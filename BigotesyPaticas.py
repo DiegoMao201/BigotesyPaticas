@@ -79,18 +79,16 @@ def conectar_google_sheets():
     """Establece y cachea la conexión a Google Sheets. Retorna los Worksheets."""
     try:
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
-        SHEET_URL = st.secrets["SHEET_URL"] # Mejor usar un secreto para la URL
+        
+        # 🟢 CORRECCIÓN: Lee la CLAVE "SHEET_URL" desde el archivo de secretos.
+        SHEET_URL = st.secrets["SHEET_URL"] 
+        
         hoja = gc.open_by_url(SHEET_URL)
         
-        # Se asumen los nombres de las hojas (crea las que no existan en tu archivo)
-        ws_inventario = hoja.worksheet("Inventario")
-        ws_clientes = hoja.worksheet("Clientes")
-        ws_ventas = hoja.worksheet("Ventas")
-        ws_gastos = hoja.worksheet("Gastos") # Nueva hoja
-        
-        return ws_inventario, ws_clientes, ws_ventas, ws_gastos
+        # Asume el resto de tu código para retornar las hojas...
+        return hoja.worksheet("Inventario"), hoja.worksheet("Clientes"), hoja.worksheet("Ventas"), hoja.worksheet("Gastos")
     except Exception as e:
-        st.error(f"🚨 Error crítico al conectar con Google Sheets. Revisa la URL y tus credenciales 'google_service_account'. Detalle: {e}")
+        st.error(f"🚨 Error crítico al conectar con Google Sheets. Revisa la URL y tus credenciales. Detalle: {e}")
         return None, None, None, None
 
 def leer_datos(ws, index_col=None):
