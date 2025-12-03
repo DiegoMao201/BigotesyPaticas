@@ -682,82 +682,78 @@ def page_gestion_gastos(ws_gastos):
         st.info("No hay gastos registrados. Usa el formulario de arriba para empezar.")
 
 
-def page_cuadre_caja_y_rentabilidad(ws_ventas, ws_gastos):
-    """Página para el cierre de caja y análisis de rentabilidad simple."""
-    st.header("💰 Cierre de Caja y Rentabilidad Diaria")
+def page_gestion_gastos(ws_gastos):
+    """Página para registrar y visualizar gastos."""
+    st.header("💸 Gestión de Gastos y Egresos")
     st.markdown("---")
 
-    ventas_df = leer_datos(ws_ventas, index_col=None)
+    # 1. Formulario de Registro de Gasto
+    with st.container(border=True):
+        st.subheader("➕ Registro Express")
+        with st.form("form_registro_gasto", clear_on_submit=True):
+            c1, c2, c3 = st.columns([1.5, 2, 1.5])
+            
+            fecha_gasto = c1.date_input("Fecha del Gasto", value=datetime.now().date())
+            monto = c2.number_input("Monto ($)", min_value=0.0, format="%.2f", key="monto_gasto")
+            tipo_gasto = c3.selectbox("Tipo de Gasto", ["Fijo", "Variable", "Inversión", "Operativo"], key="tipo_gasto_select")
+            
+            concepto = st.text_input("Concepto (Ej: Pago de Luz, Compra de Arena para Gato, Salario Empleado)", key="concepto_gasto")
+            
+            submit_button = st.form_submit_button("💾 Guardar Gasto", type="primary")
+            
+            if submit_button:
+                if monto > 0 and concepto:
+                    datos_gasto = [
+                        fecha_gasto.strftime("%d/%m/%Y"), 
+                        concepto, 
+                        tipo_gasto, 
+                        monto
+                    ]
+                    if registrar_gasto(ws_gastos, datos_gasto):
+                         st.toast("Gasto guardado. 👍", icon="✅")
+                         st.rerun()
+                else:
+                    st.error("🚨 Monto debe ser mayor a 0 y el Concepto es obligatorio.")
+
+    st.markdown("---")
+
+    # 2. Visualización de Gastos
+    st.subheader("Historial y Análisis de Egresos")
     gastos_df = leer_datos(ws_gastos, index_col=None)
-
-    # Preparar datos: Robustez para evitar el KeyError
-    if ventas_df.empty:
-        ventas_df = pd.DataFrame(columns=['Fecha', 'Total_Venta'])
-        ventas_df['Total_Venta'] = ventas_df['Total_Venta'].astype(float) # Asegurar tipo
-        # NO CREAR 'Fecha_Corta' si está vacío, se manejará en el filtro
-    else:
-        ventas_df['Total_Venta'] = pd.to_numeric(ventas_df['Total_Venta'], errors='coerce').fillna(0)
-        # 🟢 CORRECCIÓN CLAVE: Crear la columna SIEMPRE que haya datos.
-        ventas_df['Fecha_Corta'] = ventas_df['Fecha'].astype(str).apply(lambda x: x.split(' ')[0] if ' ' in x else x)
-
-    if gastos_df.empty:
-        gastos_df = pd.DataFrame(columns=['Fecha_Gasto', 'Monto'])
-        gastos_df['Monto'] = gastos_df['Monto'].astype(float) # Asegurar tipo
-    else:
+    
+    if not gastos_df.empty:
+        # Convertir 'Monto' a numérico (asegurar robustez)
         gastos_df['Monto'] = pd.to_numeric(gastos_df['Monto'], errors='coerce').fillna(0)
         
-    # Selector de fecha para el cierre
-    fecha_cierre = st.date_input("Selecciona la Fecha para el Cuadre de Caja", value=datetime.now().date(), key="fecha_cuadre")
-    fecha_cierre_str = fecha_cierre.strftime("%d/%m/%Y")
-
-    st.markdown("---")
-    
-    # 1. Filtrado para el día seleccionado
-    # 💥 El filtro solo se aplica si la columna 'Fecha_Corta' existe y hay datos.
-    if not ventas_df.empty and 'Fecha_Corta' in ventas_df.columns:
-        ventas_del_dia_df = ventas_df[ventas_df['Fecha_Corta'] == fecha_cierre_str].copy()
-    else:
-        ventas_del_dia_df = pd.DataFrame(columns=ventas_df.columns)
-
-    if not gastos_df.empty and 'Fecha_Gasto' in gastos_df.columns:
-        gastos_del_dia_df = gastos_df[gastos_df['Fecha_Gasto'] == fecha_cierre_str].copy()
-    else:
-        gastos_del_dia_df = pd.DataFrame(columns=gastos_df.columns)
+        # Filtro por mes/año
+        # Asume que 'Fecha_Gasto' está en formato dd/mm/yyyy
+        gastos_df['Mes_Año'] = gastos_df['Fecha_Gasto'].str[-7:]
+        meses_disponibles = sorted(list(set(gastos_df['Mes_Año'])), reverse=True) 
+        mes_seleccionado = st.selectbox("Filtrar por Mes (mm/yyyy)", ["Todos"] + meses_disponibles)
         
-    total_ingresos = ventas_del_dia_df['Total_Venta'].sum()
-    total_egresos = gastos_del_dia_df['Monto'].sum()
-    total_caja_neto = total_ingresos - total_egresos
-
-    # 2. Indicadores Clave del Día
-    st.subheader(f"Resumen Financiero del Día: {fecha_cierre_str}")
-    col_v, col_g, col_neto = st.columns(3)
-    col_v.metric("💵 Ingresos por Ventas", f"${total_ingresos:,.2f}", delta_color="normal")
-    col_g.metric("📉 Gastos/Egresos", f"${total_egresos:,.2f}", delta_color="inverse")
-    
-    # Métrica de Rentabilidad con indicador de subida/bajada (Delta)
-    col_neto.metric("💰 Caja Neta del Día", f"${total_caja_neto:,.2f}", delta=f"Rentab. Simple {('+' if total_caja_neto >= 0 else '')}{total_caja_neto:,.2f}", delta_color=('normal' if total_caja_neto >= 0 else 'inverse'))
-     
-    st.markdown("---")
-
-    # 3. Detalles y Generación de Cuadre
-    st.subheader("Detalles de Movimientos")
-    tab_v, tab_g = st.tabs(["Ventas del Día", "Gastos del Día"])
-    
-    with tab_v:
-        if not ventas_del_dia_df.empty:
-            ventas_display = ventas_del_dia_df[['ID_Venta', 'Nombre_Cliente', 'Nombre_Mascota', 'Total_Venta']].copy()
-            ventas_display.columns = ['ID', 'Cliente', 'Mascota', 'Total']
-            st.dataframe(ventas_display, use_container_width=True, hide_index=True, column_config={"Total": st.column_config.NumberColumn(format="$%.2f")})
+        if mes_seleccionado != "Todos":
+            gastos_filtrados_df = gastos_df[gastos_df['Mes_Año'] == mes_seleccionado].drop(columns=['Mes_Año'])
         else:
-            st.info("No hay ventas registradas en esta fecha.")
+            gastos_filtrados_df = gastos_df.drop(columns=['Mes_Año'])
+
+        col_total, col_tipo = st.columns(2)
+        
+        # Métrica Total
+        col_total.metric("Total de Gastos en el periodo", f"${gastos_filtrados_df['Monto'].sum():,.2f}", delta_color="inverse")
+        
+        # Visualización de gastos por tipo (Gráfico de barras)
+        if not gastos_filtrados_df.empty:
+            # CORRECCIÓN: Esta línea ahora es un comentario real
+            # 
+            gasto_por_tipo = gastos_filtrados_df.groupby('Tipo_Gasto')['Monto'].sum().sort_values(ascending=False)
             
-    with tab_g:
-        if not gastos_del_dia_df.empty:
-            gastos_display = gastos_del_dia_df[['Concepto', 'Tipo_Gasto', 'Monto']].copy()
-            gastos_display.columns = ['Concepto', 'Tipo', 'Monto']
-            st.dataframe(gastos_display, use_container_width=True, hide_index=True, column_config={"Monto": st.column_config.NumberColumn(format="$%.2f")})
-        else:
-            st.info("No hay gastos registrados en esta fecha.")
+            # Gráfico de barras
+            col_tipo.bar_chart(gasto_por_tipo, color=COLOR_PRIMARIO)
+            
+            st.dataframe(gastos_filtrados_df.sort_values(by='Fecha_Gasto', ascending=False), use_container_width=True, hide_index=True)
+            
+    else:
+        st.info("No hay gastos registrados. Usa el formulario de arriba para empezar.")
 
     st.markdown("---")
     
