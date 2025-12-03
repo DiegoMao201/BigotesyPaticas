@@ -79,7 +79,7 @@ def conectar_google_sheets():
     """Establece y cachea la conexión a Google Sheets. Retorna los Worksheets."""
     try:
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
-        SHEET_URL = st.secrets["SHEET_URL"] # Mejor usar un secreto para la URL
+        SHEET_URL = st.secrets["https://docs.google.com/spreadsheets/d/12ay8_vug1yYXoGhHCIjKy1_NL5oqz6QBQ537283iGEo/edit?pli=1&gid=0#gid=0"] # Mejor usar un secreto para la URL
         hoja = gc.open_by_url(SHEET_URL)
         
         # Se asumen los nombres de las hojas (crea las que no existan en tu archivo)
