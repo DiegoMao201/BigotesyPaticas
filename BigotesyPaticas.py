@@ -3,13 +3,11 @@ import pandas as pd
 import gspread # Necesitarás configurarlo para Google Sheets
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.colors import HexColor, black, white, green, blue
+from reportlab.lib.colors import HexColor, black, white
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib.units import inch
 from io import BytesIO
-import base64
 from datetime import datetime
-import calendar
 
 # --- CONFIGURACIÓN DE PÁGINA Y ESTILOS GLOBALES ---
 
@@ -83,7 +81,6 @@ def configurar_pagina():
     col1, col2 = st.columns([1, 6])
     # Intentar cargar el logo
     try:
-        # Asumiendo que el logo es un ícono de la tienda de mascotas
         col1.image("BigotesyPaticas_logo.png", width=120) 
     except:
         col1.markdown(f'<p style="font-size: 70px; text-align: center;">😻</p>', unsafe_allow_html=True)
@@ -116,18 +113,16 @@ def leer_datos(ws, index_col=None):
             df = df.set_index(index_col)
         return df
     except Exception as e:
-        # Silenciar errores por si la hoja está vacía pero mostrar un warning al dev
-        # st.warning(f"Error al leer la hoja '{ws.title}'. Puede estar vacía: {e}")
         # Retorna un DF vacío pero con las columnas esperadas para evitar KeyErrors posteriores
         if ws.title == "Inventario":
             return pd.DataFrame(columns=['ID_Producto', 'Nombre', 'Precio', 'Stock', 'Costo']).set_index('ID_Producto')
         elif ws.title == "Clientes":
             return pd.DataFrame(columns=['Cedula', 'Nombre', 'Telefono', 'Direccion', 'Mascota', 'Tipo_Mascota'])
         elif ws.title == "Ventas":
-            # 🟢 CLAVE PARA LA CORRECCIÓN: Definir las columnas necesarias
+            # CLAVE: Definir las columnas necesarias
             return pd.DataFrame(columns=['ID_Venta', 'Fecha', 'Cedula_Cliente', 'Nombre_Cliente', 'Nombre_Mascota', 'Total_Venta', 'Items_Vendidos'])
         elif ws.title == "Gastos":
-            # 🟢 CLAVE PARA LA CORRECCIÓN: Definir las columnas necesarias
+            # CLAVE: Definir las columnas necesarias
             return pd.DataFrame(columns=['Fecha_Gasto', 'Concepto', 'Tipo_Gasto', 'Monto'])
         return pd.DataFrame()
 
@@ -158,27 +153,20 @@ def registrar_venta_y_actualizar_inventario(ws_ventas, ws_inventario, datos_vent
                 prod_id = item['ID_Producto']
                 cantidad_vendida = item['Cantidad']
                 
-                # Buscar la fila por el ID_Producto (asume que está en la primera columna del Sheet)
-                # Esta búsqueda es más lenta pero más segura que basarse en el index del DF local
+                # Buscar la fila por el ID_Producto 
                 cell = ws_inventario.find(str(prod_id))
                 if cell:
                     fila_a_actualizar = cell.row 
-                    
-                    # Columna 'Stock' (asume que es la columna D, que es 4)
-                    # Debe coincidir con la columna real en Google Sheets
                     COLUMNA_STOCK = 4 
 
-                    # Cargar el stock actual directamente de la celda
                     stock_actual_str = ws_inventario.cell(fila_a_actualizar, COLUMNA_STOCK).value
-                    stock_actual = int(stock_actual_str) if stock_actual_str.isdigit() else 0
+                    stock_actual = int(stock_actual_str) if stock_actual_str and stock_actual_str.isdigit() else 0
                     
                     nuevo_stock = stock_actual - cantidad_vendida
                     
                     if nuevo_stock >= 0:
                         ws_inventario.update_cell(fila_a_actualizar, COLUMNA_STOCK, nuevo_stock) 
                     else:
-                         # Esto no debería pasar si la validación de stock es correcta en el POS,
-                         # pero es un seguro
                         st.warning(f"Stock negativo detectado para {prod_id}. Revisar.")
             
             return True
@@ -258,9 +246,7 @@ def registrar_cliente_modal(ws_clientes):
                     st.error("🚨 La Cédula, Nombre del Cliente y Nombre de la Mascota son obligatorios.")
 
 
-# --- GENERACIÓN DE PDF (ReportLab Mejorado) ---
-# ... Las funciones de PDF (generar_pdf_factura, generar_cuadre_caja_pdf) se mantienen igual 
-# ya que ReportLab no depende de Streamlit y son correctas, solo ajustando los colores.
+# --- GENERACIÓN DE PDF (ReportLab) ---
 
 def generar_pdf_factura(datos_factura, items_venta):
     """Crea una factura PDF bonita con ReportLab y retorna los bytes y el total."""
@@ -277,7 +263,8 @@ def generar_pdf_factura(datos_factura, items_venta):
     styles.add(ParagraphStyle(name='FacturaHeader', fontSize=10, fontName='Helvetica-Bold', spaceAfter=2))
     styles.add(ParagraphStyle(name='FacturaBody', fontSize=10, fontName='Helvetica', spaceAfter=2))
     styles.add(ParagraphStyle(name='TotalStyle', fontSize=14, fontName='Helvetica-Bold', alignment=2, spaceBefore=10, textColor=HexColor(COLOR_PRIMARIO)))
-    
+    styles.add(ParagraphStyle(name='Italic', fontSize=9, fontName='Helvetica-Oblique', textColor=HexColor('#666666')))
+
     # --- Cabecera de la Factura ---
     Story.append(Paragraph('🐾 FACTURA DE VENTA - BIGOTES Y PATITAS 🐾', styles['FacturaTitle']))
 
@@ -289,7 +276,7 @@ def generar_pdf_factura(datos_factura, items_venta):
         ],
         [
             Paragraph("Tienda de Mascotas - Tel: 555-PAW", styles['FacturaBody']), 
-            Paragraph(f"<b>Fecha:</b> {datos_factura['Fecha'].split(' ')[0]}", styles['FacturaBody']) # Solo la fecha corta
+            Paragraph(f"<b>Fecha:</b> {datos_factura['Fecha'].split(' ')[0]}", styles['FacturaBody'])
         ]
     ]
     t_header = Table(header_data, colWidths=[3.5*inch, 3.5*inch])
@@ -324,7 +311,6 @@ def generar_pdf_factura(datos_factura, items_venta):
     data_table = [['ID', 'Producto', 'Precio Unit.', 'Cantidad', 'Subtotal']]
     total_general = 0
     for item in items_venta:
-        # Asegurar que el precio sea numérico para el cálculo
         precio = item['Precio'] if isinstance(item['Precio'], (int, float)) else float(item['Precio'])
         cantidad = item['Cantidad']
         subtotal = precio * cantidad
@@ -342,11 +328,11 @@ def generar_pdf_factura(datos_factura, items_venta):
         ('BACKGROUND', (0, 0), (-1, 0), HexColor(COLOR_PRIMARIO)), 
         ('TEXTCOLOR', (0, 0), (-1, 0), white),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('ALIGN', (2, 1), (-1, -1), 'RIGHT'), # Precios y Subtotal a la derecha
-        ('ALIGN', (3, 1), (3, -1), 'CENTER'), # Cantidad al centro
+        ('ALIGN', (2, 1), (-1, -1), 'RIGHT'), 
+        ('ALIGN', (3, 1), (3, -1), 'CENTER'), 
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        ('BACKGROUND', (0, 1), (-1, -1), HexColor('#F0FFF4')), # Fondo más suave
+        ('BACKGROUND', (0, 1), (-1, -1), HexColor('#F0FFF4')), 
         ('GRID', (0, 0), (-1, -1), 0.5, black),
         ('LEFTPADDING', (0,0), (-1,-1), 6),
         ('RIGHTPADDING', (0,0), (-1,-1), 6)
@@ -359,10 +345,8 @@ def generar_pdf_factura(datos_factura, items_venta):
     Story.append(Spacer(1, 0.5 * inch))
 
     # --- Mensaje de Agradecimiento y Pie de página ---
-    styles.add(ParagraphStyle(name='Italic', fontSize=9, fontName='Helvetica-Oblique', textColor=HexColor('#666666')))
     Story.append(Paragraph('<i>¡Gracias por preferir Bigotes y Patitas! Vuelve pronto. Cuidamos a tu mejor amigo.</i>', styles['Italic']))
 
-    # Construir el PDF
     doc.build(Story)
     buffer.seek(0)
     return buffer.getvalue(), total_general
@@ -374,7 +358,7 @@ def generar_cuadre_caja_pdf(ventas_df, gastos_df, fecha_cuadre, total_caja):
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=50, leftMargin=50, topMargin=50, bottomMargin=50)
     Story = []
     styles = getSampleStyleSheet()
-    # Usar los nuevos colores para más impacto
+    
     styles.add(ParagraphStyle(name='CuadreTitle', fontSize=18, fontName='Helvetica-Bold', alignment=1, spaceAfter=20, textColor=HexColor(COLOR_PRIMARIO)))
     styles.add(ParagraphStyle(name='SectionHeader', fontSize=14, fontName='Helvetica-Bold', spaceAfter=10, textColor=black))
     styles.add(ParagraphStyle(name='Metric', fontSize=16, fontName='Helvetica-Bold', alignment=2, textColor=HexColor('#333333')))
@@ -420,7 +404,7 @@ def generar_cuadre_caja_pdf(ventas_df, gastos_df, fecha_cuadre, total_caja):
         ])
     t_gastos = Table(gastos_data, colWidths=[1.5*inch, 2.5*inch, 1.5*inch, 1.5*inch])
     t_gastos.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), HexColor(COLOR_SECUNDARIO)), # Fondo suave (Dorado)
+        ('BACKGROUND', (0, 0), (-1, 0), HexColor(COLOR_SECUNDARIO)), 
         ('ALIGN', (3, 1), (3, -1), 'RIGHT'),
         ('GRID', (0, 0), (-1, -1), 0.5, black),
     ]))
@@ -458,7 +442,6 @@ def page_nueva_venta(ws_inventario, ws_clientes, ws_ventas):
     if col_buscar.button("🔍 Cargar Cliente", type="secondary", use_container_width=True, disabled=not cedula_input):
         cliente_cargado = buscar_cliente_ui(clientes_df, cedula_input)
         if cliente_cargado:
-            # Asegurar el mapeo de columnas si difiere (ej: Nombre_Completo vs Nombre)
             st.session_state.cliente_actual = {
                 "Cedula": cliente_cargado.get('Cedula', ''),
                 "Nombre": cliente_cargado.get('Nombre_Completo', cliente_cargado.get('Nombre', '')),
@@ -497,7 +480,6 @@ def page_nueva_venta(ws_inventario, ws_clientes, ws_ventas):
         if producto_seleccionado_str:
             nombre_producto_real = producto_seleccionado_str.split(" (Stock:")[0]
             
-            # Usar .name para obtener el índice/ID_Producto
             producto_info = inventario_df[inventario_df['Nombre'] == nombre_producto_real].iloc[0]
             stock_disp = producto_info['Stock']
             precio_unitario = producto_info['Precio']
@@ -562,10 +544,10 @@ def page_nueva_venta(ws_inventario, ws_clientes, ws_ventas):
                 
                 if st.session_state.cliente_actual is None or not st.session_state.cliente_actual.get("Cedula"):
                     st.error("🚨 Debes cargar o registrar un cliente antes de finalizar.")
-                    return # Salir si el cliente no está bien cargado
+                    return 
 
                 # Datos para la Venta (para el PDF y la DB)
-                id_venta = datetime.now().strftime("%Y%m%d%H%M%S") # ID de venta único
+                id_venta = datetime.now().strftime("%Y%m%d%H%M%S") 
                 fecha_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
                 datos_factura = {
@@ -587,7 +569,7 @@ def page_nueva_venta(ws_inventario, ws_clientes, ws_ventas):
                     datos_factura['Cedula_Cliente'],
                     datos_factura['Nombre_Cliente'],
                     datos_factura['Nombre_Mascota'],
-                    total_venta_final, # Asegúrate de que Google Sheets acepte el número sin formato
+                    total_venta_final, 
                     "; ".join([f"{i['Nombre_Producto']} ({i['Cantidad']})" for i in st.session_state.carrito])
                 ]
                 
@@ -601,9 +583,9 @@ def page_nueva_venta(ws_inventario, ws_clientes, ws_ventas):
                         file_name=f"Factura_{id_venta}.pdf",
                         mime="application/pdf"
                     )
-                    st.session_state.carrito = [] # Limpiar el carrito
-                    st.session_state.cliente_actual = None # Limpiar cliente
-                    st.rerun() # Refrescar la página
+                    st.session_state.carrito = [] 
+                    st.session_state.cliente_actual = None 
+                    st.rerun() 
 
     else:
         st.info("El carrito está vacío. ¡Comencemos a vender!")
@@ -653,7 +635,6 @@ def page_gestion_gastos(ws_gastos):
         gastos_df['Monto'] = pd.to_numeric(gastos_df['Monto'], errors='coerce').fillna(0)
         
         # Filtro por mes/año
-        # Asume que 'Fecha_Gasto' está en formato dd/mm/yyyy
         gastos_df['Mes_Año'] = gastos_df['Fecha_Gasto'].str[-7:]
         meses_disponibles = sorted(list(set(gastos_df['Mes_Año'])), reverse=True) 
         mes_seleccionado = st.selectbox("Filtrar por Mes (mm/yyyy)", ["Todos"] + meses_disponibles)
@@ -670,10 +651,8 @@ def page_gestion_gastos(ws_gastos):
         
         # Visualización de gastos por tipo (Gráfico de barras)
         if not gastos_filtrados_df.empty:
-             Image of a bar chart showing spending by Type of Expense with a vibrant green and orange color scheme
             gasto_por_tipo = gastos_filtrados_df.groupby('Tipo_Gasto')['Monto'].sum().sort_values(ascending=False)
             
-            # Gráfico de barras (Streamlit usa Plotly o Altair, este es un ejemplo conceptual)
             col_tipo.bar_chart(gasto_por_tipo, color=COLOR_PRIMARIO)
             
             st.dataframe(gastos_filtrados_df.sort_values(by='Fecha_Gasto', ascending=False), use_container_width=True, hide_index=True)
@@ -682,86 +661,93 @@ def page_gestion_gastos(ws_gastos):
         st.info("No hay gastos registrados. Usa el formulario de arriba para empezar.")
 
 
-def page_gestion_gastos(ws_gastos):
-    """Página para registrar y visualizar gastos."""
-    st.header("💸 Gestión de Gastos y Egresos")
+def page_cuadre_caja_y_rentabilidad(ws_ventas, ws_gastos):
+    """Página para el cierre de caja y análisis de rentabilidad simple."""
+    st.header("💰 Cierre de Caja y Rentabilidad Diaria")
     st.markdown("---")
 
-    # 1. Formulario de Registro de Gasto
-    with st.container(border=True):
-        st.subheader("➕ Registro Express")
-        with st.form("form_registro_gasto", clear_on_submit=True):
-            c1, c2, c3 = st.columns([1.5, 2, 1.5])
-            
-            fecha_gasto = c1.date_input("Fecha del Gasto", value=datetime.now().date())
-            monto = c2.number_input("Monto ($)", min_value=0.0, format="%.2f", key="monto_gasto")
-            tipo_gasto = c3.selectbox("Tipo de Gasto", ["Fijo", "Variable", "Inversión", "Operativo"], key="tipo_gasto_select")
-            
-            concepto = st.text_input("Concepto (Ej: Pago de Luz, Compra de Arena para Gato, Salario Empleado)", key="concepto_gasto")
-            
-            submit_button = st.form_submit_button("💾 Guardar Gasto", type="primary")
-            
-            if submit_button:
-                if monto > 0 and concepto:
-                    datos_gasto = [
-                        fecha_gasto.strftime("%d/%m/%Y"), 
-                        concepto, 
-                        tipo_gasto, 
-                        monto
-                    ]
-                    if registrar_gasto(ws_gastos, datos_gasto):
-                         st.toast("Gasto guardado. 👍", icon="✅")
-                         st.rerun()
-                else:
-                    st.error("🚨 Monto debe ser mayor a 0 y el Concepto es obligatorio.")
-
-    st.markdown("---")
-
-    # 2. Visualización de Gastos
-    st.subheader("Historial y Análisis de Egresos")
+    ventas_df = leer_datos(ws_ventas, index_col=None)
     gastos_df = leer_datos(ws_gastos, index_col=None)
-    
-    if not gastos_df.empty:
-        # Convertir 'Monto' a numérico (asegurar robustez)
+
+    # Preparar datos: Robustez para evitar el KeyError
+    if ventas_df.empty:
+        ventas_df = pd.DataFrame(columns=['Fecha', 'Total_Venta'])
+        ventas_df['Total_Venta'] = ventas_df['Total_Venta'].astype(float) 
+    else:
+        ventas_df['Total_Venta'] = pd.to_numeric(ventas_df['Total_Venta'], errors='coerce').fillna(0)
+        # CORRECCIÓN CLAVE: Crear la columna SIEMPRE antes de intentar usarla.
+        ventas_df['Fecha_Corta'] = ventas_df['Fecha'].astype(str).apply(lambda x: x.split(' ')[0] if ' ' in x else x)
+
+    if gastos_df.empty:
+        gastos_df = pd.DataFrame(columns=['Fecha_Gasto', 'Monto'])
+        gastos_df['Monto'] = gastos_df['Monto'].astype(float) 
+    else:
         gastos_df['Monto'] = pd.to_numeric(gastos_df['Monto'], errors='coerce').fillna(0)
         
-        # Filtro por mes/año
-        # Asume que 'Fecha_Gasto' está en formato dd/mm/yyyy
-        gastos_df['Mes_Año'] = gastos_df['Fecha_Gasto'].str[-7:]
-        meses_disponibles = sorted(list(set(gastos_df['Mes_Año'])), reverse=True) 
-        mes_seleccionado = st.selectbox("Filtrar por Mes (mm/yyyy)", ["Todos"] + meses_disponibles)
-        
-        if mes_seleccionado != "Todos":
-            gastos_filtrados_df = gastos_df[gastos_df['Mes_Año'] == mes_seleccionado].drop(columns=['Mes_Año'])
-        else:
-            gastos_filtrados_df = gastos_df.drop(columns=['Mes_Año'])
+    # Selector de fecha para el cierre
+    fecha_cierre = st.date_input("Selecciona la Fecha para el Cuadre de Caja", value=datetime.now().date(), key="fecha_cuadre")
+    fecha_cierre_str = fecha_cierre.strftime("%d/%m/%Y")
 
-        col_total, col_tipo = st.columns(2)
-        
-        # Métrica Total
-        col_total.metric("Total de Gastos en el periodo", f"${gastos_filtrados_df['Monto'].sum():,.2f}", delta_color="inverse")
-        
-        # Visualización de gastos por tipo (Gráfico de barras)
-        if not gastos_filtrados_df.empty:
-            # CORRECCIÓN: Esta línea ahora es un comentario real
-            # 
-            gasto_por_tipo = gastos_filtrados_df.groupby('Tipo_Gasto')['Monto'].sum().sort_values(ascending=False)
-            
-            # Gráfico de barras
-            col_tipo.bar_chart(gasto_por_tipo, color=COLOR_PRIMARIO)
-            
-            st.dataframe(gastos_filtrados_df.sort_values(by='Fecha_Gasto', ascending=False), use_container_width=True, hide_index=True)
-            
+    st.markdown("---")
+    
+    # 1. Filtrado para el día seleccionado
+    # 💥 USO SEGURO de Fecha_Corta: Solo si existe y hay datos.
+    if not ventas_df.empty and 'Fecha_Corta' in ventas_df.columns:
+        ventas_del_dia_df = ventas_df[ventas_df['Fecha_Corta'] == fecha_cierre_str].copy()
     else:
-        st.info("No hay gastos registrados. Usa el formulario de arriba para empezar.")
+        ventas_del_dia_df = pd.DataFrame(columns=ventas_df.columns)
+
+    if not gastos_df.empty and 'Fecha_Gasto' in gastos_df.columns:
+        gastos_del_dia_df = gastos_df[gastos_df['Fecha_Gasto'] == fecha_cierre_str].copy()
+    else:
+        gastos_del_dia_df = pd.DataFrame(columns=gastos_df.columns)
+        
+    total_ingresos = ventas_del_dia_df['Total_Venta'].sum()
+    total_egresos = gastos_del_dia_df['Monto'].sum()
+    total_caja_neto = total_ingresos - total_egresos
+
+    # 2. Indicadores Clave del Día
+    st.subheader(f"Resumen Financiero del Día: {fecha_cierre_str}")
+    col_v, col_g, col_neto = st.columns(3)
+    col_v.metric("💵 Ingresos por Ventas", f"${total_ingresos:,.2f}", delta_color="normal")
+    col_g.metric("📉 Gastos/Egresos", f"${total_egresos:,.2f}", delta_color="inverse")
+    
+    col_neto.metric("💰 Caja Neta del Día", f"${total_caja_neto:,.2f}", delta=f"Rentab. Simple {('+' if total_caja_neto >= 0 else '')}{total_caja_neto:,.2f}", delta_color=('normal' if total_caja_neto >= 0 else 'inverse'))
+     
+    st.markdown("---")
+
+    # 3. Detalles y Generación de Cuadre
+    st.subheader("Detalles de Movimientos")
+    tab_v, tab_g = st.tabs(["Ventas del Día", "Gastos del Día"])
+    
+    with tab_v:
+        if not ventas_del_dia_df.empty:
+            ventas_display = ventas_del_dia_df[['ID_Venta', 'Nombre_Cliente', 'Nombre_Mascota', 'Total_Venta']].copy()
+            ventas_display.columns = ['ID', 'Cliente', 'Mascota', 'Total']
+            st.dataframe(ventas_display, use_container_width=True, hide_index=True, column_config={"Total": st.column_config.NumberColumn(format="$%.2f")})
+        else:
+            st.info("No hay ventas registradas en esta fecha.")
+            
+    with tab_g:
+        if not gastos_del_dia_df.empty:
+            gastos_display = gastos_del_dia_df[['Concepto', 'Tipo_Gasto', 'Monto']].copy()
+            gastos_display.columns = ['Concepto', 'Tipo', 'Monto']
+            st.dataframe(gastos_display, use_container_width=True, hide_index=True, column_config={"Monto": st.column_config.NumberColumn(format="$%.2f")})
+        else:
+            st.info("No hay gastos registrados en esta fecha.")
 
     st.markdown("---")
     
     # 4. Botón de Descarga
     col_pdf, col_desc = st.columns(2)
     
+    # Se debe recalcular total_ingresos y total_egresos para la validación del PDF
+    # Ya que el flujo no siempre pasa por la parte superior de la función
+    total_ingresos_validar = ventas_del_dia_df['Total_Venta'].sum() if not ventas_del_dia_df.empty else 0
+    total_egresos_validar = gastos_del_dia_df['Monto'].sum() if not gastos_del_dia_df.empty else 0
+    
     if col_pdf.button("📄 Generar Cuadre de Caja (PDF)", use_container_width=True, type="secondary"):
-        if total_ingresos != 0 or total_egresos != 0:
+        if total_ingresos_validar != 0 or total_egresos_validar != 0:
             pdf_cuadre_bytes = generar_cuadre_caja_pdf(ventas_del_dia_df, gastos_del_dia_df, fecha_cierre_str, total_caja_neto)
             col_desc.download_button(
                 label="⬇️ Descargar Cuadre de Caja PDF",
@@ -782,7 +768,7 @@ def main():
     ws_inventario, ws_clientes, ws_ventas, ws_gastos = conectar_google_sheets()
 
     if ws_inventario is None:
-        st.stop() # Detiene la ejecución si la conexión falla
+        return # Detiene la ejecución si la conexión falla
 
     # 2. Sidebar para Navegación Administrativa
     st.sidebar.header("Menú de Gestión ⚙️")
@@ -808,7 +794,6 @@ def main():
             inventario_df = leer_datos(ws_inventario, index_col='ID_Producto')
             
             if not inventario_df.empty:
-                # Asegurar que las columnas existan y sean numéricas para el formato
                 inventario_df['Precio'] = pd.to_numeric(inventario_df['Precio'], errors='coerce').fillna(0.0)
                 inventario_df['Costo'] = pd.to_numeric(inventario_df['Costo'], errors='coerce').fillna(0.0)
                 inventario_df['Stock'] = pd.to_numeric(inventario_df['Stock'], errors='coerce').fillna(0)
@@ -823,7 +808,6 @@ def main():
                     }
                 )
                 
-                # Alerta para bajo stock
                 stock_bajo = inventario_df[inventario_df['Stock'] < 5] 
                 if not stock_bajo.empty:
                     st.error("🚨 Alerta Crítica: Bajo Stock en los siguientes productos. ¡Pide reposición ya!")
