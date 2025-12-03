@@ -56,7 +56,7 @@ def conectar_google_sheets():
         # Ejemplo usando st.secrets y gspread
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
         # Abre las hojas por URL o por nombre
-        SHEET_URL = "URL_DE_TU_HOJA_PRINCIPAL_DE_GOOGLE_SHEETS"
+        SHEET_URL = "https://docs.google.com/spreadsheets/d/12ay8_vug1yYXoGhHCIjKy1_NL5oqz6QBQ537283iGEo/edit?pli=1&gid=0#gid=0"
         hoja = gc.open_by_url(SHEET_URL)
         
         return hoja.worksheet("Inventario"), hoja.worksheet("Clientes"), hoja.worksheet("Ventas")
