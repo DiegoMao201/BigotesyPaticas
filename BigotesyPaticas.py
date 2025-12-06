@@ -143,15 +143,19 @@ def generar_pdf(venta_data, items):
     buffer.seek(0)
     return buffer.getvalue()
 
-# --- 3. PESTAÑA: PUNTO DE VENTA (SÚPER APP) ---
+# --- 3. PESTAÑA: PUNTO DE VENTA (SOLUCIÓN ERROR DOWNLOAD) ---
 
 def tab_punto_venta(ws_inv, ws_cli, ws_ven):
     st.markdown("### 🛒 Nueva Venta")
     col_izq, col_der = st.columns([1.5, 1])
 
-    # Inicializar Session State
+    # Inicializar Session State para el carrito y el PDF temporal
     if 'carrito' not in st.session_state: st.session_state.carrito = []
     if 'cliente_actual' not in st.session_state: st.session_state.cliente_actual = None
+    
+    # NUEVO: Estado para guardar la última venta y mostrar el recibo fuera del form
+    if 'ultimo_pdf' not in st.session_state: st.session_state.ultimo_pdf = None
+    if 'ultima_venta_id' not in st.session_state: st.session_state.ultima_venta_id = None
 
     # --- IZQUIERDA: Selección ---
     with col_izq:
@@ -162,22 +166,25 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                 df_c = leer_datos(ws_cli)
                 if not df_c.empty:
                     df_c['Cedula'] = df_c['Cedula'].astype(str)
+                    busqueda = busqueda.strip()
                     res = df_c[df_c['Cedula'] == busqueda]
                     if not res.empty:
                         st.session_state.cliente_actual = res.iloc[0].to_dict()
-                        st.success(f"Cliente: {st.session_state.cliente_actual['Nombre']}")
+                        st.success(f"Cliente: {st.session_state.cliente_actual.get('Nombre', 'Sin Nombre')}")
                     else:
                         st.warning("No encontrado")
         
         if st.session_state.cliente_actual:
-            st.info(f"Cliente Activo: **{st.session_state.cliente_actual['Nombre']}** - Mascota: {st.session_state.cliente_actual['Mascota']}")
+            nombre_cliente = st.session_state.cliente_actual.get('Nombre', 'Cliente')
+            nombre_mascota = st.session_state.cliente_actual.get('Mascota', 'No registrada')
+            st.info(f"Cliente Activo: **{nombre_cliente}** - Mascota: {nombre_mascota}")
 
         # 2. PRODUCTOS
         st.markdown("#### Agregar Productos")
         df_inv = leer_datos(ws_inv)
         if not df_inv.empty:
             df_stock = df_inv[df_inv['Stock'] > 0]
-            prod_lista = df_stock.apply(lambda x: f"{x['Nombre']} | ${x['Precio']:,.0f} | ID:{x['ID_Producto']}", axis=1).tolist()
+            prod_lista = df_stock.apply(lambda x: f"{x.get('Nombre', 'N/A')} | ${x.get('Precio', 0):,.0f} | ID:{x.get('ID_Producto', '')}", axis=1).tolist()
             
             sel_prod = st.selectbox("Buscar Producto", [""] + prod_lista)
             col_cant, col_add = st.columns([1, 2])
@@ -185,61 +192,87 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
             
             if col_add.button("➕ Agregar", type="primary"):
                 if sel_prod:
-                    id_p = sel_prod.split("ID:")[1]
-                    info_p = df_inv[df_inv['ID_Producto'].astype(str) == id_p].iloc[0]
-                    
-                    if cantidad <= info_p['Stock']:
-                        item = {
-                            "ID_Producto": info_p['ID_Producto'],
-                            "Nombre_Producto": info_p['Nombre'],
-                            "Precio": float(info_p['Precio']),
-                            "Cantidad": int(cantidad),
-                            "Subtotal": float(info_p['Precio'] * cantidad)
-                        }
-                        st.session_state.carrito.append(item)
-                    else:
-                        st.error("Stock insuficiente")
+                    try:
+                        id_p = sel_prod.split("ID:")[1]
+                        info_p = df_inv[df_inv['ID_Producto'].astype(str) == id_p].iloc[0]
+                        if cantidad <= info_p['Stock']:
+                            item = {
+                                "ID_Producto": info_p['ID_Producto'],
+                                "Nombre_Producto": info_p['Nombre'],
+                                "Precio": float(info_p['Precio']),
+                                "Cantidad": int(cantidad),
+                                "Subtotal": float(info_p['Precio'] * cantidad)
+                            }
+                            st.session_state.carrito.append(item)
+                        else:
+                            st.error("Stock insuficiente")
+                    except Exception as e:
+                        st.error(f"Error agregando: {e}")
 
     # --- DERECHA: Checkout y Pago ---
     with col_der:
         st.markdown("### 🧾 Resumen")
-        if st.session_state.carrito:
+        
+        # Si ya se hizo la venta, mostramos SOLO el resultado y el botón de descarga
+        if st.session_state.ultimo_pdf:
+            st.success("✅ ¡Venta Registrada!")
+            st.markdown(f"**Ticket #{st.session_state.ultima_venta_id}**")
+            
+            # 1. BOTÓN DE DESCARGA (Ahora está fuera del form)
+            st.download_button(
+                label="🖨️ Descargar Recibo PDF",
+                data=st.session_state.ultimo_pdf,
+                file_name=f"Venta_{st.session_state.ultima_venta_id}.pdf",
+                mime="application/pdf",
+                type="primary"
+            )
+            
+            # 2. BOTÓN PARA NUEVA VENTA (Limpia todo)
+            if st.button("🔄 Nueva Venta / Limpiar"):
+                st.session_state.carrito = []
+                st.session_state.cliente_actual = None
+                st.session_state.ultimo_pdf = None
+                st.session_state.ultima_venta_id = None
+                st.rerun()
+
+        # Si NO hay venta finalizada, mostramos el carrito y el formulario
+        elif st.session_state.carrito:
             df_cart = pd.DataFrame(st.session_state.carrito)
             st.dataframe(df_cart[['Nombre_Producto', 'Cantidad', 'Subtotal']], hide_index=True, use_container_width=True)
             total = df_cart['Subtotal'].sum()
             st.metric("Total a Pagar", f"${total:,.0f}")
             
             st.markdown("---")
-            st.markdown("#### 💳 Detalles de Pago")
             
-            # Formulario de Cobro Avanzado
+            # --- FORMULARIO DE COBRO ---
             with st.form("form_cobro"):
+                st.markdown("#### 💳 Detalles de Pago")
+                
                 # A. TIPO DE ENTREGA
                 tipo_entrega = st.radio("Modalidad:", ["Punto de Venta", "Envío a Domicilio"], horizontal=True)
                 
-                direccion_envio = ""
+                dir_cliente = st.session_state.cliente_actual.get('Direccion', '') if st.session_state.cliente_actual else ""
+                direccion_envio = "Local"
                 if tipo_entrega == "Envío a Domicilio":
-                    direccion_envio = st.text_input("Dirección de Entrega", value=st.session_state.cliente_actual.get('Direccion', '') if st.session_state.cliente_actual else "")
-                else:
-                    direccion_envio = "Local"
+                    direccion_envio = st.text_input("Dirección de Entrega", value=str(dir_cliente))
 
                 # B. FORMA DE PAGO
                 metodo = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "DaviPlata", "Bancolombia", "Davivienda", "Tarjeta Débito/Crédito"])
                 
-                # C. DESTINO DEL DINERO (BANCO)
-                # Lógica: Si es efectivo va a Caja, si es banco va a Banco
+                # C. DESTINO
                 banco_destino = "Caja General"
                 if metodo in ["Nequi", "DaviPlata", "Bancolombia", "Davivienda", "Tarjeta Débito/Crédito"]:
-                    banco_destino = st.selectbox("Banco Destino (Dónde entra el dinero)", ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Caja Menor"])
+                    banco_destino = st.selectbox("Banco Destino", ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Caja Menor"])
                 
-                obs = st.text_area("Notas / Observaciones")
-                
+                # BOTÓN DE ENVÍO DEL FORMULARIO
                 enviar = st.form_submit_button("✅ CONFIRMAR VENTA", type="primary", use_container_width=True)
-                
-                if enviar:
-                    if not st.session_state.cliente_actual:
-                        st.error("⚠️ Falta seleccionar cliente")
-                    else:
+            
+            # --- LÓGICA AL PRESIONAR EL BOTÓN (FUERA DEL FORM PARA EVITAR ERRORES) ---
+            if enviar:
+                if not st.session_state.cliente_actual:
+                    st.error("⚠️ Falta seleccionar cliente")
+                else:
+                    try:
                         id_venta = datetime.now().strftime("%Y%m%d%H%M%S")
                         fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         items_str = ", ".join([f"{i['Nombre_Producto']} (x{i['Cantidad']})" for i in st.session_state.carrito])
@@ -247,26 +280,29 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                         
                         datos_venta = [
                             id_venta, fecha, 
-                            str(st.session_state.cliente_actual['Cedula']), 
-                            st.session_state.cliente_actual['Nombre'],
+                            str(st.session_state.cliente_actual.get('Cedula', '0')), 
+                            st.session_state.cliente_actual.get('Nombre', 'Consumidor'),
                             tipo_entrega, direccion_envio, estado_envio,
                             metodo, banco_destino, 
                             total, items_str
                         ]
                         
+                        # Guardar en Google Sheets
                         if escribir_fila(ws_ven, datos_venta):
                             actualizar_stock(ws_inv, st.session_state.carrito)
-                            st.success("¡Venta registrada exitosamente!")
                             
-                            # Generar PDF
-                            pdf_bytes = generar_pdf({"ID": id_venta, "Fecha": fecha, "Cliente": st.session_state.cliente_actual['Nombre'], "Total": total}, st.session_state.carrito)
-                            st.download_button("🖨️ Descargar Recibo", pdf_bytes, file_name=f"Venta_{id_venta}.pdf", mime="application/pdf")
+                            # Generar PDF y guardarlo en Session State
+                            cliente_pdf = st.session_state.cliente_actual.get('Nombre', 'Cliente')
+                            pdf_bytes = generar_pdf({"ID": id_venta, "Fecha": fecha, "Cliente": cliente_pdf, "Total": total}, st.session_state.carrito)
                             
-                            # Reset
-                            st.session_state.carrito = []
-                            st.session_state.cliente_actual = None
-                            time.sleep(2)
+                            # AQUÍ ESTÁ EL TRUCO: Guardamos en variables de estado
+                            st.session_state.ultimo_pdf = pdf_bytes
+                            st.session_state.ultima_venta_id = id_venta
+                            
+                            # Recargamos la página para que aparezca el botón de descarga (arriba en el if)
                             st.rerun()
+                    except Exception as e:
+                        st.error(f"Error procesando venta: {e}")
 
         else:
             st.info("El carrito está vacío.")
