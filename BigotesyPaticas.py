@@ -545,7 +545,7 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     gastos_op = 0
     if not g_rango.empty:
         # Filtramos Costos Directos (Mercancía) vs Gastos Operativos (Arriendo, etc)
-        mask_costo = g_rango['Clasificacion'].isin(['Costo de Venta', 'Costo de Venta (Mercancía)'])
+        mask_costo = g_rango['Categoria'].isin(['Costo de Venta', 'Costo de Venta (Mercancía)'])
         costos = g_rango[mask_costo]['Monto'].sum()
         gastos_op = g_rango[~mask_costo]['Monto'].sum()
 
