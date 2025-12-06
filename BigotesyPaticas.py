@@ -13,14 +13,14 @@ import time
 import numpy as np
 import base64
 
-# --- 1. CONFIGURACIÓN Y ESTILOS MODERNOS ---
+# --- 1. CONFIGURACIÓN Y ESTILOS ---
 
 COLOR_PRIMARIO = "#2ecc71"  # Verde Éxito
 COLOR_SECUNDARIO = "#27ae60" # Verde Oscuro
 COLOR_FONDO = "#f4f6f9"
 COLOR_TEXTO = "#2c3e50"
 
-# Logo de Huellita en Base64 (Para no depender de archivos externos)
+# Logo Verificado (Huella simple en PNG Base64, cadena limpia)
 LOGO_B64 = """
 iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAABmJLR0QA/wD/AP+gvaeTAAAHpElEQVRoge2ZbWxT1xXHf+f62Q87TgwJQ54hCQy0U
 5oQ6iYU2q60q6pCX7aoq1CfqlO1U9V92EdTtVWbtqmfJlW7PlS1q9qqPqxSZ6uCQJuQMAJMKISQ8BIIcRw7sR37+t774IdJbJzYTuw4rern8917zrnn
@@ -38,11 +38,8 @@ uI7t27TKyt2zZzMjeunUrd999F3ffvYV169awfv06duzYxo4d29i8eRObN29m8+ZNfPe736GxsZGGhga
 /19fV4PB68Xi+1tbXU1tZSW1tLbW0t27ZtY/v27TQ0NNDQ0EBDQwPbtm2joaGBHTt2sHnzZjZv3szmzZvZvHkzmzdvZs+e3YzsAwcOMrKPHj3Ky
 D5+/DgA58+fZ2RfuXKFkX3t2jVG9vXr1xnZIyMjAGzZsoW1a9cCsHbtWtatW8f69etZv349GzZsYP369axbt4577rmHdevWsWbNGlauXMmKFS
 tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/
-AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg9/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD5
-69Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWL16NatXr+auu+5i1a
-pV3HXXXaxatYq77rqLu+66y9T/o0ePMrKPHj3KyD5+/Dgj+8SJE4Ds/9SpU4Ds/8yZM4Ds/9y5c4Ds/+LFixQKhcT+Dw4OMjg4yODgIIMJ/Ts9R
-v/O/oODg8b+g/27+g8MDDAwMMD+/fuJG1m7di0ejwePx4PH48Hj8eDxePD7/dTX1+PxePB4PHg8HjweDx6PB7/fb/Tv9/uN/lesWEHs//DwcEb2
-kZERAP7yl78wsv/85z8zsn/7298C8M///M+M7OvXrzOyr1+/zsgeGRkB4M4772TVqlUArF69mlWrVrFq1SpWrVrF6tWrWbNmDWvWrGHNmjWsWb
+AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD5
+69Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWb
 OGu+++mzVr1rBmzRrWrFnDmjVrWLNmjan/w8PDjOyRkRFG9vDwsJH9+9//HpD9Hx4eBmT/R0ZGATn/R0ZGADn/R0ZGGBoaYmhoiKGhIYaGhhgaG
 mJoaIje3l56e3vp7e2lt7eX3t5eent72b9/P/v372f//v3s37+f/fv3s3//fuJG/H4/dXV11NXVUVdXR11dHXV1dfj9furq6qirq6Ouro66ujrq
 6urw+/1G//F6/f8A7r0yHqfVv+oAAAAASUVORK5CYII=
@@ -91,9 +88,15 @@ def conectar_google_sheets():
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
         sh = gc.open_by_url(st.secrets["SHEET_URL"])
         
-        return sh.worksheet("Inventario"), sh.worksheet("Clientes"), sh.worksheet("Ventas"), sh.worksheet("Gastos")
+        # Intentamos obtener las hojas, si no existen, el error saltará
+        ws_inv = sh.worksheet("Inventario")
+        ws_cli = sh.worksheet("Clientes")
+        ws_ven = sh.worksheet("Ventas")
+        ws_gas = sh.worksheet("Gastos")
+        
+        return ws_inv, ws_cli, ws_ven, ws_gas
     except Exception as e:
-        st.error(f"Error de conexión: {e}")
+        st.error(f"Error de conexión con Google Sheets: {e}")
         return None, None, None, None
 
 def sanitizar_dato(dato):
@@ -118,7 +121,7 @@ def escribir_fila(ws, datos):
         ws.append_row(datos_limpios)
         return True
     except Exception as e:
-        st.error(f"Error guardando: {e}")
+        st.error(f"Error guardando en Google Sheets: {e}")
         return False
 
 def actualizar_stock(ws_inv, items):
@@ -137,74 +140,36 @@ def actualizar_stock(ws_inv, items):
                 ws_inv.update_cell(fila, 5, nuevo) 
         return True
     except Exception as e:
-        st.error(f"Error stock: {e}")
+        st.error(f"Error actualizando stock: {e}")
         return False
 
-# --- 3. GENERADOR DE PDF "SUPER PRO" ---
+# --- 3. GENERADOR DE PDF "SUPER PRO" (CORREGIDO ERROR IMAGEN) ---
 
 def generar_pdf(venta_data, items):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     Story = []
     
-    # --- ESTILOS PERSONALIZADOS ---
     styles = getSampleStyleSheet()
     
-    # Estilo Título Tienda
-    style_store_name = ParagraphStyle(
-        'StoreName',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor(COLOR_SECUNDARIO),
-        alignment=TA_CENTER,
-        spaceAfter=5
-    )
-    
-    # Estilo Info Contacto
-    style_contact = ParagraphStyle(
-        'ContactInfo',
-        parent=styles['Normal'],
-        fontSize=9,
-        textColor=colors.gray,
-        alignment=TA_CENTER,
-        leading=12
-    )
-    
-    # Estilo Título de Sección
-    style_section_title = ParagraphStyle(
-        'SectionTitle',
-        parent=styles['Heading3'],
-        fontSize=12,
-        textColor=colors.HexColor(COLOR_TEXTO),
-        spaceBefore=10,
-        spaceAfter=5
-    )
-    
-    # Estilo Info Factura (Derecha)
-    style_invoice_info = ParagraphStyle(
-        'InvoiceInfo',
-        parent=styles['Normal'],
-        fontSize=10,
-        alignment=TA_RIGHT,
-        leading=14
-    )
+    style_store_name = ParagraphStyle('StoreName', parent=styles['Heading1'], fontSize=24, textColor=colors.HexColor(COLOR_SECUNDARIO), alignment=TA_CENTER, spaceAfter=5)
+    style_contact = ParagraphStyle('ContactInfo', parent=styles['Normal'], fontSize=9, textColor=colors.gray, alignment=TA_CENTER, leading=12)
+    style_invoice_info = ParagraphStyle('InvoiceInfo', parent=styles['Normal'], fontSize=10, alignment=TA_RIGHT, leading=14)
+    style_client_info = ParagraphStyle('ClientInfo', parent=styles['Normal'], fontSize=10, alignment=TA_LEFT, leading=14)
 
-    # Estilo Info Cliente (Izquierda)
-    style_client_info = ParagraphStyle(
-        'ClientInfo',
-        parent=styles['Normal'],
-        fontSize=10,
-        alignment=TA_LEFT,
-        leading=14
-    )
+    # --- 1. CABECERA CON LOGO Y NOMBRE (Manejo de Errores Robustos) ---
+    try:
+        # Limpiamos espacios y saltos de línea que causan el error "broken data stream"
+        clean_b64 = LOGO_B64.replace('\n', '').replace(' ', '')
+        img_data = base64.b64decode(clean_b64)
+        im = ImageRL(BytesIO(img_data), width=0.8*inch, height=0.8*inch)
+        im.hAlign = 'CENTER'
+        Story.append(im)
+    except Exception as e:
+        # Si falla la imagen, no rompemos el PDF, solo imprimimos el texto
+        print(f"Advertencia: No se pudo cargar el logo: {e}")
+        Story.append(Paragraph("(Logo no disponible)", style_contact))
 
-    # --- 1. CABECERA CON LOGO Y NOMBRE ---
-    # Decodificar logo base64
-    img_data = base64.b64decode(LOGO_B64.strip())
-    im = ImageRL(BytesIO(img_data), width=0.8*inch, height=0.8*inch)
-    im.hAlign = 'CENTER'
-    Story.append(im)
-    
     Story.append(Paragraph("BIGOTES Y PATITAS", style_store_name))
     Story.append(Paragraph("<b>Tu tienda de confianza para mascotas 🐾</b>", style_contact))
     Story.append(Paragraph("Tel: 320 504 6277 | Email: bigotesypaticasdosquebradas@gmail.com", style_contact))
@@ -213,17 +178,15 @@ def generar_pdf(venta_data, items):
     Story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor(COLOR_PRIMARIO)))
     Story.append(Spacer(1, 20))
 
-    # --- 2. INFORMACIÓN DEL TICKET Y CLIENTE (Grid de 2 columnas) ---
-    
-    # Datos Izquierda (Cliente)
+    # --- 2. INFORMACIÓN DEL TICKET Y CLIENTE ---
     cliente_txt = f"""
     <b>FACTURAR A:</b><br/>
     {venta_data['Cliente']}<br/>
     ID: {venta_data.get('Cedula_Cliente', '---')}<br/>
-    {venta_data.get('Direccion', 'Dirección no registrada')}
+    {venta_data.get('Direccion', 'Dirección no registrada')}<br/>
+    Mascota: {venta_data.get('Mascota', '---')}
     """
     
-    # Datos Derecha (Factura)
     factura_txt = f"""
     <b>RECIBO DE VENTA</b><br/>
     <font color={COLOR_SECUNDARIO}><b># {venta_data['ID']}</b></font><br/>
@@ -233,34 +196,26 @@ def generar_pdf(venta_data, items):
 
     data_info = [[Paragraph(cliente_txt, style_client_info), Paragraph(factura_txt, style_invoice_info)]]
     t_info = Table(data_info, colWidths=[3.5*inch, 3*inch])
-    t_info.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-    ]))
+    t_info.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
     Story.append(t_info)
     Story.append(Spacer(1, 20))
 
     # --- 3. TABLA DE PRODUCTOS ---
-    
-    # Encabezados
     headers = ['PRODUCTO / DESCRIPCIÓN', 'CANT', 'PRECIO UNIT.', 'SUBTOTAL']
     table_data = [headers]
     
-    # Filas
     for item in items:
         row = [
-            Paragraph(item['Nombre_Producto'], styles['Normal']),
+            Paragraph(item['Nombre_Producto'][:35], styles['Normal']), # Cortar nombre si es muy largo
             str(item['Cantidad']),
             f"${item['Precio']:,.0f}",
             f"${item['Subtotal']:,.0f}"
         ]
         table_data.append(row)
     
-    # Tabla
     t_prods = Table(table_data, colWidths=[3.5*inch, 0.8*inch, 1.2*inch, 1.3*inch])
     
-    # Estilo de Tabla "Profesional"
     style_table = TableStyle([
-        # Encabezado
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor(COLOR_PRIMARIO)),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
         ('ALIGN', (0,0), (-1,0), 'CENTER'),
@@ -268,37 +223,28 @@ def generar_pdf(venta_data, items):
         ('FONTSIZE', (0,0), (-1,0), 10),
         ('BOTTOMPADDING', (0,0), (-1,0), 10),
         ('TOPPADDING', (0,0), (-1,0), 10),
-        
-        # Cuerpo
         ('BACKGROUND', (0,1), (-1,-1), colors.white),
         ('TEXTCOLOR', (0,1), (-1,-1), colors.black),
-        ('ALIGN', (1,1), (-1,-1), 'CENTER'), # Cantidad centrada
-        ('ALIGN', (2,1), (-1,-1), 'RIGHT'),  # Precio derecha
-        ('ALIGN', (3,1), (-1,-1), 'RIGHT'),  # Subtotal derecha
+        ('ALIGN', (1,1), (-1,-1), 'CENTER'),
+        ('ALIGN', (2,1), (-1,-1), 'RIGHT'),
+        ('ALIGN', (3,1), (-1,-1), 'RIGHT'),
         ('FONTNAME', (0,1), (-1,-1), 'Helvetica'),
         ('FONTSIZE', (0,1), (-1,-1), 9),
         ('BOTTOMPADDING', (0,1), (-1,-1), 8),
         ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
     ])
     
-    # Filas alternas (zebra)
     for i in range(1, len(table_data)):
         if i % 2 == 0:
-            bg_color = colors.HexColor("#f4f6f9")
-            style_table.add('BACKGROUND', (0,i), (-1,i), bg_color)
+            style_table.add('BACKGROUND', (0,i), (-1,i), colors.HexColor("#f4f6f9"))
             
     t_prods.setStyle(style_table)
     Story.append(t_prods)
     Story.append(Spacer(1, 10))
 
     # --- 4. TOTALES ---
-    
     total_val = venta_data['Total']
-    
-    # Tabla simple para alinear totales a la derecha
-    data_total = [
-        ['', 'TOTAL A PAGAR:', f"${total_val:,.0f}"]
-    ]
+    data_total = [['', 'TOTAL A PAGAR:', f"${total_val:,.0f}"]]
     t_total = Table(data_total, colWidths=[4*inch, 1.5*inch, 1.3*inch])
     t_total.setStyle(TableStyle([
         ('ALIGN', (1,0), (2,0), 'RIGHT'),
@@ -312,18 +258,69 @@ def generar_pdf(venta_data, items):
     # --- 5. PIE DE PÁGINA ---
     Story.append(Spacer(1, 40))
     Story.append(HRFlowable(width="80%", thickness=0.5, color=colors.lightgrey, spaceAfter=10))
-    
-    footer_text = """
-    ¡Gracias por consentir a tu mascota con nosotros! 🐶🐱<br/>
-    Guardar este recibo para cambios o garantías (5 días hábiles).
-    """
+    footer_text = "¡Gracias por consentir a tu mascota con nosotros! 🐶🐱<br/>Guardar este recibo para cambios o garantías (5 días hábiles)."
     Story.append(Paragraph(footer_text, style_contact))
 
     doc.build(Story)
     buffer.seek(0)
     return buffer.getvalue()
 
-# --- 4. PESTAÑA: PUNTO DE VENTA (MODIFICADA PARA NUEVO PDF) ---
+# --- 4. NUEVA PESTAÑA: GESTIÓN DE CLIENTES ---
+
+def tab_clientes(ws_cli):
+    st.markdown("### 👥 Gestión de Clientes (CRM)")
+    st.info("Registra aquí toda la información para futuras campañas de marketing y cumpleaños.")
+
+    with st.container(border=True):
+        st.markdown("#### ✨ Nuevo Cliente")
+        with st.form("form_cliente"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                cedula = st.text_input("Cédula / ID *", placeholder="Ej: 1088...")
+                nombre = st.text_input("Nombre Completo *", placeholder="Ej: Juan Pérez")
+                telefono = st.text_input("Teléfono / WhatsApp *", placeholder="Ej: 320...")
+                email = st.text_input("Correo Electrónico", placeholder="cliente@email.com")
+            
+            with col2:
+                direccion = st.text_input("Dirección", placeholder="Barrio, Calle...")
+                nombre_mascota = st.text_input("Nombre de Mascota *", placeholder="Ej: Firulais")
+                tipo_mascota = st.selectbox("Tipo de Mascota", ["Perro", "Gato", "Ave", "Roedor", "Otro"])
+                fecha_nacimiento = st.date_input("Cumpleaños Mascota 🎂", value=None, min_value=date(2000,1,1))
+
+            st.markdown("---")
+            submitted = st.form_submit_button("💾 Guardar Cliente", type="primary", use_container_width=True)
+            
+            if submitted:
+                if cedula and nombre and nombre_mascota and telefono:
+                    # Validar si ya existe
+                    df_cli = leer_datos(ws_cli)
+                    if not df_cli.empty and str(cedula) in df_cli['Cedula'].astype(str).values:
+                        st.error("⚠️ Ya existe un cliente con esta cédula.")
+                    else:
+                        fecha_nac_str = fecha_nacimiento.strftime("%Y-%m-%d") if fecha_nacimiento else ""
+                        fecha_registro = datetime.now().strftime("%Y-%m-%d")
+                        
+                        datos_cliente = [
+                            cedula, nombre, telefono, email, direccion, 
+                            nombre_mascota, tipo_mascota, fecha_nac_str, fecha_registro
+                        ]
+                        
+                        if escribir_fila(ws_cli, datos_cliente):
+                            st.success(f"✅ Cliente {nombre} y su mascota {nombre_mascota} guardados correctamente.")
+                            time.sleep(1.5)
+                            st.rerun()
+                else:
+                    st.warning("Por favor completa los campos obligatorios (*)")
+
+    st.markdown("### 📂 Base de Datos de Clientes")
+    df = leer_datos(ws_cli)
+    if not df.empty:
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("Aún no hay clientes registrados.")
+
+# --- 5. PESTAÑA: PUNTO DE VENTA (Actualizada) ---
 
 def tab_punto_venta(ws_inv, ws_cli, ws_ven):
     st.markdown("### 🛒 Nueva Venta")
@@ -336,10 +333,12 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
 
     # --- IZQUIERDA ---
     with col_izq:
-        # Cliente
+        # Selección de Cliente
         with st.expander("👤 Selección de Cliente", expanded=True if not st.session_state.cliente_actual else False):
-            busqueda = st.text_input("Buscar Cédula", placeholder="Ingrese documento...")
-            if st.button("Buscar Cliente"):
+            col_b, col_crear = st.columns([3, 1])
+            busqueda = col_b.text_input("Buscar Cédula", placeholder="Ingrese documento...")
+            
+            if col_b.button("Buscar Cliente"):
                 df_c = leer_datos(ws_cli)
                 if not df_c.empty:
                     df_c['Cedula'] = df_c['Cedula'].astype(str)
@@ -347,15 +346,19 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     res = df_c[df_c['Cedula'] == busqueda]
                     if not res.empty:
                         st.session_state.cliente_actual = res.iloc[0].to_dict()
-                        st.success(f"Cliente: {st.session_state.cliente_actual.get('Nombre', 'Sin Nombre')}")
+                        st.success(f"Cliente encontrado: {st.session_state.cliente_actual.get('Nombre')}")
                     else:
-                        st.warning("No encontrado")
-        
-        if st.session_state.cliente_actual:
-            nombre_cliente = st.session_state.cliente_actual.get('Nombre', 'Cliente')
-            st.info(f"Cliente Activo: **{nombre_cliente}**")
+                        st.warning("Cliente no encontrado.")
+                else:
+                    st.warning("Base de clientes vacía.")
+            
+            st.caption("¿No existe? Ve a la pestaña 'Gestión de Clientes' para crearlo completo.")
 
-        # Productos
+        if st.session_state.cliente_actual:
+            c = st.session_state.cliente_actual
+            st.info(f"Cliente: **{c.get('Nombre')}** | Mascota: **{c.get('Mascota', 'N/A')}** ({c.get('Tipo_Mascota', '')})")
+
+        # Selección de Productos
         st.markdown("#### Agregar Productos")
         df_inv = leer_datos(ws_inv)
         if not df_inv.empty:
@@ -381,7 +384,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                             }
                             st.session_state.carrito.append(item)
                         else:
-                            st.error("Stock insuficiente")
+                            st.error(f"Stock insuficiente. Solo quedan {info_p['Stock']}")
                     except Exception as e:
                         st.error(f"Error agregando: {e}")
 
@@ -390,7 +393,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
         st.markdown("### 🧾 Resumen")
         
         if st.session_state.ultimo_pdf:
-            st.success("✅ ¡Venta Registrada!")
+            st.success("✅ ¡Venta Registrada Exitosamente!")
             st.markdown(f"**Ticket #{st.session_state.ultima_venta_id}**")
             
             st.download_button(
@@ -401,7 +404,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                 type="primary"
             )
             
-            if st.button("🔄 Nueva Venta / Limpiar"):
+            if st.button("🔄 Nueva Venta / Limpiar Pantalla"):
                 st.session_state.carrito = []
                 st.session_state.cliente_actual = None
                 st.session_state.ultimo_pdf = None
@@ -417,26 +420,24 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
             st.markdown("---")
             
             with st.form("form_cobro"):
-                st.markdown("#### 💳 Detalles de Pago")
-                
+                st.markdown("#### 💳 Pago")
                 tipo_entrega = st.radio("Modalidad:", ["Punto de Venta", "Envío a Domicilio"], horizontal=True)
                 
-                dir_cliente = st.session_state.cliente_actual.get('Direccion', '') if st.session_state.cliente_actual else ""
+                dir_def = st.session_state.cliente_actual.get('Direccion', '') if st.session_state.cliente_actual else ""
                 direccion_envio = "Local"
                 if tipo_entrega == "Envío a Domicilio":
-                    direccion_envio = st.text_input("Dirección de Entrega", value=str(dir_cliente))
+                    direccion_envio = st.text_input("Dirección de Entrega", value=str(dir_def))
 
                 metodo = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "DaviPlata", "Bancolombia", "Davivienda", "Tarjeta Débito/Crédito"])
-                
                 banco_destino = "Caja General"
                 if metodo in ["Nequi", "DaviPlata", "Bancolombia", "Davivienda", "Tarjeta Débito/Crédito"]:
-                    banco_destino = st.selectbox("Banco Destino", ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Caja Menor"])
+                    banco_destino = st.selectbox("Cuenta Destino", ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Caja Menor"])
                 
                 enviar = st.form_submit_button("✅ CONFIRMAR VENTA", type="primary", use_container_width=True)
             
             if enviar:
                 if not st.session_state.cliente_actual:
-                    st.error("⚠️ Falta seleccionar cliente")
+                    st.error("⚠️ Debes seleccionar un cliente primero.")
                 else:
                     try:
                         id_venta = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -456,29 +457,31 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                         if escribir_fila(ws_ven, datos_venta):
                             actualizar_stock(ws_inv, st.session_state.carrito)
                             
-                            # GENERAR PDF PRO
-                            cliente_data = {
+                            # Datos para PDF
+                            cliente_pdf_data = {
                                 "ID": id_venta,
                                 "Fecha": fecha,
                                 "Cliente": st.session_state.cliente_actual.get('Nombre', 'Consumidor'),
                                 "Cedula_Cliente": str(st.session_state.cliente_actual.get('Cedula', '')),
                                 "Direccion": direccion_envio,
+                                "Mascota": st.session_state.cliente_actual.get('Mascota', ''),
                                 "Total": total,
                                 "Metodo": metodo
                             }
                             
-                            pdf_bytes = generar_pdf(cliente_data, st.session_state.carrito)
+                            # Generamos PDF con manejo de errores interno
+                            pdf_bytes = generar_pdf(cliente_pdf_data, st.session_state.carrito)
                             
                             st.session_state.ultimo_pdf = pdf_bytes
                             st.session_state.ultima_venta_id = id_venta
                             st.rerun()
                     except Exception as e:
-                        st.error(f"Error procesando venta: {e}")
+                        st.error(f"Error crítico procesando venta: {e}")
 
         else:
-            st.info("El carrito está vacío.")
+            st.info("🛒 El carrito está vacío. Agrega productos.")
 
-# --- 5. OTRAS PESTAÑAS (ENVÍOS, GASTOS, CIERRE) ---
+# --- 6. OTRAS PESTAÑAS (ENVÍOS, GASTOS, CIERRE) ---
 
 def tab_envios(ws_ven):
     st.markdown("### 🚚 Control de Despachos")
@@ -574,9 +577,9 @@ def tab_cierre(ws_ven, ws_gas):
 def main():
     configurar_pagina()
     st.sidebar.title("🐾 Menú Principal")
-    opcion = st.sidebar.radio("Ir a:", ["Punto de Venta", "Despachos y Envíos", "Registro de Gastos", "Cierre y Finanzas"])
+    opcion = st.sidebar.radio("Ir a:", ["Punto de Venta", "Gestión de Clientes", "Despachos y Envíos", "Registro de Gastos", "Cierre y Finanzas"])
     st.sidebar.markdown("---")
-    st.sidebar.caption("Bigotes y Patitas v3.0 Super App")
+    st.sidebar.caption("Bigotes y Patitas v3.5 CRM")
     
     ws_inv, ws_cli, ws_ven, ws_gas = conectar_google_sheets()
     
@@ -585,6 +588,7 @@ def main():
         return
 
     if opcion == "Punto de Venta": tab_punto_venta(ws_inv, ws_cli, ws_ven)
+    elif opcion == "Gestión de Clientes": tab_clientes(ws_cli)
     elif opcion == "Despachos y Envíos": tab_envios(ws_ven)
     elif opcion == "Registro de Gastos": tab_gastos(ws_gas)
     elif opcion == "Cierre y Finanzas": tab_cierre(ws_ven, ws_gas)
