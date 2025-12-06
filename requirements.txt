@@ -6,3 +6,4 @@ weasyprint
 xlsxwriter
 matplotlib
 plotly
+openpyxl
