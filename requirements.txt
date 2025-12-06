@@ -1,4 +1,8 @@
 streamlit
 pandas
 gspread
-reportlab
+jinja2
+weasyprint
+xlsxwriter
+matplotlib
+plotly
