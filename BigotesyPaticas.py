@@ -567,7 +567,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     
     for medio in medios_digitales:
         # Ventas por este medio (se busca en Metodo o Banco Destino)
-        mask = v_dia['Metodo'].astype(str).str.contains(medio, case=False) | v_dia['Banco_Destino'].astype(str).str.contains(medio, case=False)
+        mask = v_dia['Metodo_Pago'].astype(str).str.contains(medio, case=False) | v_dia['Banco_Destino'].astype(str).str.contains(medio, case=False)
         total_medio = v_dia[mask]['Total'].sum()
         
         if total_medio > 0:
