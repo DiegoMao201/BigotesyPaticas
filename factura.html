@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Factura</title>
+    <style>
+        /* Configuración de página para PDF A4 */
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            -webkit-print-color-adjust: exact; /* Para que imprima colores exactos */
+        }
+
+        .invoice-header {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: white;
+            padding: 40px;
+            overflow: hidden; /* Limpia floats si los hubiera */
+        }
+
+        /* Flexbox a veces falla en versiones viejas, usamos tablas o block simples para header seguro */
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .business-info h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .business-info p {
+            margin: 5px 0;
+            font-size: 14px;
+            opacity: 0.95;
+        }
+
+        .invoice-number {
+            text-align: right;
+        }
+
+        .invoice-number h2 {
+            margin: 0;
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .invoice-body {
+            padding: 40px;
+        }
+
+        .client-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            gap: 20px;
+        }
+
+        .section-box {
+            flex: 1;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #27ae60;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+        }
+
+        p {
+            margin: 5px 0;
+            color: #333;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        /* Tabla de productos */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+        }
+
+        .items-table th {
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #27ae60;
+            border-bottom: 2px solid #27ae60;
+            background-color: #f8f9fa;
+        }
+
+        .items-table td {
+            padding: 12px;
+            color: #333;
+            font-size: 14px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        /* Totales */
+        .totals-section {
+            width: 100%;
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .totals-box {
+            width: 300px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            font-size: 18px;
+            font-weight: bold;
+            color: #27ae60;
+            border-top: 2px solid #e9ecef;
+        }
+
+        /* Pie de página */
+        .invoice-footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #f8f9fa;
+            padding: 20px 40px;
+            text-align: center;
+            border-top: 3px solid #27ae60;
+        }
+        
+        .logo-img {
+            vertical-align: middle;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: white;
+            padding: 2px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-header">
+        <div class="header-content">
+            <div class="business-info">
+                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                    {% if logo_b64 %}
+                        <img src="data:image/png;base64,{{ logo_b64 }}" class="logo-img">
+                    {% endif %}
+                    <h1>Bigotes y Patitas</h1>
+                </div>
+                <p>Tu tienda de confianza para mascotas</p>
+                <p>Tel: 320 504 6277</p>
+                <p>Email: bigotesypaticasdosquebradas@gmail.com</p>
+            </div>
+            <div class="invoice-number">
+                <h2>RECIBO</h2>
+                <p><strong>No:</strong> {{ id_venta }}</p>
+                <p><strong>Fecha:</strong> {{ fecha }}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="invoice-body">
+        <div class="client-section">
+            <div class="section-box">
+                <div class="section-title">Facturado a:</div>
+                <p><strong>{{ cliente_nombre }}</strong></p>
+                <p>ID: {{ cliente_cedula }}</p>
+                <p>{{ cliente_direccion }}</p>
+                <p>Mascota: {{ cliente_mascota }}</p>
+            </div>
+            <div class="section-box" style="text-align: right;">
+                <div class="section-title">Detalles de Pago:</div>
+                <p><strong>Método:</strong> {{ metodo_pago }}</p>
+                <p><strong>Estado:</strong> Pagado</p>
+            </div>
+        </div>
+
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th>Descripción</th>
+                    <th class="text-center">Cant.</th>
+                    <th class="text-right">Precio Unit.</th>
+                    <th class="text-right">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.Nombre_Producto }}</td>
+                    <td class="text-center">{{ item.Cantidad }}</td>
+                    <td class="text-right">${{ "{:,.0f}".format(item.Precio) }}</td>
+                    <td class="text-right">${{ "{:,.0f}".format(item.Subtotal) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="totals-section">
+            <div class="totals-box">
+                <div class="total-row">
+                    <span>TOTAL:</span>
+                    <span>${{ "{:,.0f}".format(total) }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="invoice-footer">
+        <p style="color: #27ae60; font-weight: bold; font-size: 16px;">
+            🐶 ¡Gracias por consentir a tu mascota con nosotros! 🐱
+        </p>
+        <p>Guardar este recibo para cambios o garantías (5 días hábiles).</p>
+    </div>
+</body>
+</html>
