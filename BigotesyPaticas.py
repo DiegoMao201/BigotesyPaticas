@@ -519,7 +519,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     
     # Cálculos Efectivo
     # Entradas en Efectivo: Ventas donde Metodo es Efectivo
-    ventas_efectivo = v_dia[v_dia['Metodo'] == 'Efectivo']['Total'].sum()
+    ventas_efectivo = v_dia[v_dia['Metodo_pago'] == 'Efectivo']['Total'].sum()
     
     # Salidas en Efectivo: Gastos donde Origen es Caja General o Caja Menor
     gastos_efectivo = g_dia[g_dia['Banco_Origen'].isin(['Caja General', 'Caja Menor', 'Efectivo'])]['Monto'].sum()
