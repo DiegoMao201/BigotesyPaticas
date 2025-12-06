@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 import gspread
 from io import BytesIO
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import time
 import numpy as np
 import base64
 import jinja2
-from weasyprint import HTML, CSS # LIBRERÍA NATIVA PARA PDF
+from weasyprint import HTML, CSS
+import plotly.express as px  # Agregamos Plotly para gráficos financieros pro
 
 # --- 1. CONFIGURACIÓN Y ESTILOS ---
 
@@ -15,6 +16,8 @@ COLOR_PRIMARIO = "#2ecc71"  # Verde Éxito
 COLOR_SECUNDARIO = "#27ae60" # Verde Oscuro
 COLOR_FONDO = "#f4f6f9"
 COLOR_TEXTO = "#2c3e50"
+COLOR_GASTO = "#e74c3c"
+COLOR_INVERSION = "#3498db"
 
 # Logo Verificado (Huella simple en PNG Base64)
 LOGO_B64 = """
@@ -23,7 +26,7 @@ iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAABmJLR0QA/wD/AP+gvaeTAAAHpElEQVRo
 /8/5P+fee17AC17wghf8P4R40g0QAuqALsABRICcSeYIsA/4LXBqMu2cdAMmQwjRDLwMrAeWAxVAWshsA74GfAT0CCFOTrR9E2YkCLwM/Ay432Q+
 ArwCXBBCHJ/wOicamQf8CngAyDSZ3wWeBz4VQoybdEsmQgjRDHwfeAlIN5kPAz8RQlROtH1jZiQIrADeBBabzIeAHwFnhRCHJ9yCCcII8F3gH4DL
 ZH4v8HMhRMVE2zchRgLAA8B7gM9kPgD8SAhxfcItmACMAE8BHwNuk/k9wDeEEJcm2r6JGakH3gXWmcyHgO8LIc5MuAUTgBHgceBfJvNu4MdCiCsT
-bd+EGKkF3gU2mswHgO8IIU5NuAUTgBHgCeBvJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5OuAUTgBHgSeAjJvMu4EdCiCsTbd+EGNkM/ADYajIf
+bd+EGKkF3gU2mswHgO8IIU5NuAUTgBHgCeBvJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5OuAUTgBHgSeAjJvNu4EdCiCsTbd+EGNkM/ADYajIf
 AL4jhDg14RZMMEaAp4CPmMw7gR8JIa5MtH0TM7IZ+CGwzWQ+APyHEOLMhFswARgBngH+YTJvB34khLgy0fZNmL0eAF4E7jWZDwK/EEL8b8ItmCC
 MAKuAD4AcMv8B8B0hRG2i7ZuQ2WsFsA3IMpkPAj8RQlROuAUTiBFgJbADyCOzf9K+TwhxbaLtmzAjQWAL8DqQaTIfAv5J+xMhRPVE2zchRgLAKu
 AdIMdkPgT8SwhxdsItmACMAKuA94BcMv+X9v1CiGsTbd/EjASBFcC7QC6Z/0f7fiHEmQm3YIIwAqwC3gNyyfxA2/cLIS5PtH0TYmQFsB3IMZkPA
@@ -46,7 +49,7 @@ def configurar_pagina():
         page_title="Bigotes y Patitas PRO",
         page_icon="🐾",
         layout="wide",
-        initial_sidebar_state="collapsed"
+        initial_sidebar_state="expanded"
     )
     
     st.markdown(f"""
@@ -69,6 +72,22 @@ def configurar_pagina():
         .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {{
             border-radius: 8px;
         }}
+        /* Tabs personalizados */
+        .stTabs [data-baseweb="tab-list"] {{
+            gap: 10px;
+        }}
+        .stTabs [data-baseweb="tab"] {{
+            height: 50px;
+            white-space: pre-wrap;
+            background-color: white;
+            border-radius: 5px;
+            color: {COLOR_TEXTO};
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }}
+        .stTabs [aria-selected="true"] {{
+            background-color: {COLOR_PRIMARIO};
+            color: white;
+        }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -79,7 +98,7 @@ def conectar_google_sheets():
     try:
         if "google_service_account" not in st.secrets:
             st.error("🚨 Falta configuración de secretos (google_service_account y SHEET_URL).")
-            return None, None, None, None
+            return None, None, None, None, None
         
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
         sh = gc.open_by_url(st.secrets["SHEET_URL"])
@@ -89,10 +108,17 @@ def conectar_google_sheets():
         ws_ven = sh.worksheet("Ventas")
         ws_gas = sh.worksheet("Gastos")
         
-        return ws_inv, ws_cli, ws_ven, ws_gas
+        # Intentamos conectar la hoja de Capital, si no existe avisamos
+        try:
+            ws_cap = sh.worksheet("Capital")
+        except:
+            st.error("⚠️ Falta la hoja 'Capital' en Google Sheets. Por favor créala.")
+            ws_cap = None
+        
+        return ws_inv, ws_cli, ws_ven, ws_gas, ws_cap
     except Exception as e:
         st.error(f"Error de conexión con Google Sheets: {e}")
-        return None, None, None, None
+        return None, None, None, None, None
 
 def sanitizar_dato(dato):
     if isinstance(dato, (np.int64, np.int32, np.integer)): return int(dato)
@@ -104,6 +130,7 @@ def leer_datos(ws):
     try:
         data = ws.get_all_records()
         df = pd.DataFrame(data)
+        # Convertir columnas numéricas de forma segura
         for col in ['Precio', 'Stock', 'Monto', 'Total']:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -138,20 +165,13 @@ def actualizar_stock(ws_inv, items):
         st.error(f"Error actualizando stock: {e}")
         return False
 
-# --- 3. GENERADOR DE PDF USANDO WEASYPRINT (NATIVO PYTHON) ---
+# --- 3. GENERADOR DE PDF ---
 
 def generar_pdf_html(venta_data, items):
-    """
-    Lee factura.html, reemplaza las variables y genera el PDF usando WeasyPrint.
-    Funciona perfectamente en Streamlit Cloud / GitHub.
-    """
     try:
-        # 1. Leer la plantilla HTML
         with open("factura.html", "r", encoding="utf-8") as f:
             template_str = f.read()
 
-        # 2. Preparar variables para Jinja2
-        # Limpiamos el base64 del logo
         clean_b64 = LOGO_B64.replace('\n', '').replace(' ', '')
         
         context = {
@@ -167,79 +187,19 @@ def generar_pdf_html(venta_data, items):
             "total": venta_data['Total']
         }
 
-        # 3. Renderizar HTML con Jinja2
         template = jinja2.Template(template_str)
         html_renderizado = template.render(context)
-
-        # 4. Generar PDF en memoria con WeasyPrint
-        # Creamos el objeto HTML y lo convertimos a bytes PDF
         pdf_file = HTML(string=html_renderizado).write_pdf()
         
         return pdf_file
-
     except Exception as e:
         st.error(f"Error generando PDF: {e}")
         return None
 
-# --- 4. NUEVA PESTAÑA: GESTIÓN DE CLIENTES ---
-
-def tab_clientes(ws_cli):
-    st.markdown("### 👥 Gestión de Clientes (CRM)")
-    st.info("Registra aquí toda la información para futuras campañas de marketing y cumpleaños.")
-
-    with st.container(border=True):
-        st.markdown("#### ✨ Nuevo Cliente")
-        with st.form("form_cliente"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                cedula = st.text_input("Cédula / ID *", placeholder="Ej: 1088...")
-                nombre = st.text_input("Nombre Completo *", placeholder="Ej: Juan Pérez")
-                telefono = st.text_input("Teléfono / WhatsApp *", placeholder="Ej: 320...")
-                email = st.text_input("Correo Electrónico", placeholder="cliente@email.com")
-            
-            with col2:
-                direccion = st.text_input("Dirección", placeholder="Barrio, Calle...")
-                nombre_mascota = st.text_input("Nombre de Mascota *", placeholder="Ej: Firulais")
-                tipo_mascota = st.selectbox("Tipo de Mascota", ["Perro", "Gato", "Ave", "Roedor", "Otro"])
-                fecha_nacimiento = st.date_input("Cumpleaños Mascota 🎂", value=None, min_value=date(2000,1,1))
-
-            st.markdown("---")
-            submitted = st.form_submit_button("💾 Guardar Cliente", type="primary", use_container_width=True)
-            
-            if submitted:
-                if cedula and nombre and nombre_mascota and telefono:
-                    # Validar si ya existe
-                    df_cli = leer_datos(ws_cli)
-                    if not df_cli.empty and str(cedula) in df_cli['Cedula'].astype(str).values:
-                        st.error("⚠️ Ya existe un cliente con esta cédula.")
-                    else:
-                        fecha_nac_str = fecha_nacimiento.strftime("%Y-%m-%d") if fecha_nacimiento else ""
-                        fecha_registro = datetime.now().strftime("%Y-%m-%d")
-                        
-                        datos_cliente = [
-                            cedula, nombre, telefono, email, direccion, 
-                            nombre_mascota, tipo_mascota, fecha_nac_str, fecha_registro
-                        ]
-                        
-                        if escribir_fila(ws_cli, datos_cliente):
-                            st.success(f"✅ Cliente {nombre} y su mascota {nombre_mascota} guardados correctamente.")
-                            time.sleep(1.5)
-                            st.rerun()
-                else:
-                    st.warning("Por favor completa los campos obligatorios (*)")
-
-    st.markdown("### 📂 Base de Datos de Clientes")
-    df = leer_datos(ws_cli)
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.info("Aún no hay clientes registrados.")
-
-# --- 5. PESTAÑA: PUNTO DE VENTA (Actualizada) ---
+# --- 4. MÓDULOS DE NEGOCIO ---
 
 def tab_punto_venta(ws_inv, ws_cli, ws_ven):
-    st.markdown("### 🛒 Nueva Venta")
+    st.markdown("### 🛒 Punto de Venta (POS)")
     col_izq, col_der = st.columns([1.5, 1])
 
     if 'carrito' not in st.session_state: st.session_state.carrito = []
@@ -262,17 +222,15 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     res = df_c[df_c['Cedula'] == busqueda]
                     if not res.empty:
                         st.session_state.cliente_actual = res.iloc[0].to_dict()
-                        st.success(f"Cliente encontrado: {st.session_state.cliente_actual.get('Nombre')}")
+                        st.success(f"Cliente: {st.session_state.cliente_actual.get('Nombre')}")
                     else:
                         st.warning("Cliente no encontrado.")
                 else:
                     st.warning("Base de clientes vacía.")
             
-            st.caption("¿No existe? Ve a la pestaña 'Gestión de Clientes' para crearlo completo.")
-
         if st.session_state.cliente_actual:
             c = st.session_state.cliente_actual
-            st.info(f"Cliente: **{c.get('Nombre')}** | Mascota: **{c.get('Mascota', 'N/A')}** ({c.get('Tipo_Mascota', '')})")
+            st.info(f"Cliente: **{c.get('Nombre')}** | Mascota: **{c.get('Mascota', 'N/A')}**")
 
         # Selección de Productos
         st.markdown("#### Agregar Productos")
@@ -285,7 +243,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
             col_cant, col_add = st.columns([1, 2])
             cantidad = col_cant.number_input("Cant", min_value=1, value=1)
             
-            if col_add.button("➕ Agregar", type="primary"):
+            if col_add.button("➕ Agregar al Carrito", type="primary"):
                 if sel_prod:
                     try:
                         id_p = sel_prod.split("ID:")[1]
@@ -300,7 +258,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                             }
                             st.session_state.carrito.append(item)
                         else:
-                            st.error(f"Stock insuficiente. Solo quedan {info_p['Stock']}")
+                            st.error(f"Stock insuficiente. Disponible: {info_p['Stock']}")
                     except Exception as e:
                         st.error(f"Error agregando: {e}")
 
@@ -309,7 +267,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
         st.markdown("### 🧾 Resumen")
         
         if st.session_state.ultimo_pdf:
-            st.success("✅ ¡Venta Registrada Exitosamente!")
+            st.success("✅ ¡Venta Registrada!")
             st.markdown(f"**Ticket #{st.session_state.ultima_venta_id}**")
             
             st.download_button(
@@ -320,7 +278,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                 type="primary"
             )
             
-            if st.button("🔄 Nueva Venta / Limpiar Pantalla"):
+            if st.button("🔄 Nueva Venta / Limpiar"):
                 st.session_state.carrito = []
                 st.session_state.cliente_actual = None
                 st.session_state.ultimo_pdf = None
@@ -337,23 +295,21 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
             
             with st.form("form_cobro"):
                 st.markdown("#### 💳 Pago")
-                tipo_entrega = st.radio("Modalidad:", ["Punto de Venta", "Envío a Domicilio"], horizontal=True)
+                tipo_entrega = st.radio("Entrega:", ["Punto de Venta", "Envío a Domicilio"], horizontal=True)
                 
                 dir_def = st.session_state.cliente_actual.get('Direccion', '') if st.session_state.cliente_actual else ""
                 direccion_envio = "Local"
                 if tipo_entrega == "Envío a Domicilio":
                     direccion_envio = st.text_input("Dirección de Entrega", value=str(dir_def))
 
-                metodo = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "DaviPlata", "Bancolombia", "Davivienda", "Tarjeta Débito/Crédito"])
-                banco_destino = "Caja General"
-                if metodo in ["Nequi", "DaviPlata", "Bancolombia", "Davivienda", "Tarjeta Débito/Crédito"]:
-                    banco_destino = st.selectbox("Cuenta Destino", ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Caja Menor"])
+                metodo = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "DaviPlata", "Bancolombia", "Davivienda", "Tarjeta D/C"])
+                banco_destino = st.selectbox("Cuenta Destino (Interno)", ["Caja General", "Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata"])
                 
                 enviar = st.form_submit_button("✅ CONFIRMAR VENTA", type="primary", use_container_width=True)
             
             if enviar:
                 if not st.session_state.cliente_actual:
-                    st.error("⚠️ Debes seleccionar un cliente primero.")
+                    st.error("⚠️ Selecciona un cliente primero.")
                 else:
                     try:
                         id_venta = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -373,7 +329,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                         if escribir_fila(ws_ven, datos_venta):
                             actualizar_stock(ws_inv, st.session_state.carrito)
                             
-                            # Datos para PDF (Ahora usa el generador HTML)
+                            # Datos para PDF
                             cliente_pdf_data = {
                                 "ID": id_venta,
                                 "Fecha": fecha,
@@ -385,129 +341,295 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                                 "Metodo": metodo
                             }
                             
-                            # Generamos el PDF con WeasyPrint
                             pdf_bytes = generar_pdf_html(cliente_pdf_data, st.session_state.carrito)
-                            
                             st.session_state.ultimo_pdf = pdf_bytes
                             st.session_state.ultima_venta_id = id_venta
                             st.rerun()
                     except Exception as e:
-                        st.error(f"Error crítico procesando venta: {e}")
-
+                        st.error(f"Error procesando venta: {e}")
         else:
-            st.info("🛒 El carrito está vacío. Agrega productos.")
+            st.info("🛒 El carrito está vacío.")
 
-# --- 6. OTRAS PESTAÑAS (ENVÍOS, GASTOS, CIERRE) ---
+def tab_clientes(ws_cli):
+    st.markdown("### 👥 Gestión de Clientes (CRM)")
+    with st.container(border=True):
+        st.markdown("#### ✨ Nuevo Cliente")
+        with st.form("form_cliente"):
+            col1, col2 = st.columns(2)
+            with col1:
+                cedula = st.text_input("Cédula / ID *")
+                nombre = st.text_input("Nombre Completo *")
+                telefono = st.text_input("Teléfono / WhatsApp *")
+                email = st.text_input("Correo Electrónico")
+            with col2:
+                direccion = st.text_input("Dirección")
+                nombre_mascota = st.text_input("Nombre Mascota *")
+                tipo_mascota = st.selectbox("Tipo", ["Perro", "Gato", "Ave", "Roedor", "Otro"])
+                fecha_nac = st.date_input("Cumpleaños Mascota", value=None)
 
-def tab_envios(ws_ven):
-    st.markdown("### 🚚 Control de Despachos")
-    df = leer_datos(ws_ven)
-    if not df.empty and 'Tipo_Entrega' in df.columns and 'Estado_Envio' in df.columns:
-        pendientes = df[(df['Tipo_Entrega'] == 'Envío a Domicilio') & (df['Estado_Envio'] == 'Pendiente')]
-        if pendientes.empty:
-            st.success("🎉 ¡No hay envíos pendientes!")
+            if st.form_submit_button("💾 Guardar Cliente", type="primary"):
+                if cedula and nombre and nombre_mascota:
+                    datos = [cedula, nombre, telefono, email, direccion, nombre_mascota, tipo_mascota, str(fecha_nac), str(date.today())]
+                    if escribir_fila(ws_cli, datos):
+                        st.success("Cliente guardado.")
+                else:
+                    st.warning("Completa los campos obligatorios (*).")
+    
+    st.markdown("#### Base de Datos")
+    df = leer_datos(ws_cli)
+    st.dataframe(df, use_container_width=True)
+
+def tab_gestion_capital(ws_cap, ws_gas):
+    st.markdown("### 💰 Gestión de Inversión y Gastos")
+    st.info("Aquí registras el dinero que entra como INVERSIÓN (Capital) y el dinero que sale como GASTO.")
+
+    tab1, tab2 = st.tabs(["📉 Registrar Gasto/Egreso", "📈 Registrar Inversión/Capital"])
+
+    # --- TAB GASTOS ---
+    with tab1:
+        st.markdown("#### Salida de Dinero")
+        with st.form("form_gasto"):
+            col1, col2 = st.columns(2)
+            with col1:
+                tipo_gasto = st.selectbox("Clasificación", ["Gasto Fijo", "Gasto Variable", "Costo de Venta (Mercancía)"])
+                categoria = st.selectbox("Concepto", ["Compra de Mercancía", "Arriendo", "Nómina", "Servicios", "Publicidad", "Mantenimiento", "Otros"])
+                descripcion = st.text_input("Detalle")
+            with col2:
+                monto = st.number_input("Monto Salida ($)", min_value=0.0)
+                origen = st.selectbox("¿De dónde salió el dinero?", ["Caja General", "Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Caja Menor"])
+                fecha_gasto = st.date_input("Fecha Gasto", value=date.today())
+
+            if st.form_submit_button("🔴 Registrar Gasto"):
+                if monto > 0:
+                    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    datos = [ts, str(fecha_gasto), tipo_gasto, categoria, descripcion, monto, "N/A", origen]
+                    if escribir_fila(ws_gas, datos):
+                        st.success("Gasto registrado correctamente.")
+                        time.sleep(1)
+                        st.rerun()
+                else:
+                    st.error("El monto debe ser mayor a 0.")
+
+    # --- TAB INVERSIONES ---
+    with tab2:
+        st.markdown("#### Entrada de Dinero (Inversión)")
+        st.caption("Usa esto para la inversión inicial o inyecciones de dinero futuras.")
+        
+        if ws_cap is None:
+            st.error("Error: No se encontró la hoja 'Capital'.")
         else:
-            st.markdown(f"**Tienes {len(pendientes)} envíos por despachar.**")
-            for index, row in pendientes.iterrows():
-                with st.expander(f"📦 {row['Nombre_Cliente']} - {row['Direccion_Envio']}"):
-                    c1, c2 = st.columns([3, 1])
-                    c1.write(f"**Items:** {row['Items']}")
-                    c1.write(f"**Total:** ${row['Total']:,.0f}")
-                    if c2.button("Marcar Enviado", key=f"btn_{row['ID_Venta']}"):
-                        try:
-                            cell = ws_ven.find(str(row['ID_Venta']))
-                            ws_ven.update_cell(cell.row, 7, "Enviado")
-                            st.toast("Estado actualizado a Enviado")
+            with st.form("form_capital"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    tipo_inv = st.selectbox("Tipo de Inversión", ["Capital Inicial", "Inyección Adicional", "Préstamo Socio"])
+                    monto_inv = st.number_input("Monto a Ingresar ($)", min_value=0.0, step=10000.0)
+                with c2:
+                    destino = st.selectbox("¿A dónde entra el dinero?", ["Bancolombia Ahorros", "Davivienda", "Caja General", "Nequi"])
+                    desc_inv = st.text_input("Descripción / Socio")
+                    fecha_inv = st.date_input("Fecha Inversión", value=date.today())
+
+                if st.form_submit_button("🔵 Registrar Inversión"):
+                    if monto_inv > 0:
+                        id_cap = datetime.now().strftime("%Y%m%d%H%M")
+                        datos_cap = [id_cap, str(fecha_inv), tipo_inv, monto_inv, destino, desc_inv]
+                        if escribir_fila(ws_cap, datos_cap):
+                            st.success(f"Inversión de ${monto_inv:,.0f} registrada exitosamente.")
                             time.sleep(1)
                             st.rerun()
-                        except Exception as e:
-                            st.error(f"Error: {e}")
+                    else:
+                        st.error("El monto debe ser positivo.")
 
-def tab_gastos(ws_gas):
-    st.markdown("### 💸 Registro de Egresos")
-    with st.container(border=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            tipo_gasto = st.selectbox("Clasificación", ["Gasto Fijo", "Gasto Variable", "Costo de Venta"])
-            categorias = []
-            if tipo_gasto == "Gasto Fijo": categorias = ["Arriendo", "Nómina", "Servicios Públicos", "Internet/Software", "Seguros"]
-            elif tipo_gasto == "Gasto Variable": categorias = ["Comisiones", "Mantenimiento", "Publicidad", "Transporte", "Papelería"]
-            else: categorias = ["Compra de Mercancía", "Insumos Veterinarios", "Laboratorio"]
-            categoria = st.selectbox("Concepto", categorias)
-            descripcion = st.text_input("Descripción Detallada (Opcional)")
-        with col2:
-            monto = st.number_input("Monto", min_value=0.0, step=100.0)
-            metodo_pago = st.selectbox("Medio de Pago", ["Transferencia", "Efectivo", "Tarjeta Crédito"])
-            origen_fondos = st.selectbox("¿De dónde sale el dinero?", ["Caja General", "Bancolombia Ahorros", "Davivienda", "Caja Menor"])
+def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
+    st.markdown("### ⚖️ Cuadre de Caja (Diario)")
+    st.markdown("Utiliza esta herramienta al finalizar el día para verificar que el dinero físico y digital coincida.")
 
-        if st.button("Guardar Gasto", type="primary", use_container_width=True):
-            if monto > 0:
-                datos_gasto = [datetime.now().strftime("%Y%m%d%H%M%S"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), tipo_gasto, categoria, descripcion, monto, metodo_pago, origen_fondos]
-                if escribir_fila(ws_gas, datos_gasto):
-                    st.success("Gasto registrado.")
-                    time.sleep(1)
-                    st.rerun()
-            else: st.warning("Monto debe ser > 0")
-
-def tab_cierre(ws_ven, ws_gas):
-    st.markdown("### 💰 Cierre de Caja")
-    hoy = date.today()
-    fecha_filtro = st.date_input("Fecha de Análisis", hoy)
+    fecha_analisis = st.date_input("📅 Seleccionar Fecha de Cuadre", value=date.today())
     
+    # Cargar datos
     df_v = leer_datos(ws_ven)
     df_g = leer_datos(ws_gas)
+    df_c = leer_datos(ws_cap)
+
+    # Convertir fechas
+    for df in [df_v, df_g, df_c]:
+        if not df.empty and 'Fecha' in df.columns:
+            df['Fecha_Dt'] = pd.to_datetime(df['Fecha']).dt.date
+
+    # Filtrar por día
+    v_dia = df_v[df_v['Fecha_Dt'] == fecha_analisis] if not df_v.empty else pd.DataFrame()
+    g_dia = df_g[df_g['Fecha_Dt'] == fecha_analisis] if not df_g.empty else pd.DataFrame()
+    c_dia = df_c[df_c['Fecha_Dt'] == fecha_analisis] if not df_c.empty else pd.DataFrame()
+
+    # Cálculos
+    total_ventas = v_dia['Total'].sum() if not v_dia.empty else 0
+    total_inversion = c_dia['Monto'].sum() if not c_dia.empty else 0
+    total_gastos = g_dia['Monto'].sum() if not g_dia.empty else 0
+    flujo_neto = (total_ventas + total_inversion) - total_gastos
+
+    # Métricas Principales
+    st.markdown("---")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Ventas (Ingreso)", f"${total_ventas:,.0f}", delta="Operativo")
+    m2.metric("Total Inversión (Entrada)", f"${total_inversion:,.0f}", delta="Capital")
+    m3.metric("Total Gastos (Salida)", f"${total_gastos:,.0f}", delta="-Salidas", delta_color="inverse")
+    m4.metric("💰 Flujo Neto del Día", f"${flujo_neto:,.0f}", delta_color="normal" if flujo_neto >= 0 else "inverse")
+    st.markdown("---")
+
+    # Detalle por Cuenta/Banco (La parte más importante para cuadrar)
+    st.subheader("🔎 Detalle para Cuadre (Por Cuenta)")
+    st.info("Compara estos montos con lo que tienes realmente en cada cuenta o cajón.")
+
+    cuentas = ["Efectivo", "Caja General", "Nequi", "DaviPlata", "Bancolombia", "Bancolombia Ahorros", "Davivienda", "Tarjeta Débito/Crédito", "Caja Menor"]
+    # Normalizamos nombres para el reporte
+    resumen_cuentas = []
+
+    for cta in cuentas:
+        # Entradas por Ventas (Banco_Destino)
+        v_cta = v_dia[v_dia['Banco_Destino'].astype(str).str.contains(cta, case=False, na=False)]['Total'].sum() if not v_dia.empty else 0
+        # Entradas por Inversión (Destino_Fondos)
+        i_cta = c_dia[c_dia['Destino_Fondos'].astype(str).str.contains(cta, case=False, na=False)]['Monto'].sum() if not c_dia.empty else 0
+        # Salidas por Gastos (Banco_Origen)
+        g_cta = g_dia[g_dia['Banco_Origen'].astype(str).str.contains(cta, case=False, na=False)]['Monto'].sum() if not g_dia.empty else 0
+        
+        neto = (v_cta + i_cta) - g_cta
+        if v_cta > 0 or i_cta > 0 or g_cta > 0:
+            resumen_cuentas.append({
+                "Cuenta / Medio": cta,
+                "Entrada (Ventas)": v_cta,
+                "Entrada (Capital)": i_cta,
+                "Salidas (Gastos)": g_cta,
+                "DEBE HABER HOY": neto
+            })
     
-    if not df_v.empty:
-        df_v['Fecha_Dt'] = pd.to_datetime(df_v['Fecha']).dt.date
-        datos_dia = df_v[df_v['Fecha_Dt'] == fecha_filtro]
-        total_ventas = datos_dia['Total'].sum()
-        num_ventas = len(datos_dia)
-        
-        total_gastos = 0
-        if not df_g.empty:
-            df_g['Fecha_Dt'] = pd.to_datetime(df_g['Fecha']).dt.date
-            gastos_dia = df_g[df_g['Fecha_Dt'] == fecha_filtro]
-            total_gastos = gastos_dia['Monto'].sum()
-        
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Ventas Totales", f"${total_ventas:,.0f}")
-        m2.metric("Gastos Totales", f"${total_gastos:,.0f}", delta_color="inverse")
-        m3.metric("Balance Neto", f"${(total_ventas - total_gastos):,.0f}")
-        m4.metric("Transacciones", num_ventas)
-        st.markdown("---")
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            st.subheader("Entradas por Banco")
-            if not datos_dia.empty:
-                bancos = datos_dia.groupby('Banco_Destino')['Total'].sum().reset_index()
-                st.dataframe(bancos, use_container_width=True)
-        with c2:
-            st.subheader("Salidas por Banco")
-            if not df_g.empty and not gastos_dia.empty:
-                salidas = gastos_dia.groupby('Banco_Origen')['Monto'].sum().reset_index()
-                st.dataframe(salidas, use_container_width=True)
+    if resumen_cuentas:
+        df_resumen = pd.DataFrame(resumen_cuentas)
+        st.dataframe(df_resumen.style.format({
+            "Entrada (Ventas)": "${:,.0f}", 
+            "Entrada (Capital)": "${:,.0f}", 
+            "Salidas (Gastos)": "${:,.0f}", 
+            "DEBE HABER HOY": "${:,.0f}"
+        }), use_container_width=True)
+    else:
+        st.warning("No hubo movimientos registrados para esta fecha.")
+
+def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
+    st.markdown("### 📊 Estado de Resultados & Finanzas")
+    st.markdown("Reporte financiero gerencial para toma de decisiones.")
+
+    # Filtros de Fecha Globales
+    col_d1, col_d2 = st.columns(2)
+    f_inicio = col_d1.date_input("Desde", value=date.today().replace(day=1))
+    f_fin = col_d2.date_input("Hasta", value=date.today())
+
+    # Cargar Data
+    df_v = leer_datos(ws_ven)
+    df_g = leer_datos(ws_gas)
+    df_c = leer_datos(ws_cap)
+
+    # Preprocesamiento Fechas
+    if not df_v.empty: df_v['Fecha_Dt'] = pd.to_datetime(df_v['Fecha']).dt.date
+    if not df_g.empty: df_g['Fecha_Dt'] = pd.to_datetime(df_g['Fecha']).dt.date
+    if not df_c.empty: df_c['Fecha_Dt'] = pd.to_datetime(df_c['Fecha']).dt.date
+
+    # Filtrar Rango
+    v_rango = df_v[(df_v['Fecha_Dt'] >= f_inicio) & (df_v['Fecha_Dt'] <= f_fin)] if not df_v.empty else pd.DataFrame()
+    g_rango = df_g[(df_g['Fecha_Dt'] >= f_inicio) & (df_g['Fecha_Dt'] <= f_fin)] if not df_g.empty else pd.DataFrame()
+    
+    # --- CÁLCULO ESTADO DE RESULTADOS (P&L) ---
+    # 1. Ingresos Operacionales
+    ingresos = v_rango['Total'].sum() if not v_rango.empty else 0
+
+    # 2. Costo de Venta (Aproximación por Gasto 'Compra de Mercancía' o 'Costo de Venta')
+    # Asumimos contabilidad de caja: Lo que gasté en mercancía en este periodo es el costo.
+    costos = 0
+    gastos_op = 0
+    if not g_rango.empty:
+        # Filtramos Costos Directos (Mercancía) vs Gastos Operativos (Arriendo, etc)
+        mask_costo = g_rango['Clasificacion'].isin(['Costo de Venta', 'Costo de Venta (Mercancía)'])
+        costos = g_rango[mask_costo]['Monto'].sum()
+        gastos_op = g_rango[~mask_costo]['Monto'].sum()
+
+    utilidad_bruta = ingresos - costos
+    utilidad_neta = utilidad_bruta - gastos_op
+    
+    margen_neto = (utilidad_neta / ingresos * 100) if ingresos > 0 else 0
+
+    # --- VISUALIZACIÓN ---
+    st.markdown("#### 1. Estado de Pérdidas y Ganancias (P&L)")
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    kpi1.metric("Ingresos (Ventas)", f"${ingresos:,.0f}")
+    kpi2.metric("Costos Directos", f"${costos:,.0f}")
+    kpi3.metric("Gastos Operativos", f"${gastos_op:,.0f}")
+    kpi4.metric("Utilidad Neta", f"${utilidad_neta:,.0f}", delta=f"{margen_neto:.1f}% Margen")
+
+    # Gráfico de Cascada (Waterfall) simplificado con Bar Chart
+    datos_pl = pd.DataFrame({
+        "Concepto": ["(+) Ingresos", "(-) Costos", "(=) Utilidad Bruta", "(-) Gastos Ops", "(=) Utilidad Neta"],
+        "Monto": [ingresos, -costos, utilidad_bruta, -gastos_op, utilidad_neta],
+        "Color": ["Positivo", "Negativo", "Total", "Negativo", "Final"]
+    })
+    
+    fig_pl = px.bar(datos_pl, x="Concepto", y="Monto", color="Color", 
+                    color_discrete_map={"Positivo": COLOR_PRIMARIO, "Negativo": COLOR_GASTO, "Total": "#95a5a6", "Final": COLOR_INVERSION},
+                    text_auto='.2s', title="Estructura Financiera del Periodo")
+    st.plotly_chart(fig_pl, use_container_width=True)
+
+    st.markdown("#### 2. Análisis de Retorno de Inversión (Histórico Total)")
+    total_invertido = df_c['Monto'].sum() if not df_c.empty else 0
+    
+    # Calculamos la utilidad acumulada histórica (aproximada con todos los datos disponibles)
+    historico_ventas = df_v['Total'].sum() if not df_v.empty else 0
+    historico_gastos = df_g['Monto'].sum() if not df_g.empty else 0
+    utilidad_acumulada = historico_ventas - historico_gastos
+    
+    col_inv1, col_inv2 = st.columns(2)
+    with col_inv1:
+        st.metric("Total Capital Invertido (Histórico)", f"${total_invertido:,.0f}")
+        roi = (utilidad_acumulada / total_invertido * 100) if total_invertido > 0 else 0
+        st.metric("ROI (Retorno sobre Inversión)", f"{roi:.1f}%", help="Mide cuánto has ganado respecto a lo que invertiste.")
+    
+    with col_inv2:
+        st.info(f"""
+        **Interpretación:**
+        - Has invertido un total de **${total_invertido:,.0f}**.
+        - Tu negocio ha generado una utilidad neta histórica de **${utilidad_acumulada:,.0f}**.
+        - { "¡Excelente! Ya recuperaste tu inversión y estás ganando." if utilidad_acumulada > total_invertido else "Aún estás en proceso de recuperar la inversión inicial." }
+        """)
 
 # --- MAIN ---
 
 def main():
     configurar_pagina()
-    st.sidebar.title("🐾 Menú Principal")
-    opcion = st.sidebar.radio("Ir a:", ["Punto de Venta", "Gestión de Clientes", "Despachos y Envíos", "Registro de Gastos", "Cierre y Finanzas"])
-    st.sidebar.markdown("---")
-    st.sidebar.caption("Bigotes y Patitas v3.5 CRM")
     
-    ws_inv, ws_cli, ws_ven, ws_gas = conectar_google_sheets()
-    
+    # Sidebar Estilizado
+    with st.sidebar:
+        st.image("https://cdn-icons-png.flaticon.com/512/2171/2171991.png", width=100)
+        st.title("Bigotes y Patitas")
+        st.caption("Sistema ERP v4.0")
+        st.markdown("---")
+        opcion = st.radio("Navegación", 
+            ["Punto de Venta", "Gestión de Clientes", "Inversión y Gastos", "Cuadre Diario (Caja)", "Finanzas & Resultados"],
+            index=0
+        )
+        st.markdown("---")
+        st.info("💡 Tip: Realiza el cuadre diario al cerrar el local.")
+
+    ws_inv, ws_cli, ws_ven, ws_gas, ws_cap = conectar_google_sheets()
+
     if not ws_inv:
-        st.warning("Esperando conexión a Google Sheets...")
+        st.warning("🔄 Conectando a la base de datos...")
         return
 
-    if opcion == "Punto de Venta": tab_punto_venta(ws_inv, ws_cli, ws_ven)
-    elif opcion == "Gestión de Clientes": tab_clientes(ws_cli)
-    elif opcion == "Despachos y Envíos": tab_envios(ws_ven)
-    elif opcion == "Registro de Gastos": tab_gastos(ws_gas)
-    elif opcion == "Cierre y Finanzas": tab_cierre(ws_ven, ws_gas)
+    if opcion == "Punto de Venta":
+        tab_punto_venta(ws_inv, ws_cli, ws_ven)
+    elif opcion == "Gestión de Clientes":
+        tab_clientes(ws_cli)
+    elif opcion == "Inversión y Gastos":
+        tab_gestion_capital(ws_cap, ws_gas)
+    elif opcion == "Cuadre Diario (Caja)":
+        tab_cuadre_diario(ws_ven, ws_gas, ws_cap)
+    elif opcion == "Finanzas & Resultados":
+        tab_finanzas_pro(ws_ven, ws_gas, ws_cap)
 
 if __name__ == "__main__":
     main()
