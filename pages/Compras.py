@@ -13,13 +13,13 @@ import re
 # ==========================================
 
 st.set_page_config(
-    page_title="Recepción Inteligente Colombia v9.0 FINAL", 
+    page_title="Recepción Inteligente Colombia v10.0 FINAL", 
     page_icon="🇨🇴", 
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS Profesionales y Espaciados
+# Estilos CSS Profesionales
 st.markdown("""
     <style>
     /* Fondo general */
@@ -47,7 +47,7 @@ st.markdown("""
     .metric-container {
         display: flex;
         justify-content: center;
-        gap: 30px; /* Espacio entre tarjetas */
+        gap: 30px;
         margin-bottom: 40px;
     }
 
@@ -57,7 +57,7 @@ st.markdown("""
         padding: 25px 20px;
         width: 30%;
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        border-left: 6px solid #3b82f6; /* Borde azul a la izquierda */
+        border-left: 6px solid #3b82f6;
         text-align: center;
         transition: transform 0.2s;
     }
@@ -233,13 +233,13 @@ def cargar_cerebro(_ws_inv, _ws_map):
     return lista_prods, dict_prods, memoria
 
 # ==========================================
-# 5. PARSER XML COLOMBIA (UBL 2.1) - CORREGIDO
+# 5. PARSER XML COLOMBIA (UBL 2.1)
 # ==========================================
 
 def parsear_xml_colombia(archivo):
     """
     Lee XMLs de Facturación Electrónica Colombia.
-    CORRECCIÓN: Calcula el precio unitario restando el primer descuento al precio base
+    Calcula el precio unitario restando el primer descuento al precio base
     para coincidir con el PDF y prioriza el StandardID.
     """
     try:
@@ -297,11 +297,10 @@ def parsear_xml_colombia(archivo):
                 base_price = float(price_node.text) if price_node is not None else 0.0
                 
                 # 2. Buscar el PRIMER descuento (AllowanceCharge con ChargeIndicator=false)
-                # El PDF muestra: Precio Base - Descuento 1 = Valor Unitario
                 discount_amount = 0.0
                 allowances = line.findall('.//cac:AllowanceCharge', ns)
                 if allowances:
-                    first_allowance = allowances[0] # Tomamos el primero
+                    first_allowance = allowances[0] 
                     is_charge = first_allowance.find('cbc:ChargeIndicator', ns).text
                     if is_charge == 'false':
                         discount_amount = float(first_allowance.find('cbc:Amount', ns).text)
@@ -313,7 +312,7 @@ def parsear_xml_colombia(archivo):
                 item_node = line.find('cac:Item', ns)
                 desc = item_node.find('cbc:Description', ns).text
                 
-                # Priorizar StandardItemIdentification (Coincide mejor con el PDF)
+                # Priorizar StandardItemIdentification
                 sku_prov = "S/C"
                 std_id = item_node.find('.//cac:StandardItemIdentification/cbc:ID', ns)
                 seller_id = item_node.find('.//cac:SellersItemIdentification/cbc:ID', ns)
@@ -327,7 +326,7 @@ def parsear_xml_colombia(archivo):
                     'SKU_Proveedor': sku_prov,
                     'Descripcion': desc,
                     'Cantidad': qty,
-                    'Costo_Unitario': final_unit_price # Precio corregido
+                    'Costo_Unitario': final_unit_price 
                 })
             except: continue
 
@@ -344,112 +343,108 @@ def parsear_xml_colombia(archivo):
         return None
 
 # ==========================================
-# 6. LÓGICA DE GUARDADO (Cerebro de Precios)
+# 6. LÓGICA DE GUARDADO (Cerebro Mejorado)
 # ==========================================
 
 def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
     """
     Actualiza Inventario, Precios, Costos y Memoria.
+    CORRECCIÓN: Asegura que si es NUEVO, se genere el ID primero y ESE ID
+    se guarde en el mapeo para que la próxima vez lo encuentre.
     """
     try:
         fecha = datetime.now().strftime("%Y-%m-%d")
-
-        # --- A. APRENDIZAJE (Guardar en Maestro) ---
-        new_mappings = []
-        for _, row in df_final.iterrows():
-            sel = row['SKU_Interno_Seleccionado']
-            if "NUEVO" not in sel:
-                sku_int = sel.split(" | ")[0].strip()
-                new_mappings.append([
-                    str(meta_xml['ID_Proveedor']),
-                    str(meta_xml['Proveedor']),
-                    str(row['SKU_Proveedor']),
-                    sku_int,
-                    float(row['Factor_Pack']),
-                    fecha
-                ])
-        if new_mappings: ws_map.append_rows(new_mappings)
-
-        # --- B. LECTURA DE INVENTARIO ACTUAL ---
+        
+        # --- A. LEER INVENTARIO ACTUAL ---
         inv_data = ws_inv.get_all_values()
         header = inv_data[0]
         
-        # --- BÚSQUEDA DE INDICES DE COLUMNAS ---
+        # Índices de columnas
         try:
-            # 1. ID
             idx_id = 0 
-            
-            # 2. NOMBRE (Buscamos 'Nombre' o 'Desc')
             idx_nombre = next(i for i, c in enumerate(header) if 'Nombre' in c or 'Nom' in c or 'Desc' in c)
-            
-            # 3. STOCK
             idx_stock = next(i for i, c in enumerate(header) if 'Stock' in c)
-            
-            # 4. COSTO
             idx_costo = next(i for i, c in enumerate(header) if 'Costo' in c)
-            
-            # 5. PRECIO VENTA
             idx_precio = next(i for i, c in enumerate(header) if any(x in c for x in ['Precio', 'Venta', 'PVP']))
-            
-        except StopIteration:
-            return False, ["❌ Error Crítico: Revisa las columnas de tu hoja Inventario. Necesitas: 'Nombre', 'Stock', 'Costo', 'Precio'."]
-        except Exception as e:
-            # Fallback por si acaso
-            idx_nombre = 1
-            idx_stock = 2
-            idx_costo = 3
-            idx_precio = 4
+        except:
+            # Fallback
+            idx_nombre = 1; idx_stock = 2; idx_costo = 3; idx_precio = 4
 
         # Mapa de filas para actualizaciones rápidas
         mapa_filas = {normalizar_str(r[idx_id]): i+1 for i, r in enumerate(inv_data)}
 
+        new_mappings = []
         updates = []
         appends = []
         logs = []
-
-        # --- C. BUCLE PRINCIPAL ---
-        for _, row in df_final.iterrows():
+        
+        # --- B. BUCLE PRINCIPAL (Unificado) ---
+        for index_row, row in df_final.iterrows():
             sel = row['SKU_Interno_Seleccionado']
+            sku_prov_factura = str(row['SKU_Proveedor'])
             
-            # Datos de Entrada
+            # Datos Numéricos
             factor = float(row['Factor_Pack']) if row['Factor_Pack'] > 0 else 1.0
             cant_recibida_xml = float(row['Cantidad_Recibida'])
             cant_total_unidades = cant_recibida_xml * factor
-            
-            # CÁLCULO DE COSTO CON IVA (5%)
             costo_unitario_xml = float(row['Costo_Unitario']) / factor
             costo_nuevo_con_iva = costo_unitario_xml * 1.05 # +5%
             
+            # 1. DETERMINAR ID INTERNO REAL
+            final_internal_id = ""
+            es_producto_nuevo = False
+            
             if "NUEVO" in sel:
-                # --- NUEVO PRODUCTO ---
-                new_id = str(row['SKU_Proveedor']) if row['SKU_Proveedor'] != "S/C" else f"N-{int(time.time())}"
+                # Caso: Crear Nuevo. Generamos el ID aquí mismo.
+                es_producto_nuevo = True
                 
-                # Precio Sugerido (Costo + 30% + Redondeo)
+                # Intentar usar el SKU del proveedor como ID interno si es válido
+                if sku_prov_factura and sku_prov_factura != "S/C":
+                    final_internal_id = sku_prov_factura
+                else:
+                    # Generar ID único temporal
+                    final_internal_id = f"N-{int(time.time())}-{index_row}"
+            else:
+                # Caso: Producto Existente seleccionado de la lista
+                final_internal_id = sel.split(" | ")[0].strip()
+            
+            # 2. GUARDAR MAPEO (Aprendizaje)
+            # Aquí está la corrección clave: guardamos el mapping usando final_internal_id
+            new_mappings.append([
+                str(meta_xml['ID_Proveedor']),
+                str(meta_xml['Proveedor']),
+                sku_prov_factura,
+                final_internal_id, # <--- Este es el ID correcto, no "NUEVO..."
+                factor,
+                fecha
+            ])
+            
+            # 3. ACTUALIZAR INVENTARIO (Append o Update)
+            if es_producto_nuevo:
+                # Crear Fila Nueva
                 precio_sugerido = redondear_centena(costo_nuevo_con_iva * 1.30)
                 
                 new_row = [""] * len(header)
-                new_row[0] = new_id
+                new_row[0] = final_internal_id
                 
-                # Asegurar que escribimos en la columna correcta del NOMBRE
-                if idx_nombre < len(new_row):
-                    new_row[idx_nombre] = row['Descripcion'] # Nombre desde factura
-                
+                if idx_nombre < len(new_row): new_row[idx_nombre] = row['Descripcion']
                 if idx_stock < len(new_row): new_row[idx_stock] = sanitizar_para_sheet(cant_total_unidades)
                 if idx_costo < len(new_row): new_row[idx_costo] = sanitizar_para_sheet(costo_nuevo_con_iva)
                 if idx_precio < len(new_row): new_row[idx_precio] = sanitizar_para_sheet(precio_sugerido)
                 
                 appends.append(new_row)
-                logs.append(f"✨ CREADO: {new_id} ({row['Descripcion']}) | Costo: ${costo_nuevo_con_iva:,.0f} | Venta: ${precio_sugerido:,.0f}")
+                logs.append(f"✨ CREADO: {final_internal_id} | {row['Descripcion']}")
+                
+                # Actualizar mapa_filas temporalmente por si hay duplicados en la misma factura (raro pero posible)
+                mapa_filas[normalizar_str(final_internal_id)] = len(inv_data) + len(appends)
             
             else:
-                # --- ACTUALIZAR EXISTENTE ---
-                sku_int = normalizar_str(sel.split(" | ")[0])
-                
-                if sku_int in mapa_filas:
-                    fila = mapa_filas[sku_int]
+                # Actualizar Fila Existente
+                sku_norm = normalizar_str(final_internal_id)
+                if sku_norm in mapa_filas:
+                    fila = mapa_filas[sku_norm]
                     row_actual = inv_data[fila-1]
                     
-                    # Leer datos actuales
                     try: stock_curr = clean_currency(row_actual[idx_stock])
                     except: stock_curr = 0.0
                     try: costo_curr = clean_currency(row_actual[idx_costo])
@@ -457,34 +452,24 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
                     try: precio_curr = clean_currency(row_actual[idx_precio])
                     except: precio_curr = 0.0
                     
-                    # 1. Actualizar Stock
+                    # Actualizar Stock y Costo
                     new_stock = stock_curr + cant_total_unidades
                     updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_stock+1), 'values': [[new_stock]]})
-                    
-                    # 2. Actualizar Costo (Siempre)
                     updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_costo+1), 'values': [[costo_nuevo_con_iva]]})
                     
-                    # 3. Lógica Precio
-                    nuevo_precio_final = precio_curr 
-                    
-                    # SUBIDA DE COSTO
+                    # Lógica Precio Inteligente
+                    nuevo_precio = precio_curr
                     if costo_nuevo_con_iva > costo_curr:
-                        margen_anterior = (precio_curr / costo_curr) if costo_curr > 0 else 1.30
-                        if margen_anterior < 1: margen_anterior = 1.30
-                        
-                        precio_teorico = costo_nuevo_con_iva * margen_anterior
-                        nuevo_precio_final = redondear_centena(precio_teorico)
-                        
-                        updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_precio+1), 'values': [[nuevo_precio_final]]})
-                        logs.append(f"📈 SUBIÓ: {sku_int} | Costo: {costo_curr:,.0f}->{costo_nuevo_con_iva:,.0f} | Precio: {precio_curr:,.0f}->{nuevo_precio_final:,.0f}")
-                    
-                    # BAJADA DE COSTO
-                    elif costo_nuevo_con_iva < costo_curr:
-                        logs.append(f"💰 MEJOR MARGEN: {sku_int} | Costo bajó. Precio se mantiene.")
-                    
+                        margen = (precio_curr / costo_curr) if costo_curr > 0 else 1.30
+                        if margen < 1.05: margen = 1.30
+                        nuevo_precio = redondear_centena(costo_nuevo_con_iva * margen)
+                        updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_precio+1), 'values': [[nuevo_precio]]})
+                        logs.append(f"📈 SUBIÓ: {final_internal_id} | P: ${nuevo_precio:,.0f}")
                     else:
-                        logs.append(f"🔄 STOCK UP: {sku_int}")
+                        logs.append(f"🔄 STOCK: {final_internal_id} (+{cant_total_unidades})")
 
+        # --- C. EJECUTAR ESCRITURAS ---
+        if new_mappings: ws_map.append_rows(new_mappings) # ¡Guarda el aprendizaje!
         if updates: ws_inv.batch_update(updates)
         if appends: ws_inv.append_rows(appends)
 
@@ -543,8 +528,7 @@ def main():
         mem = st.session_state.memoria
         dct = st.session_state.dct_prods
         
-        # --- Tarjetas Métricas con HTML/CSS Personalizado ---
-        # Esto crea los cuadros bonitos y espaciosos
+        # --- Tarjetas Métricas ---
         st.markdown(f"""
             <div class="metric-container">
                 <div class="metric-card">
@@ -576,6 +560,7 @@ def main():
             sel_def = "NUEVO (Crear Producto)"
             fac_def = 1.0
             
+            # Búsqueda en memoria
             if key in mem:
                 sku_int = mem[key]['SKU_Interno']
                 if sku_int in dct:
@@ -629,6 +614,7 @@ def main():
                 if ok:
                     st.write("✅ Inventario Actualizado")
                     st.write("✅ Precios Recalculados")
+                    st.write("✅ Aprendizaje Guardado") # Confirmación visual
                     time.sleep(1)
                     st.balloons()
                     st.success("¡Proceso Terminado Exitosamente!")
