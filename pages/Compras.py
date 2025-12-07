@@ -163,7 +163,9 @@ def cargar_datos_sistema(_ws_inv, _ws_map):
 # ==========================================
 
 def parsear_xml(archivo):
-    """Lee el XML y extrae datos clave."""
+    """
+    Lector Universal: Intenta leer UBL estándar y CFDI (México/Latam).
+    """
     try:
         tree = ET.parse(archivo)
         root = tree.getroot()
