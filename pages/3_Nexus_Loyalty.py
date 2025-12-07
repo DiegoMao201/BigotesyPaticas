@@ -188,19 +188,27 @@ def procesar_inteligencia(ws_cli, ws_ven):
         
     master['Estado'] = master['Dias_Sin_Compra'].apply(clasificar)
     
-    # 5. Detección Inteligente de Cumpleaños (Mes Actual e Ignorando Año)
-    # Buscamos columnas tipo 'Fecha', 'Nacimiento', 'Cumpleaños'
+    # 5. Detección Inteligente de Cumpleaños (MEJORADO)
+    # Buscamos columnas tipo 'Fecha', 'Nacimiento', 'Cumpleaños', 'Cumple'
     col_nac = next((c for c in master.columns if 'nacimiento' in c.lower() or 'cumple' in c.lower() or c == 'Fecha'), None)
     
     master['Cumpleaños_mascota'] = False
+    master['Nombre_Columna_Cumple'] = "No encontrada" # Debug para el usuario
     
     if col_nac:
-        # Usamos dayfirst=True para formato Latino (DD/MM/YYYY) y errors='coerce'
-        fechas_temp = pd.to_datetime(master[col_nac], dayfirst=True, errors='coerce')
+        master['Nombre_Columna_Cumple'] = col_nac
+        # ⚠️ CORRECCIÓN CLAVE: Convertimos a string primero para manejar formatos mixtos de Google Sheets
+        # Esto asegura que lea '2023-12-01' o '01/12/2023' correctamente
+        master[col_nac] = master[col_nac].astype(str)
+        
+        fechas_temp = pd.to_datetime(master[col_nac], errors='coerce')
+        
         # Extraer el mes de nacimiento
         meses_nac = fechas_temp.dt.month
+        
         # Comparar estrictamente el mes de la fecha con el mes actual
         master['Cumpleaños_mascota'] = meses_nac == hoy.month
+        
         # Guardar la fecha limpia
         master['Fecha_Nacimiento_Clean'] = fechas_temp
 
@@ -226,7 +234,9 @@ def main():
         st.markdown(f"<h1 style='color:{COLOR_PRIMARIO}; text-align: center;'>Nexus Loyalty</h1>", unsafe_allow_html=True)
         st.markdown(f"<h4 style='color:{COLOR_TEXTO}; text-align: center; margin-top: -20px;'>Bigotes y Patitas 🐾</h4>", unsafe_allow_html=True)
         st.markdown("---")
-        st.success(f"📅 Hoy es: {datetime.now().strftime('%d/%m/%Y')}")
+        
+        hoy_str = datetime.now().strftime('%d/%m/%Y')
+        st.success(f"📅 Hoy es: {hoy_str}")
         st.info("💡 Usa las pestañas para gestionar tus contactos del día.")
 
     # Carga
@@ -286,23 +296,28 @@ def main():
 
     # 2. CUMPLEAÑOS (LÓGICA MEJORADA)
     with tabs[1]:
-        mes_actual_nombre = datetime.now().strftime("%B")
-        st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>🎂</span> Cumpleañeros del Mes", unsafe_allow_html=True)
-        st.info("ℹ️ El sistema detecta automáticamente los cumpleaños de este mes, sin importar el año de nacimiento.")
+        mes_actual_nombre = datetime.now().strftime("%B") # Nombre del mes
+        mes_num = datetime.now().month
+        
+        st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>🎂</span> Cumpleañeros del Mes ({mes_actual_nombre})", unsafe_allow_html=True)
+        
+        # Debug para el usuario si no sale nada
+        col_detectada = master['Nombre_Columna_Cumple'].iloc[0] if not master.empty else "N/A"
+        st.caption(f"ℹ️ Columna detectada en Excel: **{col_detectada}**. Buscando fechas del mes: **{mes_num}**.")
         
         df_cumple = master[master['Cumpleaños_mascota'] == True].copy()
         
         if df_cumple.empty:
-            st.warning(f"No hay cumpleaños detectados en la base de datos para este mes.")
+            st.warning(f"⚠️ No hay cumpleañeros detectados para el mes {mes_num}. (Revisa que la fecha en el Excel sea de este mes para probar).")
         else:
-            st.write(f"🎉 **Tenemos {len(df_cumple)} cumpleañeros listos para celebrar:**")
+            st.success(f"🎉 **¡SÍ! Tenemos {len(df_cumple)} cumpleañeros listos para celebrar:**")
             st.dataframe(df_cumple[['Nombre', 'Nombre_Mascota', 'Telefono']], use_container_width=True)
             
             st.markdown("---")
             st.markdown("##### 🎁 Configura tu Promo de Cumpleaños:")
             
             # Input libre para definir la promo
-            promo_text = st.text_input("¿Qué regalo les daremos?", "un 15% DE DESCUENTO en su snack favorito")
+            promo_text = st.text_input("¿Qué regalo les daremos hoy?", "un 15% DE DESCUENTO en su snack favorito")
             
             st.markdown("##### 💌 Enviar Felicitación:")
             for idx, row in df_cumple.iterrows():
