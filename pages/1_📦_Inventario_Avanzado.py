@@ -353,7 +353,7 @@ def main():
         master_unico, master_buy = procesar_inventario_avanzado(data['df_inv'], data['df_ven'], data['df_prov'])
 
     # HEADER
-    st.title("🐾 Bigotes & Paticas | Nexus System")
+    st.title("🐾 Bigotes & Paticas | Nexus PRO")
     st.markdown(f"**Fecha Sistema:** {date.today()} | **Usuario:** Admin")
 
     # KPIs (Estilo Cian/Naranja)
