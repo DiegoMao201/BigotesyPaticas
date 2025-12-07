@@ -334,7 +334,7 @@ def enviar_correo_animalista(destinatario, proveedor_nombre, df_orden):
                 </div>
                 
                 <div style="background-color: #fdf2f8; padding: 15px; text-align: center; font-size: 12px; color: #888;">
-                    Enviado con amor desde <strong>Bigotes y Paticas System 🐾</strong>
+                    Enviado con amor desde <strong>Bigotes y Paticas NEXUS PRO 🐾</strong>
                 </div>
             </div>
         </body>
