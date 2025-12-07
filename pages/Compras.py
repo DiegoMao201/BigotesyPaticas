@@ -13,13 +13,13 @@ import re
 # ==========================================
 
 st.set_page_config(
-    page_title="Recepción Inteligente Colombia v8.0 PRO", 
+    page_title="Recepción Inteligente Colombia v9.0 FINAL", 
     page_icon="🇨🇴", 
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS Profesionales y Limpios
+# Estilos CSS Profesionales
 st.markdown("""
     <style>
     .stApp { background-color: #f8fafc; }
@@ -47,17 +47,16 @@ def clean_currency(val):
     """Convierte strings de dinero ($1.000,00 o 1,000.00) a float puro."""
     if isinstance(val, (int, float)): return float(val)
     if isinstance(val, str):
-        # Eliminar símbolos de moneda y espacios
         val = val.replace('$', '').replace(' ', '').strip()
         if not val: return 0.0
         try:
-            # Caso 1: Formato 1.000,00 (Latino/Europeo) -> Eliminamos punto, cambiamos coma por punto
+            # Detección automática de formato decimal (coma vs punto)
             if ',' in val and '.' in val:
-                if val.find('.') < val.find(','): # 1.000,00
+                if val.find('.') < val.find(','): # 1.000,00 -> Latino
                     val = val.replace('.', '').replace(',', '.')
-                else: # 1,000.00 (USA)
+                else: # 1,000.00 -> Gringo
                     val = val.replace(',', '')
-            elif ',' in val: # 1000,00
+            elif ',' in val: # 1000,00 -> Latino simple
                 val = val.replace(',', '.')
             return float(val)
         except:
@@ -65,7 +64,7 @@ def clean_currency(val):
     return 0.0
 
 def sanitizar_para_sheet(val):
-    """Convierte numpy types a nativos de Python para que Gspread no falle."""
+    """Convierte tipos de numpy a tipos nativos de Python para Gspread."""
     if isinstance(val, (np.int64, np.int32)): return int(val)
     if isinstance(val, (np.float64, np.float32)): return float(val)
     return val
@@ -92,7 +91,7 @@ def conectar_sheets():
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
         sh = gc.open_by_url(st.secrets["SHEET_URL"])
         
-        # Verificar/Crear Hojas
+        # Verificar o Crear Hojas necesarias
         try: ws_inv = sh.worksheet("Inventario")
         except: st.error("❌ Falta la hoja 'Inventario'. Créala con columnas: ID, Nombre, Stock, Costo, Precio"); st.stop()
         
@@ -112,7 +111,7 @@ def conectar_sheets():
         st.stop()
 
 # ==========================================
-# 4. CEREBRO Y MEMORIA
+# 4. CEREBRO Y MEMORIA (Aquí se arregla lo del NOMBRE)
 # ==========================================
 
 @st.cache_data(ttl=60)
@@ -122,20 +121,33 @@ def cargar_cerebro(_ws_inv, _ws_map):
         d_inv = _ws_inv.get_all_records()
         df_inv = pd.DataFrame(d_inv)
         
-        # Buscar columnas clave dinámicamente
+        # --- LÓGICA DE COLUMNAS MEJORADA ---
         cols = df_inv.columns
-        col_id = next((c for c in cols if 'ID' in c or 'SKU' in c), None)
-        col_nm = next((c for c in cols if 'Nom' in c or 'Desc' in c or 'Prod' in c), None)
+        
+        # A. Buscar columna ID
+        col_id = next((c for c in cols if 'ID' in c or 'SKU' in c or 'Ref' in c), None)
+        
+        # B. Buscar columna NOMBRE (Prioridad estricta a 'Nombre')
+        col_nm = next((c for c in cols if 'Nombre' in c), None)
+        if not col_nm:
+            # Fallback si no hay "Nombre", busca "Desc" o "Prod"
+            col_nm = next((c for c in cols if 'Desc' in c or 'Prod' in c), None)
         
         if not col_id: return [], {}, {}
         
-        # Crear lista display
+        # Si no encuentra columna nombre, usa el ID (para que no falle), pero avisa
+        if not col_nm: col_nm = col_id 
+
+        # Crear lista display visual: "1010 | CHUNKY POLLO"
         df_inv['Display'] = df_inv[col_id].astype(str) + " | " + df_inv[col_nm].astype(str)
+        
         lista_prods = sorted(df_inv['Display'].unique().tolist())
         lista_prods.insert(0, "NUEVO (Crear Producto)")
         
+        # Diccionario para búsqueda rápida
         dict_prods = pd.Series(df_inv['Display'].values, index=df_inv[col_id].apply(normalizar_str)).to_dict()
-    except:
+    except Exception as e:
+        print(f"Error cargando cerebro: {e}")
         lista_prods, dict_prods = ["NUEVO (Crear Producto)"], {}
 
     # 2. Cargar Mapeo Proveedores (Memoria)
@@ -211,14 +223,14 @@ def parsear_xml_colombia(archivo):
             try:
                 qty = float(line.find('cbc:InvoicedQuantity', ns).text)
                 
-                # Precio Unitario (Buscamos PriceAmount que es el unitario base)
+                # Precio Unitario
                 price_node = line.find('.//cac:Price/cbc:PriceAmount', ns)
                 price = float(price_node.text) if price_node is not None else 0.0
                 
                 item_node = line.find('cac:Item', ns)
                 desc = item_node.find('cbc:Description', ns).text
                 
-                # Intentar varios IDs para SKU Proveedor
+                # SKU Proveedor
                 sku_prov = "S/C"
                 seller_id = item_node.find('.//cac:SellersItemIdentification/cbc:ID', ns)
                 std_id = item_node.find('.//cac:StandardItemIdentification/cbc:ID', ns)
@@ -230,7 +242,7 @@ def parsear_xml_colombia(archivo):
                     'SKU_Proveedor': sku_prov,
                     'Descripcion': desc,
                     'Cantidad': qty,
-                    'Costo_Unitario': price # Precio en factura antes de IVA nuestro
+                    'Costo_Unitario': price
                 })
             except: continue
 
@@ -247,16 +259,12 @@ def parsear_xml_colombia(archivo):
         return None
 
 # ==========================================
-# 6. LOGICA DE GUARDADO (EL CEREBRO DE PRECIOS)
+# 6. LÓGICA DE GUARDADO (Cerebro de Precios)
 # ==========================================
 
 def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
     """
     Actualiza Inventario, Precios, Costos y Memoria.
-    REGLAS:
-    1. Calcula Costo + 5% IVA.
-    2. Si Costo sube -> Sube precio (mantiene margen) y redondea a centena.
-    3. Si Costo baja -> Mantiene precio (sube ganancia).
     """
     try:
         fecha = datetime.now().strftime("%Y-%m-%d")
@@ -281,26 +289,40 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
         inv_data = ws_inv.get_all_values()
         header = inv_data[0]
         
-        # Mapeo inteligente de columnas
+        # --- BÚSQUEDA DE INDICES DE COLUMNAS (Para saber dónde escribir) ---
         try:
-            # Buscamos índices por nombre aproximado
-            idx_id = 0 # Asumimos columna A
-            idx_nombre = 1 # Asumimos columna B
+            # 1. ID
+            idx_id = 0 
+            
+            # 2. NOMBRE (Buscamos 'Nombre' o 'Desc')
+            idx_nombre = next(i for i, c in enumerate(header) if 'Nombre' in c or 'Nom' in c or 'Desc' in c)
+            
+            # 3. STOCK
             idx_stock = next(i for i, c in enumerate(header) if 'Stock' in c)
+            
+            # 4. COSTO
             idx_costo = next(i for i, c in enumerate(header) if 'Costo' in c)
-            # Buscamos 'Precio', 'Venta' o 'PVP'
+            
+            # 5. PRECIO VENTA
             idx_precio = next(i for i, c in enumerate(header) if any(x in c for x in ['Precio', 'Venta', 'PVP']))
+            
         except StopIteration:
-            return False, ["❌ Error Crítico: No encontré columnas de 'Stock', 'Costo' o 'Precio' en tu hoja."]
+            return False, ["❌ Error Crítico: Revisa las columnas de tu hoja Inventario. Necesitas: 'Nombre', 'Stock', 'Costo', 'Precio'."]
+        except Exception as e:
+            # Fallback por si acaso
+            idx_nombre = 1
+            idx_stock = 2
+            idx_costo = 3
+            idx_precio = 4
 
-        # Diccionario para encontrar filas rápido: {SKU: NumeroFila}
+        # Mapa de filas para actualizaciones rápidas
         mapa_filas = {normalizar_str(r[idx_id]): i+1 for i, r in enumerate(inv_data)}
 
         updates = []
         appends = []
         logs = []
 
-        # --- C. BUCLE PRINCIPAL DE CÁLCULO ---
+        # --- C. BUCLE PRINCIPAL ---
         for _, row in df_final.iterrows():
             sel = row['SKU_Interno_Seleccionado']
             
@@ -309,81 +331,79 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
             cant_recibida_xml = float(row['Cantidad_Recibida'])
             cant_total_unidades = cant_recibida_xml * factor
             
-            # 1. CÁLCULO DE COSTO CON IVA (5%)
+            # CÁLCULO DE COSTO CON IVA (5%)
             costo_unitario_xml = float(row['Costo_Unitario']) / factor
-            costo_nuevo_con_iva = costo_unitario_xml * 1.05 # Aplicamos el 5%
+            costo_nuevo_con_iva = costo_unitario_xml * 1.05 # +5%
             
             if "NUEVO" in sel:
                 # --- NUEVO PRODUCTO ---
                 new_id = str(row['SKU_Proveedor']) if row['SKU_Proveedor'] != "S/C" else f"N-{int(time.time())}"
                 
-                # Precio Sugerido: Costo + 30% Margen (ejemplo) + Redondeo Centena
+                # Precio Sugerido (Costo + 30% + Redondeo)
                 precio_sugerido = redondear_centena(costo_nuevo_con_iva * 1.30)
                 
                 new_row = [""] * len(header)
                 new_row[0] = new_id
-                new_row[idx_nombre] = row['Descripcion']
-                new_row[idx_stock] = sanitizar_para_sheet(cant_total_unidades)
-                new_row[idx_costo] = sanitizar_para_sheet(costo_nuevo_con_iva)
-                new_row[idx_precio] = sanitizar_para_sheet(precio_sugerido)
+                
+                # Asegurar que escribimos en la columna correcta del NOMBRE
+                if idx_nombre < len(new_row):
+                    new_row[idx_nombre] = row['Descripcion'] # Nombre desde factura
+                
+                if idx_stock < len(new_row): new_row[idx_stock] = sanitizar_para_sheet(cant_total_unidades)
+                if idx_costo < len(new_row): new_row[idx_costo] = sanitizar_para_sheet(costo_nuevo_con_iva)
+                if idx_precio < len(new_row): new_row[idx_precio] = sanitizar_para_sheet(precio_sugerido)
                 
                 appends.append(new_row)
-                logs.append(f"✨ CREADO: {new_id} | Costo+IVA: ${costo_nuevo_con_iva:,.0f} | Venta: ${precio_sugerido:,.0f}")
+                logs.append(f"✨ CREADO: {new_id} ({row['Descripcion']}) | Costo: ${costo_nuevo_con_iva:,.0f} | Venta: ${precio_sugerido:,.0f}")
             
             else:
-                # --- PRODUCTO EXISTENTE (Lógica Avanzada) ---
+                # --- ACTUALIZAR EXISTENTE ---
                 sku_int = normalizar_str(sel.split(" | ")[0])
                 
                 if sku_int in mapa_filas:
                     fila = mapa_filas[sku_int]
                     row_actual = inv_data[fila-1]
                     
-                    # Leer valores actuales de la celda
+                    # Leer datos actuales
                     try: stock_curr = clean_currency(row_actual[idx_stock])
                     except: stock_curr = 0.0
-                    
                     try: costo_curr = clean_currency(row_actual[idx_costo])
                     except: costo_curr = 0.0
-                    
                     try: precio_curr = clean_currency(row_actual[idx_precio])
                     except: precio_curr = 0.0
                     
-                    # 1. Actualizar Stock (Suma)
+                    # 1. Actualizar Stock
                     new_stock = stock_curr + cant_total_unidades
                     updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_stock+1), 'values': [[new_stock]]})
                     
-                    # 2. Actualizar Costo (Siempre actualizamos al último costo real)
+                    # 2. Actualizar Costo (Siempre)
                     updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_costo+1), 'values': [[costo_nuevo_con_iva]]})
                     
-                    # 3. Lógica de Precio
-                    nuevo_precio_final = precio_curr # Por defecto no se mueve
+                    # 3. Lógica Precio
+                    nuevo_precio_final = precio_curr 
                     
-                    # Caso A: El costo SUBIÓ
+                    # SUBIDA DE COSTO
                     if costo_nuevo_con_iva > costo_curr:
-                        # Calcular margen que traía antes
                         margen_anterior = (precio_curr / costo_curr) if costo_curr > 0 else 1.30
-                        if margen_anterior < 1: margen_anterior = 1.30 # Corrección si perdíamos plata
+                        if margen_anterior < 1: margen_anterior = 1.30
                         
-                        # Nuevo precio = Nuevo Costo * Margen Anterior
                         precio_teorico = costo_nuevo_con_iva * margen_anterior
                         nuevo_precio_final = redondear_centena(precio_teorico)
                         
                         updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_precio+1), 'values': [[nuevo_precio_final]]})
-                        logs.append(f"📈 PRECIO SUBIÓ: {sku_int} | Costo: {costo_curr:,.0f}->{costo_nuevo_con_iva:,.0f} | Precio: {precio_curr:,.0f}->{nuevo_precio_final:,.0f}")
+                        logs.append(f"📈 SUBIÓ: {sku_int} | Costo: {costo_curr:,.0f}->{costo_nuevo_con_iva:,.0f} | Precio: {precio_curr:,.0f}->{nuevo_precio_final:,.0f}")
                     
-                    # Caso B: El costo BAJÓ
+                    # BAJADA DE COSTO
                     elif costo_nuevo_con_iva < costo_curr:
-                        # NO tocamos el precio. El margen aumenta.
-                        logs.append(f"💰 MEJOR MARGEN: {sku_int} | Costo bajó ({costo_curr:,.0f}->{costo_nuevo_con_iva:,.0f}). Precio se mantiene.")
+                        logs.append(f"💰 MEJOR MARGEN: {sku_int} | Costo bajó. Precio se mantiene.")
                     
                     else:
-                        logs.append(f"🔄 STOCK OK: {sku_int} | Solo se actualizó inventario.")
+                        logs.append(f"🔄 STOCK UP: {sku_int}")
 
-        # --- D. EJECUCIÓN BATCH (Rápida) ---
         if updates: ws_inv.batch_update(updates)
         if appends: ws_inv.append_rows(appends)
 
-        # --- E. HISTORIAL ---
+        # --- D. HISTORIAL ---
         ws_hist.append_row([
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             str(meta_xml['Folio']),
@@ -472,7 +492,7 @@ def main():
                 "Factor_Pack": fac_def,
                 "Cantidad_XML": it['Cantidad'],
                 "Cantidad_Recibida": it['Cantidad'],
-                "Costo_Unitario": it['Costo_Unitario'] # Base XML
+                "Costo_Unitario": it['Costo_Unitario']
             })
         
         if matches > 0: st.success(f"🧠 {matches} productos identificados automáticamente.")
