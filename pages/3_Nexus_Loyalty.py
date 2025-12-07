@@ -382,7 +382,7 @@ def main():
                         tel = row.get('Telefono', '')
                         fecha_txt = str(row.get('Cumpleaños_mascota', 'este mes'))
                         
-                        msg_mes = f"¡Hola {nom}! 🐾 Vimos en nuestro calendario que es el mes de cumpleaños de {mascota} ({fecha_txt})! 🎂🎈 Queremos adelantarnos: Tienen **{regalo_mes}** para celebrar todo el mes. 🎁 ¡Los esperamos! ✨"
+                        msg_mes = f"¡Hola {nom}! 🐾 Vimos en nuestro calendario que es el mes de cumpleaños de {mascota} ({fecha_txt})! 🎂🎈 Queremos adelantarnos: Tienen **{regalo_mes}** para que celebremos juntos. 🎁 ¡Los esperamos! ✨ *Bigotes y Paticas*"
                         
                         link = link_whatsapp(tel, msg_mes)
                         if link:
