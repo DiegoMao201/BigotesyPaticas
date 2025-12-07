@@ -163,7 +163,8 @@ def actualizar_stock(ws_inv, items):
             if idx:
                 fila = idx[0] + 2
                 stock_act = int(df.iloc[idx[0]]['Stock'])
-                nuevo = max(0, stock_act - item['Cantidad'])
+                # Usamos la cantidad vendida
+                nuevo = max(0, stock_act - int(item['Cantidad']))
                 ws_inv.update_cell(fila, 5, nuevo) 
         return True
     except Exception as e:
@@ -253,156 +254,238 @@ def generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin):
 # --- 4. MÓDULOS DE NEGOCIO ---
 
 def tab_punto_venta(ws_inv, ws_cli, ws_ven):
-    st.markdown("### 🛒 Punto de Venta (POS)")
-    col_izq, col_der = st.columns([1.5, 1])
-
+    st.markdown("### 🛒 Punto de Venta (POS) Profesional")
+    
+    # Inicialización de Estados
     if 'carrito' not in st.session_state: st.session_state.carrito = []
     if 'cliente_actual' not in st.session_state: st.session_state.cliente_actual = None
     if 'ultimo_pdf' not in st.session_state: st.session_state.ultimo_pdf = None
     if 'ultima_venta_id' not in st.session_state: st.session_state.ultima_venta_id = None
 
-    # --- IZQUIERDA ---
+    col_izq, col_der = st.columns([1.6, 1])
+
+    # --- COLUMNA IZQUIERDA: Búsqueda y Carrito ---
     with col_izq:
-        # Selección de Cliente
-        with st.expander("👤 Selección de Cliente", expanded=True if not st.session_state.cliente_actual else False):
-            col_b, col_crear = st.columns([3, 1])
-            busqueda = col_b.text_input("Buscar Cédula", placeholder="Ingrese documento...")
-            
-            if col_b.button("Buscar Cliente"):
+        # 1. Selección de Cliente
+        with st.expander("👤 Datos del Cliente", expanded=not st.session_state.cliente_actual):
+            c1, c2 = st.columns([3, 1])
+            busqueda = c1.text_input("Buscar por Cédula", placeholder="Ingrese documento...")
+            if c2.button("🔍 Buscar"):
                 df_c = leer_datos(ws_cli)
                 if not df_c.empty:
                     df_c['Cedula'] = df_c['Cedula'].astype(str)
-                    busqueda = busqueda.strip()
-                    res = df_c[df_c['Cedula'] == busqueda]
+                    res = df_c[df_c['Cedula'] == busqueda.strip()]
                     if not res.empty:
                         st.session_state.cliente_actual = res.iloc[0].to_dict()
                         st.success(f"Cliente: {st.session_state.cliente_actual.get('Nombre')}")
                     else:
                         st.warning("Cliente no encontrado.")
-                else:
-                    st.warning("Base de clientes vacía.")
-            
+        
         if st.session_state.cliente_actual:
-            c = st.session_state.cliente_actual
-            st.info(f"Cliente: **{c.get('Nombre')}** | Mascota: **{c.get('Mascota', 'N/A')}**")
+            st.info(f"🟢 Cliente: **{st.session_state.cliente_actual.get('Nombre')}** | Mascota: **{st.session_state.cliente_actual.get('Mascota', 'N/A')}**")
 
-        # Selección de Productos
-        st.markdown("#### Agregar Productos")
+        st.markdown("---")
+        
+        # 2. Buscador de Productos (Con Stock)
+        st.markdown("#### 📦 Agregar Productos")
         df_inv = leer_datos(ws_inv)
+        
         if not df_inv.empty:
-            df_stock = df_inv[df_inv['Stock'] > 0]
-            prod_lista = df_stock.apply(lambda x: f"{x.get('Nombre', 'N/A')} | ${x.get('Precio', 0):,.0f} | ID:{x.get('ID_Producto', '')}", axis=1).tolist()
+            # Filtramos solo lo que tiene stock positivo para mostrar, aunque se puede vender sin stock si se desea
+            # Formato amigable: Nombre | Stock: X | $Precio
+            prod_lista = df_inv.apply(lambda x: f"{x.get('Nombre', 'N/A')} | Stock: {x.get('Stock', 0)} | ${x.get('Precio', 0):,.0f} | ID:{x.get('ID_Producto', '')}", axis=1).tolist()
             
-            sel_prod = st.selectbox("Buscar Producto", [""] + prod_lista)
-            col_cant, col_add = st.columns([1, 2])
-            cantidad = col_cant.number_input("Cant", min_value=1, value=1)
+            sel_prod_str = st.selectbox("Escriba para buscar producto...", [""] + prod_lista)
             
-            if col_add.button("➕ Agregar al Carrito", type="primary"):
-                if sel_prod:
+            col_add_btn, col_dummy = st.columns([1, 2])
+            if col_add_btn.button("➕ Agregar a la Lista", type="primary", use_container_width=True):
+                if sel_prod_str:
                     try:
-                        id_p = sel_prod.split("ID:")[1]
+                        id_p = sel_prod_str.split("ID:")[1]
                         info_p = df_inv[df_inv['ID_Producto'].astype(str) == id_p].iloc[0]
-                        if cantidad <= info_p['Stock']:
-                            item = {
+                        
+                        # Verificar si ya existe en carrito para sumar
+                        existe = False
+                        for item in st.session_state.carrito:
+                            if str(item['ID_Producto']) == str(info_p['ID_Producto']):
+                                item['Cantidad'] += 1
+                                item['Subtotal'] = item['Cantidad'] * item['Precio']
+                                existe = True
+                                break
+                        
+                        if not existe:
+                            nuevo_item = {
                                 "ID_Producto": info_p['ID_Producto'],
                                 "Nombre_Producto": info_p['Nombre'],
                                 "Precio": float(info_p['Precio']),
-                                "Cantidad": int(cantidad),
-                                "Subtotal": float(info_p['Precio'] * cantidad)
+                                "Cantidad": 1,
+                                "Subtotal": float(info_p['Precio']),
+                                "Eliminar": False # Checkbox para borrar
                             }
-                            st.session_state.carrito.append(item)
-                        else:
-                            st.error(f"Stock insuficiente. Disponible: {info_p['Stock']}")
+                            st.session_state.carrito.append(nuevo_item)
+                        st.rerun() # Recargar para mostrar en tabla
                     except Exception as e:
-                        st.error(f"Error agregando: {e}")
+                        st.error(f"Error al agregar: {e}")
 
-    # --- DERECHA ---
-    with col_der:
-        st.markdown("### 🧾 Resumen")
+        # 3. TABLA EDITABLE (Carrito)
+        st.markdown("#### 🛒 Detalle de Venta (Editable)")
         
-        if st.session_state.ultimo_pdf:
-            st.success("✅ ¡Venta Registrada!")
-            st.markdown(f"**Ticket #{st.session_state.ultima_venta_id}**")
+        if st.session_state.carrito:
+            # Convertimos carrito a DataFrame para el editor
+            df_carrito = pd.DataFrame(st.session_state.carrito)
             
-            st.download_button(
-                label="🖨️ Descargar Recibo PDF",
-                data=st.session_state.ultimo_pdf,
-                file_name=f"Venta_{st.session_state.ultima_venta_id}.pdf",
-                mime="application/pdf",
-                type="primary"
-            )
-            
-            if st.button("🔄 Nueva Venta / Limpiar"):
-                st.session_state.carrito = []
-                st.session_state.cliente_actual = None
-                st.session_state.ultimo_pdf = None
-                st.session_state.ultima_venta_id = None
-                st.rerun()
+            # Configuración de columnas para st.data_editor
+            column_config = {
+                "Nombre_Producto": st.column_config.TextColumn("Producto", disabled=True, width="medium"),
+                "Cantidad": st.column_config.NumberColumn("Cant.", min_value=1, step=1, help="Modifica la cantidad aquí"),
+                "Precio": st.column_config.NumberColumn("Precio Unit.", format="$%d", min_value=0, help="Puedes cambiar el precio manualmente"),
+                "Subtotal": st.column_config.NumberColumn("Subtotal", format="$%d", disabled=True),
+                "Eliminar": st.column_config.CheckboxColumn("Quitar", help="Marca para eliminar el producto")
+            }
 
-        elif st.session_state.carrito:
-            df_cart = pd.DataFrame(st.session_state.carrito)
-            st.dataframe(df_cart[['Nombre_Producto', 'Cantidad', 'Subtotal']], hide_index=True, use_container_width=True)
-            total = df_cart['Subtotal'].sum()
-            st.metric("Total a Pagar", f"${total:,.0f}")
+            # Mostramos el editor
+            edited_df = st.data_editor(
+                df_carrito,
+                column_config=column_config,
+                column_order=["Nombre_Producto", "Cantidad", "Precio", "Subtotal", "Eliminar"],
+                hide_index=True,
+                use_container_width=True,
+                key="editor_carrito",
+                num_rows="dynamic" # Permite añadir filas vacías si se quisiera, pero nos enfocamos en editar
+            )
+
+            # LÓGICA DE ACTUALIZACIÓN DEL CARRITO
+            # Comparamos si hubo cambios para recalcular subtotales o eliminar filas
+            needs_rerun = False
+            
+            # 1. Recalcular Subtotales (Si el usuario cambió precio o cantidad)
+            edited_df['Subtotal'] = edited_df['Cantidad'] * edited_df['Precio']
+            
+            # 2. Filtrar eliminados (Si marcó 'Eliminar')
+            items_finales = edited_df[~edited_df['Eliminar']].copy()
+            
+            # Verificar si los datos han cambiado respecto al session_state original
+            # Convertimos a diccionarios para comparar contenido
+            nuevos_datos = items_finales.to_dict('records')
+            
+            # Limpiamos la clave 'Eliminar' antes de guardar en session state para mantenerlo limpio
+            for d in nuevos_datos:
+                if 'Eliminar' in d: del d['Eliminar']
+                # Re-agregamos la flag 'Eliminar' como False para el siguiente ciclo
+                d['Eliminar'] = False
+
+            # Actualizamos session_state
+            # Nota: Al usar st.data_editor, el script se re-ejecuta al editar.
+            # Simplemente guardamos el estado resultante de la edición.
+            st.session_state.carrito = nuevos_datos
+            
+            # Calcular Total General
+            total_general = sum(item['Subtotal'] for item in st.session_state.carrito)
+
+        else:
+            st.info("El carrito está vacío. Agrega productos arriba.")
+            total_general = 0
+
+    # --- COLUMNA DERECHA: Resumen y Pago ---
+    with col_der:
+        with st.container(border=True):
+            st.markdown("### 🧾 Resumen de Cuenta")
+            
+            # Mostrar Total Grande
+            st.metric("Total a Pagar", f"${total_general:,.0f}")
             
             st.markdown("---")
             
-            with st.form("form_cobro"):
-                st.markdown("#### 💳 Pago")
-                tipo_entrega = st.radio("Entrega:", ["Punto de Venta", "Envío a Domicilio"], horizontal=True)
+            # Si hay venta procesada, mostrar PDF y Botón Limpiar
+            if st.session_state.ultimo_pdf:
+                st.success("✅ ¡Venta Exitosa!")
+                st.markdown(f"**Ticket #{st.session_state.ultima_venta_id}**")
                 
-                dir_def = st.session_state.cliente_actual.get('Direccion', '') if st.session_state.cliente_actual else ""
-                direccion_envio = "Local"
-                if tipo_entrega == "Envío a Domicilio":
-                    direccion_envio = st.text_input("Dirección de Entrega", value=str(dir_def))
-
-                metodo = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "DaviPlata", "Bancolombia", "Davivienda", "Tarjeta D/C"])
-                banco_destino = st.selectbox("Cuenta Destino (Interno)", ["Caja General", "Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata"])
-                
-                enviar = st.form_submit_button("✅ CONFIRMAR VENTA", type="primary", use_container_width=True)
+                c_pdf, c_new = st.columns(2)
+                c_pdf.download_button(
+                    "🖨️ PDF",
+                    data=st.session_state.ultimo_pdf,
+                    file_name=f"Venta_{st.session_state.ultima_venta_id}.pdf",
+                    mime="application/pdf",
+                    type="primary"
+                )
+                if c_new.button("🔄 Nueva Venta"):
+                    st.session_state.carrito = []
+                    st.session_state.cliente_actual = None
+                    st.session_state.ultimo_pdf = None
+                    st.session_state.ultima_venta_id = None
+                    st.rerun()
             
-            if enviar:
-                if not st.session_state.cliente_actual:
-                    st.error("⚠️ Selecciona un cliente primero.")
-                else:
-                    try:
-                        id_venta = datetime.now().strftime("%Y%m%d%H%M%S")
-                        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        items_str = ", ".join([f"{i['Nombre_Producto']} (x{i['Cantidad']})" for i in st.session_state.carrito])
-                        estado_envio = "Entregado" if tipo_entrega == "Punto de Venta" else "Pendiente"
-                        
-                        datos_venta = [
-                            id_venta, fecha, 
-                            str(st.session_state.cliente_actual.get('Cedula', '0')), 
-                            st.session_state.cliente_actual.get('Nombre', 'Consumidor'),
-                            tipo_entrega, direccion_envio, estado_envio,
-                            metodo, banco_destino, 
-                            total, items_str
-                        ]
-                        
-                        if escribir_fila(ws_ven, datos_venta):
-                            actualizar_stock(ws_inv, st.session_state.carrito)
+            # Formulario de Pago (Solo si hay items y no hay venta finalizada aún)
+            elif st.session_state.carrito:
+                with st.form("form_cobro"):
+                    st.markdown("#### 💳 Detalles de Pago")
+                    
+                    tipo_entrega = st.radio("Entrega:", ["Punto de Venta", "Envío a Domicilio"], horizontal=True)
+                    
+                    direccion_envio = "Local"
+                    if st.session_state.cliente_actual:
+                         direccion_envio = st.session_state.cliente_actual.get('Direccion', 'Local')
+                    
+                    if tipo_entrega == "Envío a Domicilio":
+                        direccion_envio = st.text_input("Dirección de Entrega", value=str(direccion_envio))
+
+                    metodo = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "DaviPlata", "Bancolombia", "Davivienda", "Tarjeta D/C"])
+                    banco_destino = st.selectbox("Cuenta Destino (Interno)", ["Caja General", "Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata"])
+                    
+                    st.markdown("---")
+                    enviar = st.form_submit_button("✅ CONFIRMAR Y FACTURAR", type="primary", use_container_width=True)
+                
+                if enviar:
+                    if not st.session_state.cliente_actual:
+                        st.error("⚠️ Por favor selecciona un cliente antes de facturar.")
+                    else:
+                        try:
+                            # Preparar datos
+                            id_venta = datetime.now().strftime("%Y%m%d%H%M%S")
+                            fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             
-                            # Datos para PDF
-                            cliente_pdf_data = {
-                                "ID": id_venta,
-                                "Fecha": fecha,
-                                "Cliente": st.session_state.cliente_actual.get('Nombre', 'Consumidor'),
-                                "Cedula_Cliente": str(st.session_state.cliente_actual.get('Cedula', '')),
-                                "Direccion": direccion_envio,
-                                "Mascota": st.session_state.cliente_actual.get('Mascota', ''),
-                                "Total": total,
-                                "Metodo": metodo
-                            }
+                            items_str_list = []
+                            for i in st.session_state.carrito:
+                                items_str_list.append(f"{i['Nombre_Producto']} (x{i['Cantidad']})")
+                            items_str = ", ".join(items_str_list)
                             
-                            pdf_bytes = generar_pdf_html(cliente_pdf_data, st.session_state.carrito)
-                            st.session_state.ultimo_pdf = pdf_bytes
-                            st.session_state.ultima_venta_id = id_venta
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Error procesando venta: {e}")
-        else:
-            st.info("🛒 El carrito está vacío.")
+                            estado_envio = "Entregado" if tipo_entrega == "Punto de Venta" else "Pendiente"
+                            
+                            # Guardar en Sheet Ventas
+                            datos_venta = [
+                                id_venta, fecha, 
+                                str(st.session_state.cliente_actual.get('Cedula', '0')), 
+                                st.session_state.cliente_actual.get('Nombre', 'Consumidor'),
+                                tipo_entrega, direccion_envio, estado_envio,
+                                metodo, banco_destino, 
+                                total_general, items_str
+                            ]
+                            
+                            if escribir_fila(ws_ven, datos_venta):
+                                # Descontar Inventario
+                                actualizar_stock(ws_inv, st.session_state.carrito)
+                                
+                                # Generar PDF
+                                cliente_pdf_data = {
+                                    "ID": id_venta,
+                                    "Fecha": fecha,
+                                    "Cliente": st.session_state.cliente_actual.get('Nombre', 'Consumidor'),
+                                    "Cedula_Cliente": str(st.session_state.cliente_actual.get('Cedula', '')),
+                                    "Direccion": direccion_envio,
+                                    "Mascota": st.session_state.cliente_actual.get('Mascota', ''),
+                                    "Total": total_general,
+                                    "Metodo": metodo
+                                }
+                                
+                                pdf_bytes = generar_pdf_html(cliente_pdf_data, st.session_state.carrito)
+                                st.session_state.ultimo_pdf = pdf_bytes
+                                st.session_state.ultima_venta_id = id_venta
+                                st.rerun()
+                            else:
+                                st.error("Error al guardar la venta en la base de datos.")
+                        except Exception as e:
+                            st.error(f"Error procesando la venta: {e}")
 
 def tab_clientes(ws_cli):
     st.markdown("### 👥 Gestión de Clientes (CRM)")
@@ -519,7 +602,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     
     # Cálculos Efectivo
     # Entradas en Efectivo: Ventas donde Metodo es Efectivo
-    ventas_efectivo = v_dia[v_dia['Metodo_Pago'] == 'Efectivo']['Total'].sum()
+    ventas_efectivo = v_dia[v_dia['Metodo'] == 'Efectivo']['Total'].sum()
     
     # Salidas en Efectivo: Gastos donde Origen es Caja General o Caja Menor
     gastos_efectivo = g_dia[g_dia['Banco_Origen'].isin(['Caja General', 'Caja Menor', 'Efectivo'])]['Monto'].sum()
@@ -567,7 +650,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     
     for medio in medios_digitales:
         # Ventas por este medio (se busca en Metodo o Banco Destino)
-        mask = v_dia['Metodo_Pago'].astype(str).str.contains(medio, case=False) | v_dia['Banco_Destino'].astype(str).str.contains(medio, case=False)
+        mask = v_dia['Metodo'].astype(str).str.contains(medio, case=False) | v_dia['Banco_Destino'].astype(str).str.contains(medio, case=False)
         total_medio = v_dia[mask]['Total'].sum()
         
         if total_medio > 0:
@@ -703,7 +786,6 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
                     parts = items_str.split(", ")
                     for p in parts:
                         nombre = p.split(" (x")[0]
-                        # Extraer cantidad si es posible, sino asumir 1
                         items_list.append(nombre)
                 except: pass
             
