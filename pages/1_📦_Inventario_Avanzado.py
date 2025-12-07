@@ -132,7 +132,7 @@ Por favor, revisen su correo para el Excel detallado.
 def conectar_db():
     try:
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
-        sh = gc.open_by_url(st.secrets["general"]["SHEET_URL"])
+        sh = gc.open_by_url(st.secrets["SHEET_URL"])
         return sh
     except Exception as e:
         st.error(f"Error Database: {e}")
