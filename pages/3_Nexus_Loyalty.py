@@ -202,11 +202,11 @@ def procesar_inteligencia(ws_cli, ws_ven):
     else:
         col_nac = None
 
-    master['Es_Cumple'] = False
+    master['Cumpleaños_mascota'] = False
     if col_nac and col_nac in master.columns:
         master[col_nac] = pd.to_datetime(master[col_nac], errors='coerce')
         master['Mes_Cumple'] = master[col_nac].dt.month
-        master['Es_Cumple'] = master['Mes_Cumple'] == hoy.month
+        master['Cumpleaños_mascota'] = master['Mes_Cumple'] == hoy.month
 
     return master, df_ven, "OK"
 
@@ -302,7 +302,7 @@ def main():
     with tabs[1]:
         st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>🎂</span> Club de Cumpleaños ({datetime.now().strftime('%B')})", unsafe_allow_html=True)
         
-        df_cumple = master[master['Es_Cumple'] == True].copy()
+        df_cumple = master[master['Cumpleaños_mascota'] == True].copy()
         
         if df_cumple.empty:
             st.info("No hay cumpleaños registrados este mes. ¡Recuerda pedir la fecha de nacimiento al registrar clientes!")
