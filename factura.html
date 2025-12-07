@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Factura</title>
+    <title>Factura - Bigotes y Patitas</title>
     <style>
         /* Configuración de página para PDF A4 */
         @page {
@@ -19,13 +19,13 @@
         }
 
         .invoice-header {
-            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            /* Cambio: Color Primario (#187f77) */
+            background: linear-gradient(135deg, #187f77 0%, #125f59 100%);
             color: white;
             padding: 40px;
-            overflow: hidden; /* Limpia floats si los hubiera */
+            overflow: hidden;
         }
 
-        /* Flexbox a veces falla en versiones viejas, usamos tablas o block simples para header seguro */
         .header-content {
             display: flex;
             justify-content: space-between;
@@ -73,9 +73,12 @@
             font-size: 12px;
             font-weight: bold;
             text-transform: uppercase;
-            color: #27ae60;
+            /* Cambio: Color Primario para títulos */
+            color: #187f77;
             margin-bottom: 10px;
             letter-spacing: 1px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
         }
 
         p {
@@ -98,8 +101,9 @@
             font-size: 12px;
             font-weight: bold;
             text-transform: uppercase;
-            color: #27ae60;
-            border-bottom: 2px solid #27ae60;
+            /* Cambio: Texto Primario y Borde de Acento Naranja */
+            color: #187f77;
+            border-bottom: 2px solid #f5a641; 
             background-color: #f8f9fa;
         }
 
@@ -131,8 +135,9 @@
             padding: 10px 0;
             font-size: 18px;
             font-weight: bold;
-            color: #27ae60;
-            border-top: 2px solid #e9ecef;
+            /* Cambio: Color Naranja (#f5a641) para resaltar el cobro */
+            color: #f5a641;
+            border-top: 2px solid #187f77;
         }
 
         /* Pie de página */
@@ -144,17 +149,19 @@
             background: #f8f9fa;
             padding: 20px 40px;
             text-align: center;
-            border-top: 3px solid #27ae60;
+            /* Cambio: Borde superior Naranja */
+            border-top: 3px solid #f5a641;
         }
         
         .logo-img {
             vertical-align: middle;
-            width: 50px;
-            height: 50px;
+            width: 60px; /* Ajusté un poco el tamaño */
+            height: 60px;
             border-radius: 50%;
             background: white;
             padding: 2px;
-            margin-right: 10px;
+            margin-right: 15px;
+            object-fit: contain;
         }
     </style>
 </head>
@@ -163,9 +170,7 @@
         <div class="header-content">
             <div class="business-info">
                 <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                    {% if logo_b64 %}
-                        <img src="data:image/png;base64,{{ logo_b64 }}" class="logo-img">
-                    {% endif %}
+                    <img src="BigotesyPaticas.png" class="logo-img" alt="Logo">
                     <h1>Bigotes y Patitas</h1>
                 </div>
                 <p>Tu tienda de confianza para mascotas</p>
@@ -228,7 +233,7 @@
     </div>
 
     <div class="invoice-footer">
-        <p style="color: #27ae60; font-weight: bold; font-size: 16px;">
+        <p style="color: #187f77; font-weight: bold; font-size: 16px;">
             🐶 ¡Gracias por consentir a tu mascota con nosotros! 🐱
         </p>
         <p>Guardar este recibo para cambios o garantías (5 días hábiles).</p>
