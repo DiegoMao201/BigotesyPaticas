@@ -2,9 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime, timedelta, date
-import time
+from datetime import datetime
 from urllib.parse import quote
 
 # ==========================================
@@ -25,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS IDÉNTICO AL CÓDIGO 1 PARA CONSISTENCIA VISUAL
+# ESTILOS CSS
 st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -45,7 +43,7 @@ st.markdown(f"""
         font-weight: 600;
     }}
 
-    /* Estilo de Tarjetas (Metric Containers) */
+    /* Tarjetas Métricas */
     div[data-testid="metric-container"] {{
         background-color: {COLOR_BLANCO};
         padding: 20px;
@@ -60,7 +58,7 @@ st.markdown(f"""
         border: 1px solid #e0e0e0;
     }}
 
-    /* Botones Primarios */
+    /* Botones */
     .stButton button[type="primary"] {{
         background: linear-gradient(135deg, {COLOR_PRIMARIO}, {COLOR_SECUNDARIO});
         border: none;
@@ -75,19 +73,18 @@ st.markdown(f"""
         transform: translateY(-1px);
     }}
 
-    /* Inputs */
+    /* Inputs y Tabs */
     .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {{
         border-radius: 8px;
         border-color: #e0e0e0;
     }}
-
-    /* Tabs Personalizados */
+    
     .stTabs [data-baseweb="tab-list"] {{
         gap: 8px;
         background-color: transparent;
     }}
     .stTabs [data-baseweb="tab"] {{
-        height: 45px;
+        height: 50px;
         white-space: pre-wrap;
         background-color: {COLOR_BLANCO};
         border-radius: 8px 8px 0 0;
@@ -105,20 +102,19 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. CONEXIÓN Y PROCESAMIENTO ROBUSTO
+# 2. CONEXIÓN Y PROCESAMIENTO
 # ==========================================
 
 @st.cache_resource(ttl=600)
 def conectar_crm():
     try:
         if "google_service_account" not in st.secrets:
-            st.error("🚨 Falta configuración de secretos.")
+            st.error("🚨 Falta configuración de secretos (google_service_account).")
             return None, None
         
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
         sh = gc.open_by_url(st.secrets["SHEET_URL"])
         
-        # Intentar cargar hojas, crear si no existen (lectura segura)
         try: ws_cli = sh.worksheet("Clientes")
         except: ws_cli = None
         
@@ -131,57 +127,56 @@ def conectar_crm():
         return None, None
 
 def limpiar_columnas(df):
-    """Elimina espacios en blanco de los nombres de columnas para evitar KeyError"""
     if not df.empty:
         df.columns = df.columns.str.strip()
     return df
 
 def procesar_inteligencia(ws_cli, ws_ven):
-    # 1. Cargar Datos Crudos
+    # 1. Cargar Datos
     data_cli = ws_cli.get_all_records() if ws_cli else []
     data_ven = ws_ven.get_all_records() if ws_ven else []
     
     df_cli = pd.DataFrame(data_cli)
     df_ven = pd.DataFrame(data_ven)
     
-    # 2. Limpieza de Columnas (FIX DEL ERROR KEYERROR)
     df_cli = limpiar_columnas(df_cli)
     df_ven = limpiar_columnas(df_ven)
     
-    # 3. Validación de Datos Mínimos
     if df_cli.empty:
         return pd.DataFrame(), pd.DataFrame(), "Sin clientes"
     
-    # Asegurar columnas críticas en Clientes
+    # 2. Normalización de Clientes
     if 'Cedula' not in df_cli.columns: df_cli['Cedula'] = ''
     df_cli['Cedula'] = df_cli['Cedula'].astype(str).str.replace(r'\.0$', '', regex=True)
     
-    # Asegurar columnas críticas en Ventas
+    # Asegurar nombres de columnas críticas
+    # Buscamos columnas que contengan 'Mascota' para normalizar
+    col_mascota = next((c for c in df_cli.columns if 'mascota' in c.lower()), 'Nombre_Mascota')
+    df_cli.rename(columns={col_mascota: 'Nombre_Mascota'}, inplace=True)
+    if 'Nombre_Mascota' not in df_cli.columns: df_cli['Nombre_Mascota'] = 'Tu Peludito'
+
+    # 3. Procesamiento de Ventas
     if df_ven.empty or 'Fecha' not in df_ven.columns or 'Cedula_Cliente' not in df_ven.columns:
-        # Si no hay ventas, devolvemos clientes sin métricas de compra
         df_cli['Estado'] = "⚪ Nuevo"
         df_cli['Dias_Sin_Compra'] = 999
         df_cli['Ultima_Compra_Dt'] = pd.NaT
+        df_cli['Ultimo_Producto'] = "N/A"
         return df_cli, df_ven, "OK (Sin Ventas)"
 
-    # 4. Procesamiento de Fechas y Métricas
     df_ven['Cedula_Cliente'] = df_ven['Cedula_Cliente'].astype(str).str.replace(r'\.0$', '', regex=True)
     df_ven['Fecha'] = pd.to_datetime(df_ven['Fecha'], errors='coerce')
     
-    # Agrupar ventas por cliente para sacar la última fecha
-    # Usamos groupby y agg para evitar sort_values sobre columna inexistente si falla conversión
     resumen_ventas = df_ven.groupby('Cedula_Cliente').agg({
         'Fecha': 'max',
         'Total': 'sum',
-        'Items': 'last' # Último item comprado (aproximado)
+        'Items': 'last'
     }).reset_index()
     
     resumen_ventas.columns = ['Cedula', 'Ultima_Compra_Dt', 'Total_Gastado', 'Ultimo_Producto']
     
-    # 5. Merge (Unir Clientes con su Historial)
+    # 4. Merge y Lógica de Negocio
     master = pd.merge(df_cli, resumen_ventas, on='Cedula', how='left')
     
-    # 6. Lógica de Negocio (El Cerebro)
     hoy = pd.Timestamp.now()
     master['Dias_Sin_Compra'] = (hoy - master['Ultima_Compra_Dt']).dt.days.fillna(999)
     
@@ -194,191 +189,224 @@ def procesar_inteligencia(ws_cli, ws_ven):
         
     master['Estado'] = master['Dias_Sin_Compra'].apply(clasificar)
     
-    # Detectar Cumpleaños
-    if 'Fecha' in master.columns: # A veces se guarda como 'Fecha' en vez de 'Fecha_Nacimiento'
-        col_nac = 'Fecha'
-    elif 'Cumpleaños Mascota' in master.columns:
-         col_nac = 'Cumpleaños Mascota'
-    else:
-        col_nac = None
-
-    master['Cumpleaños_mascota'] = False
-    if col_nac and col_nac in master.columns:
-        master[col_nac] = pd.to_datetime(master[col_nac], errors='coerce')
-        master['Mes_Cumple'] = master[col_nac].dt.month
-        master['Cumpleaños_mascota'] = master['Mes_Cumple'] == hoy.month
+    # 5. Detección Inteligente de Cumpleaños (Mes Actual)
+    # Buscamos columnas tipo 'Fecha', 'Nacimiento', 'Cumpleaños'
+    col_nac = next((c for c in master.columns if 'nacimiento' in c.lower() or 'cumple' in c.lower() or c == 'Fecha'), None)
+    
+    master['Cumpleaños_Mes_Actual'] = False
+    
+    if col_nac:
+        # Convertir a datetime forzando errores a NaT
+        fechas_temp = pd.to_datetime(master[col_nac], errors='coerce')
+        # Extraer el mes de nacimiento
+        meses_nac = fechas_temp.dt.month
+        # Comparar con mes actual
+        master['Cumpleaños_Mes_Actual'] = meses_nac == hoy.month
+        # Guardar la fecha limpia para uso futuro
+        master['Fecha_Nacimiento_Clean'] = fechas_temp
 
     return master, df_ven, "OK"
 
 # ==========================================
-# 3. GENERADORES DE MENSAJES
+# 3. GENERADOR DE LINKS WHATSAPP
 # ==========================================
 
 def link_whatsapp(telefono, mensaje):
     if not telefono: return None
-    # Limpieza básica Colombia
-    tel = str(telefono).replace(" ", "").replace("+", "").replace("-", "").replace(".", "")
+    tel = str(telefono).replace(" ", "").replace("+", "").replace("-", "").replace(".", "").replace("(", "").replace(")", "")
     if len(tel) == 10: tel = "57" + tel
     return f"https://wa.me/{tel}?text={quote(mensaje)}"
 
 # ==========================================
-# 4. UI PRINCIPAL
+# 4. INTERFAZ PRINCIPAL
 # ==========================================
 
 def main():
-    # Sidebar Estilizado Nexus Pro
+    # Sidebar
     with st.sidebar:
         st.markdown(f"<h1 style='color:{COLOR_PRIMARIO}; text-align: center;'>Nexus Loyalty</h1>", unsafe_allow_html=True)
-        st.markdown(f"<h4 style='color:{COLOR_TEXTO}; text-align: center; margin-top: -20px;'>Bigotes y Patitas</h4>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='color:{COLOR_TEXTO}; text-align: center; margin-top: -20px;'>Bigotes y Patitas 🐾</h4>", unsafe_allow_html=True)
         st.markdown("---")
-        st.info("💡 Este módulo analiza tus ventas y clientes para decirte a quién contactar hoy para vender más.")
+        st.success(f"📅 Hoy es: {datetime.now().strftime('%d/%m/%Y')}")
+        st.info("💡 Usa las pestañas para gestionar tus contactos del día.")
 
-    # Conexión
+    # Carga
     ws_cli, ws_ven = conectar_crm()
     if not ws_cli: return
-
-    # Carga de Datos
     master, df_ven, status = procesar_inteligencia(ws_cli, ws_ven)
 
     if master.empty:
-        st.warning("⚠️ No hay clientes registrados en la base de datos.")
+        st.warning("⚠️ No se encontraron datos.")
         return
 
-    # --- KPI DASHBOARD ---
-    st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>❤️</span> Centro de Fidelización", unsafe_allow_html=True)
+    # --- KPI HEADER ---
+    st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>📊</span> Tablero de Control", unsafe_allow_html=True)
+    col1, col2, col3, col4 = st.columns(4)
     
-    col_k1, col_k2, col_k3, col_k4 = st.columns(4)
+    col1.metric("Clientes Totales", len(master))
+    col2.metric("Activos (Mes)", len(master[master['Estado'] == "🟢 Activo"]))
+    col3.metric("🔥 Recompra Urgente", len(master[master['Estado'] == "🟡 Recompra (Alerta)"]), delta="Prioridad Alta", delta_color="inverse")
     
-    total_cli = len(master)
-    activos = len(master[master['Estado'] == "🟢 Activo"])
-    alerta_recompra = len(master[master['Estado'] == "🟡 Recompra (Alerta)"])
-    riesgo = len(master[master['Estado'].isin(["🟠 Riesgo", "🔴 Perdido"])])
-    
-    col_k1.metric("Total Clientes", total_cli)
-    col_k2.metric("Clientes Activos", activos, delta="Compraron < 30 días")
-    col_k3.metric("🔥 Oportunidad Venta", alerta_recompra, delta="Llamar YA", delta_color="inverse")
-    col_k4.metric("En Riesgo / Perdidos", riesgo, delta="Recuperar", delta_color="inverse")
+    cumpleaneros = len(master[master['Cumpleaños_Mes_Actual'] == True])
+    col4.metric("🎂 Cumpleaños Mes", cumpleaneros, delta="Felicitar hoy")
 
     st.markdown("---")
 
-    # --- TABS DE ACCIÓN ---
-    tabs = st.tabs(["🔄 Smart Rebuy (Recompra)", "🎂 Cumpleaños Mascota", "🚑 Recuperación", "📢 Campañas"])
+    # --- TABS DE GESTIÓN ---
+    tabs = st.tabs([
+        "🔄 Smart Rebuy", 
+        "🎂 Cumpleaños", 
+        "💁‍♀️ Servicios (Ángela)", 
+        "📢 Campañas Auto", 
+        "🚑 Recuperación"
+    ])
 
-    # --- TAB 1: RECOMPRA INTELIGENTE ---
+    # 1. RECOMPRA INTELIGENTE
     with tabs[0]:
-        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>🥣</span> Alerta de Reabastecimiento", unsafe_allow_html=True)
-        st.caption("Clientes que compraron hace 30-60 días. Probablemente se les acabó la comida.")
-        
+        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>🥣</span> Se les acabó la comida (30-60 días)", unsafe_allow_html=True)
         df_rebuy = master[master['Estado'] == "🟡 Recompra (Alerta)"].copy()
         
         if df_rebuy.empty:
-            st.success("✅ ¡Excelente! No hay clientes pendientes de recompra urgente.")
+            st.success("✅ Todo al día. No hay alertas de recompra.")
         else:
-            # Seleccionar columnas visibles
-            cols_show = ['Nombre', 'Nombre_Mascota', 'Telefono', 'Ultimo_Producto', 'Dias_Sin_Compra']
-            # Asegurar que existan
-            cols_show = [c for c in cols_show if c in df_rebuy.columns]
+            # Mostrar tabla informativa
+            st.dataframe(df_rebuy[['Nombre', 'Nombre_Mascota', 'Telefono', 'Ultimo_Producto', 'Dias_Sin_Compra']], use_container_width=True, hide_index=True)
             
-            st.dataframe(df_rebuy[cols_show], use_container_width=True, hide_index=True)
-            
-            st.markdown("##### 🚀 Acciones Rápidas")
-            
-            # Generador de Links
+            st.markdown("##### 🚀 Click para contactar:")
             for idx, row in df_rebuy.iterrows():
-                prod = str(row.get('Ultimo_Producto', 'su alimento')).split('(')[0]
+                nom = row.get('Nombre', 'Cliente')
                 mascota = row.get('Nombre_Mascota', 'tu peludito')
-                cliente = row.get('Nombre', 'Cliente')
+                prod = str(row.get('Ultimo_Producto', 'su alimento')).split('(')[0]
                 tel = row.get('Telefono', '')
                 
-                msg = f"Hola {cliente}! 🐾 Esperamos que {mascota} esté genial. Notamos que ya casi es hora de refilar su {prod}. 🥣 ¿Te enviamos el domicilio hoy sin costo?"
+                msg = f"Hola {nom}! 🐾 Esperamos que {mascota} esté genial. Notamos que ya casi es hora de refilar su {prod}. 🥣 ¿Te enviamos el domicilio hoy? Recuerda que estamos para servirte."
                 link = link_whatsapp(tel, msg)
                 
                 if link:
-                    with st.expander(f"📱 Contactar a {cliente} ({mascota})"):
-                        st.markdown(f"**Mensaje sugerido:** _{msg}_")
-                        st.markdown(f"<a href='{link}' target='_blank' style='background-color:{COLOR_PRIMARIO}; color:white; padding:8px 16px; border-radius:5px; text-decoration:none; font-weight:bold;'>👉 Enviar WhatsApp</a>", unsafe_allow_html=True)
+                    st.markdown(f"🔸 **{mascota}** (Dueño: {nom}) → [Enviar Recordatorio]({link})")
 
-    # --- TAB 2: CUMPLEAÑOS ---
+    # 2. CUMPLEAÑOS
     with tabs[1]:
-        st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>🎂</span> Club de Cumpleaños ({datetime.now().strftime('%B')})", unsafe_allow_html=True)
+        mes_actual = datetime.now().strftime("%B")
+        st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>🎂</span> Cumpleañeros de {mes_actual}", unsafe_allow_html=True)
+        st.caption("El sistema detecta el mes de nacimiento, sin importar el año.")
         
-        df_cumple = master[master['Cumpleaños_mascota'] == True].copy()
+        df_cumple = master[master['Cumpleaños_Mes_Actual'] == True].copy()
         
         if df_cumple.empty:
-            st.info("No hay cumpleaños registrados este mes. ¡Recuerda pedir la fecha de nacimiento al registrar clientes!")
+            st.info(f"No hay cumpleaños detectados en la base de datos para este mes.")
         else:
             st.dataframe(df_cumple[['Nombre', 'Nombre_Mascota', 'Telefono']], use_container_width=True)
             
-            col_msg, col_promo = st.columns(2)
-            descuento = col_promo.number_input("Descuento Regalo (%)", value=10, step=5)
+            st.markdown("##### 🎁 Enviar Felicitación")
+            descuento = st.number_input("Descuento regalo (%)", 10, 50, 10)
             
-            st.markdown("##### 🎁 Enviar Regalos")
             for idx, row in df_cumple.iterrows():
+                nom = row.get('Nombre', 'Cliente')
                 mascota = row.get('Nombre_Mascota', 'tu peludito')
-                cliente = row.get('Nombre', 'Cliente')
                 tel = row.get('Telefono', '')
                 
-                msg = f"¡Feliz Cumpleaños a {mascota}! 🎂🐶 En Bigotes y Patitas queremos celebrarlo. Tienes un {descuento}% DE DESCUENTO en su torta o snacks favoritos todo este mes. 🎁 ¡Ven por su regalo!"
+                msg = f"¡Feliz Cumpleaños a {mascota}! 🎂🐶 En Bigotes y Patitas queremos celebrarlo. Tienes un {descuento}% DE DESCUENTO en su regalo favorito durante todo este mes. 🎁 ¡Ven a consentirlo!"
                 link = link_whatsapp(tel, msg)
                 
                 if link:
-                    st.markdown(f"🎉 **{mascota} ({cliente}):** [Enviar Regalo WhatsApp]({link})")
+                    st.markdown(f"🎉 **{mascota}** ({nom}): [Enviar Regalo WhatsApp]({link})")
 
-    # --- TAB 3: RECUPERACIÓN ---
+    # 3. SERVICIOS (RECORDATORIO ÁNGELA)
     with tabs[2]:
-        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>🚑</span> Estrategia de Retorno", unsafe_allow_html=True)
-        st.caption("Clientes que no compran hace más de 60 días.")
+        st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>💁‍♀️</span> Recordatorio de Servicios (Soy Ángela)", unsafe_allow_html=True)
+        st.caption("Mensaje institucional cálido para recordar que estamos presentes.")
         
-        df_riesgo = master[master['Estado'].isin(["🟠 Riesgo", "🔴 Perdido"])].copy()
+        # Filtro opcional
+        opcion_envio = st.radio("¿A quién enviar?", ["Solo Clientes Activos (VIP)", "Todos los Clientes"], horizontal=True)
         
-        if df_riesgo.empty:
-            st.success("¡Base de datos saludable! Poca deserción.")
+        if opcion_envio == "Solo Clientes Activos (VIP)":
+            df_serv = master[master['Estado'] == "🟢 Activo"].copy()
         else:
-            st.dataframe(df_riesgo[['Nombre', 'Telefono', 'Dias_Sin_Compra', 'Ultimo_Producto']], use_container_width=True)
+            df_serv = master.copy()
             
-            st.markdown("##### 📢 Oferta de Reactivación")
-            oferta = st.text_input("Define el gancho:", "Envío Gratis + Snack de Regalo")
-            
-            if st.button("Generar Campaña de Recuperación", type="primary"):
-                st.markdown("---")
-                for idx, row in df_riesgo.head(20).iterrows(): # Limitado a 20 para no saturar
-                    cliente = row.get('Nombre', 'Cliente')
-                    mascota = row.get('Nombre_Mascota', 'tu mascota')
-                    tel = row.get('Telefono', '')
-                    
-                    msg = f"¡Hola {cliente}! Hace tiempo no vemos a {mascota} 🥺. ¡Los extrañamos en Bigotes y Patitas! Solo por volver, hoy tienen: {oferta}. 🐾 ¿Qué dices, se lo enviamos?"
-                    link = link_whatsapp(tel, msg)
-                    if link:
-                        st.markdown(f"🔸 **{cliente}:** [Recuperar Cliente]({link})")
-
-    # --- TAB 4: CAMPAÑAS ---
-    with tabs[3]:
-        st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>📢</span> Difusión General", unsafe_allow_html=True)
+        st.write(f"**Lista de envío ({len(df_serv)} personas):**")
         
-        with st.form("form_campaign"):
-            st.markdown("**Crear Mensaje Masivo**")
-            titulo = st.text_input("Motivo", "Nuevos Juguetes / Promo Fin de Mes")
-            cuerpo = st.text_area("Mensaje", "Hola! Te cuento que llegaron collares hermosos...")
-            
-            filtro = st.radio("Enviar a:", ["Todos los Clientes", "Solo Activos (VIP)"])
-            
-            if st.form_submit_button("🚀 Preparar Envíos"):
-                if filtro == "Solo Activos (VIP)":
-                    target = master[master['Estado'] == "🟢 Activo"]
-                else:
-                    target = master
+        # Iterar y generar links con el mensaje ESPECÍFICO solicitado
+        with st.expander("Ver lista y enviar mensajes"):
+            for idx, row in df_serv.iterrows():
+                nom = row.get('Nombre', 'Vecino')
+                mascota = row.get('Nombre_Mascota', 'tu mascota')
+                tel = row.get('Telefono', '')
                 
-                st.success(f"Campaña preparada para {len(target)} clientes.")
-                st.info("Haz clic en los enlaces abajo para abrir WhatsApp Web:")
+                # Mensaje exacto solicitado
+                msg_serv = f"Hola {nom}, te saludamos de Bigotes y Patitas 🐾. Recuerda que aquí te acompañamos con el alimento de {mascota}. 🚚 Tenemos servicio a domicilio. Soy Ángela, solo escríbeme y ahí estaremos. ❤️ Bigotes y Patitas."
                 
-                with st.expander("Ver lista de envío"):
-                    for idx, row in target.iterrows():
-                        tel = row.get('Telefono', '')
-                        nom = row.get('Nombre', '')
-                        if tel:
-                            full_msg = f"Hola {nom}! 🐾 {cuerpo} - Equipo Bigotes y Patitas"
-                            link = link_whatsapp(tel, full_msg)
-                            st.write(f"👉 {nom}: [Enviar]({link})")
+                link = link_whatsapp(tel, msg_serv)
+                if link:
+                    st.write(f"🚚 **{nom} & {mascota}**: [Enviar Saludo Ángela]({link})")
+
+    # 4. CAMPAÑAS AUTOMÁTICAS
+    with tabs[3]:
+        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>📢</span> Generador de Campañas Bonitas", unsafe_allow_html=True)
+        
+        col_c1, col_c2 = st.columns([1, 2])
+        
+        with col_c1:
+            st.markdown("**Configuración**")
+            motivo = st.text_input("Motivo de la campaña", placeholder="Ej: Llegaron Juguetes Nuevos")
+            if not motivo: motivo = "saludarte y contarte novedades"
+            
+            filtro_camp = st.selectbox("Segmento", ["Todos", "Solo Activos", "En Riesgo"])
+        
+        # Lógica de filtrado
+        if filtro_camp == "Solo Activos":
+            target = master[master['Estado'] == "🟢 Activo"]
+        elif filtro_camp == "En Riesgo":
+            target = master[master['Estado'].isin(["🟠 Riesgo", "🔴 Perdido"])]
+        else:
+            target = master
+
+        with col_c2:
+            st.info(f"✨ El sistema redactará automáticamente un mensaje bonito sobre: **'{motivo}'**")
+        
+        st.markdown("---")
+        st.markdown(f"**Destinatarios ({len(target)}):**")
+        
+        # Mostrar tabla simple
+        st.dataframe(target[['Nombre', 'Nombre_Mascota', 'Telefono']], use_container_width=True, height=150)
+        
+        st.markdown("##### 🚀 Enviar Campaña Ahora:")
+        
+        # Generación automática de mensajes bonitos
+        for idx, row in target.iterrows():
+            nom = row.get('Nombre', 'Amigo')
+            mascota = row.get('Nombre_Mascota', 'tu peludito')
+            tel = row.get('Telefono', '')
+            
+            # Plantilla automática bonita
+            msg_auto = f"¡Hola {nom}! 🐾 Esperamos que {mascota} esté de maravilla hoy. 🌟 Pasamos por aquí desde Bigotes y Patitas para {motivo}. ❤️ Recuerda que te queremos mucho a ti y a {mascota}. ¡Cualquier cosita estamos a un mensaje de distancia!"
+            
+            link = link_whatsapp(tel, msg_auto)
+            if link:
+                st.markdown(f"💌 **{nom}** (para {mascota}): [Enviar WhatsApp Automático]({link})")
+
+    # 5. RECUPERACIÓN
+    with tabs[4]:
+        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>🚑</span> Rescate de Clientes (>60 días sin compra)", unsafe_allow_html=True)
+        df_risk = master[master['Estado'].isin(["🟠 Riesgo", "🔴 Perdido"])].copy()
+        
+        if df_risk.empty:
+            st.success("¡Excelente retención! No hay clientes perdidos.")
+        else:
+            st.dataframe(df_risk[['Nombre', 'Nombre_Mascota', 'Dias_Sin_Compra']], use_container_width=True)
+            
+            gancho = st.text_input("Oferta Gancho", "Envío Gratis + Snack")
+            
+            for idx, row in df_risk.iterrows():
+                nom = row.get('Nombre', 'Cliente')
+                mascota = row.get('Nombre_Mascota', 'tu mascota')
+                tel = row.get('Telefono', '')
+                
+                msg = f"¡Hola {nom}! Hace mucho no vemos a {mascota} 🥺. ¡Los extrañamos en Bigotes y Patitas! Solo por volver, hoy tienen: {gancho}. 🐾 ¿Qué dices, se lo enviamos?"
+                link = link_whatsapp(tel, msg)
+                if link:
+                    st.markdown(f"🎣 **Recuperar a {nom}**: [Enviar Oferta]({link})")
 
 if __name__ == "__main__":
     main()
