@@ -254,7 +254,7 @@ def generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin):
 # --- 4. MÓDULOS DE NEGOCIO ---
 
 def tab_punto_venta(ws_inv, ws_cli, ws_ven):
-    st.markdown("### 🛒 Punto de Venta (POS) Profesional")
+    st.markdown("### 🛒 Venta Bigotes y Paticas (POS) NEXUS PRO")
     
     # Inicialización de Estados
     if 'carrito' not in st.session_state: st.session_state.carrito = []
