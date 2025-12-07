@@ -193,7 +193,7 @@ def procesar_inteligencia(ws_cli, ws_ven):
     # Buscamos columnas tipo 'Fecha', 'Nacimiento', 'Cumpleaños'
     col_nac = next((c for c in master.columns if 'nacimiento' in c.lower() or 'cumple' in c.lower() or c == 'Fecha'), None)
     
-    master['Cumpleaños_Mes_Actual'] = False
+    master['Cumpleaños_mascota'] = False
     
     if col_nac:
         # Convertir a datetime forzando errores a NaT
@@ -201,7 +201,7 @@ def procesar_inteligencia(ws_cli, ws_ven):
         # Extraer el mes de nacimiento
         meses_nac = fechas_temp.dt.month
         # Comparar con mes actual
-        master['Cumpleaños_Mes_Actual'] = meses_nac == hoy.month
+        master['Cumpleaños_mascota'] = meses_nac == hoy.month
         # Guardar la fecha limpia para uso futuro
         master['Fecha_Nacimiento_Clean'] = fechas_temp
 
@@ -247,7 +247,7 @@ def main():
     col2.metric("Activos (Mes)", len(master[master['Estado'] == "🟢 Activo"]))
     col3.metric("🔥 Recompra Urgente", len(master[master['Estado'] == "🟡 Recompra (Alerta)"]), delta="Prioridad Alta", delta_color="inverse")
     
-    cumpleaneros = len(master[master['Cumpleaños_Mes_Actual'] == True])
+    cumpleaneros = len(master[master['Cumpleaños_mascota'] == True])
     col4.metric("🎂 Cumpleaños Mes", cumpleaneros, delta="Felicitar hoy")
 
     st.markdown("---")
@@ -291,7 +291,7 @@ def main():
         st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>🎂</span> Cumpleañeros de {mes_actual}", unsafe_allow_html=True)
         st.caption("El sistema detecta el mes de nacimiento, sin importar el año.")
         
-        df_cumple = master[master['Cumpleaños_Mes_Actual'] == True].copy()
+        df_cumple = master[master['Cumpleaños_mascota'] == True].copy()
         
         if df_cumple.empty:
             st.info(f"No hay cumpleaños detectados en la base de datos para este mes.")
