@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 import plotly.express as px
+import plotly.graph_objects as go
 import numpy as np
 from io import BytesIO
 from datetime import datetime, timedelta
@@ -11,447 +12,488 @@ from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 import json
 import uuid
-from urllib.parse import quote # Necesario para crear el link de WhatsApp
+from urllib.parse import quote
 
 # ==========================================
-# 1. CONFIGURACIÓN E INICIALIZACIÓN
+# 1. CONFIGURACIÓN E INICIALIZACIÓN (NEXUS PRO)
 # ==========================================
 
 st.set_page_config(
-    page_title="Nexus Ultra: AI Procurement",
-    page_icon="🧬",
+    page_title="NEXUS PRO | AI Supply Chain",
+    page_icon="💠",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS Premium
+# Estilos CSS "Glassmorphism"
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Outfit', sans-serif; color: #1e293b; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
     
-    /* KPI Cards Mejoradas */
-    div[data-testid="metric-container"] {
-        background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
-        padding: 15px;
-        border-radius: 15px;
-        border-left: 6px solid #4f46e5;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        transition: transform 0.2s;
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    
+    /* Fondo y Contenedores */
+    .stApp {
+        background-color: #f8f9fa;
     }
-    div[data-testid="metric-container"]:hover { transform: translateY(-5px); }
     
-    /* Botones Personalizados */
-    .stButton>button {
-        border-radius: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1px;
+    /* Métricas */
+    div[data-testid="metric-container"] {
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+    }
+    div[data-testid="metric-container"]:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        border-color: #6366f1;
     }
     
     /* Tablas */
-    .stDataFrame { border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .stDataFrame { 
+        border-radius: 12px; 
+        overflow: hidden;
+        border: 1px solid #e5e7eb;
+    }
+    
+    /* Botones Principales */
+    .stButton>button {
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+    
+    /* Títulos */
+    h1, h2, h3 { color: #111827; }
+    .highlight { color: #4f46e5; font-weight: 800; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. SISTEMA DE COMUNICACIÓN (Email & WhatsApp Link)
-# ==========================================
-
-def enviar_correo_proveedor(proveedor, email_destino, archivo_excel, nombre_archivo):
-    """Envía la PO por correo usando SMTP."""
-    try:
-        if not email_destino or "@" not in str(email_destino):
-            return False, "Email de proveedor inválido."
-
-        msg = MIMEMultipart()
-        msg['From'] = st.secrets["email"]["sender_email"]
-        msg['To'] = email_destino
-        msg['Subject'] = f"Nueva Orden de Compra - {proveedor} - {datetime.now().strftime('%d/%m/%Y')}"
-
-        body = f"""
-        Estimado equipo de {proveedor},
-        
-        Adjunto encontrarán una nueva orden de compra generada por nuestro sistema Nexus AI.
-        
-        Por favor confirmar recepción y fecha estimada de entrega.
-        
-        Cordialmente,
-        Dpto. Compras.
-        """
-        msg.attach(MIMEText(body, 'plain'))
-
-        part = MIMEApplication(archivo_excel, Name=nombre_archivo)
-        part['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
-        msg.attach(part)
-
-        server = smtplib.SMTP(st.secrets["email"]["smtp_server"], st.secrets["email"]["smtp_port"])
-        server.starttls()
-        server.login(st.secrets["email"]["sender_email"], st.secrets["email"]["sender_password"])
-        server.send_message(msg)
-        server.quit()
-        return True, "Correo enviado exitosamente."
-    except Exception as e:
-        return False, f"Error SMTP: {str(e)}"
-
-def generar_link_whatsapp(numero, proveedor, monto, items_resumen):
-    """
-    Genera un link de wa.me con el mensaje pre-escrito.
-    """
-    try:
-        # Limpieza básica del número (eliminar espacios, guiones, mas)
-        numero_limpio = ''.join(filter(str.isdigit, str(numero)))
-        
-        # Mensaje Tierno 'Bigotes y Paticas'
-        mensaje = f"""*¡Miau! 🐱 Hola Humano de {proveedor}.*
-
-El Agente Bigotes informa: ¡Hemos generado una nueva orden de compra! 🐾
-
-*Resumen del Pedido:*
-{items_resumen}
-
-*Valor Total:* ${monto:,.0f}
-
-Por favor, revisen su correo para el Excel detallado.
-¡Espero mis sobres de comida premium! 🐟"""
-
-        # Codificar el mensaje para URL
-        mensaje_encoded = quote(mensaje)
-        
-        # Crear Link
-        url = f"https://wa.me/{numero_limpio}?text={mensaje_encoded}"
-        return url
-    except Exception as e:
-        return "#"
-
-# ==========================================
-# 3. CONEXIÓN Y DATOS (CON CAPACIDAD DE ESCRITURA)
+# 2. MOTOR DE BASE DE DATOS (AUTO-REPARABLE)
 # ==========================================
 
 @st.cache_resource
 def conectar_db():
+    """Conexión persistente a Google Sheets."""
     try:
+        if "google_service_account" not in st.secrets:
+            st.error("❌ Falta la configuración de 'google_service_account' en secrets.toml")
+            return None
+        
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
-        sh = gc.open_by_url(st.secrets["SHEET_URL"])
+        sh = gc.open_by_url(st.secrets["general"]["SHEET_URL"])
         return sh
     except Exception as e:
-        st.error(f"Error Database: {e}")
+        st.error(f"🔴 Error Crítico de Conexión: {e}")
         return None
 
-def cargar_datos(sh):
-    ws_inv = sh.worksheet("Inventario")
-    ws_ven = sh.worksheet("Ventas")
-    ws_prov = sh.worksheet("Maestro_Proveedores")
-    
-    # Manejo de errores si no existe la hoja de historial
-    try: ws_hist_ordenes = sh.worksheet("Historial_Ordenes")
-    except: ws_hist_ordenes = None
+def get_or_create_worksheet(sh, name, headers):
+    """
+    Intenta obtener una hoja. Si no existe, LA CREA automáticamente.
+    Esto soluciona el error 'WorksheetNotFound'.
+    """
+    try:
+        # Intenta encontrar la hoja (buscamos variaciones comunes de nombres)
+        try:
+            return sh.worksheet(name)
+        except gspread.exceptions.WorksheetNotFound:
+            # Si es proveedores, intenta buscar con doble o (typo comun)
+            if name == "Maestro_Proveedores":
+                 try: return sh.worksheet("Maestro_Proveedores")
+                 except: pass
+            
+            # Si no existe, la crea
+            ws = sh.add_worksheet(title=name, rows=100, cols=20)
+            ws.append_row(headers)
+            return ws
+    except Exception as e:
+        st.error(f"Error gestionando hoja '{name}': {e}")
+        return None
 
+def cargar_datos_pro(sh):
+    """Carga datos con validación de esquema."""
+    
+    # 1. Definir esquemas (Columnas esperadas)
+    schema_inv = ['ID_Producto', 'Nombre', 'Categoria', 'Stock', 'Costo', 'Precio', 'SKU_Proveedor']
+    schema_ven = ['ID_Venta', 'Fecha', 'Items', 'Total']
+    schema_prov = ['Nombre_Proveedor', 'SKU_Interno', 'Costo', 'Factor_Pack', 'Email', 'Telefono']
+    schema_hist = ['ID_Orden', 'Proveedor', 'Fecha_Orden', 'Items_JSON', 'Total', 'Estado', 'Fecha_Recepcion', 'Lead_Time_Real', 'Calificacion']
+
+    # 2. Cargar o Crear Hojas
+    ws_inv = get_or_create_worksheet(sh, "Inventario", schema_inv)
+    ws_ven = get_or_create_worksheet(sh, "Ventas", schema_ven)
+    ws_prov = get_or_create_worksheet(sh, "Maestro_Proveedores", schema_prov)
+    ws_hist = get_or_create_worksheet(sh, "Historial_Ordenes", schema_hist)
+
+    # 3. Convertir a DataFrames
     df_inv = pd.DataFrame(ws_inv.get_all_records())
     df_ven = pd.DataFrame(ws_ven.get_all_records())
     df_prov = pd.DataFrame(ws_prov.get_all_records())
-    
-    df_ordenes = pd.DataFrame()
-    if ws_hist_ordenes:
-        df_ordenes = pd.DataFrame(ws_hist_ordenes.get_all_records())
+    df_hist = pd.DataFrame(ws_hist.get_all_records())
 
-    # Limpieza básica
-    cols_inv = {'ID_Producto': 'ID', 'Stock': 'Stock', 'Costo': 'Costo', 'Precio': 'Precio', 'Nombre': 'Nombre'}
-    df_inv = df_inv.rename(columns={k:v for k,v in cols_inv.items() if k in df_inv.columns})
-    
-    # Conversión numérica segura
-    for df in [df_inv, df_ordenes]:
-        if 'Stock' in df.columns: 
-             df['Stock'] = pd.to_numeric(df['Stock'], errors='coerce').fillna(0)
-        if 'Costo' in df.columns:
-             df['Costo'] = pd.to_numeric(df['Costo'].astype(str).str.replace(r'[^\d.]', '', regex=True), errors='coerce').fillna(0)
-    
-    return df_inv, df_ven, df_prov, df_ordenes, ws_hist_ordenes
+    # 4. Normalización Numérica (Crucial para cálculos)
+    def clean_currency(x):
+        if isinstance(x, str):
+            return float(x.replace('$', '').replace(',', '').replace(' ', '') or 0)
+        return float(x or 0)
 
-def guardar_orden_historial(ws, orden_data):
-    """Guarda una nueva orden en Google Sheets."""
-    if ws:
-        # Fila: ID, Proveedor, Fecha, JSON, Total, Estado, Fecha_Recepcion, Lead_Time, Calificacion
-        row = [
-            orden_data['id'],
-            orden_data['proveedor'],
-            str(datetime.now().date()),
-            json.dumps(orden_data['items']),
-            orden_data['total'],
-            "Pendiente",
-            "", # Fecha recepción vacía
-            "", # Lead Time vacío
-            ""  # Calificacion vacía
-        ]
-        ws.append_row(row)
+    if not df_inv.empty:
+        df_inv['Stock'] = pd.to_numeric(df_inv['Stock'], errors='coerce').fillna(0)
+        df_inv['Costo'] = df_inv['Costo'].apply(clean_currency)
+        df_inv['Precio'] = df_inv['Precio'].apply(clean_currency)
+    
+    return df_inv, df_ven, df_prov, df_hist, ws_hist
 
 # ==========================================
-# 4. LÓGICA DE NEGOCIO (FORECAST)
+# 3. LÓGICA DE INTELIGENCIA DE NEGOCIO (BI)
 # ==========================================
 
-def analizar_rendimiento_proveedores(df_ordenes):
-    """Analiza los datos históricos para calificar proveedores."""
-    if df_ordenes.empty: return pd.DataFrame()
+def analisis_abc(df):
+    """Realiza clasificación Pareto (ABC) sobre el inventario."""
+    if df.empty or 'Ventas_Valor' not in df.columns:
+        df['Clasificacion_ABC'] = 'C'
+        return df
     
-    df_compl = df_ordenes[df_ordenes['Estado'] == 'Recibido'].copy()
-    if df_compl.empty: return pd.DataFrame()
+    df = df.sort_values('Ventas_Valor', ascending=False)
+    df['Acumulado'] = df['Ventas_Valor'].cumsum() / df['Ventas_Valor'].sum()
     
-    df_compl['Lead_Time_Real'] = pd.to_numeric(df_compl['Lead_Time_Real'], errors='coerce')
-    df_compl['Calificacion'] = pd.to_numeric(df_compl['Calificacion'], errors='coerce')
-    
-    stats = df_compl.groupby('Proveedor').agg({
-        'Lead_Time_Real': 'mean',
-        'Calificacion': 'mean',
-        'ID_Orden': 'count'
-    }).reset_index()
-    
-    stats.columns = ['Proveedor', 'Tiempo_Entrega_Promedio', 'Score_Calidad', 'Ordenes_Totales']
-    return stats
+    def classify(x):
+        if x <= 0.80: return 'A' # 80% del valor (Vitales)
+        elif x <= 0.95: return 'B' # 15% del valor (Importantes)
+        else: return 'C' # 5% del valor (Triviales)
+        
+    df['Clasificacion_ABC'] = df['Acumulado'].apply(classify)
+    return df
 
-def procesar_datos(df_inv, df_ven, df_prov):
-    # 1. Ventas (Forecast simple 90 días)
+def procesar_cerebro_nexus(df_inv, df_ven, df_prov):
+    # 1. Analisis de Ventas
     df_ven['Fecha'] = pd.to_datetime(df_ven['Fecha'], errors='coerce')
-    cutoff = datetime.now() - timedelta(days=90)
-    df_recent = df_ven[df_ven['Fecha'] >= cutoff]
     
-    ventas_dict = {}
-    for items in df_recent['Items'].dropna():
-        for item in str(items).split(','):
+    # Rango: Últimos 90 días
+    cutoff_90 = datetime.now() - timedelta(days=90)
+    cutoff_30 = datetime.now() - timedelta(days=30)
+    cutoff_60 = datetime.now() - timedelta(days=60)
+    
+    ven_recent = df_ven[df_ven['Fecha'] >= cutoff_90]
+    
+    stats_prod = {}
+    
+    # Desglosar items de ventas (formato: "ProdA, ProdB" o "ProdA (2)")
+    # Este loop es simplificado, asume nombres separados por coma
+    for _, row in ven_recent.iterrows():
+        items = str(row['Items']).split(',')
+        for item in items:
             nombre = item.split('(')[0].strip()
-            ventas_dict[nombre] = ventas_dict.get(nombre, 0) + 1
-            
-    df_metrics = pd.DataFrame(list(ventas_dict.items()), columns=['Nombre', 'Ventas_90d'])
+            # Contador simple (en PRO real, parsear cantidad)
+            stats_prod[nombre] = stats_prod.get(nombre, 0) + 1
+
+    df_metrics = pd.DataFrame(list(stats_prod.items()), columns=['Nombre', 'Unidades_Vendidas_90d'])
     
-    # 2. Merge Maestro
-    df_master = pd.merge(df_inv, df_metrics, on='Nombre', how='left').fillna({'Ventas_90d': 0})
+    # 2. Unificar con Inventario
+    df_master = pd.merge(df_inv, df_metrics, on='Nombre', how='left').fillna({'Unidades_Vendidas_90d': 0})
     
-    # 3. Merge Proveedores
-    if not df_prov.empty:
-        df_master['SKU'] = df_master['SKU_Proveedor'].astype(str)
-        df_prov['SKU_Interno'] = df_prov['SKU_Interno'].astype(str)
-        df_master = pd.merge(df_master, df_prov, left_on='SKU', right_on='SKU_Interno', how='left')
+    # 3. Unificar con Proveedores
+    if not df_prov.empty and 'SKU_Interno' in df_prov.columns:
+         # Asegurar tipos string
+         df_master['ID_Producto'] = df_master['ID_Producto'].astype(str)
+         df_prov['SKU_Interno'] = df_prov['SKU_Interno'].astype(str)
+         # Merge
+         df_master = pd.merge(df_master, df_prov, left_on='ID_Producto', right_on='SKU_Interno', how='left')
     else:
         df_master['Nombre_Proveedor'] = 'Genérico'
         df_master['Factor_Pack'] = 1
-        df_master['Email_Contacto'] = ''
-        df_master['Telefono'] = '' # Campo telefono default
+        df_master['Telefono'] = ''
 
-    # 4. Cálculos Reabastecimiento
-    df_master['Velocidad_Diaria'] = df_master['Ventas_90d'] / 90
-    df_master['Stock_Dias'] = df_master['Stock'] / df_master['Velocidad_Diaria'].replace(0, 0.01)
+    # 4. Cálculos Avanzados
+    df_master['Ventas_Valor'] = df_master['Unidades_Vendidas_90d'] * df_master['Precio']
+    df_master = analisis_abc(df_master) # Aplicar Pareto
     
-    LEAD_TIME_STD = 15
-    SAFETY_STOCK = 7
-    df_master['Punto_Reorden'] = df_master['Velocidad_Diaria'] * (LEAD_TIME_STD + SAFETY_STOCK)
-    df_master['Unidades_Faltantes'] = (df_master['Punto_Reorden']*2 - df_master['Stock']).clip(lower=0)
+    df_master['Velocidad_Diaria'] = df_master['Unidades_Vendidas_90d'] / 90
+    
+    # Dias de Inventario (DSI)
+    df_master['Dias_Inventario'] = np.where(df_master['Velocidad_Diaria'] > 0, 
+                                            df_master['Stock'] / df_master['Velocidad_Diaria'], 
+                                            999) # 999 indica stock estancado
+    
+    # Reabastecimiento
+    LEAD_TIME = 15
+    SAFETY_STOCK_DAYS = {'A': 14, 'B': 7, 'C': 3} # Stock de seguridad dinámico por importancia
+    
+    df_master['Safety_Days'] = df_master['Clasificacion_ABC'].map(SAFETY_STOCK_DAYS).fillna(7)
+    df_master['Punto_Reorden'] = df_master['Velocidad_Diaria'] * (LEAD_TIME + df_master['Safety_Days'])
+    
+    df_master['Estado_Stock'] = np.where(df_master['Stock'] <= df_master['Punto_Reorden'], '🚨 Pedir', '✅ OK')
+    df_master['Faltante'] = (df_master['Punto_Reorden'] * 1.5 - df_master['Stock']).clip(lower=0)
     
     df_master['Factor_Pack'] = pd.to_numeric(df_master['Factor_Pack'], errors='coerce').fillna(1)
-    df_master['Packs_Pedir'] = np.ceil(df_master['Unidades_Faltantes'] / df_master['Factor_Pack'])
-    df_master['Costo_Total_Sugerido'] = df_master['Unidades_Faltantes'] * df_master['Costo']
-
+    df_master['Cajas_Sugeridas'] = np.ceil(df_master['Faltante'] / df_master['Factor_Pack'])
+    df_master['Inversion_Sugerida'] = df_master['Cajas_Sugeridas'] * df_master['Factor_Pack'] * df_master['Costo']
+    
     return df_master
 
 # ==========================================
-# 5. UI PRINCIPAL
+# 4. FUNCIONES DE EXPORTACIÓN Y MENSAJERÍA
+# ==========================================
+
+def generar_excel_po(df_orden):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df_orden.to_excel(writer, index=False, sheet_name='Orden_Compra')
+        workbook = writer.book
+        worksheet = writer.sheets['Orden_Compra']
+        header_fmt = workbook.add_format({'bold': True, 'fg_color': '#4f46e5', 'font_color': 'white'})
+        money_fmt = workbook.add_format({'num_format': '$#,##0.00'})
+        
+        for col_num, value in enumerate(df_orden.columns.values):
+            worksheet.write(0, col_num, value, header_fmt)
+            
+        worksheet.set_column('A:B', 20) # Ancho columnas
+    return output.getvalue()
+
+def generar_link_whatsapp(numero, proveedor, items_df):
+    if not numero or str(numero) == 'nan' or str(numero) == '': return None
+    
+    numero = ''.join(filter(str.isdigit, str(numero)))
+    
+    resumen = ""
+    for _, row in items_df.iterrows():
+        resumen += f"📦 {row['Cajas_Sugeridas']:.0f} cajas de {row['Nombre']}\n"
+    
+    total = items_df['Inversion_Sugerida'].sum()
+    
+    msg = f"""*Hola {proveedor}, pedido de reposición:*
+    
+{resumen}
+💰 *Total Estimado: ${total:,.0f}*
+
+Quedamos atentos a confirmación. ¡Gracias!"""
+    
+    return f"https://wa.me/{numero}?text={quote(msg)}"
+
+# ==========================================
+# 5. UI PRINCIPAL (DASHBOARD)
 # ==========================================
 
 def main():
     sh = conectar_db()
     if not sh: return
+
+    # Carga de Datos Resiliente
+    df_inv, df_ven, df_prov, df_hist, ws_hist = cargar_datos_pro(sh)
     
-    df_inv, df_ven, df_prov, df_ordenes, ws_hist = cargar_datos(sh)
-    df_master = procesar_datos(df_inv, df_ven, df_prov)
-    df_srm = analizar_rendimiento_proveedores(df_ordenes)
+    # Procesamiento
+    master = procesar_cerebro_nexus(df_inv, df_ven, df_prov)
 
     # --- SIDEBAR ---
     with st.sidebar:
-        st.title("🧬 NEXUS ULTRA")
-        st.info(f"Conectado a: {sh.title}")
-        st.write("---")
+        st.title("💠 NEXUS PRO")
+        st.markdown("---")
         
-        if not df_srm.empty:
-            best_prov = df_srm.sort_values('Score_Calidad', ascending=False).iloc[0]
-            st.success(f"🏆 Mejor Proveedor:\n**{best_prov['Proveedor']}**")
-        
-        st.caption("v3.0 - Manual WhatsApp")
+        # Estado del Sistema
+        alertas = master[master['Estado_Stock'] == '🚨 Pedir'].shape[0]
+        if alertas > 0:
+            st.error(f"⚠️ {alertas} Productos Críticos")
+        else:
+            st.success("✅ Inventario Saludable")
+            
+        st.markdown("---")
+        st.caption("Sistema Inteligente v4.2")
 
     # --- HEADER ---
-    st.markdown("## 🧠 Panel de Control Inteligente")
+    st.markdown("## <span class='highlight'>Dashboard de Control</span>", unsafe_allow_html=True)
     
+    # KPIs Top
     k1, k2, k3, k4 = st.columns(4)
-    inv_val = (df_master['Stock'] * df_master['Costo']).sum()
-    por_pedir = df_master['Costo_Total_Sugerido'].sum()
+    k1.metric("Valor Inventario", f"${(master['Stock']*master['Costo']).sum():,.0f}")
+    k2.metric("Cashflow Requerido", f"${master['Inversion_Sugerida'].sum():,.0f}", delta="Para reabastecer", delta_color="inverse")
     
-    k1.metric("Valor Inventario", f"${inv_val:,.0f}")
-    k2.metric("Necesidad de Compra", f"${por_pedir:,.0f}", "Cashflow requerido", delta_color="inverse")
+    # KPI Ventas 90d
+    total_unidades = master['Unidades_Vendidas_90d'].sum()
+    k3.metric("Velocidad Venta", f"{total_unidades/90:.1f} u/día")
     
-    avg_lead = df_srm['Tiempo_Entrega_Promedio'].mean() if not df_srm.empty else 0
-    k3.metric("Lead Time Real Promedio", f"{avg_lead:.1f} días", "Aprendido de historial")
-    k4.metric("Órdenes Pendientes", len(df_ordenes[df_ordenes['Estado']=='Pendiente']) if not df_ordenes.empty else 0)
+    # KPI Proveedores
+    pendientes = df_hist[df_hist['Estado'] == 'Pendiente'].shape[0] if not df_hist.empty else 0
+    k4.metric("Órdenes Activas", pendientes)
 
-    st.markdown("---")
-    
     # --- TABS ---
-    tabs = st.tabs(["📊 Dashboard & SRM", "🛒 Centro de Compras AI", "📦 Recepción", "📂 Datos Maestros"])
+    tabs = st.tabs(["📊 Análisis 360", "🚀 Centro de Compras", "📦 Recepción", "⚙️ Datos"])
 
-    # TAB 1: DASHBOARD
+    # TAB 1: ANÁLISIS 360
     with tabs[0]:
-        c1, c2 = st.columns([2,1])
+        c1, c2 = st.columns([2, 1])
+        
         with c1:
-            st.subheader("Evaluación de Proveedores")
-            if not df_srm.empty:
-                fig = px.scatter(df_srm, x='Tiempo_Entrega_Promedio', y='Score_Calidad', 
-                                 size='Ordenes_Totales', color='Proveedor',
-                                 title="Matriz Eficiencia vs Calidad")
-                fig.update_xaxes(autorange="reversed") 
+            st.subheader("Distribución de Valor (Análisis ABC)")
+            # Gráfico Sunburst: Categoria -> Clasificación ABC -> Producto
+            if 'Categoria' in master.columns and not master.empty:
+                fig = px.sunburst(master, path=['Clasificacion_ABC', 'Categoria', 'Nombre'], 
+                                  values='Ventas_Valor', 
+                                  color='Clasificacion_ABC',
+                                  color_discrete_map={'A':'#ef4444', 'B':'#f59e0b', 'C':'#10b981'},
+                                  title="¿Dónde está tu dinero? (Rojo = Productos Vitales)")
                 st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("Necesita historial de órdenes recibidas para ver gráficos.")
+                st.info("Añade categorías a tus productos para ver el gráfico solar.")
 
         with c2:
-            st.subheader("Top Productos a Pedir")
-            top_pedir = df_master.sort_values('Costo_Total_Sugerido', ascending=False).head(5)
-            st.dataframe(top_pedir[['Nombre', 'Packs_Pedir', 'Costo_Total_Sugerido']], hide_index=True)
+            st.subheader("Top Agotados")
+            agotados = master[master['Stock'] == 0].sort_values('Clasificacion_ABC')
+            if not agotados.empty:
+                st.dataframe(
+                    agotados[['Nombre', 'Clasificacion_ABC', 'Velocidad_Diaria']],
+                    hide_index=True,
+                    column_config={
+                        "Clasificacion_ABC": st.column_config.TextColumn("Importancia"),
+                        "Velocidad_Diaria": st.column_config.ProgressColumn("Demanda", format="%.2f", min_value=0, max_value=master['Velocidad_Diaria'].max())
+                    }
+                )
+            else:
+                st.success("¡Sin quiebres de stock!")
 
-    # TAB 2: COMPRAS (MODIFICADO CON WHATSAPP MANUAL)
+    # TAB 2: COMPRAS
     with tabs[1]:
-        st.header("Gestión de Compras Automatizada")
+        st.subheader("🛒 Generador de Pedidos Inteligente")
         
-        df_buy = df_master[df_master['Unidades_Faltantes'] > 0].copy()
+        # Filtro de productos a pedir
+        pedir_df = master[master['Cajas_Sugeridas'] > 0].copy()
         
-        if df_buy.empty:
-            st.success("✅ Inventario Saludable.")
+        if pedir_df.empty:
+            st.balloons()
+            st.success("¡Nada que pedir hoy! Relájate.")
         else:
-            proveedores_list = df_buy['Nombre_Proveedor'].unique()
-            prov_sel = st.selectbox("Seleccionar Proveedor:", proveedores_list)
+            col_prov, col_info = st.columns([1, 3])
             
-            orden_actual = df_buy[df_buy['Nombre_Proveedor'] == prov_sel]
+            with col_prov:
+                proveedores = pedir_df['Nombre_Proveedor'].unique()
+                prov_sel = st.selectbox("Seleccionar Proveedor", proveedores)
+                
+                # Datos proveedor
+                info_p = df_prov[df_prov['Nombre_Proveedor'] == prov_sel]
+                email_p = info_p['Email'].values[0] if not info_p.empty else "N/A"
+                tel_p = info_p['Telefono'].values[0] if not info_p.empty else None
+                
+                st.info(f"📧 {email_p}")
             
-            st.markdown(f"### 📋 Orden Sugerida para: **{prov_sel}**")
-            
-            orden_editada = st.data_editor(
-                orden_actual[['SKU', 'Nombre', 'Stock', 'Packs_Pedir', 'Costo', 'Factor_Pack']],
-                num_rows="dynamic",
-                column_config={
-                    "Packs_Pedir": st.column_config.NumberColumn("Cajas a Pedir", min_value=1, step=1),
-                    "Costo": st.column_config.NumberColumn("Costo Unit", format="$%.2f")
-                },
-                use_container_width=True
-            )
-            
-            total_orden = (orden_editada['Packs_Pedir'] * orden_editada['Factor_Pack'] * orden_editada['Costo']).sum()
-            st.metric("Total Orden Estimada", f"${total_orden:,.2f}")
-            
-            # --- ZONA DE ACCIONES ---
-            st.markdown("---")
-            st.subheader("🚀 Acciones de Pedido")
-            
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                orden_editada.to_excel(writer, index=False, sheet_name='Orden_Compra')
-            excel_data = output.getvalue()
-            
-            # Columnas para acciones
-            ac1, ac2, ac3 = st.columns(3)
-            
-            # 1. Descargar
-            with ac1:
-                st.download_button(
-                    "📥 1. Descargar Excel", 
-                    data=excel_data, 
-                    file_name=f"OC_{prov_sel}.xlsx", 
+            with col_info:
+                # Editor de Orden
+                orden_base = pedir_df[pedir_df['Nombre_Proveedor'] == prov_sel]
+                
+                st.markdown(f"#### Editando Orden para **{prov_sel}**")
+                
+                orden_final = st.data_editor(
+                    orden_base[['ID_Producto', 'Nombre', 'Stock', 'Cajas_Sugeridas', 'Costo', 'Factor_Pack']],
+                    hide_index=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Cajas_Sugeridas": st.column_config.NumberColumn("Cajas a Pedir", min_value=1, step=1),
+                        "Costo": st.column_config.NumberColumn("Costo Unit", format="$%.2f"),
+                        "Stock": st.column_config.NumberColumn("Stock Actual", disabled=True)
+                    },
+                    use_container_width=True
+                )
+                
+                total_po = (orden_final['Cajas_Sugeridas'] * orden_final['Factor_Pack'] * orden_final['Costo']).sum()
+                st.write(f"### Total Orden: :green[${total_po:,.2f}]")
+                
+                # ACCIONES
+                st.markdown("---")
+                ac1, ac2, ac3 = st.columns(3)
+                
+                excel_data = generar_excel_po(orden_final)
+                nombre_archivo = f"PO_{prov_sel}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+                
+                # 1. Descargar
+                ac1.download_button(
+                    label="💾 Descargar Excel",
+                    data=excel_data,
+                    file_name=nombre_archivo,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
-            
-            # 2. Email (Registro en DB aquí)
-            with ac2:
-                if st.button("📧 2. Enviar Email + Guardar", use_container_width=True):
-                    email_prov = df_prov[df_prov['Nombre_Proveedor'] == prov_sel]['Email'].values
-                    email_dest = email_prov[0] if len(email_prov) > 0 else None
-                    
-                    if not email_dest:
-                        st.error("❌ Sin email configurado.")
-                    else:
-                        with st.spinner("Procesando..."):
-                            ok, msg = enviar_correo_proveedor(prov_sel, email_dest, excel_data, f"OC_{prov_sel}.xlsx")
-                            if ok:
-                                st.success(f"✅ {msg}")
-                                # Registrar en DB
-                                id_orden = f"PO-{uuid.uuid4().hex[:6].upper()}"
-                                items_dict = orden_editada[['Nombre', 'Packs_Pedir']].to_dict('records')
-                                guardar_orden_historial(ws_hist, {
-                                    'id': id_orden, 'proveedor': prov_sel, 
-                                    'items': items_dict, 'total': total_orden
-                                })
-                                st.toast("Orden guardada en historial.")
-                            else:
-                                st.error(f"❌ {msg}")
-
-            # 3. WhatsApp (Manual)
-            with ac3:
-                st.write("**🐱 3. Notificar por WhatsApp**")
                 
-                # Obtener teléfono de la base de datos
-                telefono_db = ""
-                try:
-                    telefono_db = df_prov[df_prov['Nombre_Proveedor'] == prov_sel]['Telefono'].values[0]
-                except:
-                    telefono_db = "" # Si falla o no existe columna
-
-                # Input para que el usuario verifique o escriba el número
-                numero_wa = st.text_input("Número del Proveedor:", value=str(telefono_db), placeholder="Ej: 573001234567")
-                
-                # Crear resumen de items para el mensaje
-                resumen_items = ""
-                for index, row in orden_editada.iterrows():
-                    resumen_items += f"- {row['Packs_Pedir']} cajas de {row['Nombre']}\n"
-                
-                # Generar el link
-                link_wa = generar_link_whatsapp(numero_wa, prov_sel, total_orden, resumen_items)
-                
-                if numero_wa:
-                    st.link_button("📲 Abrir WhatsApp Web/App", link_wa, type="primary", use_container_width=True)
+                # 2. WhatsApp
+                link_wa = generar_link_whatsapp(tel_p, prov_sel, orden_final)
+                if link_wa:
+                    ac2.link_button("📲 Enviar WhatsApp", link_wa, type="secondary", use_container_width=True)
                 else:
-                    st.warning("Ingresa un número para habilitar el botón.")
+                    ac2.warning("Sin teléfono configurado")
+                
+                # 3. Confirmar (Guardar DB)
+                if ac3.button("🚀 Registrar Orden", type="primary", use_container_width=True):
+                    try:
+                        nueva_orden = [
+                            f"PO-{uuid.uuid4().hex[:6].upper()}",
+                            prov_sel,
+                            str(datetime.now().date()),
+                            json.dumps(orden_final[['Nombre', 'Cajas_Sugeridas']].to_dict('records')),
+                            total_po,
+                            "Pendiente", "", "", ""
+                        ]
+                        ws_hist.append_row(nueva_orden)
+                        st.toast("✅ Orden Registrada Exitosamente", icon="🎉")
+                        st.balloons()
+                    except Exception as e:
+                        st.error(f"Error al guardar: {e}")
 
     # TAB 3: RECEPCIÓN
     with tabs[2]:
-        st.header("📦 Recepción de Mercancía")
+        st.subheader("📦 Recepción de Mercancía")
         
-        if df_ordenes.empty:
-            st.write("No hay historial.")
+        if df_hist.empty:
+            st.info("No hay historial de órdenes.")
         else:
-            pendientes = df_ordenes[df_ordenes['Estado'] == 'Pendiente']
-            if pendientes.empty:
-                st.success("🎉 Todo al día.")
-            else:
-                for idx, row in pendientes.iterrows():
-                    with st.expander(f"🚛 {row['Proveedor']} - ID: {row['ID_Orden']}"):
-                        c_rec1, c_rec2 = st.columns(2)
-                        with c_rec1:
-                            st.json(row['Items_JSON'])
-                        with c_rec2:
-                            fecha_recepcion = st.date_input("Fecha Llegada", key=f"d_{idx}")
-                            calificacion = st.slider("Calidad", 1, 5, 5, key=f"s_{idx}")
+            # Filtro visual
+            filtro_estado = st.radio("Mostrar:", ["Pendientes", "Recibidos"], horizontal=True)
+            estado_db = "Pendiente" if filtro_estado == "Pendientes" else "Recibido"
+            
+            view_orders = df_hist[df_hist['Estado'] == estado_db]
+            
+            if view_orders.empty:
+                st.caption("No hay órdenes en esta categoría.")
+            
+            for idx, row in view_orders.iterrows():
+                with st.expander(f"{row['Fecha_Orden']} | {row['Proveedor']} | ${row['Total']:,.0f}"):
+                    c1, c2 = st.columns([2,1])
+                    with c1:
+                        st.write("**Items:**")
+                        try:
+                            items = json.loads(row['Items_JSON'])
+                            st.table(pd.DataFrame(items))
+                        except:
+                            st.warning("Formato de items antiguo/inválido")
                             
-                            if st.button("✅ Confirmar Recepción", key=f"b_{idx}"):
-                                fecha_orden = pd.to_datetime(row['Fecha_Orden']).date()
-                                lead_time = (fecha_recepcion - fecha_orden).days
-                                
+                    with c2:
+                        if estado_db == "Pendiente":
+                            st.write("**Acciones de Recepción:**")
+                            fecha_llega = st.date_input("Fecha Llegada", key=f"d_{row['ID_Orden']}")
+                            calidad = st.slider("Calidad Entrega (1-5)", 1, 5, 5, key=f"s_{row['ID_Orden']}")
+                            
+                            if st.button("✅ Confirmar Ingreso", key=f"btn_{row['ID_Orden']}"):
                                 cell = ws_hist.find(row['ID_Orden'])
-                                if cell:
-                                    r = cell.row
-                                    ws_hist.update_cell(r, 6, "Recibido")
-                                    ws_hist.update_cell(r, 7, str(fecha_recepcion))
-                                    ws_hist.update_cell(r, 8, lead_time)
-                                    ws_hist.update_cell(r, 9, calificacion)
-                                    st.success("Actualizado.")
-                                    st.rerun()
+                                r = cell.row
+                                # Actualizar GSheets
+                                ws_hist.update_cell(r, 6, "Recibido") # Estado
+                                ws_hist.update_cell(r, 7, str(fecha_llega)) # Fecha
+                                
+                                # Calcular Lead Time
+                                f_orden = datetime.strptime(str(row['Fecha_Orden']), '%Y-%m-%d').date()
+                                days = (fecha_llega - f_orden).days
+                                ws_hist.update_cell(r, 8, days) # Lead Time
+                                ws_hist.update_cell(r, 9, calidad) # Calificacion
+                                
+                                st.success("Inventario actualizado (Simulado). Recarga la página.")
+                        else:
+                            st.write(f"🏁 Lead Time: **{row['Lead_Time_Real']} días**")
+                            st.write(f"⭐ Calidad: **{row['Calificacion']}/5**")
 
-    # TAB 4: DATA
+    # TAB 4: DATOS CRUD
     with tabs[3]:
-        st.dataframe(df_master)
+        st.info("Vista directa de la base de datos (Lectura)")
+        st.dataframe(master)
 
 if __name__ == "__main__":
     main()
