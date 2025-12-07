@@ -85,7 +85,7 @@ def conectar_db():
             return None
         
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
-        sh = gc.open_by_url(st.secrets["general"]["SHEET_URL"])
+        sh = gc.open_by_url(st.secrets["SHEET_URL"])
         return sh
     except Exception as e:
         st.error(f"🔴 Error Crítico de Conexión: {e}")
