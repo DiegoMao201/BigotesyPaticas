@@ -15,7 +15,6 @@ COLOR_ACENTO = "#f5a641"        # Naranja (Alertas)
 COLOR_FONDO = "#f8f9fa"         # Gris claro
 COLOR_BLANCO = "#ffffff"
 COLOR_TEXTO = "#262730"
-COLOR_ROJO = "#e63946"          # Rojo para alertas críticas
 
 st.set_page_config(
     page_title="Nexus Loyalty | Bigotes y Patitas",
@@ -24,7 +23,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ESTILOS CSS
+# --- CORRECCIÓN DEL ERROR CSS ---
+# Nota: En las f-strings de Python, para CSS se usan dobles llaves {{ }} 
+# y para variables de Python una sola llave { }.
 st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -100,8 +101,8 @@ st.markdown(f"""
         border-color: {COLOR_PRIMARIO};
     }}
 
-    /* Estilo especial para alerta de cumpleaños hoy */
-    .cumple-hoy {
+    /* CLASE ESPECIAL PARA LA ALERTA DE CUMPLEAÑOS */
+    .cumple-hoy {{
         background-color: #ffead0;
         border: 2px solid {COLOR_ACENTO};
         padding: 15px;
@@ -109,7 +110,8 @@ st.markdown(f"""
         margin-bottom: 15px;
         color: #8a4b00;
         font-weight: bold;
-    }
+        text-align: center;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -161,9 +163,9 @@ def procesar_inteligencia(ws_cli, ws_ven):
     if 'Cedula' not in df_cli.columns: df_cli['Cedula'] = ''
     df_cli['Cedula'] = df_cli['Cedula'].astype(str).str.replace(r'\.0$', '', regex=True)
     
-    # Asegurar nombres de columnas (Según tu estructura: Mascota)
+    # Asegurar nombre de columna Mascota
     if 'Mascota' not in df_cli.columns: 
-        df_cli['Mascota'] = 'Tu Peludito' # Valor por defecto
+        df_cli['Mascota'] = 'Tu Peludito'
 
     # 3. Procesamiento de Ventas
     if df_ven.empty or 'Fecha' not in df_ven.columns or 'Cedula_Cliente' not in df_ven.columns:
@@ -198,29 +200,28 @@ def procesar_inteligencia(ws_cli, ws_ven):
             
         df_cli['Estado'] = df_cli['Dias_Sin_Compra'].apply(clasificar)
     
-    # 4. Detección Inteligente de Cumpleaños (CORREGIDO PARA DETECTAR FECHAS LATINAS)
+    # 4. Detección Inteligente de Cumpleaños (FIX FORMATO FECHA)
     col_nac = 'Cumpleaños_mascota'
     
     df_cli['Es_Cumple_Mes'] = False
     df_cli['Es_Cumple_Hoy'] = False
     
     if col_nac in df_cli.columns:
-        # Paso A: Convertir a String y Limpiar
+        # Convertimos a string para evitar errores con fechas mixtas
         df_cli[col_nac] = df_cli[col_nac].astype(str).str.strip()
         
-        # Paso B: Convertir a Datetime forzando dayfirst=True (Formato Latino DD/MM/YYYY)
-        # errors='coerce' convierte errores en NaT (Not a Time)
+        # Convertimos a Fecha REAL (dayfirst=True es CLAVE para formato latino DD/MM/AAAA)
         df_cli['Fecha_Nac_DT'] = pd.to_datetime(df_cli[col_nac], dayfirst=True, errors='coerce')
         
         hoy_dt = datetime.now()
         
-        # Validar fechas validas
+        # Filtrar solo las fechas válidas
         mask_valid = df_cli['Fecha_Nac_DT'].notna()
         
-        # Marcar Mes
+        # Detectar Mes
         df_cli.loc[mask_valid, 'Es_Cumple_Mes'] = df_cli.loc[mask_valid, 'Fecha_Nac_DT'].dt.month == hoy_dt.month
         
-        # Marcar Día Exacto (HOY)
+        # Detectar Día Exacto (Día y Mes coinciden con Hoy)
         df_cli.loc[mask_valid, 'Es_Cumple_Hoy'] = (
             (df_cli.loc[mask_valid, 'Fecha_Nac_DT'].dt.month == hoy_dt.month) & 
             (df_cli.loc[mask_valid, 'Fecha_Nac_DT'].dt.day == hoy_dt.day)
@@ -234,15 +235,9 @@ def procesar_inteligencia(ws_cli, ws_ven):
 
 def link_whatsapp(telefono, mensaje):
     if not telefono: return None
-    # Limpieza agresiva del teléfono
     tel = str(telefono).replace(" ", "").replace("+", "").replace("-", "").replace(".", "").replace("(", "").replace(")", "").strip()
-    
-    # Validar longitud básica (si es muy corto, probablemente no sirva)
     if len(tel) < 7: return None
-    
-    # Asumir código de país Colombia (57) si tiene 10 dígitos
     if len(tel) == 10: tel = "57" + tel
-    
     return f"https://wa.me/{tel}?text={quote(mensaje)}"
 
 # ==========================================
@@ -260,11 +255,10 @@ def main():
         st.success(f"📅 Hoy es: {hoy_str}")
         st.info("💡 Usa las pestañas para gestionar tus contactos del día.")
 
-    # Carga
+    # Carga de datos
     ws_cli, ws_ven = conectar_crm()
     if not ws_cli: return
     
-    # Indicador de carga
     with st.spinner('Conectando con la base de datos de peluditos...'):
         master, df_ven, status = procesar_inteligencia(ws_cli, ws_ven)
 
@@ -276,21 +270,17 @@ def main():
     st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>📊</span> Tablero de Control", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     
-    if 'Estado' in master.columns:
-        activos = len(master[master['Estado'] == "🟢 Activo"])
-        alertas = len(master[master['Estado'] == "🟡 Recompra (Alerta)"])
-    else:
-        activos = 0
-        alertas = 0
-
+    activos = len(master[master['Estado'] == "🟢 Activo"]) if 'Estado' in master.columns else 0
+    alertas = len(master[master['Estado'] == "🟡 Recompra (Alerta)"]) if 'Estado' in master.columns else 0
+    
     # Contadores de Cumpleaños
-    cumple_hoy_count = len(master[master['Es_Cumple_Hoy'] == True])
-    cumple_mes_count = len(master[master['Es_Cumple_Mes'] == True])
+    cumple_hoy_count = len(master[master['Es_Cumple_Hoy'] == True]) if 'Es_Cumple_Hoy' in master.columns else 0
+    cumple_mes_count = len(master[master['Es_Cumple_Mes'] == True]) if 'Es_Cumple_Mes' in master.columns else 0
 
     col1.metric("Clientes Totales", len(master))
     col2.metric("Activos (Mes)", activos)
     col3.metric("🔥 Recompra Urgente", alertas, delta="Prioridad Alta", delta_color="inverse")
-    col4.metric("🎂 Cumpleaños Hoy", cumple_hoy_count, delta=f"Mes: {cumple_mes_count}")
+    col4.metric("🎂 Cumpleaños HOY", cumple_hoy_count, delta=f"Mes: {cumple_mes_count}")
 
     st.markdown("---")
 
@@ -315,7 +305,10 @@ def main():
         if df_rebuy.empty:
             st.success("✅ Todo al día. No hay alertas de recompra urgentes.")
         else:
-            st.dataframe(df_rebuy[['Nombre', 'Mascota', 'Telefono', 'Ultimo_Producto', 'Dias_Sin_Compra']], use_container_width=True, hide_index=True)
+            cols_mostrar = ['Nombre', 'Mascota', 'Telefono', 'Ultimo_Producto', 'Dias_Sin_Compra']
+            # Filtramos solo columnas que existan
+            cols_existentes = [c for c in cols_mostrar if c in df_rebuy.columns]
+            st.dataframe(df_rebuy[cols_existentes], use_container_width=True, hide_index=True)
             
             st.markdown("##### 🚀 Click para enviar Recordatorio Bonito:")
             for idx, row in df_rebuy.iterrows():
@@ -328,116 +321,110 @@ def main():
                 link = link_whatsapp(tel, msg)
                 
                 if link:
-                    st.markdown(f"🔸 **{mascota}** (Dueño: {nom}) → [Enviar WhatsApp Recordatorio]({link})")
+                    st.markdown(f"🔸 **{mascota}** (Dueño: {nom}) → [Enviar WhatsApp]({link})")
 
-    # 2. CUMPLEAÑOS (LÓGICA CORREGIDA Y MEJORADA)
+    # 2. CUMPLEAÑOS (LÓGICA HOY vs MES)
     with tabs[1]:
-        mes_actual_nombre = datetime.now().strftime("%B")
         mes_num = datetime.now().month
         dia_num = datetime.now().day
         
         st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>🎂</span> Centro de Celebraciones", unsafe_allow_html=True)
-        st.caption(f"📅 Hoy estamos buscando fechas que coincidan con el día **{dia_num}** y mes **{mes_num}**.")
-
-        # FILTROS
-        df_hoy = master[master['Es_Cumple_Hoy'] == True].copy()
-        df_mes = master[(master['Es_Cumple_Mes'] == True) & (master['Es_Cumple_Hoy'] == False)].copy()
         
-        # --- SECCIÓN: CUMPLEAÑOS HOY (ALERTA ROJA/NARANJA) ---
-        if not df_hoy.empty:
-            st.markdown(f"""
-            <div class="cumple-hoy">
-                🎉 ¡ATENCIÓN! ¡HOY CUMPLEN AÑOS {len(df_hoy)} PELUDITOS! 🎂🎈
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.write("**Lista de Cumpleañeros de HOY:**")
-            st.dataframe(df_hoy[['Nombre', 'Mascota', 'Telefono', 'Tipo_Mascota']], use_container_width=True)
+        if 'Es_Cumple_Hoy' not in master.columns:
+            st.error("No se pudo procesar la columna 'Cumpleaños_mascota'. Revisa que exista en Google Sheets.")
+        else:
+            # Separar los de HOY de los del MES
+            df_hoy = master[master['Es_Cumple_Hoy'] == True].copy()
+            df_mes = master[(master['Es_Cumple_Mes'] == True) & (master['Es_Cumple_Hoy'] == False)].copy()
 
-            # GENERADOR DE MENSAJE ESPECIAL PARA HOY
-            st.markdown("##### 🎁 Configura el Regalo de HOY:")
-            regalo_hoy = st.text_input("¿Qué les damos hoy?", "un postre de cortesía + 20% OFF", key="regalo_hoy")
+            # --- SECCIÓN: CUMPLE HOY ---
+            if not df_hoy.empty:
+                # Usamos HTML directo para evitar errores de CSS con variables
+                st.markdown(f"""
+                <div class="cumple-hoy">
+                    🎉 ¡ATENCIÓN! ¡HOY CUMPLEN AÑOS {len(df_hoy)} PELUDITOS! 🎂🎈
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.write("**Lista de Cumpleañeros de HOY:**")
+                cols_hoy = ['Nombre', 'Mascota', 'Telefono', 'Tipo_Mascota', 'Cumpleaños_mascota']
+                st.dataframe(df_hoy[[c for c in cols_hoy if c in df_hoy.columns]], use_container_width=True)
 
-            st.markdown("##### 💌 Enviar Felicitación URGENTE (Hoy):")
-            for idx, row in df_hoy.iterrows():
-                nom = row.get('Nombre', 'Amigo')
-                mascota = row.get('Mascota', 'tu bebé')
-                tel = row.get('Telefono', '')
-                tipo = row.get('Tipo_Mascota', 'mascota')
-                
-                # Mensaje muy emotivo para el día exacto
-                msg_hoy = f"¡FELIZ CUMPLEAÑOS {mascota.upper()}! 🎂🎈🐶🐱\n\nHola {nom}, sabemos que hoy es un día súper especial porque {mascota} celebra una nueva vuelta al sol con nosotros. 🌟❤\n\nEn Bigotes y Patitas queremos ser parte de la fiesta. 🎉\n\n🎁 Tienen un REGALO ESPERA: **{regalo_hoy}** válido solo por esta semana.\n\n¡Vengan a visitarnos para darle su abrazo! 🐾✨"
-                
-                link = link_whatsapp(tel, msg_hoy)
-                if link:
-                    st.markdown(f"🎂 **FELICITAR A {mascota} (HOY)** → [Enviar WhatsApp]({link})")
-            
-            st.markdown("---")
+                st.markdown("##### 🎁 Regalo de HOY:")
+                regalo_hoy = st.text_input("¿Qué les regalamos?", "un postre de cortesía + 20% OFF", key="gift_hoy")
 
-        # --- SECCIÓN: CUMPLEAÑOS RESTO DEL MES ---
-        st.markdown(f"**Otros cumpleañeros de este mes ({len(df_mes)}):**")
-        
-        if df_mes.empty and df_hoy.empty:
-            st.info(f"No hay más cumpleaños detectados en la base de datos para el mes {mes_num}.")
-        elif not df_mes.empty:
-            st.dataframe(df_mes[['Nombre', 'Mascota', 'Cumpleaños_mascota', 'Telefono']], use_container_width=True)
-            
-            regalo_mes = st.text_input("Promo general del mes:", "10% de descuento en snacks", key="regalo_mes")
-            
-            for idx, row in df_mes.iterrows():
-                nom = row.get('Nombre', 'Cliente')
-                mascota = row.get('Mascota', 'tu peludito')
-                tel = row.get('Telefono', '')
-                fecha_txt = row.get('Cumpleaños_mascota', 'este mes')
+                st.markdown("##### 💌 Enviar Felicitación URGENTE:")
+                for idx, row in df_hoy.iterrows():
+                    nom = row.get('Nombre', 'Amigo')
+                    mascota = row.get('Mascota', 'tu bebé')
+                    tel = row.get('Telefono', '')
+                    
+                    msg_hoy = f"¡FELIZ CUMPLEAÑOS {str(mascota).upper()}! 🎂🎈🐶🐱\n\nHola {nom}, sabemos que hoy es un día súper especial porque {mascota} celebra una nueva vuelta al sol. 🌟❤\n\nEn Bigotes y Patitas queremos ser parte de la fiesta. 🎉\n\n🎁 Tienen un REGALO DE CUMPLEAÑOS: **{regalo_hoy}**. Válido por esta semana.\n\n¡Vengan a visitarnos para darle su abrazo! 🐾✨"
+                    
+                    link = link_whatsapp(tel, msg_hoy)
+                    if link:
+                        st.markdown(f"🎈 **{mascota}** → [Enviar FELICITACIÓN]({link})")
+                st.markdown("---")
+            else:
+                st.info(f"📅 Hoy ({dia_num}/{mes_num}) no hay cumpleaños exactos registrados.")
+
+            # --- SECCIÓN: RESTO DEL MES ---
+            st.markdown(f"**Otros cumpleañeros de este mes ({len(df_mes)}):**")
+            if not df_mes.empty:
+                cols_mes = ['Nombre', 'Mascota', 'Cumpleaños_mascota', 'Telefono']
+                st.dataframe(df_mes[[c for c in cols_mes if c in df_mes.columns]], use_container_width=True)
                 
-                msg_mes = f"¡Hola {nom}! 🐾 Vimos en nuestro calendario que {mascota} cumple años en {fecha_txt}! 🎂🎈 Queremos adelantarnos y enviarle un regalito: Tienen {regalo_mes} para celebrar. 🎁 ¡Los esperamos! ✨"
+                regalo_mes = st.text_input("Promo para el mes:", "10% de descuento en snacks", key="gift_mes")
                 
-                link = link_whatsapp(tel, msg_mes)
-                if link:
-                    st.markdown(f"📅 {mascota} ({fecha_txt}) → [Enviar Saludo Anticipado]({link})")
+                for idx, row in df_mes.iterrows():
+                    nom = row.get('Nombre', 'Cliente')
+                    mascota = row.get('Mascota', 'tu peludito')
+                    tel = row.get('Telefono', '')
+                    fecha_txt = row.get('Cumpleaños_mascota', 'este mes')
+                    
+                    msg_mes = f"¡Hola {nom}! 🐾 Vimos en nuestro calendario que {mascota} cumple años pronto ({fecha_txt})! 🎂🎈 Queremos adelantarnos: Tienen {regalo_mes} para celebrar. 🎁 ¡Los esperamos! ✨"
+                    
+                    link = link_whatsapp(tel, msg_mes)
+                    if link:
+                        st.markdown(f"📅 {mascota} ({fecha_txt}) → [Enviar Saludo]({link})")
 
     # 3. SERVICIOS (RECORDATORIO ÁNGELA - INACTIVOS)
     with tabs[2]:
-        st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>💁‍♀️</span> Mensajes de Ángela (Recuperar Relación)", unsafe_allow_html=True)
-        st.markdown("**Objetivo:** Contactar clientes inactivos con un mensaje cálido y humano.")
+        st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>💁‍♀️</span> Mensajes de Ángela", unsafe_allow_html=True)
         
         if 'Estado' in master.columns:
             df_angela = master[master['Estado'].isin(["🟠 Riesgo", "🔴 Perdido", "⚪ Nuevo"])].copy()
         else:
             df_angela = master.copy()
         
-        st.write(f"**Lista de envío ({len(df_angela)} personas que extrañamos):**")
+        st.write(f"**Lista de envío ({len(df_angela)} clientes inactivos):**")
         
         with st.expander("Ver lista detallada"):
-            st.dataframe(df_angela[['Nombre', 'Mascota', 'Telefono', 'Email']], use_container_width=True)
+            cols_angela = ['Nombre', 'Mascota', 'Telefono', 'Email']
+            st.dataframe(df_angela[[c for c in cols_angela if c in df_angela.columns]], use_container_width=True)
 
-        st.markdown("##### 💌 Enviar Saludo Cálido de Ángela:")
-        
+        st.markdown("##### 💌 Enviar Saludo:")
         for idx, row in df_angela.iterrows():
             nom = row.get('Nombre', 'Vecino')
             mascota = row.get('Mascota', 'tu mascota')
             tel = row.get('Telefono', '')
             
-            msg_serv = f"¡Hola {nom}! 🌈 Hace tiempo no vemos la colita feliz de {mascota} y los extrañamos mucho en Bigotes y Patitas 🥺🐾. Soy Ángela 👋. Solo pasaba a saludarte y recordarte que aquí seguimos con el corazón abierto para lo que necesiten. ❤️ ¿Cómo han estado? ¡Nos encantaría saber de ustedes! ✨🚚"
+            msg_serv = f"¡Hola {nom}! 🌈 Hace tiempo no vemos la colita feliz de {mascota} y los extrañamos mucho en Bigotes y Patitas 🥺🐾. Soy Ángela 👋. Solo pasaba a saludarte y recordarte que aquí seguimos con el corazón abierto. ❤️ ¿Cómo han estado? ¡Nos encantaría saber de ustedes! ✨🚚"
             
             link = link_whatsapp(tel, msg_serv)
             if link:
-                st.write(f"💕 **{nom} & {mascota}**: [Enviar Saludo Ángela]({link})")
+                st.write(f"💕 **{nom} & {mascota}**: [Enviar Saludo]({link})")
 
     # 4. CAMPAÑAS AUTOMÁTICAS
     with tabs[3]:
-        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>📢</span> Creador de Campañas Bonitas", unsafe_allow_html=True)
-        
+        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>📢</span> Creador de Campañas", unsafe_allow_html=True)
         col_c1, col_c2 = st.columns([1, 2])
         
         with col_c1:
-            st.markdown("**Configuración**")
-            motivo = st.text_input("Motivo (Ej: llegaron juguetes)", placeholder="Ej: Nuevos collares luminosos")
+            motivo = st.text_input("Motivo de la campaña", placeholder="Ej: Llegaron juguetes nuevos")
             if not motivo: motivo = "contarte novedades increíbles"
-            
-            filtro_camp = st.selectbox("¿A quién le escribimos?", ["Todos mis Clientes", "Solo Activos (VIP)", "Clientes Inactivos"])
+            filtro_camp = st.selectbox("Destinatarios", ["Todos mis Clientes", "Solo Activos (VIP)", "Clientes Inactivos"])
         
-        # Lógica de filtrado
         target = master
         if 'Estado' in master.columns:
             if filtro_camp == "Solo Activos (VIP)":
@@ -446,16 +433,15 @@ def main():
                 target = master[master['Estado'].isin(["🟠 Riesgo", "🔴 Perdido"])]
 
         with col_c2:
-            st.info(f"✨ El sistema redactará un mensaje lleno de amor sobre: **'{motivo}'** para {len(target)} personas.")
+            st.info(f"✨ Mensaje sobre: **'{motivo}'** para {len(target)} personas.")
         
         st.markdown("---")
-        
         for idx, row in target.iterrows():
             nom = row.get('Nombre', 'Amigo')
             mascota = row.get('Mascota', 'tu peludito')
             tel = row.get('Telefono', '')
             
-            msg_auto = f"¡Hola {nom}! 🐾 Esperamos que {mascota} esté moviendo la colita de felicidad hoy. 🌟 Pasamos por aquí desde Bigotes y Patitas para {motivo}. 😍✨ Recuerda que amamos consentir a {mascota}. ¡Cualquier duda estamos a un ladrido de distancia! 🐕❤️"
+            msg_auto = f"¡Hola {nom}! 🐾 Esperamos que {mascota} esté súper bien. 🌟 Pasamos por aquí desde Bigotes y Patitas para {motivo}. 😍✨ Recuerda que amamos consentir a {mascota}. ¡Cualquier duda estamos a un ladrido de distancia! 🐕❤️"
             
             link = link_whatsapp(tel, msg_auto)
             if link:
@@ -463,7 +449,7 @@ def main():
 
     # 5. RECUPERACIÓN (OFERTA DIRECTA)
     with tabs[4]:
-        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>🚑</span> Rescate con Oferta (>60 días)", unsafe_allow_html=True)
+        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>🚑</span> Rescate con Oferta", unsafe_allow_html=True)
         
         if 'Estado' in master.columns:
             df_risk = master[master['Estado'].isin(["🟠 Riesgo", "🔴 Perdido"])].copy()
@@ -473,20 +459,19 @@ def main():
         if df_risk.empty:
             st.success("¡Excelente! No tienes clientes perdidos.")
         else:
-            st.write(f"Detectamos {len(df_risk)} clientes que necesitan un empujoncito.")
-            
-            gancho = st.text_input("Oferta Gancho para que vuelvan:", "Envío Gratis + una Sorpresa 🎁")
+            st.write(f"Detectamos {len(df_risk)} clientes para recuperar.")
+            gancho = st.text_input("Oferta Gancho:", "Envío Gratis + una Sorpresa 🎁")
             
             for idx, row in df_risk.iterrows():
                 nom = row.get('Nombre', 'Cliente')
                 mascota = row.get('Mascota', 'tu mascota')
                 tel = row.get('Telefono', '')
                 
-                msg = f"¡Hola {nom}! 🐾 Notamos que hace mucho no consentimos a {mascota} 🥺 y nos duele el corazón. ¡Queremos que vuelvan a la familia Bigotes y Patitas! ❤ Solo por responder este mensaje hoy, tienen: {gancho}. 😲🐾 ¿Qué dices? ¿Se lo enviamos ya mismo? 🚚💨"
+                msg = f"¡Hola {nom}! 🐾 Notamos que hace mucho no consentimos a {mascota} 🥺. ¡Queremos que vuelvan a la familia Bigotes y Patitas! ❤ Solo por responder hoy, tienen: {gancho}. 😲🐾 ¿Se lo enviamos? 🚚💨"
                 link = link_whatsapp(tel, msg)
                 
                 if link:
-                    st.markdown(f"🎣 **Recuperar a {nom}**: [Enviar Oferta Irresistible]({link})")
+                    st.markdown(f"🎣 **Recuperar a {nom}**: [Enviar Oferta]({link})")
 
 if __name__ == "__main__":
     main()
