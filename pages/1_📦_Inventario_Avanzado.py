@@ -8,93 +8,88 @@ import plotly.graph_objects as go
 import numpy as np
 
 # ==========================================
-# 1. CONFIGURACIÓN Y ESTILOS "ENTERPRISE"
+# 1. CONFIGURACIÓN Y ESTILOS "ULTIMATE"
 # ==========================================
 
 st.set_page_config(
-    page_title="Master Suite de Inventario & Rentabilidad",
-    page_icon="💎",
+    page_title="Nexus: Master Inventory Intelligence",
+    page_icon="🧬",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# CSS Profesional con Diseño de Tarjetas y Métricas
+# Estilos CSS inyectados para UI/UX de alto nivel
 st.markdown("""
     <style>
-    /* Estructura Global */
-    .stApp { background-color: #f8fafc; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
     
-    /* Tipografía */
-    h1, h2, h3 { color: #0f172a; font-family: 'Segoe UI', sans-serif; font-weight: 700; }
-    p, div { color: #334155; }
-
-    /* Métricas KPI Cards */
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    .stApp { background-color: #f1f5f9; }
+    
+    /* Headers */
+    h1, h2, h3 { color: #1e293b; font-weight: 700; letter-spacing: -0.5px; }
+    
+    /* KPI Cards Avanzadas */
     div[data-testid="metric-container"] {
-        background-color: white;
-        padding: 24px;
-        border-radius: 16px;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        padding: 20px;
+        border-radius: 12px;
         border: 1px solid #e2e8f0;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        transition: transform 0.2s;
+        border-left: 4px solid #3b82f6;
     }
-    div[data-testid="metric-container"]:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    
+    /* Tablas */
+    .stDataFrame { 
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); 
+        border-radius: 10px;
+        overflow: hidden;
     }
-    div[data-testid="metric-container"] label { color: #64748b; font-size: 0.9rem; }
-    div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #0f172a; font-size: 1.8rem; }
-
+    
     /* Tabs */
-    .stTabs [data-baseweb="tab-list"] { 
-        gap: 10px; 
-        background-color: transparent;
-        padding-bottom: 10px;
-    }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; background-color: transparent; }
     .stTabs [data-baseweb="tab"] {
         background-color: white;
-        border-radius: 8px;
-        padding: 12px 24px;
+        border-radius: 6px;
+        padding: 10px 20px;
         font-weight: 600;
-        border: 1px solid #e2e8f0;
+        font-size: 0.9rem;
+        border: 1px solid #cbd5e1;
         color: #64748b;
+        transition: all 0.2s ease;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #2563eb !important;
+        background-color: #0f172a !important;
         color: white !important;
-        border-color: #2563eb;
+        border-color: #0f172a;
     }
-
-    /* Tablas */
-    .stDataFrame { border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
     
     /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: white;
-        border-right: 1px solid #e2e8f0;
-    }
+    [data-testid="stSidebar"] { background-color: white; border-right: 1px solid #e2e8f0; }
     
-    /* Alertas Personalizadas */
-    .badge-danger { background-color: #fee2e2; color: #991b1b; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
-    .badge-success { background-color: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
-    .badge-warning { background-color: #fef9c3; color: #854d0e; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
+    /* Custom Alerts */
+    .nexus-alert { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border: 1px solid transparent; }
+    .nexus-alert-danger { background-color: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+    .nexus-alert-success { background-color: #dcfce7; color: #166534; border-color: #86efac; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. CONEXIÓN Y UTILIDADES ROBUSTAS
+# 2. SISTEMA DE CONEXIÓN Y BLINDAJE DE DATOS
 # ==========================================
 
 @st.cache_resource(ttl=600)
 def conectar_db():
+    """Conexión robusta con manejo de secretos."""
     try:
         if "google_service_account" not in st.secrets:
-            st.error("🚨 Falta configuración de secretos 'google_service_account' y 'SHEET_URL'.")
+            st.error("🚨 CRÍTICO: No se encontraron los secretos de Google Sheets.")
             return None, None
         
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
         sh = gc.open_by_url(st.secrets["SHEET_URL"])
         
-        # Intentamos obtener las hojas con manejo de error silencioso
+        # Intentar conectar a hojas específicas
         try: ws_inv = sh.worksheet("Inventario")
         except: ws_inv = None
         
@@ -103,26 +98,83 @@ def conectar_db():
             
         return ws_inv, ws_ven
     except Exception as e:
-        st.error(f"Error crítico de conexión a Google Sheets: {e}")
+        st.error(f"Error de conexión: {e}")
         return None, None
 
+def normalizar_columnas(df, tipo="inventario"):
+    """
+    Inteligencia Artificial Simbólica para corregir nombres de columnas mal escritos
+    y garantizar estructura mínima para evitar crashes.
+    """
+    if df.empty: return df
+    
+    # 1. Limpieza inicial
+    df.columns = df.columns.str.strip().str.lower()
+    
+    # 2. Mapa de sinónimos (Thesaurus)
+    mapa = {
+        'fecha': 'Fecha', 'date': 'Fecha', 'dia': 'Fecha', 'time': 'Fecha',
+        'items': 'Items', 'producto': 'Items', 'products': 'Items', 'sku': 'Items',
+        'precio': 'Precio', 'price': 'Precio', 'pvp': 'Precio', 'venta': 'Precio',
+        'costo': 'Costo', 'cost': 'Costo', 'compra': 'Costo',
+        'stock': 'Stock', 'cantidad': 'Stock', 'qty': 'Stock', 'existencia': 'Stock',
+        'nombre': 'Nombre', 'name': 'Nombre', 'item': 'Nombre', 'descripcion': 'Nombre',
+        'categoria': 'Categoria', 'cat': 'Categoria', 'familia': 'Categoria',
+        'proveedor': 'Proveedor', 'supplier': 'Proveedor'
+    }
+    
+    new_cols = {}
+    for col in df.columns:
+        match_found = False
+        # Búsqueda exacta
+        if col in mapa:
+            new_cols[col] = mapa[col]
+            match_found = True
+        else:
+            # Búsqueda difusa (contiene la palabra)
+            for key, val in mapa.items():
+                if key in col:
+                    new_cols[col] = val
+                    match_found = True
+                    break
+        
+        # Si no se encuentra, mantener capitalizado
+        if not match_found:
+            new_cols[col] = col.title()
+            
+    df = df.rename(columns=new_cols)
+    
+    # 3. GARANTÍA DE ESTRUCTURA (Anti-Crash)
+    # Si falta una columna crítica, la creamos con valores por defecto.
+    columnas_criticas = []
+    if tipo == "inventario":
+        columnas_criticas = [('Nombre', 'Producto Desconocido'), ('Stock', 0), ('Precio', 0.0), ('Costo', 0.0)]
+    elif tipo == "ventas":
+        columnas_criticas = [('Fecha', datetime.now()), ('Items', '')]
+        
+    for col, default_val in columnas_criticas:
+        if col not in df.columns:
+            df[col] = default_val
+            # Solo avisar si es debug, para no molestar al usuario final
+            # st.toast(f"⚠️ Columna '{col}' regenerada automáticamente.", icon="🔧")
+
+    return df
+
 def clean_currency(val):
-    """Limpia strings de moneda a float de forma ultra-segura."""
+    """Sanitizador de números agresivo."""
     if isinstance(val, (int, float, np.number)): return float(val)
     if isinstance(val, str):
-        # Eliminar símbolos comunes y espacios
         val = val.replace('$', '').replace('€', '').replace(' ', '').strip()
         if not val: return 0.0
         try:
-            # Manejo básico de miles (,) y decimales (.)
             val = val.replace(',', '') 
             return float(val)
         except: return 0.0
     return 0.0
 
 @st.cache_data(ttl=300)
-def leer_data(_ws):
-    """Lee datos con cache para velocidad."""
+def leer_data(_ws, tipo):
+    """ETL Pipeline: Extracción y Transformación segura."""
     if _ws is None: return pd.DataFrame()
     try:
         data = _ws.get_all_records()
@@ -130,492 +182,405 @@ def leer_data(_ws):
         
         df = pd.DataFrame(data)
         
-        # Limpieza de Nombres de Columnas (eliminar espacios extra)
-        df.columns = df.columns.str.strip()
+        # PASO 1: Normalización Inteligente
+        df = normalizar_columnas(df, tipo)
         
-        # Limpieza automática de numéricos
+        # PASO 2: Tipado de Datos
         cols_num = ['Precio', 'Stock', 'Costo', 'Total', 'Cantidad']
         for c in cols_num:
             if c in df.columns:
                 df[c] = df[c].apply(clean_currency)
                 
-        # Estandarizar Fechas
         if 'Fecha' in df.columns:
             df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+            # Eliminar fechas nulas si es tabla de ventas
+            if tipo == "ventas":
+                df = df.dropna(subset=['Fecha'])
             
         return df
     except Exception as e:
-        st.error(f"Error leyendo datos de la hoja: {e}")
+        st.error(f"Error en ETL ({tipo}): {e}")
         return pd.DataFrame()
 
 # ==========================================
-# 3. MOTOR ANALÍTICO "CEREBRO" (Optimizado)
+# 3. MOTOR DE INTELIGENCIA DE NEGOCIOS (BI)
 # ==========================================
 
-def motor_analisis_avanzado(df_inv, df_ven):
+def motor_analisis_master(df_inv, df_ven, growth_scenario=0.0):
     """
-    Realiza un análisis 360: Rotación, Márgenes, Pareto, Predicción.
+    Cerebro analítico que incluye:
+    - Análisis de Series de Tiempo
+    - Stock de Seguridad (Z-Score)
+    - GMROI
+    - Simulador de Crecimiento
     """
-    if df_inv.empty: return pd.DataFrame()
+    if df_inv.empty: return pd.DataFrame(), pd.DataFrame()
 
-    # --- A. ANÁLISIS DE VENTAS (Minado de Datos) ---
+    # --- A. PROCESAMIENTO DE VENTAS ---
     ventas_por_producto = {}
-    revenue_por_producto = {}
+    ventas_historicas = [] # Lista para serie de tiempo global
     
     if not df_ven.empty:
-        # Filtramos últimos 30 días para calcular velocidad actual (Run Rate)
-        fecha_limite = datetime.now() - timedelta(days=30)
-        df_ven_30 = df_ven[df_ven['Fecha'] >= fecha_limite]
+        # 1. Filtro de fecha (Últimos 90 días para mejor tendencia, no solo 30)
+        cutoff_date = datetime.now() - timedelta(days=90)
+        df_ven_recent = df_ven[df_ven['Fecha'] >= cutoff_date].copy()
         
-        for _, row in df_ven_30.iterrows():
+        # 2. Desglose de Items
+        for idx, row in df_ven_recent.iterrows():
             items_str = str(row.get('Items', ''))
-            # Parsear string complejo tipo "Prod A (x2), Prod B (x1)"
+            fecha_venta = row['Fecha']
+            
             if items_str:
                 parts = items_str.split(", ")
                 for p in parts:
                     try:
+                        cant = 1
+                        nombre = p.strip()
                         if "(x" in p:
-                            nombre_dirty = p.split(" (x")[0]
-                            cant_str = p.split(" (x")[1].replace(")", "")
-                            cant = int(cant_str)
-                        else:
-                            nombre_dirty = p
-                            cant = 1
+                            nombre_parts = p.split(" (x")
+                            nombre = nombre_parts[0].strip()
+                            cant = int(nombre_parts[1].replace(")", ""))
                         
-                        nombre = nombre_dirty.strip()
+                        # Acumuladores
                         ventas_por_producto[nombre] = ventas_por_producto.get(nombre, 0) + cant
+                        
+                        # Guardar para serie de tiempo
+                        ventas_historicas.append({
+                            'Fecha': fecha_venta,
+                            'Nombre': nombre,
+                            'Cantidad': cant
+                        })
                     except: continue
 
-    # Crear DF de Rotación
-    df_rot = pd.DataFrame(list(ventas_por_producto.items()), columns=['Nombre', 'Ventas_30d'])
-    df_rot['Velocidad_Diaria'] = df_rot['Ventas_30d'] / 30
-
-    # --- B. MERGE CON INVENTARIO MAESTRO ---
-    # Merge Left para mantener todo el inventario aunque no tenga ventas
-    df_full = pd.merge(df_inv, df_rot, on='Nombre', how='left')
+    # Dataframe de Historial Detallado (para gráficos de línea)
+    df_history = pd.DataFrame(ventas_historicas)
     
-    # Relleno de NaNs
-    df_full['Ventas_30d'] = df_full['Ventas_30d'].fillna(0)
+    # --- B. CÁLCULO DE VELOCIDAD Y VARIABILIDAD ---
+    # Convertimos el diccionario a DF
+    df_metrics = pd.DataFrame(list(ventas_por_producto.items()), columns=['Nombre', 'Ventas_90d'])
+    
+    # Cálculo de métricas avanzadas
+    # Velocidad Diaria (Run Rate) - Promedio simple
+    df_metrics['Velocidad_Diaria'] = df_metrics['Ventas_90d'] / 90
+    
+    # APLICAR SIMULADOR DE CRECIMIENTO
+    if growth_scenario != 0:
+        df_metrics['Velocidad_Diaria'] = df_metrics['Velocidad_Diaria'] * (1 + (growth_scenario/100))
+
+    # --- C. FUSIÓN MAESTRA (MERGE) ---
+    df_full = pd.merge(df_inv, df_metrics, on='Nombre', how='left')
+    
+    # Limpieza post-merge
+    df_full['Ventas_90d'] = df_full['Ventas_90d'].fillna(0)
     df_full['Velocidad_Diaria'] = df_full['Velocidad_Diaria'].fillna(0)
     
-    # --- C. INTELIGENCIA FINANCIERA ---
+    # --- D. MATEMÁTICA FINANCIERA ---
+    # Fallback inteligente para costo
+    if 'Costo' not in df_full.columns: df_full['Costo'] = 0.0
+    if 'Precio' not in df_full.columns: df_full['Precio'] = 0.0
     
-    # 1. Validación de Costos y Precios
-    if 'Costo' not in df_full.columns:
-        df_full['Costo'] = df_full['Precio'] * 0.65 # Fallback: asumimos 35% margen si no hay costo
+    # Rellenar costos cero con heurística (60% del precio)
+    mask_no_cost = (df_full['Costo'] <= 0) & (df_full['Precio'] > 0)
+    df_full.loc[mask_no_cost, 'Costo'] = df_full.loc[mask_no_cost, 'Precio'] * 0.6
     
-    # Asegurar que no haya divisiones por cero o costos 0 irreales
-    df_full['Costo'] = df_full['Costo'].replace(0, 0.01) 
-    
-    # 2. Métricas de Rentabilidad
+    # Métricas Base
     df_full['Margen_Unitario'] = df_full['Precio'] - df_full['Costo']
-    df_full['Margen_Porcentaje'] = (df_full['Margen_Unitario'] / df_full['Precio']).fillna(0) * 100
+    df_full['Margen_Pct'] = (df_full['Margen_Unitario'] / df_full['Precio'].replace(0, 1)).fillna(0) * 100
+    df_full['Valor_Inv_Costo'] = df_full['Stock'] * df_full['Costo']
     
-    # 3. Valoración del Inventario
-    df_full['Valor_Stock_Costo'] = df_full['Stock'] * df_full['Costo']
-    df_full['Valor_Stock_Venta'] = df_full['Stock'] * df_full['Precio']
-    df_full['Utilidad_Potencial_Stock'] = df_full['Valor_Stock_Venta'] - df_full['Valor_Stock_Costo']
-    
-    # 4. Análisis de Cobertura (Days of Inventory - DOI)
-    def calc_cobertura(row):
-        if row['Velocidad_Diaria'] <= 0.01: return 999 # Stock estancado
-        return row['Stock'] / row['Velocidad_Diaria']
-        
-    df_full['Dias_Cobertura'] = df_full.apply(calc_cobertura, axis=1)
-    
-    # 5. Clasificación ABC (Pareto Real sobre Revenue 30d)
-    df_full['Revenue_30d'] = df_full['Ventas_30d'] * df_full['Precio']
-    df_full = df_full.sort_values('Revenue_30d', ascending=False)
-    
-    total_rev = df_full['Revenue_30d'].sum()
-    if total_rev > 0:
-        df_full['Acumulado_Pct'] = df_full['Revenue_30d'].cumsum() / total_rev
-        def clasificar_abc(pct):
-            if pct <= 0.80: return 'A (Estrellas)'
-            elif pct <= 0.95: return 'B (Regulares)'
-            else: return 'C (Lento Mov.)'
-        df_full['Clasificacion_ABC'] = df_full['Acumulado_Pct'].apply(clasificar_abc)
-    else:
-        df_full['Clasificacion_ABC'] = 'C (Sin Ventas)'
-        df_full['Acumulado_Pct'] = 1.0
-
-    # 6. Estrategia de Abastecimiento (Target Dinámico)
-    DIAS_OBJETIVO = 21 # Queremos stock para 3 semanas
-    df_full['Stock_Ideal'] = np.ceil(df_full['Velocidad_Diaria'] * DIAS_OBJETIVO)
-    df_full['A_Comprar'] = (df_full['Stock_Ideal'] - df_full['Stock']).apply(lambda x: x if x > 0 else 0)
-    df_full['Inversion_Requerida'] = df_full['A_Comprar'] * df_full['Costo']
-
-    # 7. Diagnóstico de Salud (Estados)
-    def etiquetar_estado(row):
-        # Prioridad 1: Agotados con demanda
-        if row['Stock'] <= 0 and row['Velocidad_Diaria'] > 0: return "🚨 AGOTADO (Perdiendo Ventas)"
-        # Prioridad 2: Sin stock y sin venta (Hueso vacío)
-        if row['Stock'] <= 0: return "⚪ Agotado (Sin Demanda)"
-        # Prioridad 3: Stock Crítico
-        if row['Dias_Cobertura'] < 7: return "🔥 Crítico (< 1 semana)"
-        # Prioridad 4: Stock Bajo
-        if row['Dias_Cobertura'] < 15: return "⚠️ Bajo (< 2 semanas)"
-        # Prioridad 5: Exceso / Dormido
-        if row['Dias_Cobertura'] > 90: return "🧊 Sobre-Stock (> 3 meses)"
-        if row['Ventas_30d'] == 0 and row['Stock'] > 0: return "💀 Stock Muerto (0 ventas)"
-        
-        return "✅ Saludable"
-
-    df_full['Estado'] = df_full.apply(etiquetar_estado, axis=1)
-    
-    # 8. Cálculo de Costo de Oportunidad (Dinero perdido HOY por no tener stock)
-    # Si está agotado y su velocidad diaria es X, pierdo X * Precio al día.
-    df_full['Perdida_Diaria_Venta'] = df_full.apply(
-        lambda x: (x['Velocidad_Diaria'] * x['Precio']) if "AGOTADO" in x['Estado'] else 0, axis=1
+    # --- E. GMROI (Gross Margin Return on Inventory) ---
+    # GMROI = (Margen Bruto Anualizado) / (Costo Inventario Promedio)
+    # Es la métrica reina del retail. Cuánto gano por cada $1 invertido en stock.
+    df_full['GMROI'] = np.where(
+        df_full['Valor_Inv_Costo'] > 0,
+        (df_full['Margen_Unitario'] * df_full['Velocidad_Diaria'] * 365) / df_full['Valor_Inv_Costo'],
+        0
     )
 
-    return df_full
-
-# ==========================================
-# 4. GENERADOR EXCEL AUDITORÍA
-# ==========================================
-
-def generar_excel_auditoria(df, filtro_texto=""):
-    """Genera un archivo Excel profesional listo para imprimir."""
-    output = BytesIO()
+    # --- F. STOCK DE SEGURIDAD Y REORDEN (Nivel Enterprise) ---
+    # Asumimos Lead Time (Tiempo de proveedor) de 7 días por defecto, con desviación.
+    LEAD_TIME_DIAS = 7 
+    Z_SCORE_95 = 1.65 # Para 95% de nivel de servicio
     
-    # Filtrar
-    if filtro_texto:
-        df = df[df['Nombre'].str.contains(filtro_texto, case=False, na=False)]
+    # Stock de Seguridad = Z * raiz(LeadTime) * DesviacionVenta (Simplificada aquí como 20% de la media para no complejizar sin datos diarios exactos por SKU)
+    df_full['Safety_Stock'] = np.ceil(Z_SCORE_95 * np.sqrt(LEAD_TIME_DIAS) * (df_full['Velocidad_Diaria'] * 0.5))
+    
+    # Punto de Reorden = (Velocidad * LeadTime) + Safety Stock
+    df_full['Punto_Reorden'] = (df_full['Velocidad_Diaria'] * LEAD_TIME_DIAS) + df_full['Safety_Stock']
+    
+    # Sugerencia de Compra (Target 30 días)
+    TARGET_DIAS = 30
+    df_full['Stock_Maximo'] = (df_full['Velocidad_Diaria'] * TARGET_DIAS) + df_full['Safety_Stock']
+    
+    df_full['A_Comprar'] = (df_full['Stock_Maximo'] - df_full['Stock']).clip(lower=0)
+    df_full['Inversion_Compra'] = df_full['A_Comprar'] * df_full['Costo']
+
+    # --- G. ESTADOS Y ALARMAS ---
+    df_full['Dias_Cobertura'] = np.where(df_full['Velocidad_Diaria'] > 0, df_full['Stock'] / df_full['Velocidad_Diaria'], 999)
+    
+    def clasificar_estado(row):
+        if row['Stock'] <= 0 and row['Velocidad_Diaria'] > 0: return "🚨 AGOTADO (Perdida Venta)"
+        if row['Stock'] <= row['Safety_Stock']: return "🔥 Crítico (Bajo Seguridad)"
+        if row['Stock'] <= row['Punto_Reorden']: return "⚠️ Reorden (Pedir ya)"
+        if row['Dias_Cobertura'] > 120: return "🧊 Obsoleto (> 4 meses)"
+        if row['Velocidad_Diaria'] == 0 and row['Stock'] > 0: return "💀 Stock Muerto"
+        return "✅ Saludable"
         
+    df_full['Estado'] = df_full.apply(clasificar_estado, axis=1)
+    
+    # --- H. CLASIFICACIÓN ABC (PARETO) ---
+    df_full['Revenue_Proyectado'] = df_full['Velocidad_Diaria'] * 30 * df_full['Precio']
+    df_full = df_full.sort_values('Revenue_Proyectado', ascending=False)
+    
+    total_rev = df_full['Revenue_Proyectado'].sum()
+    if total_rev > 0:
+        df_full['Acumulado_Pct'] = df_full['Revenue_Proyectado'].cumsum() / total_rev
+        conditions = [
+            (df_full['Acumulado_Pct'] <= 0.8),
+            (df_full['Acumulado_Pct'] <= 0.95)
+        ]
+        choices = ['A (Premium)', 'B (Estándar)']
+        df_full['Clasificacion_ABC'] = np.select(conditions, choices, default='C (Cola Larga)')
+    else:
+        df_full['Clasificacion_ABC'] = 'C (Cola Larga)'
+
+    return df_full, df_history
+
+# ==========================================
+# 4. REPORTING AUTOMATIZADO (XLSX)
+# ==========================================
+
+def generar_reporte_excel(df):
+    output = BytesIO()
     writer = pd.ExcelWriter(output, engine='xlsxwriter')
     
-    # Seleccionar columnas lógicas
-    cols_base = ['ID_Producto', 'Nombre', 'Categoria', 'Stock', 'Costo'] 
-    cols_existentes = [c for c in cols_base if c in df.columns]
+    # Hoja 1: Resumen Ejecutivo
+    df_resumen = df[['Nombre', 'Categoria', 'Stock', 'Estado', 'A_Comprar', 'Inversion_Compra', 'Dias_Cobertura', 'GMROI']].copy()
+    df_resumen.to_excel(writer, sheet_name='Dashboard', index=False)
     
-    df_export = df[cols_existentes].copy()
-    df_export = df_export.rename(columns={'Stock': 'Stock_Sistema'})
+    # Hoja 2: Conteo Físico (Formateada)
+    df_auditoria = df[['Nombre', 'Categoria', 'Stock']].copy()
+    df_auditoria['Conteo_Fisico'] = ""
+    df_auditoria['Diferencia'] = ""
+    df_auditoria.to_excel(writer, sheet_name='Auditoria_Fisica', index=False)
     
-    # Columnas para escribir a mano
-    df_export['Conteo_Real'] = "" 
-    df_export['Diferencia'] = ""
-    df_export['Condición_Fisica'] = ""
-    df_export['Notas'] = ""
-    
-    sheet_name = "Hoja_Conteo"
-    df_export.to_excel(writer, sheet_name=sheet_name, index=False)
-    
-    # Formateo con XlsxWriter
-    workbook = writer.book
-    worksheet = writer.sheets[sheet_name]
-    
-    # Estilos
-    header_fmt = workbook.add_format({'bold': True, 'font_color': 'white', 'bg_color': '#1e3a8a', 'border': 1, 'align': 'center', 'valign': 'vcenter'})
-    cell_fmt = workbook.add_format({'border': 1})
-    input_fmt = workbook.add_format({'bg_color': '#fef3c7', 'border': 1}) # Color amarillo suave para input manual
-    
-    # Aplicar formatos
-    for col_num, value in enumerate(df_export.columns.values):
-        worksheet.write(0, col_num, value, header_fmt)
-        
-    worksheet.set_column('A:A', 15) # ID
-    worksheet.set_column('B:B', 45) # Nombre
-    worksheet.set_column('C:E', 12) # Datos
-    
-    # Resaltar columnas de escritura
-    start_input_col = len(cols_existentes)
-    worksheet.set_column(start_input_col, start_input_col + 3, 18, input_fmt)
+    # Formateo
+    wb = writer.book
+    ws = writer.sheets['Auditoria_Fisica']
+    fmt_header = wb.add_format({'bold': True, 'bg_color': '#1e293b', 'font_color': 'white'})
+    ws.set_column('A:B', 25)
+    ws.write(0, 0, "Nombre", fmt_header) # Re-escribir cabecera con estilo
     
     writer.close()
     return output.getvalue()
 
 # ==========================================
-# 5. INTERFAZ PRINCIPAL (DASHBOARD)
+# 5. UI: INTERFAZ DE USUARIO MAESTRA
 # ==========================================
 
 def main():
-    # --- HEADER ---
-    st.title("💎 Master Inventory Suite")
-    st.markdown("Plataforma de inteligencia de inventarios, optimización de compras y auditoría.")
+    st.title("Nexus Inventory™")
+    st.caption("Sistema de Inteligencia Logística & Financiera v2.0")
 
-    # --- CARGA DE DATOS ---
-    with st.spinner("🔄 Sincronizando con ERP y Analizando Datos..."):
-        ws_inv, ws_ven = conectar_db()
-        if not ws_inv: return
+    # --- CARGA ---
+    ws_inv, ws_ven = conectar_db()
+    if not ws_inv: return # Stop si no hay conexión
 
-        df_inv_raw = leer_data(ws_inv)
-        df_ven_raw = leer_data(ws_ven)
+    with st.spinner("🔄 Procesando Algoritmos Predictivos..."):
+        df_inv_raw = leer_data(ws_inv, "inventario")
+        df_ven_raw = leer_data(ws_ven, "ventas")
         
         if df_inv_raw.empty:
-            st.warning("⚠️ No hay inventario registrado. Por favor carga productos en la base de datos.")
+            st.error("❌ El inventario está vacío o no se pudo leer.")
             return
 
-        # EJECUTAR MOTOR ANALÍTICO
-        df = motor_analisis_avanzado(df_inv_raw, df_ven_raw)
-
-    # --- SIDEBAR: FILTROS ESTRATÉGICOS ---
+    # --- SIDEBAR DE CONTROL ---
     with st.sidebar:
-        st.image("https://cdn-icons-png.flaticon.com/512/2897/2897785.png", width=60)
-        st.markdown("### 🔍 Filtros de Inteligencia")
+        st.header("🎛️ Centro de Mando")
         
-        # Filtro Categoría
-        cats = sorted(df['Categoria'].unique().tolist()) if 'Categoria' in df.columns else []
-        sel_cats = st.multiselect("Categoría", cats, default=cats, placeholder="Todas las categorías")
+        # Simulador
+        st.subheader("🔮 Simulador de Futuro")
+        growth = st.slider("Crecimiento Esperado (%)", -50, 100, 0, help="Ajusta esto para ver cómo cambia la necesidad de compra si vendes más o menos.")
+        if growth != 0:
+            st.info(f"Simulando escenario: {growth:+}% ventas")
+            
+        # Filtros
+        st.subheader("🔍 Filtros Globales")
+        cats = sorted(df_inv_raw['Categoria'].unique()) if 'Categoria' in df_inv_raw.columns else []
+        sel_cat = st.multiselect("Categoría", cats)
         
-        # Filtro ABC
-        abc_opts = sorted(df['Clasificacion_ABC'].unique().tolist())
-        sel_abc = st.multiselect("Clasificación Pareto (ABC)", abc_opts, default=abc_opts)
+        # Ejecución del Motor
+        df, df_hist = motor_analisis_master(df_inv_raw, df_ven_raw, growth)
         
-        # Filtro Proveedor (Si existe)
-        if 'Proveedor' in df.columns:
-            provs = sorted(df['Proveedor'].unique().tolist())
-            sel_prov = st.multiselect("Proveedor", provs, default=provs)
-            if sel_prov: df = df[df['Proveedor'].isin(sel_prov)]
+        # Aplicar filtro visual
+        if sel_cat:
+            df = df[df['Categoria'].isin(sel_cat)]
+            if not df_hist.empty:
+                # Filtrar historial requiere cruzar nombres
+                nombres_filtrados = df['Nombre'].unique()
+                df_hist = df_hist[df_hist['Nombre'].isin(nombres_filtrados)]
 
-        # Aplicar Filtros Base
-        if sel_cats: df = df[df['Categoria'].isin(sel_cats)]
-        if sel_abc: df = df[df['Clasificacion_ABC'].isin(sel_abc)]
-        
-        st.divider()
-        st.info(f"Mostrando **{len(df)}** productos filtrados.")
-
-    # --- KPI CARDS (Primera Fila) ---
-    st.markdown("### 🚀 Resumen Ejecutivo")
-    
-    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-    
-    val_costo_total = df['Valor_Stock_Costo'].sum()
-    val_venta_total = df['Valor_Stock_Venta'].sum()
-    margen_global = ((val_venta_total - val_costo_total) / val_venta_total * 100) if val_venta_total > 0 else 0
-    
-    items_agotados_criticos = len(df[df['Estado'].str.contains("AGOTADO")])
-    perdida_oportunidad = df['Perdida_Diaria_Venta'].sum()
-    
-    stock_muerto_val = df[df['Estado'].str.contains("Muerto|Sobre-Stock")]['Valor_Stock_Costo'].sum()
-
-    kpi1.metric("Valor Inventario (Costo)", f"${val_costo_total:,.0f}", delta="Capital Invertido", delta_color="off")
-    kpi2.metric("Margen Potencial Global", f"{margen_global:.1f}%", f"${(val_venta_total - val_costo_total):,.0f} Utilidad")
-    kpi3.metric("Productos Agotados", items_agotados_criticos, delta="-Urgentísimo", delta_color="inverse")
-    kpi4.metric("Pérdida Diaria (Stockout)", f"${perdida_oportunidad:,.0f}", delta="Dinero perdido hoy", delta_color="inverse")
-    kpi5.metric("Capital 'Dormido' (Stock Muerto)", f"${stock_muerto_val:,.0f}", delta="Optimizar", delta_color="inverse")
-
-    st.markdown("---")
-
-    # --- NAVEGACIÓN PRINCIPAL ---
-    tab_dash, tab_strat, tab_buy, tab_dead, tab_audit = st.tabs([
-        "📊 Dashboard 360", 
-        "🧠 Matriz Estratégica", 
-        "🛒 Asistente de Compras", 
-        "💀 Stock Muerto", 
-        "📋 Auditoría Física"
-    ])
-
-    # -----------------------------------------------
-    # TAB 1: DASHBOARD VISUAL
-    # -----------------------------------------------
-    with tab_dash:
-        col_g1, col_g2 = st.columns([2, 1])
-        
-        with col_g1:
-            st.subheader("Estado de Salud del Inventario")
-            # Agrupar datos para gráfico
-            df_status = df.groupby('Estado').size().reset_index(name='Cantidad')
-            
-            # Colores semánticos
-            colors_map = {
-                "✅ Saludable": "#22c55e",
-                "🚨 AGOTADO (Perdiendo Ventas)": "#ef4444",
-                "🔥 Crítico (< 1 semana)": "#f97316",
-                "⚠️ Bajo (< 2 semanas)": "#eab308",
-                "🧊 Sobre-Stock (> 3 meses)": "#3b82f6",
-                "💀 Stock Muerto (0 ventas)": "#64748b",
-                "⚪ Agotado (Sin Demanda)": "#cbd5e1"
-            }
-            
-            fig_bar = px.bar(df_status, x='Cantidad', y='Estado', orientation='h', 
-                             color='Estado', text='Cantidad',
-                             color_discrete_map=colors_map,
-                             title="Distribución de SKUs por Salud de Stock")
-            fig_bar.update_layout(showlegend=False, height=350)
-            st.plotly_chart(fig_bar, use_container_width=True)
-            
-        with col_g2:
-            st.subheader("Top Revenue (30 días)")
-            top_5 = df.nlargest(5, 'Revenue_30d')
-            # SOLUCIÓN DEL ERROR PX.DONUT -> PX.PIE CON HOLE
-            if not top_5.empty and top_5['Revenue_30d'].sum() > 0:
-                fig_don = px.pie(top_5, values='Revenue_30d', names='Nombre', hole=0.5,
-                                 title="Top 5 Productos Estrella")
-                fig_don.update_traces(textposition='inside', textinfo='percent+label')
-                fig_don.update_layout(height=350, showlegend=False)
-                st.plotly_chart(fig_don, use_container_width=True)
-            else:
-                st.info("No hay suficientes datos de ventas recientes para mostrar el Top 5.")
-
-        # Segunda Fila: Categorías
-        st.subheader("Rentabilidad por Categoría")
-        if 'Categoria' in df.columns:
-            df_cat = df.groupby('Categoria')[['Valor_Stock_Costo', 'Revenue_30d']].sum().reset_index()
-            # Gráfico combinado
-            fig_mix = go.Figure()
-            fig_mix.add_trace(go.Bar(x=df_cat['Categoria'], y=df_cat['Valor_Stock_Costo'], name='Dinero Invertido', marker_color='#94a3b8'))
-            fig_mix.add_trace(go.Scatter(x=df_cat['Categoria'], y=df_cat['Revenue_30d'], name='Ventas (30d)', yaxis='y2', line=dict(color='#2563eb', width=3)))
-            
-            fig_mix.update_layout(
-                yaxis=dict(title="Inversión ($)"),
-                yaxis2=dict(title="Ventas ($)", overlaying='y', side='right'),
-                title="Correlación: Inversión vs Retorno por Categoría",
-                hovermode="x unified"
-            )
-            st.plotly_chart(fig_mix, use_container_width=True)
-
-    # -----------------------------------------------
-    # TAB 2: MATRIZ ESTRATÉGICA (ABC & MÁRGENES)
-    # -----------------------------------------------
-    with tab_strat:
-        c_str1, c_str2 = st.columns([1, 2])
-        
-        with c_str1:
-            st.markdown("### 🧠 Análisis Pareto (ABC)")
-            st.info("""
-            **Regla 80/20:**
-            * **Clase A:** Generan el 80% de tus ingresos. ¡Nunca deben agotarse!
-            * **Clase B:** Importancia media.
-            * **Clase C:** Generan poco ingreso. Candidatos a reducción.
-            """)
-            
-            # Sunburst
-            fig_sun = px.sunburst(df, path=['Clasificacion_ABC', 'Categoria'], values='Revenue_30d',
-                                  color='Clasificacion_ABC', 
-                                  color_discrete_map={'A (Estrellas)':'#22c55e', 'B (Regulares)':'#facc15', 'C (Lento Mov.)':'#94a3b8'},
-                                  title="Estructura de Ingresos")
-            st.plotly_chart(fig_sun, use_container_width=True)
-
-        with c_str2:
-            st.markdown("### 💎 Matriz de Rentabilidad: Margen vs Volumen")
-            st.caption("Identifica tus 'Vacas Lecheras' (Alto Volumen, Bajo Margen) y 'Estrellas' (Alto Volumen, Alto Margen).")
-            
-            # Scatter Plot Avanzado
-            # Filtramos outliers extremos para que el gráfico se vea bien
-            df_scat = df[df['Revenue_30d'] > 0]
-            
-            fig_scat = px.scatter(df_scat, x='Revenue_30d', y='Margen_Porcentaje',
-                                  size='Valor_Stock_Costo', color='Clasificacion_ABC',
-                                  hover_name='Nombre', text='Nombre',
-                                  labels={'Revenue_30d': 'Ventas Totales ($)', 'Margen_Porcentaje': 'Margen (%)'},
-                                  title="Mapa de Posicionamiento de Producto")
-            
-            # Líneas cuadrantes
-            avg_margen = df_scat['Margen_Porcentaje'].mean()
-            avg_rev = df_scat['Revenue_30d'].mean()
-            
-            fig_scat.add_hline(y=avg_margen, line_dash="dash", line_color="gray", annotation_text="Margen Promedio")
-            fig_scat.add_vline(x=avg_rev, line_dash="dash", line_color="gray", annotation_text="Venta Promedio")
-            fig_scat.update_traces(textposition='top center')
-            
-            st.plotly_chart(fig_scat, use_container_width=True)
-
-    # -----------------------------------------------
-    # TAB 3: ASISTENTE DE COMPRAS (SOLUCIÓN COMPLETA)
-    # -----------------------------------------------
-    with tab_buy:
-        st.header("🛒 Generador de Órdenes de Compra")
-        st.markdown("El sistema calcula automáticamente cuánto pedir basándose en la velocidad de venta de los últimos 30 días.")
-        
-        col_ctrl, col_data = st.columns([1, 3])
-        
-        with col_ctrl:
-            dias_obj = st.slider("Días de Stock Objetivo", min_value=7, max_value=60, value=21, step=1, help="¿Para cuántos días quieres tener inventario?")
-            
-            # Recalcular Stock Ideal Dinámicamente basado en el Slider
-            df['Stock_Ideal_Din'] = np.ceil(df['Velocidad_Diaria'] * dias_obj)
-            df['A_Comprar_Din'] = (df['Stock_Ideal_Din'] - df['Stock']).apply(lambda x: x if x > 0 else 0)
-            df['Inversion_Din'] = df['A_Comprar_Din'] * df['Costo']
-            
-            # --- SOLUCIÓN AL ERROR DEL MULTISELECT ---
-            # 1. Obtener opciones existentes en los datos
-            opciones_existentes = sorted(df['Estado'].unique().tolist())
-            
-            # 2. Definir deseados
-            deseados = ["🚨 AGOTADO (Perdiendo Ventas)", "🔥 Crítico (< 1 semana)", "⚠️ Bajo (< 2 semanas)"]
-            
-            # 3. Intersección segura
-            default_validos = [x for x in deseados if x in opciones_existentes]
-            
-            filtro_urgencia = st.multiselect(
-                "Filtrar por Urgencia:",
-                options=opciones_existentes,
-                default=default_validos
-            )
-        
-        with col_data:
-            # Filtrar Dataframe
-            df_pedidos = df[df['Estado'].isin(filtro_urgencia) & (df['A_Comprar_Din'] > 0)].copy()
-            
-            if not df_pedidos.empty:
-                total_inversion = df_pedidos['Inversion_Din'].sum()
-                st.success(f"💰 Inversión total sugerida: **${total_inversion:,.2f}** para cubrir **{dias_obj} días**.")
-                
-                st.dataframe(
-                    df_pedidos[['Nombre', 'Stock', 'Velocidad_Diaria', 'Stock_Ideal_Din', 'A_Comprar_Din', 'Costo', 'Inversion_Din', 'Proveedor'] if 'Proveedor' in df.columns else ['Nombre', 'Stock', 'Velocidad_Diaria', 'Stock_Ideal_Din', 'A_Comprar_Din', 'Costo', 'Inversion_Din']],
-                    column_config={
-                        "Velocidad_Diaria": st.column_config.NumberColumn("Venta Diaria", format="%.2f u"),
-                        "Stock_Ideal_Din": st.column_config.NumberColumn("Nivel Óptimo"),
-                        "A_Comprar_Din": st.column_config.NumberColumn("CANTIDAD A PEDIR", help="Sugerencia IA"),
-                        "Inversion_Din": st.column_config.NumberColumn("Costo Total", format="$%.2f"),
-                        "Costo": st.column_config.NumberColumn("Costo Unit", format="$%.2f"),
-                    },
-                    use_container_width=True,
-                    height=500
-                )
-            else:
-                st.balloons()
-                st.success("🎉 ¡Excelente gestión! No se requieren compras para los estados seleccionados.")
-
-    # -----------------------------------------------
-    # TAB 4: STOCK MUERTO
-    # -----------------------------------------------
-    with tab_dead:
-        st.header("💀 Análisis de Inventario Inmovilizado")
-        st.warning("Estos productos ocupan espacio y capital, pero no generan flujo de caja. ¡Considera ofertas o liquidaciones!")
-        
-        # Filtro: Productos con Stock > 0 pero Ventas_30d = 0
-        df_dead = df[(df['Stock'] > 0) & (df['Ventas_30d'] == 0)].copy()
-        df_dead = df_dead.sort_values('Valor_Stock_Costo', ascending=False)
-        
-        c_d1, c_d2 = st.columns([1, 1])
-        with c_d1:
-            st.metric("Total Productos sin Movimiento (30d)", len(df_dead))
-        with c_d2:
-            st.metric("Capital Congelado", f"${df_dead['Valor_Stock_Costo'].sum():,.2f}")
-            
-        st.dataframe(
-            df_dead[['Nombre', 'Categoria', 'Stock', 'Costo', 'Valor_Stock_Costo', 'Fecha_Ingreso'] if 'Fecha_Ingreso' in df.columns else ['Nombre', 'Categoria', 'Stock', 'Costo', 'Valor_Stock_Costo']],
-            column_config={
-                "Valor_Stock_Costo": st.column_config.ProgressColumn("Capital Atrapado", format="$%d", min_value=0, max_value=df_dead['Valor_Stock_Costo'].max())
-            },
-            use_container_width=True
+        st.markdown("---")
+        st.download_button(
+            "📥 Descargar Informe Completo",
+            data=generar_reporte_excel(df),
+            file_name="Reporte_Nexus.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-    # -----------------------------------------------
-    # TAB 5: AUDITORÍA
-    # -----------------------------------------------
-    with tab_audit:
-        st.header("📋 Centro de Auditoría Física")
-        
-        c_audit1, c_audit2 = st.columns([3, 1])
-        with c_audit1:
-            search_audit = st.text_input("🔍 Buscar producto para hoja de conteo:", placeholder="Ej: Shampoo...")
-        with c_audit2:
-            st.write("")
-            st.write("")
-            excel_bytes = generar_excel_auditoria(df, search_audit)
-            st.download_button(
-                label="📥 Descargar Hoja de Conteo (Excel)",
-                data=excel_bytes,
-                file_name=f"Auditoria_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                type="primary"
-            )
+    # --- KPI HEADER ---
+    col1, col2, col3, col4 = st.columns(4)
+    
+    inv_val = df['Valor_Inv_Costo'].sum()
+    sales_potential = (df['Velocidad_Diaria'] * 30 * df['Precio']).sum()
+    stockout_loss = df[df['Estado'].str.contains("AGOTADO")]['Velocidad_Diaria'] * df['Precio']
+    stockout_loss_total = stockout_loss.sum()
+    gmroi_avg = df[df['Valor_Inv_Costo'] > 0]['GMROI'].mean()
+
+    col1.metric("Valor Inventario", f"${inv_val:,.0f}", help="Dinero actual en bodega (Costo)")
+    col2.metric("Ventas Proyectadas (Mes)", f"${sales_potential:,.0f}", delta=f"{growth}% Escenario")
+    col3.metric("Pérdida Diaria (Stockout)", f"${stockout_loss_total:,.0f}", delta="Acción Inmediata", delta_color="inverse")
+    col4.metric("GMROI Promedio", f"{gmroi_avg:.2f}x", help="Por cada $1 invertido, recuperas esto en margen bruto anual.")
+
+    # --- TABS DE NAVEGACIÓN ---
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 Dashboard 360", 
+        "📈 Tendencias y Tiempo", 
+        "🛒 Planificador de Compras", 
+        "💀 Cementerio de Stock",
+        "💎 Estrategia ABC"
+    ])
+
+    # 1. DASHBOARD
+    with tab1:
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.subheader("Salud del Ecosistema")
+            df_status = df['Estado'].value_counts().reset_index()
+            df_status.columns = ['Estado', 'Count']
             
-        st.markdown("### Vista Previa de Datos")
-        st.dataframe(df[['Nombre', 'Stock', 'Categoria']].head(20), use_container_width=True)
+            fig = px.bar(df_status, x='Count', y='Estado', orientation='h', 
+                         color='Estado', text='Count',
+                         color_discrete_map={
+                             "✅ Saludable": "#10b981",
+                             "🚨 AGOTADO (Perdida Venta)": "#ef4444",
+                             "🔥 Crítico (Bajo Seguridad)": "#f97316",
+                             "⚠️ Reorden (Pedir ya)": "#eab308",
+                             "🧊 Obsoleto (> 4 meses)": "#3b82f6",
+                             "💀 Stock Muerto": "#64748b"
+                         })
+            fig.update_layout(height=350, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+            
+        with c2:
+            st.subheader("Top Rentabilidad")
+            # Treemap de Margen
+            if 'Categoria' in df.columns:
+                fig_tree = px.treemap(df, path=['Categoria', 'Nombre'], values='Valor_Inv_Costo',
+                                      color='GMROI', color_continuous_scale='RdYlGn',
+                                      title="Inventario por Valor y Retorno (GMROI)")
+                st.plotly_chart(fig_tree, use_container_width=True)
+            else:
+                st.info("Necesitas categorizar productos para ver el mapa de calor.")
+
+    # 2. TENDENCIAS (NUEVO)
+    with tab2:
+        st.subheader("⏳ Máquina del Tiempo de Ventas")
+        if not df_hist.empty:
+            # Agrupar por semana
+            df_hist['Fecha'] = pd.to_datetime(df_hist['Fecha'])
+            ventas_tiempo = df_hist.groupby([pd.Grouper(key='Fecha', freq='W-MON'), 'Nombre'])['Cantidad'].sum().reset_index()
+            
+            # Selector de productos para limpiar el gráfico
+            top_products = df.nlargest(5, 'Revenue_Proyectado')['Nombre'].tolist()
+            selected_prods = st.multiselect("Comparar Productos:", df['Nombre'].unique(), default=top_products)
+            
+            df_chart = ventas_tiempo[ventas_tiempo['Nombre'].isin(selected_prods)]
+            
+            fig_line = px.line(df_chart, x='Fecha', y='Cantidad', color='Nombre', markers=True,
+                               title="Evolución Semanal de Ventas")
+            fig_line.update_xaxes(dtick="M1", tickformat="%b %d")
+            st.plotly_chart(fig_line, use_container_width=True)
+        else:
+            st.warning("No hay suficientes datos históricos de ventas con fechas válidas.")
+
+    # 3. PLANIFICADOR DE COMPRAS
+    with tab3:
+        st.subheader("🧠 Motor de Reabastecimiento Inteligente")
+        st.markdown("""
+        Este módulo calcula cuánto comprar basándose en:
+        1. **Stock de Seguridad:** Para cubrir imprevistos.
+        2. **Punto de Reorden:** Cuándo hacer el pedido.
+        3. **Simulador:** El % de crecimiento seleccionado en el menú lateral.
+        """)
+        
+        # Filtro rápido
+        urgentes = df[df['A_Comprar'] > 0].sort_values('Estado')
+        
+        if not urgentes.empty:
+            costo_total_compra = urgentes['Inversion_Compra'].sum()
+            st.success(f"💰 Presupuesto Recomendado: **${costo_total_compra:,.2f}**")
+            
+            st.dataframe(
+                urgentes[['Nombre', 'Stock', 'Safety_Stock', 'Punto_Reorden', 'A_Comprar', 'Inversion_Compra', 'Estado', 'Proveedor'] if 'Proveedor' in df.columns else ['Nombre', 'Stock', 'Safety_Stock', 'Punto_Reorden', 'A_Comprar', 'Inversion_Compra', 'Estado']],
+                column_config={
+                    "Safety_Stock": st.column_config.NumberColumn("Colchón Seguridad", help="Stock mínimo intocable"),
+                    "Punto_Reorden": st.column_config.NumberColumn("Gatillo Pedido", help="Si baja de aquí, pide"),
+                    "A_Comprar": st.column_config.NumberColumn("CANTIDAD PEDIR", format="%.0f 📦"),
+                    "Inversion_Compra": st.column_config.NumberColumn("Costo Estimado", format="$%.2f"),
+                },
+                use_container_width=True
+            )
+        else:
+            st.balloons()
+            st.info("Todo perfecto. Niveles de inventario óptimos según la demanda actual.")
+
+    # 4. STOCK MUERTO
+    with tab4:
+        st.subheader("⚰️ Análisis de Obsolescencia")
+        col_dead1, col_dead2 = st.columns(2)
+        
+        muertos = df[df['Estado'].str.contains("Muerto|Obsoleto")].copy()
+        
+        if not muertos.empty:
+            capital_preso = muertos['Valor_Inv_Costo'].sum()
+            with col_dead1:
+                st.error(f"Capital Congelado: ${capital_preso:,.2f}")
+                st.caption("Dinero que podrías usar para comprar productos 'Clase A'.")
+            
+            with col_dead2:
+                st.markdown("#### 💡 Estrategias de Liquidación")
+                st.markdown("""
+                - **Combos:** Agrúpalos con productos estrella.
+                - **Flash Sale:** Descuento del 30-50%.
+                - **Donación:** Beneficio fiscal si aplica.
+                """)
+            
+            st.dataframe(muertos[['Nombre', 'Stock', 'Dias_Cobertura', 'Costo', 'Valor_Inv_Costo']], use_container_width=True)
+        else:
+            st.success("¡Increíble! No tienes stock obsoleto.")
+
+    # 5. ABC STRATEGY
+    with tab5:
+        st.subheader("📐 Matriz Estratégica ABC (Pareto)")
+        c_abc1, c_abc2 = st.columns([2,1])
+        
+        with c_abc1:
+            fig_scat = px.scatter(df, x='Revenue_Proyectado', y='Margen_Pct', 
+                                  size='Valor_Inv_Costo', color='Clasificacion_ABC',
+                                  hover_name='Nombre',
+                                  labels={'Revenue_Proyectado': 'Ventas Proyectadas ($)', 'Margen_Pct': 'Margen %'},
+                                  title="Mapa de Estrellas vs Vacas Lecheras")
+            st.plotly_chart(fig_scat, use_container_width=True)
+            
+        with c_abc2:
+            st.markdown("#### Resumen por Clase")
+            resumen_abc = df.groupby('Clasificacion_ABC').agg({
+                'Nombre': 'count',
+                'Valor_Inv_Costo': 'sum',
+                'Revenue_Proyectado': 'sum'
+            }).reset_index()
+            st.dataframe(resumen_abc, hide_index=True)
 
 if __name__ == "__main__":
     main()
