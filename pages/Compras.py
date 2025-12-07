@@ -6,50 +6,62 @@ import numpy as np
 import time
 from datetime import datetime, date
 
-# --- 1. CONFIGURACIÓN Y ESTILOS ---
+# ==========================================
+# 1. CONFIGURACIÓN Y ESTILOS (PROFESIONAL)
+# ==========================================
 
 COLOR_PRIMARIO = "#2ecc71"
 COLOR_SECUNDARIO = "#e67e22"
 COLOR_FONDO = "#f4f6f9"
 COLOR_INFO = "#3498db"
 
-st.set_page_config(page_title="Recepción Inteligente 3.0 - Pro", page_icon="📦", layout="wide")
+st.set_page_config(page_title="Recepción Inteligente 3.0 - Ultimate", page_icon="📦", layout="wide")
 
 st.markdown(f"""
     <style>
     .stApp {{ background-color: {COLOR_FONDO}; }}
     .big-title {{ font-family: 'Helvetica Neue', sans-serif; font-size: 2.5em; color: #2c3e50; font-weight: 800; margin-bottom: 0px; }}
     .sub-title {{ font-size: 1.2em; color: #7f8c8d; margin-bottom: 20px; }}
+    /* Botones más bonitos y grandes */
     .stButton button[type="primary"] {{
         background: linear-gradient(45deg, {COLOR_PRIMARIO}, #27ae60);
-        border: none; color: white; font-weight: bold; border-radius: 8px; padding: 0.6rem 1.2rem;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border: none; color: white; font-weight: bold; border-radius: 8px; padding: 0.8rem 1.5rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.3s ease;
     }}
+    .stButton button[type="primary"]:hover {{ transform: scale(1.02); box-shadow: 0 6px 8px rgba(0,0,0,0.15); }}
+    
+    /* Tarjetas de métricas */
     .metric-card {{
         background-color: white; padding: 20px; border-radius: 12px;
         border-left: 5px solid {COLOR_INFO};
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; margin-bottom: 10px;
     }}
-    .metric-label {{ font-size: 0.9em; color: #7f8c8d; font-weight: 600; text-transform: uppercase; }}
+    .metric-label {{ font-size: 0.9em; color: #7f8c8d; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }}
     .metric-value {{ font-size: 1.8em; color: #2c3e50; font-weight: bold; }}
+    
+    /* Ajuste para que el Editor ocupe el ancho completo */
+    .stDataFrame {{ width: 100%; }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. CONEXIÓN Y UTILIDADES ---
+# ==========================================
+# 2. CONEXIÓN Y UTILIDADES (OPTIMIZADO)
+# ==========================================
 
 @st.cache_resource(ttl=600)
 def conectar_sheets():
-    """Conecta a Google Sheets y asegura que existan las hojas necesarias."""
+    """Conecta a Google Sheets. Caché de 10 min para no reconectar a cada rato."""
     try:
+        # Validación de secretos
         if "google_service_account" not in st.secrets:
-            st.error("🚨 Falta configuración de secretos (google_service_account).")
-            return None, None, None, None
+            st.error("🚨 Error Crítico: Falta 'google_service_account' en secrets.toml")
+            st.stop()
         
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
         
         if "SHEET_URL" not in st.secrets:
-            st.error("🚨 Falta configuración de secretos (SHEET_URL).")
-            return None, None, None, None
+            st.error("🚨 Error Crítico: Falta 'SHEET_URL' en secrets.toml")
+            st.stop()
             
         sh = gc.open_by_url(st.secrets["SHEET_URL"])
         
@@ -57,78 +69,107 @@ def conectar_sheets():
         try:
             ws_inv = sh.worksheet("Inventario")
         except:
-            st.error("No se encontró la pestaña 'Inventario'.")
-            return None, None, None, None
+            st.error("🚨 No se encontró la pestaña 'Inventario'. Créala en tu Google Sheet.")
+            st.stop()
 
-        # 2. Hoja Maestro_Proveedores (Memoria de SKUs)
+        # 2. Hoja Maestro_Proveedores (Memoria)
         try:
             ws_map = sh.worksheet("Maestro_Proveedores")
         except:
-            ws_map = sh.add_worksheet(title="Maestro_Proveedores", rows=1000, cols=10)
+            ws_map = sh.add_worksheet(title="Maestro_Proveedores", rows=2000, cols=10)
             ws_map.append_row(["ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Factor_Pack", "Ultima_Actualizacion"])
         
-        # 3. Hoja Historial_Recepciones (Lead Time y Logs)
+        # 3. Hoja Historial_Recepciones (Logs)
         try:
             ws_hist = sh.worksheet("Historial_Recepciones")
         except:
-            ws_hist = sh.add_worksheet(title="Historial_Recepciones", rows=1000, cols=10)
+            ws_hist = sh.add_worksheet(title="Historial_Recepciones", rows=2000, cols=10)
             ws_hist.append_row(["Fecha_Recepcion", "Folio_Factura", "Proveedor", "Fecha_Emision_Factura", "Dias_Entrega", "Total_Items", "Total_Costo"])
 
         return sh, ws_inv, ws_map, ws_hist
 
     except Exception as e:
-        st.error(f"Error conexión a Google Sheets: {e}")
-        return None, None, None, None
+        st.error(f"Error fatal de conexión: {e}")
+        st.stop()
 
 def sanitizar_dato(dato):
+    """Convierte numpy types a tipos nativos de Python para JSON/Sheets."""
     if isinstance(dato, (np.int64, np.int32)): return int(dato)
     if isinstance(dato, (np.float64, np.float32)): return float(dato)
     return dato
 
 def limpiar_moneda(valor):
+    """Limpia strings de dinero ($1,200.00) a float."""
     if isinstance(valor, (int, float)): return float(valor)
     if isinstance(valor, str):
         limpio = valor.replace('$', '').replace(',', '').strip()
+        if not limpio: return 0.0
         try: return float(limpio)
         except: return 0.0
     return 0.0
 
-# --- 3. FUNCIONES DE LECTURA DE INVENTARIO PARA BÚSQUEDA ---
+# ==========================================
+# 3. LECTURA DE INVENTARIO (EL CEREBRO DE BÚSQUEDA)
+# ==========================================
 
-def obtener_lista_inventario(ws_inv):
-    """Obtiene una lista formateada 'SKU | Nombre' para el dropdown."""
+# Usamos cache_data para que leer 600 lineas sea instantáneo tras la primera vez
+@st.cache_data(ttl=300) 
+def obtener_lista_inventario(_ws_inv):
+    """
+    Descarga TODO el inventario y crea la lista 'SKU | Nombre' para el buscador.
+    El guión bajo en _ws_inv le dice a Streamlit que no hashee el objeto worksheet.
+    """
     try:
-        data = ws_inv.get_all_records()
+        data = _ws_inv.get_all_records()
         df = pd.DataFrame(data)
         
-        # Aseguramos nombres de columnas estándar
-        mapa_cols = {c: c for c in df.columns}
-        for c in df.columns:
-            if 'sku' in c.lower() and 'prov' not in c.lower(): mapa_cols[c] = 'SKU'
-            if 'nomb' in c.lower() or 'desc' in c.lower(): mapa_cols[c] = 'Nombre'
-        
-        df = df.rename(columns=mapa_cols)
-        
-        if 'SKU' not in df.columns or 'Nombre' not in df.columns:
-            return []
+        if df.empty: return ["Inventario Vacío"]
 
-        # Crear lista combinada para el selectbox
-        df['Display'] = df['SKU'].astype(str) + " | " + df['Nombre'].astype(str)
-        lista = df['Display'].tolist()
-        lista.insert(0, "NUEVO (Crear Automáticamente)") # Opción por defecto para nuevos
+        # Normalización de columnas (quita espacios y mayúsculas)
+        df.columns = [c.strip() for c in df.columns]
+        mapa_cols = {c: c for c in df.columns}
+        
+        col_sku_real = None
+        col_nom_real = None
+
+        # Buscador inteligente de columnas
+        for c in df.columns:
+            cl = c.lower()
+            if ('sku' in cl or 'codigo' in cl or 'ref' in cl) and 'prov' not in cl: 
+                col_sku_real = c
+            if ('nomb' in cl or 'desc' in cl or 'prod' in cl) and 'fact' not in cl: 
+                col_nom_real = c
+        
+        if not col_sku_real or not col_nom_real:
+            # Fallback si no encuentra columnas obvias
+            return ["Error: Revisa encabezados (necesito SKU y Nombre)"]
+
+        # Crear lista combinada limpia
+        # Convertimos a string y quitamos NaN
+        df['Display'] = df[col_sku_real].fillna('').astype(str) + " | " + df[col_nom_real].fillna('').astype(str)
+        
+        # Filtramos vacíos y duplicados
+        lista = sorted(list(set(df['Display'].tolist())))
+        lista = [x for x in lista if len(x) > 3] # Quitar basura corta
+        
+        lista.insert(0, "NUEVO (Crear Automáticamente)") 
         return lista
     except Exception as e:
-        st.warning(f"No se pudo cargar la lista de inventario para búsqueda: {e}")
+        st.warning(f"Advertencia cargando lista: {e}")
         return ["NUEVO (Crear Automáticamente)"]
 
-# --- 4. MOTOR DE MEMORIA Y APRENDIZAJE ---
+# ==========================================
+# 4. MEMORIA Y APRENDIZAJE
+# ==========================================
 
 def cargar_memoria(ws_map):
+    """Carga el cerebro: Qué SKU de proveedor corresponde a cuál interno."""
     try:
         data = ws_map.get_all_records()
         memoria = {}
         for row in data:
-            key = f"{str(row['ID_Proveedor'])}_{str(row['SKU_Proveedor'])}"
+            # Clave compuesta única
+            key = f"{str(row['ID_Proveedor']).strip()}_{str(row['SKU_Proveedor']).strip()}"
             memoria[key] = {
                 'SKU_Interno': str(row['SKU_Interno']),
                 'Factor_Pack': float(row['Factor_Pack']) if row['Factor_Pack'] else 1.0
@@ -138,44 +179,46 @@ def cargar_memoria(ws_map):
         return {}
 
 def guardar_aprendizaje(ws_map, nuevos_datos):
+    """Guarda las nuevas relaciones en la hoja Maestro."""
     try:
         registros = ws_map.get_all_records()
-        df_map = pd.DataFrame(registros)
-        
+        # Mapa de claves existentes para saber si actualizar o crear
+        mapa_filas = {} 
+        if registros:
+            for idx, row in enumerate(registros):
+                key = f"{str(row['ID_Proveedor']).strip()}_{str(row['SKU_Proveedor']).strip()}"
+                mapa_filas[key] = idx + 2 # +2 por header y base 1 de Sheets
+
         filas_nuevas = []
         updates = []
-        mapa_filas = {} 
-        
-        if not df_map.empty:
-            for idx, row in df_map.iterrows():
-                key = f"{str(row['ID_Proveedor'])}_{str(row['SKU_Proveedor'])}"
-                mapa_filas[key] = idx + 2 # +2 por header y base 1
+        fecha_hoy = str(datetime.now())
 
         for item in nuevos_datos:
-            # Extraer SKU interno limpio (quitando el nombre si viene del dropdown)
-            sku_interno_raw = str(item['SKU_Interno_Seleccionado'])
-            if " | " in sku_interno_raw:
-                sku_interno = sku_interno_raw.split(" | ")[0].strip()
-            elif "NUEVO" in sku_interno_raw:
-                sku_interno = str(item['SKU_Proveedor']) # Usamos el del proveedor si es nuevo
+            # Limpieza del SKU seleccionado (quitar " | Nombre")
+            val_sel = str(item['SKU_Interno_Seleccionado'])
+            if " | " in val_sel:
+                sku_interno = val_sel.split(" | ")[0].strip()
+            elif "NUEVO" in val_sel:
+                sku_interno = str(item['SKU_Proveedor']).strip()
             else:
-                sku_interno = sku_interno_raw
+                sku_interno = val_sel.strip()
 
-            proveedor_id = str(item['ID_Proveedor'])
-            sku_prov = str(item['SKU_Proveedor'])
+            id_prov = str(item['ID_Proveedor']).strip()
+            sku_prov = str(item['SKU_Proveedor']).strip()
             factor = item['Factor_Pack']
-            nombre_prov = item['Proveedor_Nombre']
+            nom_prov = item['Proveedor_Nombre']
             
-            key = f"{proveedor_id}_{sku_prov}"
+            key = f"{id_prov}_{sku_prov}"
             
             if key in mapa_filas:
-                # Actualizar SKU Interno y Factor si ya existe
+                # Si ya existe, actualizamos la relación (por si corrigieron algo)
                 row_idx = mapa_filas[key]
                 updates.append({'range': f"D{row_idx}", 'values': [[sku_interno]]})
                 updates.append({'range': f"E{row_idx}", 'values': [[factor]]})
+                updates.append({'range': f"F{row_idx}", 'values': [[fecha_hoy]]})
             else:
-                # Aprender nueva asociación
-                filas_nuevas.append([proveedor_id, nombre_prov, sku_prov, sku_interno, factor, str(datetime.now())])
+                # Si es nuevo, aprendemos
+                filas_nuevas.append([id_prov, nom_prov, sku_prov, sku_interno, factor, fecha_hoy])
 
         if updates: ws_map.batch_update(updates)
         if filas_nuevas: ws_map.append_rows(filas_nuevas)
@@ -185,17 +228,15 @@ def guardar_aprendizaje(ws_map, nuevos_datos):
         return False
 
 def registrar_historial_recepcion(ws_hist, datos_xml, total_costo):
-    """Guarda los metadatos de la recepción para medir tiempos."""
+    """Log de auditoría."""
     try:
-        fecha_recepcion = datetime.now().strftime("%Y-%m-%d")
-        dias_entrega = datos_xml.get('Dias_Entrega', 0)
-        
+        fecha_recepcion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         row = [
             fecha_recepcion,
             datos_xml['Folio'],
             datos_xml['Proveedor'],
             datos_xml.get('Fecha_Emision', ''),
-            dias_entrega,
+            datos_xml.get('Dias_Entrega', 0),
             len(datos_xml['Items']),
             total_costo
         ]
@@ -203,20 +244,23 @@ def registrar_historial_recepcion(ws_hist, datos_xml, total_costo):
     except Exception as e:
         print(f"Error historial: {e}")
 
-# --- 5. PARSING XML (FACTURA) ---
+# ==========================================
+# 5. PARSEO XML (LECTURA DE FACTURA)
+# ==========================================
 
 def parsear_xml_factura(archivo):
+    """Lee el XML, soporta Namespaces complejos y extrae datos."""
     try:
         tree = ET.parse(archivo)
         root = tree.getroot()
         
-        # Namespaces comunes en facturación electrónica
         ns_map = {
             'cac': 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2',
             'cbc': 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2',
         }
 
-        # Intentar extraer Invoice anidado (común en algunos PACs)
+        # Manejo de "AttachedDocument" (Factura anidada en Description)
+        # Esto pasa mucho en facturación Latam
         desc_tag = root.find('.//cac:Attachment/cac:ExternalReference/cbc:Description', ns_map)
         if desc_tag is not None and desc_tag.text and "Invoice" in desc_tag.text:
             try:
@@ -226,30 +270,30 @@ def parsear_xml_factura(archivo):
         else:
             root_invoice = root
 
-        ns_inv = ns_map # Reutilizar namespaces
+        ns_inv = ns_map 
 
-        # 1. Datos Proveedor
+        # 1. Proveedor
         prov_node = root_invoice.find('.//cac:AccountingSupplierParty/cac:Party', ns_inv)
         if prov_node is not None:
             nombre_prov = prov_node.find('.//cac:PartyTaxScheme/cbc:RegistrationName', ns_inv).text
             id_prov = prov_node.find('.//cac:PartyTaxScheme/cbc:CompanyID', ns_inv).text
         else:
-            nombre_prov = "Desconocido"
+            nombre_prov = "PROVEEDOR DESCONOCIDO"
             id_prov = "GENERICO"
         
-        # 2. Datos Generales Factura
-        folio = root_invoice.find('.//cbc:ID', ns_inv).text
+        # 2. Generales
+        folio_node = root_invoice.find('.//cbc:ID', ns_inv)
+        folio = folio_node.text if folio_node is not None else "S/F"
         
-        # Fecha de Emisión y cálculo de días
-        fecha_emision_str = root_invoice.find('.//cbc:IssueDate', ns_inv).text
+        fecha_node = root_invoice.find('.//cbc:IssueDate', ns_inv)
+        fecha_emision_str = fecha_node.text if fecha_node is not None else datetime.now().strftime("%Y-%m-%d")
+        
         try:
-            fecha_emision = datetime.strptime(fecha_emision_str, "%Y-%m-%d").date()
-            dias_entrega = (datetime.now().date() - fecha_emision).days
+            f_emi = datetime.strptime(fecha_emision_str, "%Y-%m-%d").date()
+            dias_entrega = (datetime.now().date() - f_emi).days
         except:
-            fecha_emision_str = "N/A"
             dias_entrega = 0
 
-        # Total Factura
         total_tag = root_invoice.find('.//cac:LegalMonetaryTotal/cbc:PayableAmount', ns_inv)
         total_factura = float(total_tag.text) if total_tag is not None else 0.0
 
@@ -263,11 +307,13 @@ def parsear_xml_factura(archivo):
                 price_node = line.find('.//cac:Price/cbc:PriceAmount', ns_inv)
                 costo_unit = float(price_node.text) if price_node is not None else 0.0
                 
-                # Buscar SKU en varios tags posibles
+                # Buscar SKU en varios lugares
+                sku = "S/C"
                 sku_tag = line.find('.//cac:Item/cac:StandardItemIdentification/cbc:ID', ns_inv)
-                if sku_tag is None:
-                    sku_tag = line.find('.//cac:Item/cac:SellersItemIdentification/cbc:ID', ns_inv)
-                sku = sku_tag.text if sku_tag is not None else "S/C"
+                if sku_tag is not None: sku = sku_tag.text
+                else:
+                    sku_tag_vend = line.find('.//cac:Item/cac:SellersItemIdentification/cbc:ID', ns_inv)
+                    if sku_tag_vend is not None: sku = sku_tag_vend.text
 
                 items.append({
                     "ID_Proveedor": id_prov,
@@ -291,157 +337,162 @@ def parsear_xml_factura(archivo):
         }
 
     except Exception as e:
-        st.error(f"Error procesando XML: {str(e)}")
+        st.error(f"Error leyendo XML: {str(e)}")
         return None
 
-# --- 6. LÓGICA DE ACTUALIZACIÓN ---
+# ==========================================
+# 6. ESCRITURA EN INVENTARIO (UPDATE)
+# ==========================================
 
 def procesar_inventario(ws_inv, df_final):
-    # Leer Inventario
+    """
+    Actualiza el inventario sumando cantidades.
+    Soporta hojas grandes (600+ filas) eficientemente.
+    """
     try:
         data = ws_inv.get_all_values()
         if not data: return False, ["El inventario está vacío"]
-        headers = data[0]
+        headers = [h.strip().lower() for h in data[0]]
     except: return False, ["Error leyendo inventario"]
 
-    # Mapear columnas dinámicamente
-    try:
-        # Buscamos columnas clave ignorando mayúsculas
-        header_map = {h.lower(): i for i, h in enumerate(headers)}
-        
-        col_sku = -1
-        col_stock = -1
-        col_costo = -1
-        col_precio = -1
-        col_nombre = -1
+    # Mapeo flexible de columnas
+    col_sku = -1
+    col_stock = -1
+    col_costo = -1
+    col_precio = -1
+    col_nombre = -1
 
-        for h, idx in header_map.items():
-            if 'sku' in h and 'prov' not in h: col_sku = idx
-            if 'stock' in h or 'cantidad' in h: col_stock = idx
-            if 'costo' in h: col_costo = idx
-            if 'precio' in h or 'venta' in h: col_precio = idx
-            if 'nombre' in h or 'desc' in h: col_nombre = idx
+    for i, h in enumerate(headers):
+        if ('sku' in h or 'codigo' in h) and 'prov' not in h: col_sku = i
+        if 'stock' in h or 'cantidad' in h: col_stock = i
+        if 'costo' in h: col_costo = i
+        if 'precio' in h or 'venta' in h: col_precio = i
+        if 'nomb' in h or 'desc' in h or 'prod' in h: col_nombre = i
 
-        if col_sku == -1 or col_stock == -1:
-            return False, [f"No se encontraron columnas SKU o Stock en el inventario. Encabezados: {headers}"]
+    if col_sku == -1 or col_stock == -1:
+        return False, [f"No encontré columnas SKU o Stock. Encabezados detectados: {data[0]}"]
 
-    except Exception as e:
-        return False, [f"Error mapeando columnas: {e}"]
-
+    # Mapa rápido de SKU -> Fila (O(1) lookup)
     inv_map = {}
-    # Crear índice rápido del inventario
-    for i, row in enumerate(data[1:], start=2):
-        if len(row) <= col_sku: continue
-        sku_val = str(row[col_sku]).strip()
-        if sku_val:
-            inv_map[sku_val] = {
-                'fila': i,
-                'stock': limpiar_moneda(row[col_stock]) if len(row) > col_stock else 0,
-                'costo': limpiar_moneda(row[col_costo]) if col_costo != -1 and len(row) > col_costo else 0,
-                'precio': limpiar_moneda(row[col_precio]) if col_precio != -1 and len(row) > col_precio else 0,
-                'nombre': row[col_nombre] if col_nombre != -1 and len(row) > col_nombre else "Sin Nombre"
-            }
+    for idx, row in enumerate(data):
+        if idx == 0: continue # saltar header
+        if len(row) > col_sku:
+            sku_val = str(row[col_sku]).strip()
+            if sku_val:
+                # Guardamos info relevante para comparar precios
+                inv_map[sku_val] = {
+                    'fila': idx + 1, # Base 1 para GSpread
+                    'stock_val': row[col_stock] if len(row) > col_stock else "0",
+                    'costo_val': row[col_costo] if col_costo != -1 and len(row) > col_costo else "0"
+                }
 
     updates = []
     new_rows = []
     log = []
 
     for _, row in df_final.iterrows():
-        # Limpiar selección del dropdown (quitar " | Nombre")
-        sku_raw = str(row['SKU_Interno_Seleccionado'])
-        if " | " in sku_raw:
-            sku_interno = sku_raw.split(" | ")[0].strip()
-        elif "NUEVO" in sku_raw:
-            sku_interno = str(row['SKU_Proveedor']).strip() # Usamos SKU prov si es nuevo
-        else:
-            sku_interno = sku_raw.strip()
-            
-        nombre_prod = row['Descripcion_Factura']
+        # Limpieza SKU Interno
+        sel = str(row['SKU_Interno_Seleccionado'])
+        if " | " in sel: sku_interno = sel.split(" | ")[0].strip()
+        elif "NUEVO" in sel: sku_interno = str(row['SKU_Proveedor']).strip()
+        else: sku_interno = sel.strip()
         
-        # Usamos Cantidad RECIBIDA (Física), no la facturada
+        # Cálculos Reales
         cant_recibida = row['Cantidad_Recibida']
         factor = row['Factor_Pack']
         costo_pack = row['Costo_Pack_Factura']
         
         unidades_reales = cant_recibida * factor
+        if unidades_reales == 0: continue # Saltar si es 0
+
         costo_unitario_real = costo_pack / factor if factor > 0 else costo_pack
-        
-        # Lógica de Actualización
+        nombre_prod = row['Descripcion_Factura']
+
         if sku_interno in inv_map:
-            # ACTUALIZAR EXISTENTE
+            # === PRODUCTO EXISTENTE ===
             info = inv_map[sku_interno]
             fila = info['fila']
-            stock_actual = info['stock']
-            costo_actual = info['costo']
             
             # Stock
+            stock_actual = limpiar_moneda(info['stock_val'])
             nuevo_stock = stock_actual + unidades_reales
-            updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila, col_stock + 1)}", 'values': [[sanitizar_dato(nuevo_stock)]]})
-
-            # Precios y Costos (Solo si cambiaron significativamente)
+            updates.append({'range': gspread.utils.rowcol_to_a1(fila, col_stock + 1), 'values': [[sanitizar_dato(nuevo_stock)]]})
+            
+            # Costo (Actualizar siempre al último o promedio, aquí usamos último)
             msg_precio = ""
             if col_costo != -1:
-                updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila, col_costo + 1)}", 'values': [[sanitizar_dato(costo_unitario_real)]]})
+                costo_actual = limpiar_moneda(info['costo_val'])
+                updates.append({'range': gspread.utils.rowcol_to_a1(fila, col_costo + 1), 'values': [[sanitizar_dato(costo_unitario_real)]]})
                 
-                if costo_unitario_real > costo_actual:
-                    msg_precio = "📈 Costo subió."
-                    # Opcional: Actualizar precio venta si se desea automatizar
-                    if col_precio != -1:
-                        nuevo_precio = costo_unitario_real / 0.70 # Ejemplo margen 30%
-                        updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila, col_precio + 1)}", 'values': [[sanitizar_dato(nuevo_precio)]]})
-                elif costo_unitario_real < costo_actual:
-                    msg_precio = "💰 Costo bajó."
-            
-            log.append(f"🔄 **{sku_interno}**: Stock {stock_actual} -> {nuevo_stock}. {msg_precio}")
+                if costo_unitario_real > costo_actual: msg_precio = "📈 Costo subió."
+                elif costo_unitario_real < costo_actual: msg_precio = "💰 Costo bajó."
+                
+                # Regla de Precio Venta (Opcional: Margen 30%)
+                if col_precio != -1:
+                    nuevo_precio = costo_unitario_real / 0.70
+                    updates.append({'range': gspread.utils.rowcol_to_a1(fila, col_precio + 1), 'values': [[sanitizar_dato(nuevo_precio)]]})
 
+            log.append(f"🔄 **{sku_interno}**: Stock {stock_actual} -> {nuevo_stock}. {msg_precio}")
+        
         else:
-            # CREAR NUEVO PRODUCTO
-            new_row = [""] * len(headers)
+            # === PRODUCTO NUEVO ===
+            # Creamos una fila vacía del tamaño correcto
+            new_row = [""] * len(data[0])
             new_row[col_sku] = sku_interno
-            if col_nombre != -1: new_row[col_nombre] = nombre_prod
             new_row[col_stock] = sanitizar_dato(unidades_reales)
+            if col_nombre != -1: new_row[col_nombre] = nombre_prod
             if col_costo != -1: new_row[col_costo] = sanitizar_dato(costo_unitario_real)
-            if col_precio != -1: new_row[col_precio] = sanitizar_dato(costo_unitario_real / 0.70) # Margen sugerido
+            if col_precio != -1: new_row[col_precio] = sanitizar_dato(costo_unitario_real / 0.70)
             
             new_rows.append(new_row)
-            log.append(f"✨ **NUEVO**: {sku_interno} | {nombre_prod} | Stock Inicial: {unidades_reales}")
+            log.append(f"✨ **NUEVO**: {sku_interno} | {nombre_prod} | Stock Ini: {unidades_reales}")
 
     try:
         if updates: ws_inv.batch_update(updates)
         if new_rows: ws_inv.append_rows(new_rows)
         return True, log
     except Exception as e:
-        return False, [f"Error escribiendo Sheets: {e}"]
+        return False, [f"Error escribiendo en Sheets: {e}"]
 
-# --- 7. INTERFAZ DE USUARIO (MAIN) ---
+# ==========================================
+# 7. MAIN APP UI
+# ==========================================
 
 def main():
-    st.markdown('<p class="big-title">Recepción Inteligente 3.0</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-title">Carga facturas, asocia inventario y verifica recepción física.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="big-title">Recepción Inteligente 3.0 Ultimate</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">Gestión masiva de inventario (600+ items), aprendizaje automático y XML.</p>', unsafe_allow_html=True)
     
-    # Conexión
-    sh, ws_inv, ws_map, ws_hist = conectar_sheets()
-    if not ws_inv: st.stop()
-
-    # Session State
+    # Init Session
     if 'paso' not in st.session_state: st.session_state.paso = 1
     if 'xml_data' not in st.session_state: st.session_state.xml_data = None
     if 'df_mapped' not in st.session_state: st.session_state.df_mapped = None
-    if 'lista_inventario' not in st.session_state: st.session_state.lista_inventario = []
+    if 'catalogo' not in st.session_state: st.session_state.catalogo = []
 
-    # ==========================================
-    # PASO 1: CARGA DE FACTURA
-    # ==========================================
+    # Conexión
+    sh, ws_inv, ws_map, ws_hist = conectar_sheets()
+    if not sh: st.stop()
+
+    # ------------------------------------------------------------------
+    # PASO 1: CARGA
+    # ------------------------------------------------------------------
     if st.session_state.paso == 1:
-        st.markdown("### 1️⃣ Cargar XML de Factura")
-        uploaded_file = st.file_uploader("Arrastra tu archivo XML aquí", type=['xml'])
+        st.markdown("### 1️⃣ Cargar Factura (XML)")
+        
+        # Botón para recargar inventario manualmente si cambias algo en el Excel
+        if st.button("🔄 Refrescar Inventario de Google Sheets"):
+            st.cache_data.clear()
+            st.success("Caché limpiado. Se descargará el inventario fresco.")
+
+        uploaded_file = st.file_uploader("Sube tu XML aquí", type=['xml'])
         
         if uploaded_file:
-            with st.spinner("Analizando factura y descargando inventario..."):
+            with st.spinner("🚀 Analizando XML y descargando tu inventario completo..."):
+                # 1. Parsear XML
                 datos = parsear_xml_factura(uploaded_file)
                 
-                # Cargar inventario para el dropdown
-                st.session_state.lista_inventario = obtener_lista_inventario(ws_inv)
+                # 2. Cargar Catálogo (Cacheado)
+                catalogo = obtener_lista_inventario(ws_inv)
+                st.session_state.catalogo = catalogo # Guardar en sesión
                 
                 if datos and datos['Items']:
                     st.session_state.xml_data = datos
@@ -449,52 +500,53 @@ def main():
                     st.session_state.paso = 2
                     st.rerun()
                 else:
-                    st.error("No se pudieron leer items del XML.")
+                    st.error("Error: El XML no tiene items válidos o no se pudo leer.")
 
-    # ==========================================
-    # PASO 2: ASOCIACIÓN (MAPPING) INTELIGENTE
-    # ==========================================
+    # ------------------------------------------------------------------
+    # PASO 2: ASOCIACIÓN (EL BUSCADOR INTELIGENTE)
+    # ------------------------------------------------------------------
     elif st.session_state.paso == 2:
         data = st.session_state.xml_data
         memoria = st.session_state.memoria
         
-        # Header Informativo
+        # Métricas
         c1, c2, c3, c4 = st.columns(4)
         c1.markdown(f"<div class='metric-card'><div class='metric-label'>Proveedor</div><div class='metric-value' style='font-size:1.2em'>{data['Proveedor'][:15]}..</div></div>", unsafe_allow_html=True)
-        c2.markdown(f"<div class='metric-card'><div class='metric-label'>Fecha Emisión</div><div class='metric-value'>{data['Fecha_Emision']}</div></div>", unsafe_allow_html=True)
-        c3.markdown(f"<div class='metric-card'><div class='metric-label'>Días Entrega</div><div class='metric-value'>{data['Dias_Entrega']}</div></div>", unsafe_allow_html=True)
-        c4.markdown(f"<div class='metric-card'><div class='metric-label'>Total Factura</div><div class='metric-value'>${data['Total_Factura']:,.0f}</div></div>", unsafe_allow_html=True)
+        c2.markdown(f"<div class='metric-card'><div class='metric-label'>Folio</div><div class='metric-value'>{data['Folio']}</div></div>", unsafe_allow_html=True)
+        c3.markdown(f"<div class='metric-card'><div class='metric-label'>Items</div><div class='metric-value'>{len(data['Items'])}</div></div>", unsafe_allow_html=True)
+        c4.markdown(f"<div class='metric-card'><div class='metric-label'>Total</div><div class='metric-value'>${data['Total_Factura']:,.0f}</div></div>", unsafe_allow_html=True)
         
         st.divider()
-        st.markdown("### 2️⃣ Asocia los productos a tu Inventario")
-        st.info("ℹ️ Selecciona tu producto en la columna **'🔍 TU PRODUCTO (Buscador)'**. El sistema recordará esto la próxima vez.")
+        st.markdown("### 2️⃣ Vinculación de Productos")
+        st.info("💡 Escribe en la columna **'TU PRODUCTO'** (ej: 'chunk') para buscar en tu inventario de 600+ items. El sistema aprenderá tu elección.")
 
-        # Preparar Dataframe para Editor
+        # Construcción de la tabla
         filas = []
+        catalogo = st.session_state.catalogo 
+
         for item in data['Items']:
-            key = f"{data['ID_Proveedor']}_{item['SKU_Proveedor']}"
+            key = f"{str(data['ID_Proveedor']).strip()}_{str(item['SKU_Proveedor']).strip()}"
             
-            # Predicción basada en memoria
-            sku_interno_default = "NUEVO (Crear Automáticamente)" # Default
-            factor_prev = 1.0
+            # Valores por defecto
+            sku_defecto = "NUEVO (Crear Automáticamente)"
+            factor_defecto = 1.0
             
+            # ¿Lo conocemos?
             if key in memoria:
                 sku_mem = memoria[key]['SKU_Interno']
-                # Intentar buscar el string completo en la lista cargada
-                match = next((s for s in st.session_state.lista_inventario if s.startswith(sku_mem + " |")), None)
-                if match:
-                    sku_interno_default = match
-                else:
-                    # Si está en memoria pero no en lista actual (raro), mantener lo que hay
-                    sku_interno_default = sku_mem 
+                # Buscamos coincidencias en el catálogo actual para preseleccionar
+                # Esto asegura que el dropdown funcione aunque el nombre haya cambiado ligeramente
+                match = next((s for s in catalogo if s.startswith(sku_mem + " |")), None)
+                if match: sku_defecto = match
+                else: sku_defecto = sku_mem # Fallback visual
                 
-                factor_prev = memoria[key]['Factor_Pack']
+                factor_defecto = memoria[key]['Factor_Pack']
 
             filas.append({
                 "SKU_Proveedor": item['SKU_Proveedor'],
                 "Descripcion_Factura": item['Descripcion_Factura'],
-                "SKU_Interno_Seleccionado": sku_interno_default,
-                "Factor_Pack": factor_prev,
+                "SKU_Interno_Seleccionado": sku_defecto,
+                "Factor_Pack": factor_defecto,
                 "Cantidad_Facturada": item['Cantidad_Facturada'],
                 "Costo_Pack_Factura": item['Costo_Pack_Factura'],
                 "ID_Proveedor": data['ID_Proveedor'],
@@ -503,108 +555,108 @@ def main():
             
         df = pd.DataFrame(filas)
 
-        # Editor de Datos con Selectbox
+        # EDITOR PODEROSO
         edited_df = st.data_editor(
             df,
             column_config={
                 "SKU_Proveedor": st.column_config.TextColumn("Ref. Prov", disabled=True, width="small"),
-                "Descripcion_Factura": st.column_config.TextColumn("Producto en Factura", disabled=True, width="medium"),
+                "Descripcion_Factura": st.column_config.TextColumn("En Factura", disabled=True, width="medium"),
+                
+                # --- LA MAGIA: SELECTBOX BUSCABLE ---
                 "SKU_Interno_Seleccionado": st.column_config.SelectboxColumn(
                     "🔍 TU PRODUCTO (Buscador)",
-                    options=st.session_state.lista_inventario,
+                    options=catalogo, # Aquí pasamos la lista completa cargada en Paso 1
                     required=True,
                     width="large",
-                    help="Escribe para buscar en tu inventario"
+                    help="Escribe para filtrar tu inventario..."
                 ),
+                # ------------------------------------
+                
                 "Factor_Pack": st.column_config.NumberColumn("📦 Unids/Caja", min_value=1, step=1),
-                "Cantidad_Facturada": st.column_config.NumberColumn("Cant. Factura", disabled=True),
+                "Cantidad_Facturada": st.column_config.NumberColumn("Cant. Fac", disabled=True),
                 "Costo_Pack_Factura": st.column_config.NumberColumn("Costo Caja", format="$%.2f", disabled=True),
-                # Ocultos
-                "ID_Proveedor": None, "Proveedor_Nombre": None
+                "ID_Proveedor": None, "Proveedor_Nombre": None # Ocultos
             },
             use_container_width=True,
             hide_index=True,
             num_rows="fixed",
-            height=400
+            height=500
         )
 
-        col1, col2 = st.columns([1, 4])
-        if col1.button("⬅️ Cancelar"):
+        c1, c2 = st.columns([1, 4])
+        if c1.button("⬅️ Cancelar"):
             st.session_state.paso = 1
             st.rerun()
         
-        if col2.button("Ir a Recepción Física ➡️", type="primary"):
+        if c2.button("Siguiente: Verificar Físico ➡️", type="primary"):
             st.session_state.df_mapped = edited_df
             st.session_state.paso = 3
             st.rerun()
 
-    # ==========================================
-    # PASO 3: RECEPCIÓN FÍSICA Y VERIFICACIÓN
-    # ==========================================
+    # ------------------------------------------------------------------
+    # PASO 3: VERIFICACIÓN FÍSICA Y GUARDADO
+    # ------------------------------------------------------------------
     elif st.session_state.paso == 3:
-        st.markdown("### 3️⃣ Recepción Física (Conteo Ciego)")
-        st.warning("👇 Confirma cuántas cajas llegaron realmente. Si faltó algo, edita la columna 'Recibido Real'.")
+        st.markdown("### 3️⃣ Recepción Física (Check Final)")
+        st.warning("👇 Ajusta la columna **'RECIBIDO REAL'** si llegó menos mercancía.")
         
         df_verif = st.session_state.df_mapped.copy()
         
-        # Inicializar Recibido igual a Facturado
+        # Init columna recepción
         if 'Cantidad_Recibida' not in df_verif.columns:
             df_verif['Cantidad_Recibida'] = df_verif['Cantidad_Facturada']
         
-        # Calcular unidades totales para referencia visual
+        # Cálculo visual total
         df_verif['Total_Unidades'] = df_verif['Cantidad_Recibida'] * df_verif['Factor_Pack']
 
-        # Editor Final
         final_df = st.data_editor(
             df_verif,
             column_config={
-                "SKU_Interno_Seleccionado": st.column_config.TextColumn("Producto Asignado", disabled=True),
-                "Descripcion_Factura": st.column_config.TextColumn("Ref. Factura", disabled=True),
-                "Cantidad_Facturada": st.column_config.NumberColumn("Cant. Factura", disabled=True),
-                "Cantidad_Recibida": st.column_config.NumberColumn("✅ RECIBIDO REAL", min_value=0, step=1, required=True),
+                "SKU_Interno_Seleccionado": st.column_config.TextColumn("Producto", disabled=True),
+                "Descripcion_Factura": st.column_config.TextColumn("Ref.", disabled=True),
+                "Cantidad_Facturada": st.column_config.NumberColumn("Cant. Fac", disabled=True),
+                "Cantidad_Recibida": st.column_config.NumberColumn("✅ RECIBIDO REAL", min_value=0, step=1),
                 "Factor_Pack": st.column_config.NumberColumn("Factor", disabled=True),
-                "Total_Unidades": st.column_config.ProgressColumn("Total Unidades Sueltas", format="%d", min_value=0, max_value=1000),
-                # Ocultar resto
+                "Total_Unidades": st.column_config.ProgressColumn("Unidades Totales", format="%d", min_value=0, max_value=200),
                 "SKU_Proveedor": None, "Costo_Pack_Factura": None, "ID_Proveedor": None, "Proveedor_Nombre": None
             },
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
+            height=500
         )
 
-        # Validación visual de discrepancias
+        # Validación
         diff = final_df['Cantidad_Facturada'] - final_df['Cantidad_Recibida']
-        if diff.sum() > 0:
-            st.error(f"⚠️ Hay una diferencia de {diff.sum()} cajas faltantes respecto a la factura.")
-        elif diff.sum() < 0:
-            st.warning(f"⚠️ Estás recibiendo {-diff.sum()} cajas DE MÁS respecto a la factura.")
-        else:
-            st.success("✅ La recepción cuadra perfectamente con la factura.")
+        if diff.sum() > 0: st.error(f"⚠️ Faltan {diff.sum()} cajas vs Factura.")
+        elif diff.sum() < 0: st.warning(f"⚠️ Sobran {-diff.sum()} cajas vs Factura.")
+        else: st.success("✅ Todo cuadra perfecto.")
 
         st.divider()
         c1, c2 = st.columns([1, 4])
-        
         if c1.button("⬅️ Atrás"):
             st.session_state.paso = 2
             st.rerun()
-            
-        if c2.button("💾 FINALIZAR Y ACTUALIZAR INVENTARIO", type="primary"):
-            with st.spinner("Procesando... Guardando Aprendizaje... Actualizando Stocks..."):
+
+        if c2.button("💾 FINALIZAR Y ACTUALIZAR TODO", type="primary"):
+            with st.status("🚀 Procesando actualización masiva...", expanded=True) as status:
                 
-                # 1. Guardar Memoria (Aprendizaje)
+                st.write("🧠 Aprendiendo nuevas vinculaciones de productos...")
                 records = final_df.to_dict('records')
                 guardar_aprendizaje(ws_map, records)
                 
-                # 2. Guardar Historial de Tiempos
-                costo_total_real = (final_df['Cantidad_Recibida'] * final_df['Costo_Pack_Factura']).sum()
-                registrar_historial_recepcion(ws_hist, st.session_state.xml_data, costo_total_real)
+                st.write("📊 Guardando historial de tiempos y costos...")
+                costo_total = (final_df['Cantidad_Recibida'] * final_df['Costo_Pack_Factura']).sum()
+                registrar_historial_recepcion(ws_hist, st.session_state.xml_data, costo_total)
                 
-                # 3. Actualizar Inventario Real
+                st.write("📦 Actualizando stocks y precios en Inventario...")
                 exito, logs = procesar_inventario(ws_inv, final_df)
                 
                 if exito:
+                    status.update(label="¡Éxito Total!", state="complete", expanded=False)
                     st.balloons()
-                    st.success("¡Inventario Actualizado Exitosamente!")
-                    with st.expander("Ver Bitácora de Cambios"):
+                    st.success("¡Inventario Actualizado!")
+                    
+                    with st.expander("📄 Ver Reporte de Cambios"):
                         for l in logs: st.write(l)
                     
                     time.sleep(5)
@@ -612,7 +664,8 @@ def main():
                     st.session_state.xml_data = None
                     st.rerun()
                 else:
-                    st.error("Hubo un error al actualizar:")
+                    status.update(label="Error", state="error")
+                    st.error("Hubo errores:")
                     for l in logs: st.error(l)
 
 if __name__ == "__main__":
