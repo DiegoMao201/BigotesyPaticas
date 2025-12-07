@@ -11,15 +11,15 @@ from weasyprint import HTML, CSS
 import plotly.express as px
 import plotly.graph_objects as go
 
-# --- 1. CONFIGURACIÓN Y ESTILOS ---
+# --- 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME) ---
 
-COLOR_PRIMARIO = "#2ecc71"  # Verde Éxito
-COLOR_SECUNDARIO = "#27ae60" # Verde Oscuro
-COLOR_FONDO = "#f4f6f9"
-COLOR_TEXTO = "#2c3e50"
-COLOR_GASTO = "#e74c3c"
-COLOR_INVERSION = "#3498db"
-COLOR_ADVERTENCIA = "#f39c12"
+# Paleta de Colores Solicitada
+COLOR_PRIMARIO = "#187f77"      # Cian Oscuro (Teal)
+COLOR_SECUNDARIO = "#125e58"    # Variante más oscura para degradados
+COLOR_ACENTO = "#f5a641"        # Naranja (Alertas y Acentos)
+COLOR_FONDO = "#f8f9fa"         # Fondo gris muy claro para contraste
+COLOR_TEXTO = "#262730"
+COLOR_BLANCO = "#ffffff"
 
 # Logo Verificado (Huella simple en PNG Base64)
 LOGO_B64 = """
@@ -28,16 +28,16 @@ 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
-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
+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
@@ -48,47 +48,105 @@ mJoaIje3l56e3vp7e2lt7eX3t5eent72b9/P/v372f//v3s37+f/fv3s3//fuJG/H4/dXV11NXVUVdXR
 
 def configurar_pagina():
     st.set_page_config(
-        page_title="Bigotes y Patitas PRO",
+        page_title="Nexus Pro | Bigotes y Patitas",
         page_icon="🐾",
         layout="wide",
         initial_sidebar_state="expanded"
     )
     
+    # CSS Personalizado para Nexus Pro
     st.markdown(f"""
         <style>
-        .stApp {{ background-color: {COLOR_FONDO}; }}
-        h1, h2, h3 {{ color: {COLOR_TEXTO}; font-family: 'Helvetica Neue', sans-serif; }}
+        /* Importar fuente moderna */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+        .stApp {{
+            background-color: {COLOR_FONDO};
+            font-family: 'Inter', sans-serif;
+        }}
+        
+        h1, h2, h3 {{
+            color: {COLOR_PRIMARIO};
+            font-weight: 700;
+        }}
+        
+        h4, h5, h6 {{
+            color: {COLOR_TEXTO};
+            font-weight: 600;
+        }}
+
+        /* Estilo de Tarjetas (Metric Containers y otros divs) */
         div[data-testid="metric-container"] {{
-            background-color: white;
-            padding: 15px;
+            background-color: {COLOR_BLANCO};
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border-left: 5px solid {COLOR_ACENTO};
+        }}
+        
+        div[data-testid="stExpander"] {{
+            background-color: {COLOR_BLANCO};
             border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
             border: 1px solid #e0e0e0;
         }}
+
+        /* Botones Primarios (Cian) */
         .stButton button[type="primary"] {{
-            background: linear-gradient(90deg, {COLOR_PRIMARIO}, {COLOR_SECUNDARIO});
+            background: linear-gradient(135deg, {COLOR_PRIMARIO}, {COLOR_SECUNDARIO});
             border: none;
+            color: white;
             font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
         }}
-        .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {{
+        .stButton button[type="primary"]:hover {{
+            box-shadow: 0 5px 15px rgba(24, 127, 119, 0.4);
+            transform: translateY(-1px);
+        }}
+
+        /* Botones Secundarios */
+        .stButton button[type="secondary"] {{
+            border: 2px solid {COLOR_PRIMARIO};
+            color: {COLOR_PRIMARIO};
             border-radius: 8px;
         }}
-        /* Tabs personalizados */
+
+        /* Inputs y Selects */
+        .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {{
+            border-radius: 8px;
+            border-color: #e0e0e0;
+        }}
+        .stTextInput input:focus, .stNumberInput input:focus {{
+            border-color: {COLOR_PRIMARIO};
+            box-shadow: 0 0 0 1px {COLOR_PRIMARIO};
+        }}
+
+        /* Tabs Personalizados */
         .stTabs [data-baseweb="tab-list"] {{
-            gap: 10px;
+            gap: 8px;
+            background-color: transparent;
         }}
         .stTabs [data-baseweb="tab"] {{
-            height: 50px;
+            height: 45px;
             white-space: pre-wrap;
-            background-color: white;
-            border-radius: 5px;
+            background-color: {COLOR_BLANCO};
+            border-radius: 8px 8px 0 0;
             color: {COLOR_TEXTO};
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            font-weight: 600;
+            border: 1px solid #eee;
+            border-bottom: none;
         }}
         .stTabs [aria-selected="true"] {{
             background-color: {COLOR_PRIMARIO};
             color: white;
+            border-color: {COLOR_PRIMARIO};
+        }}
+
+        /* Sidebar Styling */
+        section[data-testid="stSidebar"] {{
+            background-color: {COLOR_BLANCO};
+            border-right: 1px solid #eee;
         }}
         </style>
     """, unsafe_allow_html=True)
@@ -180,20 +238,33 @@ def generar_pdf_html(venta_data, items):
             with open("factura.html", "r", encoding="utf-8") as f:
                 template_str = f.read()
         except:
-             template_str = """
-             <html><body>
-             <center><img src="data:image/png;base64,{{ logo_b64 }}" width="50"></center>
-             <h2>Bigotes y Patitas</h2>
-             <p>Ticket: {{ id_venta }}<br>Fecha: {{ fecha }}</p>
+             template_str = f"""
+             <html>
+             <head>
+                <style>
+                    body {{ font-family: sans-serif; color: #333; }}
+                    h2 {{ color: {COLOR_PRIMARIO}; }}
+                    table {{ width: 100%; border-collapse: collapse; }}
+                    td, th {{ padding: 8px; border-bottom: 1px solid #ddd; }}
+                    .total {{ font-size: 18px; font-weight: bold; color: {COLOR_PRIMARIO}; }}
+                </style>
+             </head>
+             <body>
+             <center><img src="data:image/png;base64,{{{{ logo_b64 }}}}" width="60"></center>
+             <center><h2>Nexus Pro</h2><p>Bigotes y Patitas</p></center>
+             <p><strong>Ticket:</strong> {{{{ id_venta }}}}<br><strong>Fecha:</strong> {{{{ fecha }}}}</p>
              <hr>
-             <p>Cliente: {{ cliente_nombre }}</p>
-             <table width="100%">
-             {% for item in items %}
-             <tr><td>{{ item.Nombre_Producto }} (x{{ item.Cantidad }})</td><td align="right">${{ item.Subtotal }}</td></tr>
-             {% endfor %}
+             <p><strong>Cliente:</strong> {{{{ cliente_nombre }}}}</p>
+             <p><strong>Mascota:</strong> {{{{ cliente_mascota }}}}</p>
+             <table>
+             <tr style="background-color: #f2f2f2;"><th>Producto</th><th align="right">Total</th></tr>
+             {{% for item in items %}}
+             <tr><td>{{{{ item.Nombre_Producto }}}} (x{{{{ item.Cantidad }}}})</td><td align="right">${{{{ item.Subtotal }}}}</td></tr>
+             {{% endfor %}}
              </table>
-             <hr>
-             <h3>TOTAL: ${{ total }}</h3>
+             <br>
+             <p class="total" align="right">TOTAL A PAGAR: ${{{{ total }}}}</p>
+             <center><p style="font-size:10px; color:#777;">Gracias por su compra</p></center>
              </body></html>
              """
 
@@ -254,7 +325,8 @@ def generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin):
 # --- 4. MÓDULOS DE NEGOCIO ---
 
 def tab_punto_venta(ws_inv, ws_cli, ws_ven):
-    st.markdown("### 🛒 Venta Bigotes y Paticas (POS) NEXUS PRO")
+    st.markdown(f"### <span style='color:{COLOR_ACENTO}'>🛒</span> Nexus Pro POS", unsafe_allow_html=True)
+    st.caption("Punto de Venta - Bigotes y Patitas")
     
     # Inicialización de Estados
     if 'carrito' not in st.session_state: st.session_state.carrito = []
@@ -277,28 +349,26 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     res = df_c[df_c['Cedula'] == busqueda.strip()]
                     if not res.empty:
                         st.session_state.cliente_actual = res.iloc[0].to_dict()
-                        st.success(f"Cliente: {st.session_state.cliente_actual.get('Nombre')}")
+                        st.toast(f"Cliente cargado: {st.session_state.cliente_actual.get('Nombre')}", icon="✅")
                     else:
                         st.warning("Cliente no encontrado.")
         
         if st.session_state.cliente_actual:
-            st.info(f"🟢 Cliente: **{st.session_state.cliente_actual.get('Nombre')}** | Mascota: **{st.session_state.cliente_actual.get('Mascota', 'N/A')}**")
+            st.info(f"🟢 **{st.session_state.cliente_actual.get('Nombre')}** | Mascota: **{st.session_state.cliente_actual.get('Mascota', 'N/A')}**")
 
         st.markdown("---")
         
         # 2. Buscador de Productos (Con Stock)
-        st.markdown("#### 📦 Agregar Productos")
+        st.markdown("#### 📦 Catálogo de Productos")
         df_inv = leer_datos(ws_inv)
         
         if not df_inv.empty:
-            # Filtramos solo lo que tiene stock positivo para mostrar, aunque se puede vender sin stock si se desea
-            # Formato amigable: Nombre | Stock: X | $Precio
             prod_lista = df_inv.apply(lambda x: f"{x.get('Nombre', 'N/A')} | Stock: {x.get('Stock', 0)} | ${x.get('Precio', 0):,.0f} | ID:{x.get('ID_Producto', '')}", axis=1).tolist()
             
             sel_prod_str = st.selectbox("Escriba para buscar producto...", [""] + prod_lista)
             
             col_add_btn, col_dummy = st.columns([1, 2])
-            if col_add_btn.button("➕ Agregar a la Lista", type="primary", use_container_width=True):
+            if col_add_btn.button("➕ Agregar al Carrito", type="primary", use_container_width=True):
                 if sel_prod_str:
                     try:
                         id_p = sel_prod_str.split("ID:")[1]
@@ -320,30 +390,27 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                                 "Precio": float(info_p['Precio']),
                                 "Cantidad": 1,
                                 "Subtotal": float(info_p['Precio']),
-                                "Eliminar": False # Checkbox para borrar
+                                "Eliminar": False 
                             }
                             st.session_state.carrito.append(nuevo_item)
-                        st.rerun() # Recargar para mostrar en tabla
+                        st.rerun() 
                     except Exception as e:
                         st.error(f"Error al agregar: {e}")
 
         # 3. TABLA EDITABLE (Carrito)
-        st.markdown("#### 🛒 Detalle de Venta (Editable)")
+        st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>🛒</span> Detalle de Venta", unsafe_allow_html=True)
         
         if st.session_state.carrito:
-            # Convertimos carrito a DataFrame para el editor
             df_carrito = pd.DataFrame(st.session_state.carrito)
             
-            # Configuración de columnas para st.data_editor
             column_config = {
                 "Nombre_Producto": st.column_config.TextColumn("Producto", disabled=True, width="medium"),
-                "Cantidad": st.column_config.NumberColumn("Cant.", min_value=1, step=1, help="Modifica la cantidad aquí"),
-                "Precio": st.column_config.NumberColumn("Precio Unit.", format="$%d", min_value=0, help="Puedes cambiar el precio manualmente"),
+                "Cantidad": st.column_config.NumberColumn("Cant.", min_value=1, step=1),
+                "Precio": st.column_config.NumberColumn("Precio Unit.", format="$%d", min_value=0),
                 "Subtotal": st.column_config.NumberColumn("Subtotal", format="$%d", disabled=True),
-                "Eliminar": st.column_config.CheckboxColumn("Quitar", help="Marca para eliminar el producto")
+                "Eliminar": st.column_config.CheckboxColumn("Quitar")
             }
 
-            # Mostramos el editor
             edited_df = st.data_editor(
                 df_carrito,
                 column_config=column_config,
@@ -351,35 +418,20 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                 hide_index=True,
                 use_container_width=True,
                 key="editor_carrito",
-                num_rows="dynamic" # Permite añadir filas vacías si se quisiera, pero nos enfocamos en editar
+                num_rows="dynamic"
             )
 
             # LÓGICA DE ACTUALIZACIÓN DEL CARRITO
-            # Comparamos si hubo cambios para recalcular subtotales o eliminar filas
-            needs_rerun = False
-            
-            # 1. Recalcular Subtotales (Si el usuario cambió precio o cantidad)
             edited_df['Subtotal'] = edited_df['Cantidad'] * edited_df['Precio']
-            
-            # 2. Filtrar eliminados (Si marcó 'Eliminar')
             items_finales = edited_df[~edited_df['Eliminar']].copy()
-            
-            # Verificar si los datos han cambiado respecto al session_state original
-            # Convertimos a diccionarios para comparar contenido
             nuevos_datos = items_finales.to_dict('records')
             
-            # Limpiamos la clave 'Eliminar' antes de guardar en session state para mantenerlo limpio
             for d in nuevos_datos:
                 if 'Eliminar' in d: del d['Eliminar']
-                # Re-agregamos la flag 'Eliminar' como False para el siguiente ciclo
                 d['Eliminar'] = False
 
-            # Actualizamos session_state
-            # Nota: Al usar st.data_editor, el script se re-ejecuta al editar.
-            # Simplemente guardamos el estado resultante de la edición.
             st.session_state.carrito = nuevos_datos
             
-            # Calcular Total General
             total_general = sum(item['Subtotal'] for item in st.session_state.carrito)
 
         else:
@@ -389,10 +441,10 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
     # --- COLUMNA DERECHA: Resumen y Pago ---
     with col_der:
         with st.container(border=True):
-            st.markdown("### 🧾 Resumen de Cuenta")
+            st.markdown(f"### <span style='color:{COLOR_ACENTO}'>🧾</span> Resumen", unsafe_allow_html=True)
             
             # Mostrar Total Grande
-            st.metric("Total a Pagar", f"${total_general:,.0f}")
+            st.markdown(f"<h1 style='text-align: center; color: {COLOR_PRIMARIO}; font-size: 3em;'>${total_general:,.0f}</h1>", unsafe_allow_html=True)
             
             st.markdown("---")
             
@@ -407,16 +459,17 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     data=st.session_state.ultimo_pdf,
                     file_name=f"Venta_{st.session_state.ultima_venta_id}.pdf",
                     mime="application/pdf",
-                    type="primary"
+                    type="primary",
+                    use_container_width=True
                 )
-                if c_new.button("🔄 Nueva Venta"):
+                if c_new.button("🔄 Nueva", use_container_width=True):
                     st.session_state.carrito = []
                     st.session_state.cliente_actual = None
                     st.session_state.ultimo_pdf = None
                     st.session_state.ultima_venta_id = None
                     st.rerun()
             
-            # Formulario de Pago (Solo si hay items y no hay venta finalizada aún)
+            # Formulario de Pago
             elif st.session_state.carrito:
                 with st.form("form_cobro"):
                     st.markdown("#### 💳 Detalles de Pago")
@@ -434,11 +487,11 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     banco_destino = st.selectbox("Cuenta Destino (Interno)", ["Caja General", "Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata"])
                     
                     st.markdown("---")
-                    enviar = st.form_submit_button("✅ CONFIRMAR Y FACTURAR", type="primary", use_container_width=True)
+                    enviar = st.form_submit_button(f"✅ CONFIRMAR Y FACTURAR", type="primary", use_container_width=True)
                 
                 if enviar:
                     if not st.session_state.cliente_actual:
-                        st.error("⚠️ Por favor selecciona un cliente antes de facturar.")
+                        st.error("⚠️ Por favor selecciona un cliente antes de facturar.", icon="⚠️")
                     else:
                         try:
                             # Preparar datos
@@ -488,7 +541,8 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                             st.error(f"Error procesando la venta: {e}")
 
 def tab_clientes(ws_cli):
-    st.markdown("### 👥 Gestión de Clientes (CRM)")
+    st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>👥</span> Gestión de Clientes (CRM)", unsafe_allow_html=True)
+    
     with st.container(border=True):
         st.markdown("#### ✨ Nuevo Cliente")
         with st.form("form_cliente"):
@@ -512,13 +566,13 @@ def tab_clientes(ws_cli):
                 else:
                     st.warning("Completa los campos obligatorios (*).")
     
-    st.markdown("#### Base de Datos")
+    st.markdown("---")
+    st.markdown("#### Base de Datos de Clientes")
     df = leer_datos(ws_cli)
     st.dataframe(df, use_container_width=True)
 
 def tab_gestion_capital(ws_cap, ws_gas):
-    st.markdown("### 💰 Gestión de Inversión y Gastos")
-    st.info("Aquí registras el dinero que entra como INVERSIÓN (Capital) y el dinero que sale como GASTO.")
+    st.markdown(f"### <span style='color:{COLOR_ACENTO}'>💰</span> Inversión y Gastos (Nexus Pro)", unsafe_allow_html=True)
 
     tab1, tab2 = st.tabs(["📉 Registrar Gasto/Egreso", "📈 Registrar Inversión/Capital"])
 
@@ -536,12 +590,12 @@ def tab_gestion_capital(ws_cap, ws_gas):
                 origen = st.selectbox("¿De dónde salió el dinero?", ["Caja General", "Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Caja Menor"])
                 fecha_gasto = st.date_input("Fecha Gasto", value=date.today())
 
-            if st.form_submit_button("🔴 Registrar Gasto"):
+            if st.form_submit_button("🔴 Registrar Gasto", type="primary"):
                 if monto > 0:
                     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     datos = [ts, str(fecha_gasto), tipo_gasto, categoria, descripcion, monto, "N/A", origen]
                     if escribir_fila(ws_gas, datos):
-                        st.success("Gasto registrado correctamente.")
+                        st.toast("Gasto registrado correctamente.", icon="📉")
                         time.sleep(1)
                         st.rerun()
                 else:
@@ -550,7 +604,7 @@ def tab_gestion_capital(ws_cap, ws_gas):
     # --- TAB INVERSIONES ---
     with tab2:
         st.markdown("#### Entrada de Dinero (Inversión)")
-        st.caption("Usa esto para la inversión inicial o inyecciones de dinero futuras.")
+        st.caption("Capital inicial o inyecciones de socios.")
         
         if ws_cap is None:
             st.error("Error: No se encontró la hoja 'Capital'.")
@@ -565,30 +619,29 @@ def tab_gestion_capital(ws_cap, ws_gas):
                     desc_inv = st.text_input("Descripción / Socio")
                     fecha_inv = st.date_input("Fecha Inversión", value=date.today())
 
-                if st.form_submit_button("🔵 Registrar Inversión"):
+                if st.form_submit_button("🔵 Registrar Inversión", type="primary"):
                     if monto_inv > 0:
                         id_cap = datetime.now().strftime("%Y%m%d%H%M")
                         datos_cap = [id_cap, str(fecha_inv), tipo_inv, monto_inv, destino, desc_inv]
                         if escribir_fila(ws_cap, datos_cap):
-                            st.success(f"Inversión de ${monto_inv:,.0f} registrada exitosamente.")
+                            st.toast(f"Inversión de ${monto_inv:,.0f} registrada.", icon="📈")
                             time.sleep(1)
                             st.rerun()
                     else:
                         st.error("El monto debe ser positivo.")
 
 def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
-    st.markdown("### ⚖️ Cuadre de Caja (Control Diario)")
-    st.markdown("Herramienta de auditoría para verificar el dinero físico y digital.")
+    st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>⚖️</span> Cuadre de Caja Diario", unsafe_allow_html=True)
 
     col_fecha, col_base = st.columns(2)
     fecha_analisis = col_fecha.date_input("📅 Fecha de Cuadre", value=date.today())
-    base_caja = col_base.number_input("🏦 Base de Caja (Dinero inicial en cajón)", value=200000.0, step=1000.0)
+    base_caja = col_base.number_input("🏦 Base de Caja (Dinero inicial)", value=200000.0, step=1000.0)
     
     # Cargar datos y filtrar
     df_v = leer_datos(ws_ven)
     df_g = leer_datos(ws_gas)
     
-    # Convertir fechas para comparar solo fecha (sin hora)
+    # Convertir fechas
     if not df_v.empty: df_v['Fecha_Dt'] = df_v['Fecha'].dt.date
     if not df_g.empty: df_g['Fecha_Dt'] = df_g['Fecha'].dt.date
 
@@ -598,34 +651,24 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     st.markdown("---")
 
     # --- SECCIÓN 1: CUADRE DE CAJA FÍSICA (EFECTIVO) ---
-    st.subheader("1. Cuadre de Efectivo (Cajón)")
+    st.subheader("1. Cuadre de Efectivo")
     
     # Cálculos Efectivo
-    # Entradas en Efectivo: Ventas donde Metodo es Efectivo
     ventas_efectivo = v_dia[v_dia['Metodo_Pago'] == 'Efectivo']['Total'].sum()
-    
-    # Salidas en Efectivo: Gastos donde Origen es Caja General o Caja Menor
     gastos_efectivo = g_dia[g_dia['Banco_Origen'].isin(['Caja General', 'Caja Menor', 'Efectivo'])]['Monto'].sum()
-    
-    # Dinero Teórico
     teorico_caja = base_caja + ventas_efectivo - gastos_efectivo
 
     col_res1, col_res2, col_res3 = st.columns(3)
     col_res1.metric("Base Inicial", f"${base_caja:,.0f}")
-    col_res1.caption("(+) Dinero al abrir")
-    
-    col_res2.metric("Ventas en Efectivo", f"${ventas_efectivo:,.0f}")
-    col_res2.caption("(+) Entradas por ventas")
-    
-    col_res3.metric("Gastos en Efectivo", f"${gastos_efectivo:,.0f}")
-    col_res3.caption("(-) Pagos con caja chica")
+    col_res2.metric("Ventas Efectivo", f"${ventas_efectivo:,.0f}")
+    col_res3.metric("Gastos Efectivo", f"${gastos_efectivo:,.0f}")
 
-    st.markdown(f"#### 💰 DEBE HABER EN EL CAJÓN: :green[${teorico_caja:,.0f}]")
+    st.markdown(f"<h3 style='text-align:center; color:{COLOR_PRIMARIO}'>💰 DEBE HABER EN CAJÓN: ${teorico_caja:,.0f}</h3>", unsafe_allow_html=True)
     
     # Auditoría
     with st.container(border=True):
-        st.markdown("**Auditoría de Cierre:** Cuente el dinero que realmente tiene.")
-        real_caja = st.number_input("Dinero contado en el cajón:", min_value=0.0, step=100.0, format="%.0f")
+        st.markdown("**Auditoría de Cierre:**")
+        real_caja = st.number_input("Dinero contado real:", min_value=0.0, step=100.0, format="%.0f")
         
         diferencia = real_caja - teorico_caja
         
@@ -640,8 +683,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     st.markdown("---")
 
     # --- SECCIÓN 2: CUADRE DIGITAL (BANCOS) ---
-    st.subheader("2. Cuadre de Bancos y Apps")
-    st.caption("Verifica tus apps (Nequi, DaviPlata) para confirmar estos ingresos.")
+    st.subheader("2. Cuadre Digital (Apps/Bancos)")
 
     medios_digitales = ["Nequi", "DaviPlata", "Bancolombia", "Davivienda", "Tarjeta D/C"]
     
@@ -649,7 +691,6 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     total_digital = 0
     
     for medio in medios_digitales:
-        # Ventas por este medio (se busca en Metodo o Banco Destino)
         mask = v_dia['Metodo_Pago'].astype(str).str.contains(medio, case=False) | v_dia['Banco_Destino'].astype(str).str.contains(medio, case=False)
         total_medio = v_dia[mask]['Total'].sum()
         
@@ -663,21 +704,22 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
             st.dataframe(pd.DataFrame(datos_digitales), hide_index=True, use_container_width=True)
             st.metric("Total Digital Esperado", f"${total_digital:,.0f}")
         with col_graf:
-            fig = px.pie(datos_digitales, names='Medio', values='Total Venta', title='Ingresos Digitales Hoy', hole=0.4)
+            fig = px.pie(datos_digitales, names='Medio', values='Total Venta', title='Ingresos Digitales', hole=0.5,
+                         color_discrete_sequence=[COLOR_PRIMARIO, COLOR_ACENTO, COLOR_SECUNDARIO, "#2c3e50"])
             fig.update_layout(height=250, margin=dict(t=30, b=0, l=0, r=0))
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No hubo ventas digitales hoy.")
 
 def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
-    st.markdown("## 📊 Dashboard Financiero & Gerencial")
-    st.markdown("El centro de control de tu inversión y utilidades.")
+    st.markdown(f"## <span style='color:{COLOR_PRIMARIO}'>📊</span> Dashboard Financiero Nexus Pro", unsafe_allow_html=True)
+    st.caption("Análisis de resultados y métricas clave.")
 
     # --- FILTROS GLOBALES ---
     with st.container(border=True):
         col_f1, col_f2, col_btn = st.columns([1, 1, 1])
-        f_inicio = col_f1.date_input("Fecha Inicio", value=date.today().replace(day=1))
-        f_fin = col_f2.date_input("Fecha Fin", value=date.today())
+        f_inicio = col_f1.date_input("Desde", value=date.today().replace(day=1))
+        f_fin = col_f2.date_input("Hasta", value=date.today())
         
         # Cargar Data
         df_v = leer_datos(ws_ven)
@@ -686,15 +728,15 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
 
         # Botón Exportar Excel
         with col_btn:
-            st.write("") # Espacio
             st.write("") 
-            if st.button("📥 Descargar Reporte Excel Completo", type="primary"):
+            st.write("") 
+            if st.button("📥 Descargar Reporte Excel", type="primary"):
                 excel_file = generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin)
                 if excel_file:
                     st.download_button(
-                        label="📄 Click para Guardar Excel",
+                        label="📄 Guardar Excel",
                         data=excel_file,
-                        file_name=f"Reporte_Financiero_{f_inicio}_{f_fin}.xlsx",
+                        file_name=f"NexusPro_Finanzas_{f_inicio}_{f_fin}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
 
@@ -708,14 +750,12 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     g_rango = df_g[(df_g['Fecha_Dt'] >= f_inicio) & (df_g['Fecha_Dt'] <= f_fin)] if not df_g.empty else pd.DataFrame()
 
     # --- CÁLCULOS KPI AVANZADOS ---
-    # 1. Ingresos y Costos
     ingresos = v_rango['Total'].sum() if not v_rango.empty else 0
     transacciones = len(v_rango)
     ticket_promedio = (ingresos / transacciones) if transacciones > 0 else 0
     
-    # 2. Desglose de Gastos
-    costos_directos = 0 # Mercancía
-    gastos_operativos = 0 # Arriendo, servicios
+    costos_directos = 0 
+    gastos_operativos = 0 
     
     if not g_rango.empty:
         mask_costo = g_rango['Categoria'].isin(['Compra de Mercancía', 'Costo de Venta'])
@@ -724,36 +764,34 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
 
     utilidad_bruta = ingresos - costos_directos
     utilidad_neta = utilidad_bruta - gastos_operativos
-    margen_bruto = (utilidad_bruta / ingresos * 100) if ingresos > 0 else 0
     margen_neto = (utilidad_neta / ingresos * 100) if ingresos > 0 else 0
 
-    # 3. Punto de Equilibrio (Simplified)
-    # Cuánto necesito vender para cubrir mis gastos operativos asumiendo el margen bruto actual
-    punto_equilibrio = (gastos_operativos / (margen_bruto/100)) if margen_bruto > 0 else 0
+    # Punto de Equilibrio (Simplified)
+    punto_equilibrio = gastos_operativos * 1.5 
 
     # --- VISUALIZACIÓN DE KPIs ---
-    st.markdown("### 1. Indicadores Clave de Desempeño (KPIs)")
+    st.markdown("### 1. Indicadores Clave (KPIs)")
     k1, k2, k3, k4, k5 = st.columns(5)
     
-    k1.metric("Ventas Totales", f"${ingresos:,.0f}", help="Ingreso bruto en el periodo")
-    k2.metric("Utilidad Neta (Ganancia)", f"${utilidad_neta:,.0f}", delta=f"{margen_neto:.1f}% Margen", delta_color="normal" if utilidad_neta > 0 else "inverse")
-    k3.metric("Ticket Promedio", f"${ticket_promedio:,.0f}", help="Valor promedio de cada compra")
+    k1.metric("Ventas Totales", f"${ingresos:,.0f}", help="Ingreso bruto")
+    k2.metric("Utilidad Neta", f"${utilidad_neta:,.0f}", delta=f"{margen_neto:.1f}% Margen")
+    k3.metric("Ticket Promedio", f"${ticket_promedio:,.0f}")
     k4.metric("Costos Mercancía", f"${costos_directos:,.0f}", delta="-Costo", delta_color="inverse")
     k5.metric("Gastos Operativos", f"${gastos_operativos:,.0f}", delta="-Gasto", delta_color="inverse")
 
     st.markdown("---")
 
-    # --- GRÁFICOS INTERACTIVOS (PLOTLY) ---
+    # --- GRÁFICOS INTERACTIVOS (PLOTLY - NUEVOS COLORES) ---
     col_g1, col_g2 = st.columns([2, 1])
 
     # Gráfico 1: Evolución de Ventas Diarias
     with col_g1:
-        st.subheader("📈 Tendencia de Ventas (Diario)")
+        st.subheader("📈 Tendencia de Ventas")
         if not v_rango.empty:
             v_diaria = v_rango.groupby('Fecha_Dt')['Total'].sum().reset_index()
             fig_line = px.line(v_diaria, x='Fecha_Dt', y='Total', markers=True, 
                                line_shape='spline', render_mode='svg')
-            fig_line.update_traces(line_color=COLOR_PRIMARIO, line_width=3)
+            fig_line.update_traces(line_color=COLOR_PRIMARIO, line_width=4, marker_color=COLOR_ACENTO)
             fig_line.update_layout(xaxis_title="Fecha", yaxis_title="Venta ($)", height=350)
             st.plotly_chart(fig_line, use_container_width=True)
         else:
@@ -761,10 +799,10 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
 
     # Gráfico 2: Estructura de Gastos (Sunburst o Donut)
     with col_g2:
-        st.subheader("💸 ¿En qué se va el dinero?")
+        st.subheader("💸 Gastos")
         if not g_rango.empty:
             fig_pie = px.pie(g_rango, values='Monto', names='Categoria', hole=0.4,
-                             color_discrete_sequence=px.colors.qualitative.Pastel)
+                             color_discrete_sequence=[COLOR_ACENTO, COLOR_PRIMARIO, COLOR_SECUNDARIO, "#95a5a6"])
             fig_pie.update_layout(height=350, showlegend=False)
             fig_pie.update_traces(textposition='inside', textinfo='percent+label')
             st.plotly_chart(fig_pie, use_container_width=True)
@@ -775,14 +813,12 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     
     # Gráfico 3: Top Productos Vendidos
     with col_g3:
-        st.subheader("🏆 Top Productos Vendidos")
+        st.subheader("🏆 Top Productos")
         if not v_rango.empty:
-            # Necesitamos parsear el string de items para contar productos individuales
-            # Esto es una aproximación basada en la estructura guardada
             items_list = []
             for idx, row in v_rango.iterrows():
                 try:
-                    items_str = row['Items'] # "Prod A (x1), Prod B (x2)"
+                    items_str = row['Items'] 
                     parts = items_str.split(", ")
                     for p in parts:
                         nombre = p.split(" (x")[0]
@@ -791,8 +827,8 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
             
             if items_list:
                 df_top = pd.DataFrame(items_list, columns=['Producto']).value_counts().reset_index(name='Cantidad').head(7)
-                fig_bar = px.bar(df_top, x='Cantidad', y='Producto', orientation='h', text='Cantidad',
-                                 color='Cantidad', color_continuous_scale='Greens')
+                fig_bar = px.bar(df_top, x='Cantidad', y='Producto', orientation='h', text='Cantidad')
+                fig_bar.update_traces(marker_color=COLOR_PRIMARIO, textposition='outside')
                 fig_bar.update_layout(yaxis={'categoryorder':'total ascending'}, height=300)
                 st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -801,8 +837,6 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
         st.subheader("⚖️ Salud Financiera")
         st.markdown(f"""
         **Punto de Equilibrio Estimado:** :blue[${punto_equilibrio:,.0f}]
-        
-        *Esto significa que necesitas vender ${punto_equilibrio:,.0f} en este periodo para no perder dinero (cubrir arriendo, nómina, etc).*
         """)
         
         delta_pe = ingresos - punto_equilibrio
@@ -810,16 +844,15 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
         
         st.progress(min(int(pct_cubierto), 100))
         if delta_pe > 0:
-            st.success(f"¡Estás en zona de GANANCIA por ${delta_pe:,.0f}!")
+            st.success(f"¡Zona de GANANCIA! Superávit: ${delta_pe:,.0f}")
         else:
-            st.error(f"Estás en zona de PÉRDIDA. Te faltan ${abs(delta_pe):,.0f} para cubrir costos fijos.")
+            st.warning(f"Zona de RIESGO. Faltan ${abs(delta_pe):,.0f}")
 
-    # --- ANÁLISIS DE RETORNO DE INVERSIÓN (ROI) HISTÓRICO ---
+    # --- ANÁLISIS ROI ---
     st.markdown("---")
-    st.subheader("🏦 Estado de la Inversión (Histórico Total)")
+    st.subheader("🏦 Estado de Inversión (Histórico)")
     
     total_invertido = df_c['Monto'].sum() if not df_c.empty else 0
-    # Utilidad histórica acumulada (Todas las ventas - Todos los gastos históricos)
     h_ventas = df_v['Total'].sum() if not df_v.empty else 0
     h_gastos = df_g['Monto'].sum() if not df_g.empty else 0
     utilidad_historica = h_ventas - h_gastos
@@ -829,17 +862,20 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     c_roi1, c_roi2 = st.columns([1, 2])
     with c_roi1:
         st.metric("Total Capital Invertido", f"${total_invertido:,.0f}")
-        st.metric("ROI (Retorno Inversión)", f"{roi:.1f}%", delta_color="normal" if roi > 0 else "off")
+        st.metric("ROI (Retorno)", f"{roi:.1f}%")
     
     with c_roi2:
         fig_waterfall = go.Figure(go.Waterfall(
             name = "Flujo", orientation = "v",
             measure = ["relative", "relative", "total"],
-            x = ["Inversión Inicial", "Utilidad Acumulada", "Valor Actual Neto"],
+            x = ["Inversión", "Utilidad Acumulada", "Valor Actual"],
             textposition = "outside",
             text = [f"${total_invertido/1e6:.1f}M", f"${utilidad_historica/1e6:.1f}M", f"${(total_invertido+utilidad_historica)/1e6:.1f}M"],
             y = [total_invertido, utilidad_historica, 0],
-            connector = {"line":{"color":"rgb(63, 63, 63)"}},
+            connector = {"line":{"color":"#333"}},
+            decreasing = {"marker":{"color":COLOR_ACENTO}},
+            increasing = {"marker":{"color":COLOR_PRIMARIO}},
+            totals = {"marker":{"color":COLOR_SECUNDARIO}}
         ))
         fig_waterfall.update_layout(title = "Evolución del Capital", height=300)
         st.plotly_chart(fig_waterfall, use_container_width=True)
@@ -850,18 +886,22 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
 def main():
     configurar_pagina()
     
-    # Sidebar Estilizado
+    # Sidebar Estilizado Nexus Pro
     with st.sidebar:
-        st.image("https://cdn-icons-png.flaticon.com/512/2171/2171991.png", width=100)
-        st.title("Bigotes y Patitas")
-        st.caption("Sistema ERP v5.0 PRO")
+        # Título y Branding
+        st.markdown(f"<h1 style='color:{COLOR_PRIMARIO}; text-align: center;'>Nexus Pro</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='color:{COLOR_TEXTO}; text-align: center; margin-top: -20px;'>Bigotes y Patitas</h4>", unsafe_allow_html=True)
+        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v5.0 PRO</span></center>", unsafe_allow_html=True)
+        
         st.markdown("---")
-        opcion = st.radio("Navegación", 
+        
+        opcion = st.radio("Menú Principal", 
             ["Punto de Venta", "Gestión de Clientes", "Inversión y Gastos", "Cuadre Diario (Caja)", "Finanzas & Resultados"],
             index=0
         )
         st.markdown("---")
-        st.info("💡 Tip: Realiza el cuadre diario al cerrar el local.")
+        with st.container(border=True):
+            st.caption("💡 Tip: Realiza el cuadre diario al cerrar el local.")
 
     ws_inv, ws_cli, ws_ven, ws_gas, ws_cap = conectar_google_sheets()
 
