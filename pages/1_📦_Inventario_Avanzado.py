@@ -23,44 +23,73 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS
+# --- ESTILOS CSS PERSONALIZADOS (CIAN #187f77 Y NARANJA #f5a641) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap');
+    
     html, body, [class*="css"] { font-family: 'Quicksand', sans-serif; }
+    
+    :root {
+        --primary-color: #187f77;
+        --accent-color: #f5a641;
+        --bg-light: #f0fdfc;
+    }
+
+    /* Títulos y Encabezados */
+    h1, h2, h3 { color: #187f77 !important; }
     
     /* Métricas */
     div[data-testid="metric-container"] {
         background: #ffffff;
         padding: 15px;
-        border-radius: 15px;
-        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        border-left: 5px solid #187f77;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
+    div[data-testid="metric-container"] label { color: #187f77; font-weight: 600; }
     
     /* Botones */
     .stButton>button {
-        border-radius: 10px;
-        font-weight: 600;
-        height: 3rem;
-    }
-    
-    /* Headers */
-    h1, h2, h3 { color: #831843; }
-    
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        background-color: #fce7f3;
         border-radius: 8px;
+        font-weight: 700;
+        border: 2px solid #187f77;
+        color: #187f77;
+        background-color: white;
+        transition: all 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #187f77;
+        color: white;
+        border-color: #187f77;
+    }
+    /* Botón Primario (Acciones Fuertes) */
+    div.stButton > button:focus:not(:active) {
+        border-color: #f5a641;
+        color: #f5a641;
+    }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] {
+        height: 45px;
+        background-color: #e0f2f1;
+        border-radius: 8px 8px 0 0;
         padding: 0 20px;
         font-weight: 600;
+        color: #187f77;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #831843 !important;
+        background-color: #187f77 !important;
         color: white !important;
     }
+    
+    /* Dataframe y Tablas */
+    div[data-testid="stDataFrame"] { border: 1px solid #e0f2f1; }
+    
+    /* Alertas y Mensajes */
+    .stAlert { background-color: #fff7ed; border: 1px solid #f5a641; color: #9a3412; }
+    
     </style>
 """, unsafe_allow_html=True)
 
@@ -82,7 +111,6 @@ def conectar_db():
         return None
 
 def get_worksheet_safe(sh, name, headers):
-    """Obtiene una hoja o la crea si no existe con las cabeceras exactas."""
     try:
         return sh.worksheet(name)
     except gspread.exceptions.WorksheetNotFound:
@@ -101,46 +129,45 @@ def clean_currency(x):
     return 0.0
 
 def cargar_datos_completos(sh):
-    # 1. Definir columnas exactas según tu requerimiento
+    # Columnas exactas requeridas
     cols_inv = ['ID_Producto', 'SKU_Proveedor', 'Nombre', 'Stock', 'Precio', 'Costo', 'Categoria']
     cols_ven = ['ID_Venta', 'Fecha', 'Cedula_Cliente', 'Nombre_Cliente', 'Tipo_Entrega', 'Direccion_Envio', 'Estado_Envio', 'Metodo_Pago', 'Banco_Destino', 'Total', 'Items']
     cols_prov = ['ID_Proveedor', 'Nombre_Proveedor', 'SKU_Proveedor', 'SKU_Interno', 'Factor_Pack', 'Ultima_Actualizacion', 'Email', 'Costo_Proveedor']
     cols_ord = ['ID_Orden', 'Proveedor', 'Fecha_Orden', 'Items_JSON', 'Total_Dinero', 'Estado', 'Fecha_Recepcion', 'Lead_Time_Real', 'Calificacion']
     cols_recep = ['Fecha_Recepcion', 'Folio_Factura', 'Proveedor', 'Fecha_Emision_Factura', 'Dias_Entrega', 'Total_Items', 'Total_Costo']
 
-    # 2. Obtener Hojas
+    # Obtener Hojas
     ws_inv = get_worksheet_safe(sh, "Inventario", cols_inv)
     ws_ven = get_worksheet_safe(sh, "Ventas", cols_ven)
     ws_prov = get_worksheet_safe(sh, "Maestro_Proveedores", cols_prov)
     ws_ord = get_worksheet_safe(sh, "Historial_Ordenes", cols_ord)
     ws_recep = get_worksheet_safe(sh, "Historial_Recepciones", cols_recep)
 
-    # 3. Convertir a DataFrames
+    # DataFrames
     df_inv = pd.DataFrame(ws_inv.get_all_records())
     df_ven = pd.DataFrame(ws_ven.get_all_records())
     df_prov = pd.DataFrame(ws_prov.get_all_records())
     df_ord = pd.DataFrame(ws_ord.get_all_records())
     
-    # 4. Normalización de Tipos de Datos (Limpieza)
+    # --- LIMPIEZA Y NORMALIZACIÓN ---
     
-    # Inventario
+    # 1. Inventario (Asegurar ID único es string)
     if not df_inv.empty:
-        # Asegurar columnas aunque estén vacías
         for c in cols_inv: 
             if c not in df_inv.columns: df_inv[c] = ""
-        
         df_inv['Stock'] = pd.to_numeric(df_inv['Stock'], errors='coerce').fillna(0)
         df_inv['Costo'] = df_inv['Costo'].apply(clean_currency)
         df_inv['Precio'] = df_inv['Precio'].apply(clean_currency)
         df_inv['ID_Producto'] = df_inv['ID_Producto'].astype(str).str.strip()
+        # PROTECCIÓN CONTRA DUPLICADOS EN LA HOJA DE INVENTARIO
+        df_inv.drop_duplicates(subset=['ID_Producto'], keep='first', inplace=True)
     else:
         df_inv = pd.DataFrame(columns=cols_inv)
 
-    # Proveedores
+    # 2. Proveedores
     if not df_prov.empty:
         for c in cols_prov:
             if c not in df_prov.columns: df_prov[c] = ""
-            
         df_prov['Costo_Proveedor'] = df_prov['Costo_Proveedor'].apply(clean_currency)
         df_prov['Factor_Pack'] = pd.to_numeric(df_prov['Factor_Pack'], errors='coerce').fillna(1)
         df_prov['SKU_Interno'] = df_prov['SKU_Interno'].astype(str).str.strip()
@@ -148,7 +175,7 @@ def cargar_datos_completos(sh):
     else:
         df_prov = pd.DataFrame(columns=cols_prov)
 
-    # Ordenes
+    # 3. Ordenes
     if not df_ord.empty:
         for c in cols_ord:
             if c not in df_ord.columns: df_ord[c] = ""
@@ -165,25 +192,21 @@ def cargar_datos_completos(sh):
     }
 
 # ==========================================
-# 3. LÓGICA DE NEGOCIO (PROCESAMIENTO)
+# 3. LÓGICA DE NEGOCIO (SIN DUPLICADOS)
 # ==========================================
 
 def procesar_inventario_avanzado(df_inv, df_ven, df_prov):
-    # 1. Calcular Velocidad de Ventas (Últimos 90 días)
+    # 1. Análisis de Ventas (90 días)
     if not df_ven.empty:
         df_ven['Fecha'] = pd.to_datetime(df_ven['Fecha'], errors='coerce')
         cutoff = datetime.now() - timedelta(days=90)
         ven_recent = df_ven[df_ven['Fecha'] >= cutoff]
         
-        # Desglosar items (asumiendo formato "Producto A, Producto B")
-        # Si tu formato Items es JSON en Ventas, habría que parsearlo. 
-        # Asumiremos texto simple separado por comas para compatibilidad general.
         stats = {}
         for _, row in ven_recent.iterrows():
             items_str = str(row.get('Items', ''))
             lista = items_str.split(',')
             for item in lista:
-                # Limpiar nombre (quitar cantidades entre paréntesis si las hay)
                 nombre_clean = item.split('(')[0].strip()
                 if nombre_clean:
                     stats[nombre_clean] = stats.get(nombre_clean, 0) + 1
@@ -192,54 +215,63 @@ def procesar_inventario_avanzado(df_inv, df_ven, df_prov):
     else:
         df_sales = pd.DataFrame(columns=['Nombre', 'Ventas_90d'])
 
-    # 2. Merge Inventario con Ventas
+    # 2. MERGE INVENTARIO + VENTAS (Mantiene Unicidad)
+    # Hacemos el merge por 'Nombre' o 'ID' según corresponda. 
+    # El df_inv YA tiene los duplicados eliminados en la función de carga.
     if not df_inv.empty and 'Nombre' in df_inv.columns:
         master = pd.merge(df_inv, df_sales, on='Nombre', how='left').fillna({'Ventas_90d': 0})
     else:
         master = df_inv.copy()
         master['Ventas_90d'] = 0
 
-    # 3. Métricas de Stock
+    # 3. Cálculos de Stock
     master['Velocidad_Diaria'] = master['Ventas_90d'] / 90
     master['Dias_Cobertura'] = np.where(master['Velocidad_Diaria'] > 0, master['Stock'] / master['Velocidad_Diaria'], 999)
     
-    # 4. Definir Estados
-    conditions = [
-        (master['Stock'] == 0),
-        (master['Dias_Cobertura'] <= 20), # Reordenar si hay para menos de 20 días
-        (master['Dias_Cobertura'] > 20)
-    ]
-    choices = ['💀 AGOTADO', '🚨 Pedir', '✅ OK']
-    master['Estado_Stock'] = np.select(conditions, choices, default='✅ OK')
+    master['Estado_Stock'] = np.select(
+        [master['Stock'] == 0, master['Dias_Cobertura'] <= 20, master['Dias_Cobertura'] > 20],
+        ['💀 AGOTADO', '🚨 Pedir', '✅ OK'], default='✅ OK'
+    )
 
-    # 5. Calcular Sugerido (Para cubrir 45 días)
     master['Stock_Objetivo'] = master['Velocidad_Diaria'] * 45
     master['Faltante_Unidades'] = (master['Stock_Objetivo'] - master['Stock']).clip(lower=0)
 
-    # 6. Merge con Proveedores (Cruce por ID_Producto = SKU_Interno)
+    # 4. TRATAMIENTO DE PROVEEDORES (LA SOLUCIÓN A TU PROBLEMA)
+    # Creamos dos dataframes:
+    # A) master_unico: Para ver la base de datos limpia (1 fila por producto).
+    #    Si hay varios proveedores, tomamos el más económico o el primero.
+    # B) master_buy: Para generar órdenes (puede tener múltiples filas si hay varios proveedores).
+
     if not df_prov.empty:
-        # Left join para traer datos del proveedor principal
-        master_buy = pd.merge(master, df_prov, left_on='ID_Producto', right_on='SKU_Interno', how='left')
+        # Paso clave: Ordenar proveedores por costo (ascendente) y quedarse con el primero por SKU_Interno
+        # Esto nos da el "Mejor Proveedor" para la vista resumida
+        df_prov_unico = df_prov.sort_values('Costo_Proveedor', ascending=True).drop_duplicates(subset=['SKU_Interno'], keep='first')
         
-        # Llenar nulos para productos sin proveedor asignado
-        master_buy['Nombre_Proveedor'] = master_buy['Nombre_Proveedor'].fillna('Genérico')
-        master_buy['Factor_Pack'] = master_buy['Factor_Pack'].fillna(1).replace(0, 1)
-        master_buy['Costo_Proveedor'] = np.where(master_buy['Costo_Proveedor'] > 0, master_buy['Costo_Proveedor'], master_buy['Costo'])
+        # Merge para la vista ÚNICA (Tablas de Inventario y Base de Datos)
+        master_unico = pd.merge(master, df_prov_unico, left_on='ID_Producto', right_on='SKU_Interno', how='left')
+        
+        # Merge para la vista de COMPRAS (Permite ver todas las opciones)
+        master_buy = pd.merge(master, df_prov, left_on='ID_Producto', right_on='SKU_Interno', how='left')
     else:
+        master_unico = master.copy()
         master_buy = master.copy()
-        master_buy['Nombre_Proveedor'] = 'Genérico'
-        master_buy['Factor_Pack'] = 1
-        master_buy['Costo_Proveedor'] = master_buy['Costo']
-        master_buy['Email'] = ''
+        for df in [master_unico, master_buy]:
+            df['Nombre_Proveedor'] = 'Genérico'
+            df['Factor_Pack'] = 1
+            df['Costo_Proveedor'] = df['Costo']
+            df['Email'] = ''
 
-    # 7. Calcular Cajas
-    master_buy['Cajas_Sugeridas'] = np.ceil(master_buy['Faltante_Unidades'] / master_buy['Factor_Pack'])
-    master_buy['Costo_Total_Sugerido'] = master_buy['Cajas_Sugeridas'] * master_buy['Factor_Pack'] * master_buy['Costo_Proveedor']
+    # Limpieza final de Nulos
+    for df in [master_unico, master_buy]:
+        df['Nombre_Proveedor'] = df['Nombre_Proveedor'].fillna('Sin Asignar')
+        df['Factor_Pack'] = df['Factor_Pack'].fillna(1).replace(0, 1)
+        df['Costo_Proveedor'] = np.where(df['Costo_Proveedor'] > 0, df['Costo_Proveedor'], df['Costo'])
+        df['Cajas_Sugeridas'] = np.ceil(df['Faltante_Unidades'] / df['Factor_Pack'])
 
-    return master, master_buy
+    return master_unico, master_buy
 
 # ==========================================
-# 4. UTILS: CORREO Y WHATSAPP
+# 4. UTILS: COMUNICACIÓN
 # ==========================================
 
 def enviar_correo(destinatario, proveedor, df_orden):
@@ -250,26 +282,38 @@ def enviar_correo(destinatario, proveedor, df_orden):
         sender_email = st.secrets["email"]["sender_email"]
         sender_password = st.secrets["email"]["sender_password"]
         
-        # Crear HTML
         filas = ""
         total = 0
         for _, row in df_orden.iterrows():
-            subtotal = row['Cajas_Sugeridas'] * row['Factor_Pack'] * row['Costo_Proveedor']
-            total += subtotal
-            filas += f"<tr><td>{row['Nombre']}</td><td style='text-align:center'>{int(row['Cajas_Sugeridas'])}</td><td style='text-align:right'>${subtotal:,.0f}</td></tr>"
+            sub = row['Cajas_Sugeridas'] * row['Factor_Pack'] * row['Costo_Proveedor']
+            total += sub
+            filas += f"""<tr style="border-bottom:1px solid #ddd;">
+                <td style="padding:8px;">{row['Nombre']}</td>
+                <td style="padding:8px;text-align:center;">{int(row['Cajas_Sugeridas'])}</td>
+                <td style="padding:8px;text-align:right;">${sub:,.0f}</td>
+            </tr>"""
             
         html = f"""
-        <h2>Pedido para {proveedor}</h2>
-        <table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse; width:100%">
-            <tr style="background:#f3f4f6"><th>Producto</th><th>Cajas</th><th>Subtotal</th></tr>
-            {filas}
-            <tr><td colspan="2"><b>TOTAL</b></td><td style='text-align:right'><b>${total:,.0f}</b></td></tr>
-        </table>
-        <p>Favor confirmar recibido y fecha de entrega. Gracias.</p>
+        <div style="font-family:sans-serif; color:#333;">
+            <h2 style="color:#187f77;">🐾 Bigotes y Paticas | Solicitud de Pedido</h2>
+            <p>Hola <b>{proveedor}</b>, adjunto orden de compra:</p>
+            <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <tr style="background:#187f77; color:white;">
+                    <th style="padding:10px; text-align:left;">Producto</th>
+                    <th style="padding:10px;">Cajas</th>
+                    <th style="padding:10px; text-align:right;">Subtotal</th>
+                </tr>
+                {filas}
+                <tr>
+                    <td colspan="2" style="padding:10px; text-align:right;"><b>TOTAL ESTIMADO:</b></td>
+                    <td style="padding:10px; text-align:right; color:#f5a641; font-size:18px;"><b>${total:,.0f}</b></td>
+                </tr>
+            </table>
+        </div>
         """
         
         msg = MIMEMultipart()
-        msg['Subject'] = f"Pedido Bigotes y Paticas - {date.today()}"
+        msg['Subject'] = f"Pedido Bigotes y Paticas ({date.today()})"
         msg['From'] = sender_email
         msg['To'] = destinatario
         msg.attach(MIMEText(html, 'html'))
@@ -286,12 +330,12 @@ def enviar_correo(destinatario, proveedor, df_orden):
 def link_whatsapp(numero, proveedor, df_orden):
     if not numero: return None
     total = 0
-    txt = f"Hola *{proveedor}*, pedido de Bigotes:\n"
+    txt = f"👋 Hola *{proveedor}*, pedido de *Bigotes y Paticas* 🐾:\n\n"
     for _, row in df_orden.iterrows():
         sub = row['Cajas_Sugeridas'] * row['Factor_Pack'] * row['Costo_Proveedor']
         total += sub
-        txt += f"📦 {int(row['Cajas_Sugeridas'])}cj {row['Nombre']}\n"
-    txt += f"\n💰 Total: ${total:,.0f}"
+        txt += f"📦 {int(row['Cajas_Sugeridas'])} cj - {row['Nombre']}\n"
+    txt += f"\n💰 *Total Aprox: ${total:,.0f}*\nQuedamos atentos. ¡Gracias!"
     return f"https://wa.me/{numero}?text={quote(txt)}"
 
 # ==========================================
@@ -303,106 +347,130 @@ def main():
     if not sh: return
 
     # Carga Inicial
-    with st.spinner('🔄 Sincronizando datos con Google Sheets...'):
+    with st.spinner('🐾 Sincronizando sistema Nexus...'):
         data = cargar_datos_completos(sh)
-        # Procesamiento
-        master_stock, master_buy = procesar_inventario_avanzado(data['df_inv'], data['df_ven'], data['df_prov'])
+        # Procesamiento: master_unico (para ver), master_buy (para comprar)
+        master_unico, master_buy = procesar_inventario_avanzado(data['df_inv'], data['df_ven'], data['df_prov'])
 
-    st.title("🐾 Bigotes & Paticas | Nexus Pro")
+    # HEADER
+    st.title("🐾 Bigotes & Paticas | Nexus System")
+    st.markdown(f"**Fecha Sistema:** {date.today()} | **Usuario:** Admin")
 
-    # KPIs Principales
+    # KPIs (Estilo Cian/Naranja)
     k1, k2, k3, k4 = st.columns(4)
-    valor_inv = (master_stock['Stock'] * master_stock['Costo']).sum()
-    agotados = master_stock[master_stock['Estado_Stock'] == '💀 AGOTADO'].shape[0]
+    valor_inv = (master_unico['Stock'] * master_unico['Costo']).sum()
+    agotados = master_unico[master_unico['Estado_Stock'] == '💀 AGOTADO'].shape[0]
     
-    k1.metric("Valor Inventario", f"${valor_inv:,.0f}")
-    k2.metric("Referencias Agotadas", agotados, delta="Crítico" if agotados > 0 else "Todo Bien", delta_color="inverse")
-    k3.metric("Total Referencias", len(master_stock))
-    k4.metric("Fecha Sistema", str(date.today()))
+    k1.metric("💰 Valor Inventario", f"${valor_inv:,.0f}")
+    k2.metric("⚠️ Referencias Agotadas", agotados, delta="Atención Inmediata" if agotados > 0 else "Stock Saludable", delta_color="inverse")
+    k3.metric("📦 Total Referencias", len(master_unico)) # ¡AHORA SÍ DARÁ EL NÚMERO REAL SIN REPETIDOS!
+    k4.metric("📉 Tasa Venta (90d)", f"{int(master_unico['Ventas_90d'].sum())} unds")
 
     # TABS
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📊 Inventario Visual", 
-        "🛒 Generar Ordenes", 
-        "📥 Bodega & Recepción", 
-        "⚙️ Base de Datos"
-    ])
+    tabs = st.tabs(["📊 Tablero Visual", "🛒 Generar Pedidos", "📥 Recepción Bodega", "💾 Base de Datos Maestra"])
 
-    # --- TAB 1: VISUALIZACIÓN ---
-    with tab1:
-        st.subheader("Estado Actual del Inventario")
-        col_graf, col_data = st.columns([2, 1])
+    # --- TAB 1: VISUALIZACIÓN (USA MASTER_UNICO) ---
+    with tabs[0]:
+        col_g1, col_g2 = st.columns([2, 1])
         
-        with col_graf:
-            fig = px.treemap(master_stock, path=['Categoria', 'Estado_Stock', 'Nombre'], values='Stock',
-                             color='Estado_Stock', color_discrete_map={'💀 AGOTADO':'red', '🚨 Pedir':'orange', '✅ OK':'green'},
-                             title="Mapa de Calor de Stock por Categoría")
-            st.plotly_chart(fig, use_container_width=True)
+        with col_g1:
+            st.subheader("Mapa de Calor del Inventario")
+            # Treemap con los colores corporativos
+            if not master_unico.empty:
+                fig = px.treemap(
+                    master_unico[master_unico['Stock']>0], 
+                    path=['Categoria', 'Estado_Stock', 'Nombre'], 
+                    values='Stock',
+                    color='Estado_Stock', 
+                    color_discrete_map={'💀 AGOTADO':'#f5a641', '🚨 Pedir':'#fcd34d', '✅ OK':'#187f77'},
+                    title="Distribución de Stock"
+                )
+                fig.update_layout(margin=dict(t=30, l=10, r=10, b=10))
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No hay datos de stock para graficar.")
+
+        with col_g2:
+            st.subheader("🔥 Top 5 Más Vendidos")
+            top = master_unico.sort_values('Ventas_90d', ascending=False).head(5)
+            st.dataframe(top[['Nombre', 'Stock', 'Ventas_90d']], hide_index=True, use_container_width=True)
             
-        with col_data:
-            st.write("📋 **Productos Críticos**")
-            criticos = master_stock[master_stock['Estado_Stock'] != '✅ OK'][['ID_Producto','Nombre', 'Stock', 'Estado_Stock']]
-            st.dataframe(criticos, use_container_width=True, hide_index=True)
+            st.markdown("---")
+            st.subheader("🚨 Alertas de Stock")
+            criticos = master_unico[master_unico['Estado_Stock'] != '✅ OK'][['Nombre', 'Stock', 'Estado_Stock']]
+            st.dataframe(criticos, hide_index=True, use_container_width=True)
 
-    # --- TAB 2: GENERAR ORDENES (FLUJO 1) ---
-    with tab2:
-        st.subheader("Generador de Pedidos Inteligente")
+    # --- TAB 2: COMPRAS (USA MASTER_BUY PARA VER OPCIONES) ---
+    with tabs[1]:
+        st.subheader("🛒 Gestión de Proveedores y Pedidos")
         
-        # 1. Seleccionar Proveedor
+        # 1. Selector Proveedor
         provs = sorted(master_buy['Nombre_Proveedor'].unique().tolist())
-        sel_prov = st.selectbox("Seleccionar Proveedor:", provs)
+        sel_prov = st.selectbox("👉 Selecciona Proveedor:", provs)
         
-        # 2. Datos Automáticos (Filtrados)
+        # 2. Filtrar
         df_prov_active = master_buy[master_buy['Nombre_Proveedor'] == sel_prov].copy()
         
-        # 3. Selector Manual de Productos
-        with st.expander("➕ Agregar producto manual (que no está sugerido)"):
-            all_products = master_buy['Nombre'].unique().tolist()
-            add_prods = st.multiselect("Buscar producto:", all_products)
+        # 3. Agregar Manualmente
+        with st.expander("➕ Agregar productos adicionales a esta orden"):
+            # Usamos master_unico para la lista de búsqueda (para no ver repetidos en el dropdown)
+            all_products = master_unico['Nombre'].unique().tolist()
+            add_prods = st.multiselect("Buscar en catálogo completo:", all_products)
+            
             if add_prods:
-                # Buscar filas de los manuales (priorizando el proveedor actual si existe, si no genérico)
-                manual_rows = master_buy[master_buy['Nombre'].isin(add_prods)].copy()
-                # Forzar que aparezcan con al menos 1 caja
-                manual_rows['Cajas_Sugeridas'] = manual_rows['Cajas_Sugeridas'].replace(0, 1)
-                # Combinar
+                # Buscamos en master_buy para traer datos del proveedor actual si existen, o genéricos
+                manual_rows = master_buy[
+                    (master_buy['Nombre'].isin(add_prods)) & 
+                    ((master_buy['Nombre_Proveedor'] == sel_prov) | (master_buy['Nombre_Proveedor'] == 'Genérico'))
+                ].copy()
+                # Priorizar proveedor actual eliminando duplicados si salió genérico también
+                manual_rows = manual_rows.sort_values('Nombre_Proveedor').drop_duplicates(subset=['ID_Producto'], keep='first')
+                manual_rows['Cajas_Sugeridas'] = 1
+                
                 df_editor_source = pd.concat([df_prov_active[df_prov_active['Cajas_Sugeridas']>0], manual_rows]).drop_duplicates(subset=['ID_Producto'])
             else:
                 df_editor_source = df_prov_active[df_prov_active['Cajas_Sugeridas'] > 0]
 
-        # 4. Editor de Orden
+        # 4. Editor
         if df_editor_source.empty:
-            st.info("No hay sugerencias automáticas para este proveedor. Agrega productos manualmente.")
+            st.info(f"El sistema no sugiere pedidos automáticos para {sel_prov}. Agrega productos manualmente arriba.")
             orden_final = pd.DataFrame()
         else:
-            st.write("Verifica las cantidades antes de procesar:")
+            st.markdown("##### 📝 Confirmar Cantidades")
             orden_final = st.data_editor(
                 df_editor_source[['ID_Producto', 'Nombre', 'Stock', 'Cajas_Sugeridas', 'Factor_Pack', 'Costo_Proveedor']],
                 column_config={
-                    "Cajas_Sugeridas": st.column_config.NumberColumn("Cajas a Pedir", min_value=1, step=1),
-                    "Costo_Proveedor": st.column_config.NumberColumn("Costo Pack", format="$%.2f"),
-                    "ID_Producto": st.column_config.TextColumn("ID", disabled=True),
-                    "Nombre": st.column_config.TextColumn("Producto", disabled=True),
+                    "Cajas_Sugeridas": st.column_config.NumberColumn("Cajas", min_value=1, step=1),
+                    "Costo_Proveedor": st.column_config.NumberColumn("Costo Pack", format="$%.0f"),
+                    "ID_Producto": st.column_config.TextColumn("SKU", disabled=True),
+                    "Nombre": st.column_config.TextColumn("Producto", disabled=True, width="large"),
                 },
                 hide_index=True,
                 use_container_width=True,
                 key="editor_orden"
             )
 
-        # 5. Acciones de Guardado
+        # 5. Acciones
         if not orden_final.empty:
             total_orden = (orden_final['Cajas_Sugeridas'] * orden_final['Factor_Pack'] * orden_final['Costo_Proveedor']).sum()
-            st.metric("Total Orden Estimada", f"${total_orden:,.0f}")
+            
+            st.markdown(f"""
+            <div style="background-color:#e0f2f1; padding:15px; border-radius:10px; border:1px solid #187f77; text-align:right;">
+                <span style="font-size:18px; color:#187f77;">Total Estimado Orden:</span> 
+                <span style="font-size:24px; font-weight:bold; color:#f5a641;">${total_orden:,.0f}</span>
+            </div>
+            """, unsafe_allow_html=True)
             
             c1, c2, c3 = st.columns(3)
             email_prov = df_prov_active['Email'].iloc[0] if not df_prov_active.empty else ""
             
             with c1:
-                dest = st.text_input("Email Destino", value=email_prov)
-                if st.button("📧 Enviar y Guardar"):
+                dest = st.text_input("Email Proveedor", value=email_prov)
+                if st.button("📧 Enviar Correo Oficial", use_container_width=True):
                     ok, msg = enviar_correo(dest, sel_prov, orden_final)
                     if ok:
                         guardar_orden(data['ws_ord'], sel_prov, orden_final, total_orden)
-                        st.success("Orden enviada y guardada exitosamente.")
+                        st.success("¡Pedido enviado y guardado!")
                         time.sleep(2)
                         st.rerun()
                     else:
@@ -410,167 +478,116 @@ def main():
             
             with c2:
                 tel = st.text_input("WhatsApp (Solo números)", placeholder="57300...")
-                if st.button("📱 Link WhatsApp + Guardar"):
+                if st.button("📱 Generar Link WhatsApp", use_container_width=True):
                     link = link_whatsapp(tel, sel_prov, orden_final)
                     if link:
                         guardar_orden(data['ws_ord'], sel_prov, orden_final, total_orden)
-                        st.markdown(f"[Haz click para abrir WhatsApp]({link})", unsafe_allow_html=True)
-                        st.success("Orden guardada. Abre el link arriba.")
+                        st.markdown(f"<a href='{link}' target='_blank' style='display:block; text-align:center; background:#25D366; color:white; padding:10px; border-radius:5px; text-decoration:none;'>👉 Abrir WhatsApp</a>", unsafe_allow_html=True)
             
             with c3:
                 st.write("")
                 st.write("")
-                if st.button("💾 Solo Guardar (Sin Enviar)"):
+                if st.button("💾 Guardar sin Enviar", use_container_width=True):
                     guardar_orden(data['ws_ord'], sel_prov, orden_final, total_orden)
-                    st.success("Orden guardada en Historial.")
-                    time.sleep(2)
+                    st.success("Guardado en historial.")
+                    time.sleep(1)
                     st.rerun()
 
-    # --- TAB 3: RECEPCIÓN (FLUJO 2) ---
-    with tab3:
-        st.subheader("Recepción de Mercancía (Bodega)")
+    # --- TAB 3: RECEPCIÓN ---
+    with tabs[2]:
+        st.subheader("📥 Recepción de Mercancía")
         
-        # Cargar Ordenes Pendientes
         pendientes = data['df_ord'][data['df_ord']['Estado'] == 'Pendiente']
         
         if pendientes.empty:
-            st.success("¡Todo al día! No hay órdenes pendientes de recepción.")
+            st.success("✅ Todo limpio. No hay mercancía pendiente por llegar.")
         else:
-            orden_selec = st.selectbox("Seleccionar Orden Pendiente:", 
-                                       pendientes['ID_Orden'] + " | " + pendientes['Proveedor'] + " | $" + pendientes['Total_Dinero'].astype(str))
+            opciones = pendientes['ID_Orden'] + " | " + pendientes['Proveedor'] + " | $" + pendientes['Total_Dinero'].astype(str)
+            orden_selec = st.selectbox("Seleccionar Orden Pendiente:", opciones)
             
             if orden_selec:
-                id_orden_act = orden_selec.split(" | ")[0]
-                row_orden = pendientes[pendientes['ID_Orden'] == id_orden_act].iloc[0]
+                id_act = orden_selec.split(" | ")[0]
+                row_orden = pendientes[pendientes['ID_Orden'] == id_act].iloc[0]
                 
-                st.info(f"Recibiendo Orden: **{id_orden_act}** del proveedor **{row_orden['Proveedor']}**")
-                
-                # Mostrar Items Esperados
+                # Mostrar items
                 try:
-                    items_dict = json.loads(row_orden['Items_JSON'])
-                    df_items_esp = pd.DataFrame(items_dict)
-                    st.table(df_items_esp[['ID_Producto', 'Nombre', 'Cajas_Sugeridas']])
+                    items = json.loads(row_orden['Items_JSON'])
+                    st.table(pd.DataFrame(items)[['Nombre', 'Cajas_Sugeridas']])
                 except:
-                    st.error("Error al leer JSON de items.")
-                    df_items_esp = pd.DataFrame()
+                    st.error("Error leyendo detalles.")
+                    items = []
 
-                st.markdown("---")
-                st.write("📝 **Datos de Factura Real**")
-                
-                col_r1, col_r2, col_r3 = st.columns(3)
-                folio_factura = col_r1.text_input("Folio / Número Factura")
-                fecha_emision = col_r2.date_input("Fecha Emisión Factura")
-                costo_real = col_r3.number_input("Costo Total Factura", min_value=0.0)
-                
-                confirmar = st.checkbox("Confirmo que he contado la mercancía física y coincide (o ajustaré stock manual).")
-                
-                if st.button("✅ PROCESAR ENTRADA DE MERCANCÍA", type="primary", disabled=not confirmar):
-                    with st.spinner("Actualizando Inventario y Cerrando Orden..."):
-                        # 1. Calcular Lead Time
-                        fecha_orden = pd.to_datetime(row_orden['Fecha_Orden']).date()
-                        dias_entrega = (date.today() - fecha_orden).days
-                        
-                        # 2. Actualizar Inventario (Grave Loop)
-                        logs = []
-                        for item in items_dict:
-                            prod_id = item['ID_Producto']
-                            cajas = float(item['Cajas_Sugeridas'])
-                            # Necesitamos saber el factor pack para sumar unidades
-                            # Buscamos en el dataframe maestro cargado
-                            info_prod = master_buy[master_buy['ID_Producto'] == prod_id]
-                            if not info_prod.empty:
-                                factor = float(info_prod['Factor_Pack'].values[0])
-                                unidades_sumar = cajas * factor
+                with st.form("form_recepcion"):
+                    c_f1, c_f2 = st.columns(2)
+                    folio = c_f1.text_input("Número de Factura Física")
+                    fecha_fac = c_f2.date_input("Fecha de Factura")
+                    
+                    if st.form_submit_button("✅ INGRESAR AL INVENTARIO"):
+                        with st.spinner("Actualizando stock..."):
+                            # 1. Loop actualización
+                            log_txt = []
+                            for it in items:
+                                # Buscar factor pack en master_unico para convertir cajas a unidades
+                                prod_info = master_unico[master_unico['ID_Producto'] == it['ID_Producto']]
+                                factor = prod_info['Factor_Pack'].values[0] if not prod_info.empty else 1
+                                cant_und = float(it['Cajas_Sugeridas']) * factor
                                 
-                                # Actualizar GSheets (Función Auxiliar)
-                                exito_upd = actualizar_stock_gsheets(data['ws_inv'], prod_id, unidades_sumar)
-                                if exito_upd:
-                                    logs.append(f"✅ {prod_id}: +{unidades_sumar} unds")
-                                else:
-                                    logs.append(f"❌ {prod_id}: Error al buscar ID")
-                        
-                        # 3. Guardar en Historial Recepciones
-                        nueva_recepcion = [
-                            str(date.today()),          # Fecha_Recepcion
-                            folio_factura,              # Folio_Factura
-                            row_orden['Proveedor'],     # Proveedor
-                            str(fecha_emision),         # Fecha_Emision
-                            dias_entrega,               # Dias_Entrega
-                            len(items_dict),            # Total_Items
-                            costo_real                  # Total_Costo
-                        ]
-                        data['ws_recep'].append_row(nueva_recepcion)
-                        
-                        # 4. Actualizar Estado Orden a "Recibido"
-                        # Buscar la celda del ID y actualizar fila
-                        cell = data['ws_ord'].find(id_orden_act)
-                        if cell:
-                            # Asumiendo orden columnas: ID, Prov, Fecha, Items, Total, ESTADO(6), FECHA_RECEP(7), LEAD(8)
-                            data['ws_ord'].update_cell(cell.row, 6, "Recibido")
-                            data['ws_ord'].update_cell(cell.row, 7, str(date.today()))
-                            data['ws_ord'].update_cell(cell.row, 8, dias_entrega)
-                        
-                        st.success("¡Recepción Completada!")
-                        st.write("Log de Actualización:")
-                        st.write(logs)
-                        time.sleep(3)
-                        st.rerun()
+                                # Actualizar GSheet
+                                actualizar_stock_gsheets(data['ws_inv'], it['ID_Producto'], cant_und)
+                                log_txt.append(f"{it['Nombre']}: +{cant_und} unds")
+                            
+                            # 2. Guardar Recepción
+                            row_recep = [str(date.today()), folio, row_orden['Proveedor'], str(fecha_fac), 0, len(items), row_orden['Total_Dinero']]
+                            data['ws_recep'].append_row(row_recep)
+                            
+                            # 3. Cerrar Orden
+                            cell = data['ws_ord'].find(id_act)
+                            data['ws_ord'].update_cell(cell.row, 6, "Recibido") # Estado
+                            data['ws_ord'].update_cell(cell.row, 7, str(date.today())) # Fecha Recep
+                            
+                            st.success("¡Inventario actualizado correctamente!")
+                            st.write(log_txt)
+                            time.sleep(3)
+                            st.rerun()
 
-    # --- TAB 4: DATOS RAW ---
-    with tab4:
-        st.dataframe(master_buy)
+    # --- TAB 4: BASE DE DATOS (AQUÍ ESTÁ LA SOLUCIÓN VISUAL) ---
+    with tabs[3]:
+        st.subheader("💾 Base de Datos Unificada")
+        st.markdown("""
+        <div style="background-color:#e0f2f1; padding:10px; border-radius:5px; border-left:4px solid #187f77; margin-bottom:15px;">
+            <b>ℹ️ Nota:</b> Esta vista muestra <b>referencias únicas</b>. Si un producto tiene múltiples proveedores, 
+            aquí se muestra el proveedor principal (menor costo). Para ver todos los proveedores, ve a la pestaña "Generar Pedidos".
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Mostramos master_unico que garantiza 1 fila por ID_Producto
+        st.dataframe(
+            master_unico[['ID_Producto', 'Nombre', 'Stock', 'Costo', 'Precio', 'Nombre_Proveedor', 'Costo_Proveedor', 'Estado_Stock']],
+            use_container_width=True,
+            hide_index=True
+        )
 
 # ==========================================
-# 6. FUNCIONES AUXILIARES DE ESCRITURA
+# 6. FUNCIONES DE ESCRITURA
 # ==========================================
 
 def guardar_orden(ws_ord, proveedor, df_orden, total):
-    """Guarda la orden generada en la hoja Historial_Ordenes"""
-    # Preparar JSON para la columna Items_JSON
     items_list = df_orden[['ID_Producto', 'Nombre', 'Cajas_Sugeridas', 'Costo_Proveedor']].to_dict('records')
-    items_json = json.dumps(items_list)
-    
     id_unico = f"ORD-{uuid.uuid4().hex[:6].upper()}"
-    
-    # Columnas: ID_Orden, Proveedor, Fecha_Orden, Items_JSON, Total_Dinero, Estado, Fecha_Recepcion, Lead_Time_Real, Calificacion
-    fila = [
-        id_unico,
-        proveedor,
-        str(date.today()),
-        items_json,
-        total,
-        "Pendiente",
-        "", # Fecha Recep vacía
-        "", # Lead Time vacío
-        ""  # Calificacion vacía
-    ]
+    fila = [id_unico, proveedor, str(date.today()), json.dumps(items_list), total, "Pendiente", "", "", ""]
     ws_ord.append_row(fila)
 
 def actualizar_stock_gsheets(ws_inv, id_producto, unidades_sumar):
-    """Busca el ID en la hoja Inventario y suma las unidades a la columna Stock"""
     try:
-        # Buscar la celda que contiene el ID
-        cell = ws_inv.find(id_producto)
+        cell = ws_inv.find(str(id_producto))
         if cell:
-            # Asumimos que Stock es la columna 4 (D) según tu estructura:
-            # ID(1), SKU(2), Nombre(3), Stock(4), ...
+            # Asumiendo columna 4 es Stock (ID, SKU, Nombre, STOCK...)
             col_stock = 4 
-            stock_actual_val = ws_inv.cell(cell.row, col_stock).value
-            
-            # Limpiar valor actual
-            try:
-                stock_actual = float(stock_actual_val)
-            except:
-                stock_actual = 0.0
-            
-            nuevo_stock = stock_actual + unidades_sumar
-            ws_inv.update_cell(cell.row, col_stock, nuevo_stock)
-            return True
-        else:
-            return False
+            val_act = ws_inv.cell(cell.row, col_stock).value
+            nuevo = float(val_act if val_act else 0) + unidades_sumar
+            ws_inv.update_cell(cell.row, col_stock, nuevo)
     except Exception as e:
-        print(f"Error update gsheets: {e}")
-        return False
+        print(f"Error stock: {e}")
 
 if __name__ == "__main__":
     main()
