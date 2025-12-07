@@ -281,6 +281,7 @@ def procesar_inteligencia(df_inv, df_ven, df_prov):
     # Merge Proveedores (Cruce Avanzado con SKU_Interno)
     if not df_prov.empty:
         # Hacemos merge usando SKU_Interno de la tabla de proveedores y ID_Producto del inventario
+        # NOTA: Esto genera un "uno-a-muchos" si hay múltiples proveedores para un producto
         master_buy = pd.merge(master_inv, df_prov, left_on='ID_Producto', right_on='SKU_Interno', how='left')
         
         # Priorizar datos del proveedor si existen, sino usar los genéricos
@@ -493,7 +494,7 @@ def main():
             else:
                 st.success("¡Todo se mueve!")
 
-    # TAB 2: PEDIDOS (CORE CON MANUAL ADD)
+    # TAB 2: PEDIDOS (CORE CON MANUAL ADD FIX)
     with tabs[1]:
         st.subheader("🛒 Crear Órdenes de Compra Inteligentes")
         
@@ -505,34 +506,49 @@ def main():
         with c_sel1:
             prov_sel = st.selectbox("👉 Selecciona un Proveedor para trabajar", proveedores_list)
         
-        # 2. Filtrar Datos
-        # Sugeridos Automáticos para este proveedor
+        # 2. Filtrar Datos Automáticos
         df_auto = master_buy[
             (master_buy['Cajas_Sugeridas'] > 0) & 
             (master_buy['Nombre_Proveedor'] == prov_sel)
         ].copy()
         
-        # 3. Sección Manual (NUEVA CARACTERÍSTICA)
+        # 3. Sección Manual (CORREGIDO: Eliminar Duplicados)
         with st.expander(f"➕ Agregar Productos Manualmente a la orden de {prov_sel}", expanded=False):
-            # Buscar productos que NO estén ya en la sugerencia automática para no duplicar
+            # Buscar productos que NO estén ya en la sugerencia automática
             ids_auto = df_auto['ID_Producto'].tolist()
             
-            # Filtramos productos asociados al proveedor O genéricos, que no estén ya en la lista auto
-            # O permitimos buscar TODO el inventario si es un pedido especial
-            opciones_manuales = master_buy[~master_buy['ID_Producto'].isin(ids_auto)]
+            # Filtramos opciones disponibles (no sugeridas ya)
+            opciones_manuales = master_buy[~master_buy['ID_Producto'].isin(ids_auto)].copy()
             
-            # Crear lista formateada para el buscador
-            opciones_manuales['Label'] = opciones_manuales['Nombre'] + " | Stock: " + opciones_manuales['Stock'].astype(str)
+            # PASO CRÍTICO: Crear una lista ÚNICA para el dropdown. 
+            # Esto evita ver "Chunky" 5 veces en la lista.
+            opciones_unicas_ui = opciones_manuales.drop_duplicates(subset=['ID_Producto']).copy()
+            opciones_unicas_ui['Label'] = opciones_unicas_ui['Nombre'] + " | Stock: " + opciones_unicas_ui['Stock'].astype(str)
             
             productos_manuales_sel = st.multiselect(
                 "Busca productos adicionales:",
-                options=opciones_manuales['ID_Producto'],
-                format_func=lambda x: opciones_manuales[opciones_manuales['ID_Producto'] == x]['Label'].values[0]
+                options=opciones_unicas_ui['ID_Producto'],
+                format_func=lambda x: opciones_unicas_ui[opciones_unicas_ui['ID_Producto'] == x]['Label'].values[0]
             )
             
             if productos_manuales_sel:
-                # Crear dataframe de manuales
-                df_manual = master_buy[master_buy['ID_Producto'].isin(productos_manuales_sel)].copy()
+                # Recuperar los datos completos de lo seleccionado
+                df_manual_raw = master_buy[master_buy['ID_Producto'].isin(productos_manuales_sel)].copy()
+                
+                # LÓGICA DE PRIORIDAD:
+                # 1. Queremos la fila que coincida con el proveedor seleccionado (prov_sel) si existe.
+                # 2. Si no existe, tomamos cualquier otra (Genérico u otro proveedor).
+                # 3. Finalmente eliminamos duplicados por ID_Producto para no tener 5 filas iguales.
+                
+                # Creamos columna temporal para ordenar: 0 si es el proveedor actual, 1 si no.
+                df_manual_raw['prioridad_orden'] = np.where(df_manual_raw['Nombre_Proveedor'] == prov_sel, 0, 1)
+                
+                # Ordenamos y quitamos duplicados, quedándonos con la mejor opción (la primera)
+                df_manual = df_manual_raw.sort_values('prioridad_orden').drop_duplicates(subset=['ID_Producto'], keep='first').copy()
+                
+                # Limpiamos columna auxiliar
+                df_manual.drop(columns=['prioridad_orden'], inplace=True)
+                
                 df_manual['Cajas_Sugeridas'] = 1 # Empezar con 1 caja por defecto
                 
                 # Unir Automático + Manual
@@ -548,7 +564,6 @@ def main():
             # Obtener datos de contacto del proveedor seleccionado
             info_p = df_prov[df_prov['Nombre_Proveedor'] == prov_sel]
             email_db = info_p['Email'].values[0] if not info_p.empty and 'Email' in info_p.columns else ""
-            tel_db = "" # Podrías mapearlo si tienes columna Telefono
             
             # Mostrar tabla editable
             st.markdown("##### 📝 Detalle de la Orden")
@@ -625,7 +640,7 @@ def main():
                     except Exception as e:
                         st.error(f"Error al guardar: {e}")
 
-    # TAB 3: RECEPCIÓN (CORREGIDO ERROR VALUEERROR)
+    # TAB 3: RECEPCIÓN
     with tabs[2]:
         st.subheader("📦 Bodega: Mercancía en Camino")
         
