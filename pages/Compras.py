@@ -19,17 +19,84 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS Profesionales
+# Estilos CSS Profesionales y Espaciados
 st.markdown("""
     <style>
-    .stApp { background-color: #f8fafc; }
-    .main-header { font-size: 2.5rem; font-weight: 800; color: #1e3a8a; margin-bottom: 0.5rem; text-align: center; font-family: 'Helvetica', sans-serif; }
-    .sub-header { font-size: 1.1rem; color: #64748b; margin-bottom: 2rem; text-align: center; }
-    .metric-row { display: flex; justify-content: space-around; margin-bottom: 20px; }
-    .metric-item { background: #ffffff; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); width: 30%; border-top: 4px solid #3b82f6; }
-    .metric-val { font-size: 1.8rem; font-weight: bold; color: #0f172a; margin-top: 5px; }
-    .metric-lbl { font-size: 0.9rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
-    div[data-testid="stExpander"] { background-color: white; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    /* Fondo general */
+    .stApp { background-color: #f0f2f6; }
+    
+    /* Header Principal */
+    .main-header { 
+        font-size: 3rem; 
+        font-weight: 800; 
+        color: #1e3a8a; 
+        margin-top: 1rem;
+        margin-bottom: 0.5rem; 
+        text-align: center; 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    }
+    
+    .sub-header { 
+        font-size: 1.2rem; 
+        color: #64748b; 
+        margin-bottom: 2.5rem; 
+        text-align: center; 
+    }
+
+    /* Tarjetas Métricas (KPIs) */
+    .metric-container {
+        display: flex;
+        justify-content: center;
+        gap: 30px; /* Espacio entre tarjetas */
+        margin-bottom: 40px;
+    }
+
+    .metric-card {
+        background-color: #ffffff;
+        border-radius: 15px;
+        padding: 25px 20px;
+        width: 30%;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        border-left: 6px solid #3b82f6; /* Borde azul a la izquierda */
+        text-align: center;
+        transition: transform 0.2s;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+    }
+
+    .metric-label {
+        color: #64748b;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
+
+    .metric-value {
+        color: #1e293b;
+        font-size: 1.8rem;
+        font-weight: 800;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Ajustes de contenedores Streamlit */
+    div[data-testid="stExpander"] { 
+        background-color: white; 
+        border-radius: 10px; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+        border: none;
+    }
+    
+    .stButton>button {
+        font-weight: bold;
+        border-radius: 8px;
+        height: 3rem;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -111,7 +178,7 @@ def conectar_sheets():
         st.stop()
 
 # ==========================================
-# 4. CEREBRO Y MEMORIA (Aquí se arregla lo del NOMBRE)
+# 4. CEREBRO Y MEMORIA
 # ==========================================
 
 @st.cache_data(ttl=60)
@@ -166,13 +233,14 @@ def cargar_cerebro(_ws_inv, _ws_map):
     return lista_prods, dict_prods, memoria
 
 # ==========================================
-# 5. PARSER XML COLOMBIA (UBL 2.1)
+# 5. PARSER XML COLOMBIA (UBL 2.1) - CORREGIDO
 # ==========================================
 
 def parsear_xml_colombia(archivo):
     """
     Lee XMLs de Facturación Electrónica Colombia.
-    Extrae datos del AttachedDocument o Invoice directo.
+    CORRECCIÓN: Calcula el precio unitario restando el primer descuento al precio base
+    para coincidir con el PDF y prioriza el StandardID.
     """
     try:
         tree = ET.parse(archivo)
@@ -215,7 +283,7 @@ def parsear_xml_colombia(archivo):
         try: total = float(invoice_root.find('.//cac:LegalMonetaryTotal/cbc:PayableAmount', ns).text)
         except: total = 0.0
 
-        # 3. Extracción de Items
+        # 3. Extracción de Items con Lógica de Precios Corregida
         items = []
         lines = invoice_root.findall('.//cac:InvoiceLine', ns)
         
@@ -223,26 +291,43 @@ def parsear_xml_colombia(archivo):
             try:
                 qty = float(line.find('cbc:InvoicedQuantity', ns).text)
                 
-                # Precio Unitario
+                # --- PRECIO CORREGIDO ---
+                # 1. Obtener precio base (Lista)
                 price_node = line.find('.//cac:Price/cbc:PriceAmount', ns)
-                price = float(price_node.text) if price_node is not None else 0.0
+                base_price = float(price_node.text) if price_node is not None else 0.0
                 
+                # 2. Buscar el PRIMER descuento (AllowanceCharge con ChargeIndicator=false)
+                # El PDF muestra: Precio Base - Descuento 1 = Valor Unitario
+                discount_amount = 0.0
+                allowances = line.findall('.//cac:AllowanceCharge', ns)
+                if allowances:
+                    first_allowance = allowances[0] # Tomamos el primero
+                    is_charge = first_allowance.find('cbc:ChargeIndicator', ns).text
+                    if is_charge == 'false':
+                        discount_amount = float(first_allowance.find('cbc:Amount', ns).text)
+
+                # Precio Final (Coincide con la columna "Valor Unit." del PDF)
+                final_unit_price = base_price - discount_amount
+                
+                # --- REFERENCIA CORREGIDA ---
                 item_node = line.find('cac:Item', ns)
                 desc = item_node.find('cbc:Description', ns).text
                 
-                # SKU Proveedor
+                # Priorizar StandardItemIdentification (Coincide mejor con el PDF)
                 sku_prov = "S/C"
-                seller_id = item_node.find('.//cac:SellersItemIdentification/cbc:ID', ns)
                 std_id = item_node.find('.//cac:StandardItemIdentification/cbc:ID', ns)
+                seller_id = item_node.find('.//cac:SellersItemIdentification/cbc:ID', ns)
                 
-                if seller_id is not None: sku_prov = seller_id.text
-                elif std_id is not None: sku_prov = std_id.text
+                if std_id is not None and std_id.text:
+                    sku_prov = std_id.text
+                elif seller_id is not None:
+                    sku_prov = seller_id.text
                 
                 items.append({
                     'SKU_Proveedor': sku_prov,
                     'Descripcion': desc,
                     'Cantidad': qty,
-                    'Costo_Unitario': price
+                    'Costo_Unitario': final_unit_price # Precio corregido
                 })
             except: continue
 
@@ -289,7 +374,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
         inv_data = ws_inv.get_all_values()
         header = inv_data[0]
         
-        # --- BÚSQUEDA DE INDICES DE COLUMNAS (Para saber dónde escribir) ---
+        # --- BÚSQUEDA DE INDICES DE COLUMNAS ---
         try:
             # 1. ID
             idx_id = 0 
@@ -433,11 +518,11 @@ def main():
 
     # --- PASO 1: CARGA ---
     if st.session_state.step == 1:
-        st.markdown('<div class="sub-header">Arrastra tu Factura XML aquí</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sub-header">Arrastra tu Factura XML aquí para comenzar</div>', unsafe_allow_html=True)
         uploaded = st.file_uploader("", type=['xml'])
         
         if uploaded:
-            with st.spinner("🤖 Analizando estructura DIAN..."):
+            with st.spinner("🤖 Analizando estructura DIAN y calculando descuentos..."):
                 data = parsear_xml_colombia(uploaded)
                 if not data: st.stop()
                 
@@ -458,13 +543,26 @@ def main():
         mem = st.session_state.memoria
         dct = st.session_state.dct_prods
         
-        # Tarjetas Métricas
-        c1, c2, c3 = st.columns(3)
-        c1.markdown(f"<div class='metric-item'><div class='metric-lbl'>Proveedor</div><div class='metric-val'>{d['Proveedor'][:15]}</div></div>", unsafe_allow_html=True)
-        c2.markdown(f"<div class='metric-item'><div class='metric-lbl'>Factura</div><div class='metric-val'>{d['Folio']}</div></div>", unsafe_allow_html=True)
-        c3.markdown(f"<div class='metric-item'><div class='metric-lbl'>Total</div><div class='metric-val'>${d['Total']:,.0f}</div></div>", unsafe_allow_html=True)
+        # --- Tarjetas Métricas con HTML/CSS Personalizado ---
+        # Esto crea los cuadros bonitos y espaciosos
+        st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-card">
+                    <div class="metric-label">PROVEEDOR</div>
+                    <div class="metric-value">{d['Proveedor'][:20]}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">No. FACTURA</div>
+                    <div class="metric-value">{d['Folio']}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">TOTAL A PAGAR</div>
+                    <div class="metric-value">${d['Total']:,.0f}</div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
         
-        st.write("---")
+        st.markdown("<br>", unsafe_allow_html=True)
         
         # Pre-llenado inteligente
         nit_clean = normalizar_str(d['ID_Proveedor'])
@@ -503,13 +601,13 @@ def main():
         edited = st.data_editor(
             df_show,
             column_config={
-                "SKU_Proveedor": st.column_config.TextColumn("Ref. Prov", disabled=True),
+                "SKU_Proveedor": st.column_config.TextColumn("Ref. Prov", disabled=True, help="Referencia leída del XML (Standard ID)"),
                 "Descripcion": st.column_config.TextColumn("Producto Factura", disabled=True, width="medium"),
                 "SKU_Interno_Seleccionado": st.column_config.SelectboxColumn("📌 Tu Inventario", options=st.session_state.lst_prods, required=True, width="large"),
                 "Factor_Pack": st.column_config.NumberColumn("Factor (Uds/Caja)", min_value=0.1, help="Si llega 1 caja de 12, pon 12"),
                 "Cantidad_XML": st.column_config.NumberColumn("Cant. Fac", disabled=True),
                 "Cantidad_Recibida": st.column_config.NumberColumn("✅ Recibido"),
-                "Costo_Unitario": st.column_config.NumberColumn("Costo Base", format="$%d", disabled=True)
+                "Costo_Unitario": st.column_config.NumberColumn("Costo Base", format="$%d", disabled=True, help="Precio Unitario del PDF (Base - Descuento)")
             },
             use_container_width=True,
             hide_index=True,
@@ -517,6 +615,7 @@ def main():
         )
         
         # Botones Acción
+        st.markdown("<br>", unsafe_allow_html=True)
         colA, colB = st.columns([1, 4])
         if colA.button("🔙 Cancelar"):
             st.session_state.step = 1
