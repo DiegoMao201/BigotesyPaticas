@@ -278,7 +278,7 @@ def generar_pdf_html(venta_data, items):
             "cliente_cedula": venta_data.get('Cedula_Cliente', '---'),
             "cliente_direccion": venta_data.get('Direccion', 'Local'),
             "cliente_mascota": venta_data.get('Mascota', '---'),
-            "metodo_pago": venta_data.get('Metodo', 'Efectivo'),
+            "metodo_pago": venta_data.get('Metodo_Pago', 'Efectivo'),
             "items": items,
             "total": venta_data['Total']
         }
@@ -645,7 +645,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     if not df_v.empty: df_v['Fecha_Dt'] = df_v['Fecha'].dt.date
     if not df_g.empty: df_g['Fecha_Dt'] = df_g['Fecha'].dt.date
 
-    v_dia = df_v[df_v['Fecha_Dt'] == fecha_analisis] if not df_v.empty else pd.DataFrame(columns=['Total', 'Metodo', 'Banco_Destino'])
+    v_dia = df_v[df_v['Fecha_Dt'] == fecha_analisis] if not df_v.empty else pd.DataFrame(columns=['Total', 'Metodo_Pago', 'Banco_Destino'])
     g_dia = df_g[df_g['Fecha_Dt'] == fecha_analisis] if not df_g.empty else pd.DataFrame(columns=['Monto', 'Banco_Origen'])
 
     st.markdown("---")
