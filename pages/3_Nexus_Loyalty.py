@@ -193,10 +193,10 @@ def procesar_inteligencia(ws_cli, ws_ven):
     col_nac = next((c for c in master.columns if 'nacimiento' in c.lower() or 'cumple' in c.lower() or c == 'Fecha'), None)
     
     master['Cumpleaños_mascota'] = False
-    master['Nombre_Columna_Cumple'] = "No encontrada" # Debug para el usuario
+    master['Cumpleaños_mascota'] = "No encontrada" # Debug para el usuario
     
     if col_nac:
-        master['Nombre_Columna_Cumple'] = col_nac
+        master['Cumpleaños_mascota'] = col_nac
         # ⚠️ CORRECCIÓN CLAVE: Convertimos a string primero para manejar formatos mixtos de Google Sheets
         # Esto asegura que lea '2023-12-01' o '01/12/2023' correctamente
         master[col_nac] = master[col_nac].astype(str)
@@ -302,7 +302,7 @@ def main():
         st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>🎂</span> Cumpleañeros del Mes ({mes_actual_nombre})", unsafe_allow_html=True)
         
         # Debug para el usuario si no sale nada
-        col_detectada = master['Nombre_Columna_Cumple'].iloc[0] if not master.empty else "N/A"
+        col_detectada = master['Cumpleaños_mascota'].iloc[0] if not master.empty else "N/A"
         st.caption(f"ℹ️ Columna detectada en Excel: **{col_detectada}**. Buscando fechas del mes: **{mes_num}**.")
         
         df_cumple = master[master['Cumpleaños_mascota'] == True].copy()
