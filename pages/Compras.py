@@ -86,7 +86,6 @@ def cargar_memoria(ws_map):
     """Descarga la memoria de asociaciones para pre-llenar datos."""
     try:
         data = ws_map.get_all_records()
-        # Creamos un diccionario clave: "IDProveedor_SKUProveedor" -> {SKU_Interno, Factor}
         memoria = {}
         for row in data:
             key = f"{str(row['ID_Proveedor'])}_{str(row['SKU_Proveedor'])}"
@@ -99,10 +98,7 @@ def cargar_memoria(ws_map):
         return {}
 
 def guardar_aprendizaje(ws_map, nuevos_datos):
-    """
-    Guarda o actualiza las asociaciones en la hoja Maestro_Proveedores.
-    nuevos_datos = lista de dicts con la nueva info validada por el usuario.
-    """
+    """Guarda o actualiza las asociaciones en la hoja Maestro_Proveedores."""
     try:
         registros_actuales = ws_map.get_all_records()
         df_map = pd.DataFrame(registros_actuales)
@@ -110,8 +106,7 @@ def guardar_aprendizaje(ws_map, nuevos_datos):
         filas_nuevas = []
         updates = []
         
-        # Obtenemos un mapa de filas existentes para actualizar rápido
-        mapa_filas = {} # Clave -> Indice de fila (0-based en el df, +2 para sheets)
+        mapa_filas = {} 
         if not df_map.empty:
             for idx, row in df_map.iterrows():
                 key = f"{str(row['ID_Proveedor'])}_{str(row['SKU_Proveedor'])}"
@@ -124,24 +119,19 @@ def guardar_aprendizaje(ws_map, nuevos_datos):
             factor = item['Factor_Pack']
             nombre_prov = item['Proveedor_Nombre']
             
-            if not sku_interno: continue # Si no asignaron SKU interno, no memorizamos
+            if not sku_interno or sku_interno == "None": continue 
 
             key = f"{proveedor_id}_{sku_prov}"
             
             if key in mapa_filas:
-                # Actualizamos registro existente
                 row_idx = mapa_filas[key]
-                # Actualizamos Columna D (SKU Interno) y E (Factor)
                 updates.append({'range': f"D{row_idx}", 'values': [[sku_interno]]})
                 updates.append({'range': f"E{row_idx}", 'values': [[factor]]})
             else:
-                # Registro nuevo
                 filas_nuevas.append([proveedor_id, nombre_prov, sku_prov, sku_interno, factor, str(pd.Timestamp.now())])
 
-        if updates:
-            ws_map.batch_update(updates)
-        if filas_nuevas:
-            ws_map.append_rows(filas_nuevas)
+        if updates: ws_map.batch_update(updates)
+        if filas_nuevas: ws_map.append_rows(filas_nuevas)
             
         return True
     except Exception as e:
@@ -163,7 +153,10 @@ def parsear_xml_factura(archivo):
         # Extraer Invoice interno si es AttachedDocument
         desc_tag = root.find('.//cac:Attachment/cac:ExternalReference/cbc:Description', ns_map)
         if desc_tag is not None and desc_tag.text:
-            root_invoice = ET.fromstring(desc_tag.text.strip())
+            try:
+                root_invoice = ET.fromstring(desc_tag.text.strip())
+            except:
+                root_invoice = root
         else:
             root_invoice = root
 
@@ -172,20 +165,29 @@ def parsear_xml_factura(archivo):
             'cbc': 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2'
         }
 
-        # Datos del Proveedor (Vital para la memoria)
+        # Datos del Proveedor
         prov_node = root_invoice.find('.//cac:AccountingSupplierParty/cac:Party', ns_inv)
-        nombre_prov = prov_node.find('.//cac:PartyTaxScheme/cbc:RegistrationName', ns_inv).text
-        # ID Proveedor (NIT/RUT)
-        id_prov_tag = prov_node.find('.//cac:PartyTaxScheme/cbc:CompanyID', ns_inv)
-        id_prov = id_prov_tag.text if id_prov_tag is not None else "GENERICO"
+        if prov_node is not None:
+            nombre_prov_tag = prov_node.find('.//cac:PartyTaxScheme/cbc:RegistrationName', ns_inv)
+            nombre_prov = nombre_prov_tag.text if nombre_prov_tag is not None else "Proveedor Desconocido"
+            
+            id_prov_tag = prov_node.find('.//cac:PartyTaxScheme/cbc:CompanyID', ns_inv)
+            id_prov = id_prov_tag.text if id_prov_tag is not None else "GENERICO"
+        else:
+            nombre_prov = "Desconocido"
+            id_prov = "GENERICO"
         
-        folio = root_invoice.find('.//cbc:ID', ns_inv).text
+        folio_tag = root_invoice.find('.//cbc:ID', ns_inv)
+        folio = folio_tag.text if folio_tag is not None else "---"
 
         items = []
         for line in root_invoice.findall('.//cac:InvoiceLine', ns_inv):
             try:
-                desc = line.find('.//cac:Item/cbc:Description', ns_inv).text
-                qty = float(line.find('.//cbc:InvoicedQuantity', ns_inv).text)
+                desc_tag = line.find('.//cac:Item/cbc:Description', ns_inv)
+                desc = desc_tag.text if desc_tag is not None else "Producto sin nombre"
+                
+                qty_tag = line.find('.//cbc:InvoicedQuantity', ns_inv)
+                qty = float(qty_tag.text) if qty_tag is not None else 0.0
                 
                 price_tag = line.find('.//cac:Price/cbc:PriceAmount', ns_inv)
                 costo_unit = float(price_tag.text) if price_tag is not None else 0.0
@@ -200,11 +202,12 @@ def parsear_xml_factura(archivo):
                     "Proveedor_Nombre": nombre_prov,
                     "SKU_Proveedor": sku,
                     "Descripcion_Factura": desc,
-                    "Cantidad_Facturada": qty,     # Paquetes facturados
-                    "Costo_Pack_Factura": costo_unit, # Costo por paquete
+                    "Cantidad_Facturada": qty,
+                    "Costo_Pack_Factura": costo_unit,
                     "Total_Linea": qty * costo_unit
                 })
-            except: continue 
+            except Exception:
+                continue 
 
         return {"Proveedor": nombre_prov, "ID_Proveedor": id_prov, "Folio": folio, "Items": items}
 
@@ -212,40 +215,41 @@ def parsear_xml_factura(archivo):
         st.error(f"Error procesando XML: {str(e)}")
         return None
 
-# --- 5. LÓGICA DE ACTUALIZACIÓN DE INVENTARIO ---
+# --- 5. LÓGICA DE ACTUALIZACIÓN ---
 
 def procesar_inventario(ws_inv, df_final):
-    """
-    Actualiza el inventario usando el SKU INTERNO y CALCULOS UNITARIOS.
-    """
-    # 1. Leer Inventario Actual
+    # 1. Leer Inventario
     try:
         data = ws_inv.get_all_values()
+        if not data: return False, ["El inventario está vacío"]
         headers = data[0]
     except: return False, ["Error leyendo inventario"]
 
     # Mapear columnas
     try:
-        col_sku = headers.index('SKU_Proveedor') # Asumimos que esta columna guarda TU SKU Interno
+        col_sku = headers.index('SKU_Proveedor') 
         col_stock = headers.index('Stock')
         col_costo = headers.index('Costo')
         col_precio = headers.index('Precio')
-        # Opcionales
-        col_nombre = headers.index('Nombre') if 'Nombre' in headers else headers.index('Descripcion')
+        
+        if 'Nombre' in headers: col_nombre = headers.index('Nombre')
+        elif 'Descripcion' in headers: col_nombre = headers.index('Descripcion')
+        else: col_nombre = 0
+            
     except:
-        return False, ["Estructura de inventario incorrecta. Faltan columnas clave (Stock, Costo, Precio, SKU_Proveedor)."]
+        return False, ["Estructura de inventario incorrecta. Revisa columnas: SKU_Proveedor, Stock, Costo, Precio."]
 
-    # Crear mapa de inventario actual: SKU_Interno -> {fila, datos}
     inv_map = {}
-    for i, row in enumerate(data[1:], start=2): # Start=2 para coincidir con fila Excel
+    for i, row in enumerate(data[1:], start=2):
+        if len(row) <= col_sku: continue
         sku_val = str(row[col_sku]).strip()
         if sku_val:
             inv_map[sku_val] = {
                 'fila': i,
-                'stock': limpiar_moneda(row[col_stock]),
-                'costo': limpiar_moneda(row[col_costo]),
-                'precio': limpiar_moneda(row[col_precio]),
-                'nombre': row[col_nombre]
+                'stock': limpiar_moneda(row[col_stock]) if len(row) > col_stock else 0,
+                'costo': limpiar_moneda(row[col_costo]) if len(row) > col_costo else 0,
+                'precio': limpiar_moneda(row[col_precio]) if len(row) > col_precio else 0,
+                'nombre': row[col_nombre] if len(row) > col_nombre else "Sin Nombre"
             }
 
     updates = []
@@ -253,15 +257,13 @@ def procesar_inventario(ws_inv, df_final):
     log = []
 
     for _, row in df_final.iterrows():
-        # Datos ya procesados por el usuario
         sku_interno = str(row['SKU_Interno']).strip()
-        nombre_prod = row['Descripcion_Factura'] # O el nombre del inventario
+        nombre_prod = row['Descripcion_Factura']
         
         cant_packs = row['Cantidad_Facturada']
         factor = row['Factor_Pack']
         costo_pack = row['Costo_Pack_Factura']
         
-        # CÁLCULOS UNITARIOS REALES
         unidades_reales = cant_packs * factor
         costo_unitario_real = costo_pack / factor if factor > 0 else costo_pack
         
@@ -270,7 +272,7 @@ def procesar_inventario(ws_inv, df_final):
             continue
 
         if sku_interno in inv_map:
-            # --- PRODUCTO EXISTENTE ---
+            # ACTUALIZAR
             info = inv_map[sku_interno]
             fila = info['fila']
             stock_actual = info['stock']
@@ -282,33 +284,31 @@ def procesar_inventario(ws_inv, df_final):
             nuevo_stock = stock_actual + unidades_reales
             updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila, col_stock + 1)}", 'values': [[sanitizar_dato(nuevo_stock)]]})
 
-            # B. Precios Inteligentes (Unitarios)
-            nuevo_precio = precio_actual
+            # B. Precios
             nuevo_costo = costo_actual
+            nuevo_precio = precio_actual
             msg_precio = ""
 
             if costo_unitario_real > costo_actual:
-                # Costo Subió -> Subimos Precio
                 nuevo_costo = costo_unitario_real
                 nuevo_precio = nuevo_costo / 0.85
-                msg_precio = f"📈 Subió costo unitario (${costo_actual:,.0f} -> ${nuevo_costo:,.0f}). Precio ajustado."
+                msg_precio = f"📈 Costo subió. Precio ajustado."
                 
                 updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila, col_costo + 1)}", 'values': [[sanitizar_dato(nuevo_costo)]]})
                 updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila, col_precio + 1)}", 'values': [[sanitizar_dato(nuevo_precio)]]})
             
             elif costo_unitario_real < costo_actual:
-                # Costo Bajó -> Mantenemos precio (Más margen)
                 nuevo_costo = costo_unitario_real
-                msg_precio = f"💰 Bajó costo unitario. Precio mantenido (Mayor margen)."
+                msg_precio = f"💰 Costo bajó. Margen mejorado."
                 updates.append({'range': f"{gspread.utils.rowcol_to_a1(fila, col_costo + 1)}", 'values': [[sanitizar_dato(nuevo_costo)]]})
             
             else:
                 msg_precio = "Costo estable."
 
-            log.append(f"🔄 **{nombre_real}**: +{unidades_reales:.0f} u. (Venían {cant_packs} packs de {factor}). {msg_precio}")
+            log.append(f"🔄 **{nombre_real}**: +{unidades_reales:.0f} u. {msg_precio}")
 
         else:
-            # --- PRODUCTO NUEVO (Crear en inventario) ---
+            # NUEVO
             new_row = [""] * len(headers)
             new_row[col_sku] = sku_interno
             new_row[col_nombre] = nombre_prod
@@ -319,9 +319,8 @@ def procesar_inventario(ws_inv, df_final):
             new_row[col_precio] = sanitizar_dato(precio_sugerido)
             
             new_rows.append(new_row)
-            log.append(f"✨ **Nuevo Item Creado**: {sku_interno} | {nombre_prod} | Stock: {unidades_reales} | Precio: ${precio_sugerido:,.0f}")
+            log.append(f"✨ **Nuevo**: {sku_interno} | {nombre_prod} | Stock: {unidades_reales}")
 
-    # Escribir cambios
     try:
         if updates: ws_inv.batch_update(updates)
         if new_rows: ws_inv.append_rows(new_rows)
@@ -333,7 +332,6 @@ def procesar_inventario(ws_inv, df_final):
 
 def main():
     st.markdown('<p class="big-title">📦 Recepción Inteligente + Aprendizaje</p>', unsafe_allow_html=True)
-    st.caption("Asocia productos de proveedores con tu inventario interno, maneja packs y actualiza precios unitarios.")
     
     ws_inv, ws_map = conectar_sheets()
     if not ws_inv: st.stop()
@@ -345,27 +343,27 @@ def main():
     if st.session_state.paso == 1:
         uploaded_file = st.file_uploader("Sube tu Factura Electrónica (XML)", type=['xml'])
         if uploaded_file:
-            with st.spinner("Leyendo factura y consultando memoria..."):
+            with st.spinner("Leyendo factura..."):
                 datos = parsear_xml_factura(uploaded_file)
-                if datos:
+                if datos and datos['Items']:
                     st.session_state.xml_data = datos
-                    st.session_state.memoria = cargar_memoria(ws_map) # Cargar memoria existente
+                    st.session_state.memoria = cargar_memoria(ws_map)
                     st.session_state.paso = 2
                     st.rerun()
+                else:
+                    st.error("No se pudieron leer items del XML. Verifica el formato.")
 
-    # PASO 2: ASOCIACIÓN Y EDICIÓN
+    # PASO 2: EDICIÓN
     elif st.session_state.paso == 2:
         data = st.session_state.xml_data
         memoria = st.session_state.memoria
         
-        st.info(f"Proveedor: **{data['Proveedor']}** (ID: {data['ID_Proveedor']})")
+        st.info(f"Proveedor: **{data['Proveedor']}**")
 
-        # Preparar DataFrame para el editor
         filas_editor = []
         for item in data['Items']:
             key = f"{data['ID_Proveedor']}_{item['SKU_Proveedor']}"
             
-            # Buscamos en memoria si ya conocemos este producto
             sku_int_prev = ""
             factor_prev = 1.0
             
@@ -376,64 +374,63 @@ def main():
             filas_editor.append({
                 "SKU_Proveedor": item['SKU_Proveedor'],
                 "Descripcion_Factura": item['Descripcion_Factura'],
-                "SKU_Interno": sku_int_prev,  # Campo editable clave
+                "SKU_Interno": sku_int_prev,
                 "Cantidad_Facturada": item['Cantidad_Facturada'],
-                "Factor_Pack": factor_prev,   # Campo editable clave (Unidades por caja)
+                "Factor_Pack": factor_prev,
                 "Costo_Pack_Factura": item['Costo_Pack_Factura'],
-                "ID_Proveedor": data['ID_Proveedor'], # Oculto pero necesario
+                "ID_Proveedor": data['ID_Proveedor'],
                 "Proveedor_Nombre": data['Proveedor']
             })
 
-        df = pd.DataFrame(filas_editor)
-        
+        # --- CORRECCIÓN CRÍTICA: Asegurar que DataFrame tenga columnas siempre ---
+        if filas_editor:
+            df = pd.DataFrame(filas_editor)
+        else:
+            # Estructura vacía para evitar KeyError si la lista está vacía
+            df = pd.DataFrame(columns=[
+                "SKU_Proveedor", "Descripcion_Factura", "SKU_Interno", 
+                "Cantidad_Facturada", "Factor_Pack", "Costo_Pack_Factura", 
+                "ID_Proveedor", "Proveedor_Nombre"
+            ])
+
         st.markdown("### 🔗 Asociación de Productos")
-        st.markdown("Asigna **Tu Código Interno** y cuántas unidades vienen por **Pack**.")
 
         edited_df = st.data_editor(
             df,
             column_config={
-                "SKU_Proveedor": st.column_config.TextColumn("Ref. Prov", disabled=True, help="Código en la factura"),
+                "SKU_Proveedor": st.column_config.TextColumn("Ref. Prov", disabled=True),
                 "Descripcion_Factura": st.column_config.TextColumn("Producto Factura", disabled=True, width="large"),
-                
-                "SKU_Interno": st.column_config.TextColumn(
-                    "📝 TU CÓDIGO INTERNO", 
-                    help="Escribe el código tal cual está en tu inventario. Si lo dejas vacío, se ignorará.",
-                    required=True
-                ),
-                
-                "Factor_Pack": st.column_config.NumberColumn(
-                    "📦 Unids/Pack", 
-                    help="¿Cuántas unidades trae este item? Si es una caja de 12 latas, pon 12.",
-                    min_value=1, step=1, default=1
-                ),
-                
+                "SKU_Interno": st.column_config.TextColumn("📝 TU CÓDIGO INTERNO", required=True),
+                "Factor_Pack": st.column_config.NumberColumn("📦 Unids/Pack", min_value=1, step=1, default=1),
                 "Cantidad_Facturada": st.column_config.NumberColumn("Cant. Factura", disabled=True),
                 "Costo_Pack_Factura": st.column_config.NumberColumn("Costo Pack", format="$%.2f", disabled=True),
-                "ID_Proveedor": None, # Ocultar
-                "Proveedor_Nombre": None # Ocultar
+                "ID_Proveedor": None,
+                "Proveedor_Nombre": None
             },
             use_container_width=True,
             hide_index=True,
             num_rows="fixed"
         )
 
-        # Previsualización de cálculos
         st.markdown("---")
-        st.markdown("##### 👁️ Previsualización de Ingreso al Inventario")
+        st.markdown("##### 👁️ Previsualización")
         
-        # Calculamos columnas visuales para que el usuario entienda qué va a pasar
-        edited_df['Unidades_Totales'] = edited_df['Cantidad_Facturada'] * edited_df['Factor_Pack']
-        edited_df['Costo_Unitario_Real'] = edited_df['Costo_Pack_Factura'] / edited_df['Factor_Pack']
-        
-        st.dataframe(
-            edited_df[['SKU_Interno', 'Descripcion_Factura', 'Unidades_Totales', 'Costo_Unitario_Real']],
-            column_config={
-                "Costo_Unitario_Real": st.column_config.NumberColumn("Costo Unitario Real", format="$%.2f"),
-                "Unidades_Totales": st.column_config.NumberColumn("Total Unidades a Sumar")
-            },
-            use_container_width=True,
-            hide_index=True
-        )
+        # --- CORRECCIÓN CRÍTICA: Validar que existan datos antes de calcular ---
+        if not edited_df.empty and 'Cantidad_Facturada' in edited_df.columns:
+            edited_df['Unidades_Totales'] = edited_df['Cantidad_Facturada'] * edited_df['Factor_Pack']
+            edited_df['Costo_Unitario_Real'] = edited_df['Costo_Pack_Factura'] / edited_df['Factor_Pack']
+            
+            st.dataframe(
+                edited_df[['SKU_Interno', 'Descripcion_Factura', 'Unidades_Totales', 'Costo_Unitario_Real']],
+                column_config={
+                    "Costo_Unitario_Real": st.column_config.NumberColumn("Costo Unitario Real", format="$%.2f"),
+                    "Unidades_Totales": st.column_config.NumberColumn("Total Unidades a Sumar")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.warning("No hay items para previsualizar.")
 
         col1, col2 = st.columns([1, 4])
         if col1.button("Cancelar"):
@@ -441,25 +438,25 @@ def main():
             st.rerun()
             
         if col2.button("💾 Procesar, Aprender y Actualizar", type="primary"):
-            with st.spinner("Guardando memoria y actualizando stock..."):
-                # 1. Guardar Aprendizaje (Mapeo)
-                # Convertir a dict para la función
-                datos_aprendizaje = edited_df.to_dict('records')
-                guardar_aprendizaje(ws_map, datos_aprendizaje)
-                
-                # 2. Actualizar Inventario
-                exito, logs = procesar_inventario(ws_inv, edited_df)
-                
-                if exito:
-                    st.success("✅ ¡Proceso completado!")
-                    with st.expander("Ver reporte detallado"):
-                        for l in logs: st.write(l)
-                    time.sleep(5)
-                    st.session_state.paso = 1
-                    st.rerun()
-                else:
-                    st.error("Hubo errores en la actualización:")
-                    for l in logs: st.error(l)
+            if edited_df.empty:
+                st.error("No hay datos para procesar.")
+            else:
+                with st.spinner("Guardando..."):
+                    datos_aprendizaje = edited_df.to_dict('records')
+                    guardar_aprendizaje(ws_map, datos_aprendizaje)
+                    
+                    exito, logs = procesar_inventario(ws_inv, edited_df)
+                    
+                    if exito:
+                        st.success("✅ ¡Proceso completado!")
+                        with st.expander("Ver reporte"):
+                            for l in logs: st.write(l)
+                        time.sleep(5)
+                        st.session_state.paso = 1
+                        st.rerun()
+                    else:
+                        st.error("Error:")
+                        for l in logs: st.error(l)
 
 if __name__ == "__main__":
     main()
