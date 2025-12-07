@@ -141,7 +141,7 @@ def conectar_db():
 def cargar_datos(sh):
     ws_inv = sh.worksheet("Inventario")
     ws_ven = sh.worksheet("Ventas")
-    ws_prov = sh.worksheet("Maestro_Proovedores")
+    ws_prov = sh.worksheet("Maestro_Proveedores")
     
     # Manejo de errores si no existe la hoja de historial
     try: ws_hist_ordenes = sh.worksheet("Historial_Ordenes")
