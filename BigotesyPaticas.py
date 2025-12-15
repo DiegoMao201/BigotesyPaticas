@@ -1015,7 +1015,7 @@ def main():
         
         # MENÚ PRINCIPAL CON NUEVA OPCIÓN
         opcion = st.radio("Menú Principal", 
-            ["Punto de Venta", "📦 Despachos y Envíos", "Gestión de Clientes", "Inversión y Gastos", "Cuadre Diario (Caja)", "Finanzas & Resultados"],
+            ["Punto de Venta", "Despachos y Envíos", "Gestión de Clientes", "Inversión y Gastos", "Cuadre Diario (Caja)", "Finanzas & Resultados"],
             index=0
         )
         st.markdown("---")
