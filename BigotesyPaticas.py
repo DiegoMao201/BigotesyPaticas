@@ -146,14 +146,14 @@ def configurar_pagina():
         }}
         
         /* Estilos para Tarjetas de Logística */
-        .delivery-card {
+        .delivery-card {{
             background-color: white;
             padding: 15px;
             border-radius: 10px;
             border: 1px solid #eee;
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
             margin-bottom: 15px;
-        }
+        }}
         </style>
     """, unsafe_allow_html=True)
 
