@@ -29,11 +29,7 @@ iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAABmJLR0QA/wD/AP+gvaeTAAAHpElEQVRo
 ArwCXBBCHJ/wOicamQf8CngAyDSZ3wWeBz4VQoybdEsmQgjRDHwfeAlIN5kPAz8RQlROtH1jZiQIrADeBBabzIeAHwFnhRCHJ9yCCcII8F3gH4DL
 ZH4v8HMhRMVE2zchRgLAA8B7gM9kPgD8SAhxfcItmACMAE8BHwNuk/k9wDeEEJcm2r6JGakH3gXWmcyHgO8LIc5MuAUTgBHgceBfJvNu4MdCiCsT
 bd+EGKkF3gU2mswHgO8IIU5NuAUTgBHgCeBvJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8w
-HgO8IIU5OuAUTgBHgSeAjJvNu4EdCiCsTbd+EGNkM/ADYajIfAL4jhDg14RZMMEaAp4CPmMw7gR8JIa5MtH0TM7IZ+CGwzWQ+APyHEOLMhFswARgB
-ngH+YTJvB34khLgy0fZNmL0eAF4E7jWZDwK/EEL8b8ItmACMAKuAD4AcMv8B8B0hRG2i7ZuQ2WsFsA3IMpkPAj8RQlROuAUTiBFgJbADyCOzf9K+
-TwhxbaLtmzAjQWAL8DqQaTIfAv5J+xMhRPVE2zchRgLAKuAdIMdkPgT8SwhxdsItmACMAKuA94BcMv+X9v1CiGsTbd/EjASBFcC7QC6Z/0f7fiHE
-mQm3YIIwAqwC3gNyyfxA2/cLIS5PtH0TYmQFsB3IMZkPAv8WQpybcAsmACPASuADIDvI/EDbDwghrk20fRNmJAhsA34O5JD5gbYfFEJUTLR9E2Ik
-CKwC3gdyyPxA2w8KIc5OuAUTgBFgJfARkE3mB9p+WAhxbSJsJ8xIEFgH/BLIMZk/0PZjQoiK0bZ5QoyUAI3AaiDfzD4M/EwIcWykbSYAI8BK4GMg
+HgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5OuAUTgBHgSeAjJvNu4EdCiCsTbd+EGNkM/ADYajIfAL4jhDg14RZMMEaAp4CPmMw7gR8JIa5MtH0TM7IZ+CGwzWQ+APyHEOLMhFswARgBngH+YTJvB34khLgy0fZNmL0eAF4E7jWZDwK/EEL8b8ItmACMAKuAD4AcMv8B8B0hRG2i7ZuQ2WsFsA3IMpkPAj8RQlROuAUTiBFgJbADyCOzf9K+TwhxbaLtmzAjQWAL8DqQaTIfAv5J+xMhRPVE2zchRgLAKuAdIMdkPgT8SwhxdsItmACMAKuA94BcMv+X9v1CiGsTbd/EjASBFcC7QC6Z/0f7fiHEmQm3YIIwAqwC3gNyyfxA2/cLIS5PtH0TYmQFsB3IMZkPAv8WQpybcAsmACPASuADIDvI/EDbDwghrk20fRNmJAhsA34O5JD5gbYfFEJUTLR9E2IkCKwC3gdyyPxA2w8KIc5OuAUTgBFgJfARkE3mB9p+WAhxbSJsJ8xIEFgH/BLIMZk/0PZjQoiK0bZ5QoyUAI3AaiDfzD4M/EwIcWykbSYAI8BK4GMg
 y8w+DPxcCHF1JG0mZEQIsRb4BZBjZh8Gfi6EOObVNlJGehFCfAfIMbMPAz8XQoyY2Yz5P0wIsR74BZBjZh8GfiGEODrSNhM4ewmwc+cuI7t27TKyt
 2zZzMjeunUrd999F3ffvYV169awfv06duzYxo4d29i8eRObN29m8+ZNfPe736GxsZGGhga2b99OQ0MD27ZtY+vWzTQ2NrJ16xZ8Ph/19fV4PB68X
 i+1tbXU1tZSW1tLbW0t27ZtY/v27TQ0NNDQ0EBDQwPbtm2joaGBHTt2sHnzZjZv3szmzZvZvHkzmzdvZs+e3YzsAwcOMrKPHj3KyD5+/DgA58+fZ
@@ -148,6 +144,16 @@ def configurar_pagina():
             background-color: {COLOR_BLANCO};
             border-right: 1px solid #eee;
         }}
+        
+        /* Estilos para Tarjetas de Logística */
+        .delivery-card {
+            background-color: white;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #eee;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -229,6 +235,26 @@ def actualizar_stock(ws_inv, items):
         st.error(f"Error actualizando stock: {e}")
         return False
 
+def actualizar_estado_envio(ws_ven, id_venta, nuevo_estado):
+    try:
+        # Buscar la celda que contiene el ID de la venta
+        cell = ws_ven.find(str(id_venta))
+        if cell:
+            # Asumimos que la columna 'Estado_Envio' es la columna 7 (G)
+            # 1:ID, 2:Fecha, 3:Cedula, 4:Nombre, 5:Tipo, 6:Direccion, 7:Estado
+            # Si has cambiado el orden de las columnas, ajusta este número.
+            # Una forma más segura es encontrar el número de columna por header:
+            headers = ws_ven.row_values(1)
+            col_index = headers.index("Estado_Envio") + 1
+            
+            ws_ven.update_cell(cell.row, col_index, nuevo_estado)
+            return True
+        else:
+            return False
+    except Exception as e:
+        st.error(f"Error actualizando estado del envío: {e}")
+        return False
+
 # --- 3. GENERADOR DE PDF Y EXCEL ---
 
 def generar_pdf_html(venta_data, items):
@@ -256,6 +282,8 @@ def generar_pdf_html(venta_data, items):
              <hr>
              <p><strong>Cliente:</strong> {{{{ cliente_nombre }}}}</p>
              <p><strong>Mascota:</strong> {{{{ cliente_mascota }}}}</p>
+             <p><strong>Entrega:</strong> {{{{ tipo_entrega }}}} ({{{{ estado }}}})</p>
+             <p><strong>Dirección:</strong> {{{{ cliente_direccion }}}}</p>
              <table>
              <tr style="background-color: #f2f2f2;"><th>Producto</th><th align="right">Total</th></tr>
              {{% for item in items %}}
@@ -279,6 +307,8 @@ def generar_pdf_html(venta_data, items):
             "cliente_direccion": venta_data.get('Direccion', 'Local'),
             "cliente_mascota": venta_data.get('Mascota', '---'),
             "metodo_pago": venta_data.get('Metodo_Pago', 'Efectivo'),
+            "tipo_entrega": venta_data.get('Tipo_Entrega', 'Local'),
+            "estado": "Pendiente" if venta_data.get('Tipo_Entrega') == "Envío a Domicilio" else "Entregado",
             "items": items,
             "total": venta_data['Total']
         }
@@ -528,17 +558,74 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                                     "Direccion": direccion_envio,
                                     "Mascota": st.session_state.cliente_actual.get('Mascota', ''),
                                     "Total": total_general,
-                                    "Metodo": metodo
+                                    "Metodo": metodo,
+                                    "Tipo_Entrega": tipo_entrega
                                 }
                                 
                                 pdf_bytes = generar_pdf_html(cliente_pdf_data, st.session_state.carrito)
                                 st.session_state.ultimo_pdf = pdf_bytes
                                 st.session_state.ultima_venta_id = id_venta
+                                
+                                if estado_envio == "Pendiente":
+                                    st.toast("Pedido enviado a cola de Domicilios", icon="🛵")
+                                
                                 st.rerun()
                             else:
                                 st.error("Error al guardar la venta en la base de datos.")
                         except Exception as e:
                             st.error(f"Error procesando la venta: {e}")
+
+def tab_logistica(ws_ven):
+    st.markdown(f"### <span style='color:{COLOR_ACENTO}'>🛵</span> Gestión de Despachos y Domicilios", unsafe_allow_html=True)
+    st.markdown("Visualiza y tramita los pedidos pendientes de envío.")
+
+    df = leer_datos(ws_ven)
+    
+    if df.empty:
+        st.info("No hay datos de ventas.")
+        return
+
+    # Filtrar solo Envío a Domicilio y que estén Pendientes
+    mask_pendientes = (df['Tipo_Entrega'] == 'Envío a Domicilio') & (df['Estado_Envio'] == 'Pendiente')
+    pendientes = df[mask_pendientes].copy()
+
+    if pendientes.empty:
+        st.success("✅ ¡Todo al día! No hay domicilios pendientes de despacho.")
+    else:
+        st.markdown(f"#### ⏳ Pedidos Pendientes ({len(pendientes)})")
+        
+        # Iterar sobre los pendientes y mostrar tarjetas
+        for index, row in pendientes.iterrows():
+            with st.container():
+                st.markdown(f"""
+                <div class="delivery-card">
+                    <h4 style="margin:0; color:{COLOR_PRIMARIO};">Pedido #{row['ID']}</h4>
+                    <p style="margin:0; font-size: 0.9em; color:#666;">Fecha: {row['Fecha']}</p>
+                    <hr style="margin: 10px 0;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <div>
+                            <strong>👤 Cliente:</strong> {row['Cliente']}<br>
+                            <strong>📍 Dirección:</strong> {row['Direccion']}<br>
+                            <strong>📦 Items:</strong> {row['Items']}
+                        </div>
+                        <div style="text-align:right;">
+                             <h3 style="color:{COLOR_ACENTO}; margin:0;">${row['Total']:,.0f}</h3>
+                             <small>{row['Metodo_Pago']}</small>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Botón de Acción
+                col_btn, col_espacio = st.columns([1, 4])
+                if col_btn.button(f"🚀 Marcar como ENVIADO", key=f"btn_{row['ID']}", type="primary"):
+                    if actualizar_estado_envio(ws_ven, row['ID'], "Enviado"):
+                        st.toast(f"Pedido {row['ID']} marcado como Enviado.", icon="✅")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("Error actualizando el estado.")
+            st.markdown("<br>", unsafe_allow_html=True)
 
 def tab_clientes(ws_cli):
     st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>👥</span> Gestión de Clientes (CRM)", unsafe_allow_html=True)
@@ -705,7 +792,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
             st.metric("Total Digital Esperado", f"${total_digital:,.0f}")
         with col_graf:
             fig = px.pie(datos_digitales, names='Medio', values='Total Venta', title='Ingresos Digitales', hole=0.5,
-                         color_discrete_sequence=[COLOR_PRIMARIO, COLOR_ACENTO, COLOR_SECUNDARIO, "#2c3e50"])
+                          color_discrete_sequence=[COLOR_PRIMARIO, COLOR_ACENTO, COLOR_SECUNDARIO, "#2c3e50"])
             fig.update_layout(height=250, margin=dict(t=30, b=0, l=0, r=0))
             st.plotly_chart(fig, use_container_width=True)
     else:
@@ -781,7 +868,7 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
 
     st.markdown("---")
 
-    # --- GRÁFICOS INTERACTIVOS (PLOTLY - NUEVOS COLORES) ---
+    # --- GRÁFICOS INTERACTIVOS ---
     col_g1, col_g2 = st.columns([2, 1])
 
     # Gráfico 1: Evolución de Ventas Diarias
@@ -797,7 +884,7 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
         else:
             st.info("Sin datos para graficar.")
 
-    # Gráfico 2: Estructura de Gastos (Sunburst o Donut)
+    # Gráfico 2: Estructura de Gastos
     with col_g2:
         st.subheader("💸 Gastos")
         if not g_rango.empty:
@@ -809,6 +896,37 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
         else:
             st.info("Sin gastos registrados.")
 
+    # --- NUEVA SECCIÓN: ANÁLISIS POR CANAL (DOMICILIO VS MOSTRADOR) ---
+    st.markdown("---")
+    st.subheader("🚚 Análisis de Canales: Domicilios vs. Mostrador")
+    
+    if not v_rango.empty:
+        c_dom1, c_dom2 = st.columns([1, 1])
+        
+        # Agrupar por Tipo de Entrega
+        por_canal = v_rango.groupby('Tipo_Entrega')['Total'].sum().reset_index()
+        
+        with c_dom1:
+            # Gráfico de Torta
+            fig_canal = px.pie(por_canal, values='Total', names='Tipo_Entrega', 
+                               title="Participación por Canal ($)",
+                               color_discrete_sequence=[COLOR_PRIMARIO, COLOR_ACENTO])
+            fig_canal.update_layout(height=300)
+            st.plotly_chart(fig_canal, use_container_width=True)
+            
+        with c_dom2:
+            # Dataframe detalle
+            st.markdown("##### Detalle Numérico")
+            resumen_canal = v_rango.groupby('Tipo_Entrega').agg(
+                Ventas_Totales=('Total', 'sum'),
+                Num_Pedidos=('ID', 'count')
+            ).reset_index()
+            resumen_canal['Ventas_Totales'] = resumen_canal['Ventas_Totales'].apply(lambda x: f"${x:,.0f}")
+            st.dataframe(resumen_canal, hide_index=True, use_container_width=True)
+    else:
+        st.info("No hay ventas para comparar canales.")
+
+    st.markdown("---")
     col_g3, col_g4 = st.columns(2)
     
     # Gráfico 3: Top Productos Vendidos
@@ -891,12 +1009,13 @@ def main():
         # Título y Branding
         st.markdown(f"<h1 style='color:{COLOR_PRIMARIO}; text-align: center;'>Nexus Pro</h1>", unsafe_allow_html=True)
         st.markdown(f"<h4 style='color:{COLOR_TEXTO}; text-align: center; margin-top: -20px;'>Bigotes y Patitas</h4>", unsafe_allow_html=True)
-        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v5.0 PRO</span></center>", unsafe_allow_html=True)
+        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v6.0 PRO</span></center>", unsafe_allow_html=True)
         
         st.markdown("---")
         
+        # MENÚ PRINCIPAL CON NUEVA OPCIÓN
         opcion = st.radio("Menú Principal", 
-            ["Punto de Venta", "Gestión de Clientes", "Inversión y Gastos", "Cuadre Diario (Caja)", "Finanzas & Resultados"],
+            ["Punto de Venta", "📦 Despachos y Envíos", "Gestión de Clientes", "Inversión y Gastos", "Cuadre Diario (Caja)", "Finanzas & Resultados"],
             index=0
         )
         st.markdown("---")
@@ -911,6 +1030,8 @@ def main():
 
     if opcion == "Punto de Venta":
         tab_punto_venta(ws_inv, ws_cli, ws_ven)
+    elif opcion == "📦 Despachos y Envíos":
+        tab_logistica(ws_ven)
     elif opcion == "Gestión de Clientes":
         tab_clientes(ws_cli)
     elif opcion == "Inversión y Gastos":
