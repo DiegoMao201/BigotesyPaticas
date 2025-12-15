@@ -10,14 +10,15 @@ import jinja2
 from weasyprint import HTML, CSS
 import plotly.express as px
 import plotly.graph_objects as go
+import xlsxwriter # Necesario para el reporte profesional
 
 # --- 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME) ---
 
-# Paleta de Colores Solicitada
+# Paleta de Colores
 COLOR_PRIMARIO = "#187f77"      # Cian Oscuro (Teal)
-COLOR_SECUNDARIO = "#125e58"    # Variante más oscura para degradados
-COLOR_ACENTO = "#f5a641"        # Naranja (Alertas y Acentos)
-COLOR_FONDO = "#f8f9fa"         # Fondo gris muy claro para contraste
+COLOR_SECUNDARIO = "#125e58"    # Variante más oscura
+COLOR_ACENTO = "#f5a641"        # Naranja (Alertas)
+COLOR_FONDO = "#f8f9fa"         # Fondo gris muy claro
 COLOR_TEXTO = "#262730"
 COLOR_BLANCO = "#ffffff"
 
@@ -29,7 +30,7 @@ iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAABmJLR0QA/wD/AP+gvaeTAAAHpElEQVRo
 ArwCXBBCHJ/wOicamQf8CngAyDSZ3wWeBz4VQoybdEsmQgjRDHwfeAlIN5kPAz8RQlROtH1jZiQIrADeBBabzIeAHwFnhRCHJ9yCCcII8F3gH4DL
 ZH4v8HMhRMVE2zchRgLAA8B7gM9kPgD8SAhxfcItmACMAE8BHwNuk/k9wDeEEJcm2r6JGakH3gXWmcyHgO8LIc5MuAUTgBHgceBfJvNu4MdCiCsT
 bd+EGKkF3gU2mswHgO8IIU5NuAUTgBHgCeBvJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8w
-HgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5OuAUTgBHgSeAjJvNu4EdCiCsTbd+EGNkM/ADYajIfAL4jhDg14RZMMEaAp4CPmMw7gR8JIa5MtH0TM7IZ+CGwzWQ+APyHEOLMhFswARgBngH+YTJvB34khLgy0fZNmL0eAF4E7jWZDwK/EEL8b8ItmACMAKuAD4AcMv8B8B0hRG2i7ZuQ2WsFsA3IMpkPAj8RQlROuAUTiBFgJbADyCOzf9K+TwhxbaLtmzAjQWAL8DqQaTIfAv5J+xMhRPVE2zchRgLAKuAdIMdkPgT8SwhxdsItmACMAKuA94BcMv+X9v1CiGsTbd/EjASBFcC7QC6Z/0f7fiHEmQm3YIIwAqwC3gNyyfxA2/cLIS5PtH0TYmQFsB3IMZkPAv8WQpybcAsmACPASuADIDvI/EDbDwghrk20fRNmJAhsA34O5JD5gbYfFEJUTLR9E2IkCKwC3gdyyPxA2w8KIc5OuAUTgBFgJfARkE3mB9p+WAhxbSJsJ8xIEFgH/BLIMZk/0PZjQoiK0bZ5QoyUAI3AaiDfzD4M/EwIcWykbSYAI8BK4GMg
+HgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiCsTbd+EGNkM/ADYajIfAL4jhDg14RZMMEaAp4CPmMw7gR8JIa5MtH0TM7IZ+CGwzWQ+APyHEOLMhFswARgBngH+YTJvB34khLgy0fZNmL0eAF4E7jWZDwK/EEL8b8ItmACMAKuAD4AcMv8B8B0hRG2i7ZuQ2WsFsA3IMpkPAj8RQlROuAUTiBFgJbADyCOzf9K+TwhxbaLtmzAjQWAL8DqQaTIfAv5J+xMhRPVE2zchRgLAKuAdIMdkPgT8SwhxdsItmACMAKuA94BcMv+X9v1CiGsTbd/EjASBFcC7QC6Z/0f7fiHEmQm3YIIwAqwC3gNyyfxA2/cLIS5PtH0TYmQFsB3IMZkPAv8WQpybcAsmACPASuADIDvI/EDbDwghrk20fRNmJAhsA34O5JD5gbYfFEJUTLR9E2IkCKwC3gdyyPxA2w8KIc5OuAUTgBFgJfARkE3mB9p+WAhxbSJsJ8xIEFgH/BLIMZk/0PZjQoiK0bZ5QoyUAI3AaiDfzD4M/EwIcWykbSYAI8BK4GMg
 y8w+DPxcCHF1JG0mZEQIsRb4BZBjZh8Gfi6EOObVNlJGehFCfAfIMbMPAz8XQoyY2Yz5P0wIsR74BZBjZh8GfiGEODrSNhM4ewmwc+cuI7t27TKyt
 2zZzMjeunUrd999F3ffvYV169awfv06duzYxo4d29i8eRObN29m8+ZNfPe736GxsZGGhga2b99OQ0MD27ZtY+vWzTQ2NrJ16xZ8Ph/19fV4PB68X
 i+1tbXU1tZSW1tLbW0t27ZtY/v27TQ0NNDQ0EBDQwPbtm2joaGBHTt2sHnzZjZv3szmzZvZvHkzmzdvZs+e3YzsAwcOMrKPHj3KyD5+/DgA58+fZ
@@ -53,7 +54,6 @@ def configurar_pagina():
     # CSS Personalizado para Nexus Pro
     st.markdown(f"""
         <style>
-        /* Importar fuente moderna */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
         .stApp {{
@@ -71,7 +71,7 @@ def configurar_pagina():
             font-weight: 600;
         }}
 
-        /* Estilo de Tarjetas (Metric Containers y otros divs) */
+        /* Tarjetas */
         div[data-testid="metric-container"] {{
             background-color: {COLOR_BLANCO};
             padding: 20px;
@@ -86,7 +86,7 @@ def configurar_pagina():
             border: 1px solid #e0e0e0;
         }}
 
-        /* Botones Primarios (Cian) */
+        /* Botones */
         .stButton button[type="primary"] {{
             background: linear-gradient(135deg, {COLOR_PRIMARIO}, {COLOR_SECUNDARIO});
             border: none;
@@ -101,14 +101,13 @@ def configurar_pagina():
             transform: translateY(-1px);
         }}
 
-        /* Botones Secundarios */
         .stButton button[type="secondary"] {{
             border: 2px solid {COLOR_PRIMARIO};
             color: {COLOR_PRIMARIO};
             border-radius: 8px;
         }}
 
-        /* Inputs y Selects */
+        /* Inputs */
         .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {{
             border-radius: 8px;
             border-color: #e0e0e0;
@@ -118,7 +117,7 @@ def configurar_pagina():
             box-shadow: 0 0 0 1px {COLOR_PRIMARIO};
         }}
 
-        /* Tabs Personalizados */
+        /* Tabs */
         .stTabs [data-baseweb="tab-list"] {{
             gap: 8px;
             background-color: transparent;
@@ -139,13 +138,13 @@ def configurar_pagina():
             border-color: {COLOR_PRIMARIO};
         }}
 
-        /* Sidebar Styling */
+        /* Sidebar */
         section[data-testid="stSidebar"] {{
             background-color: {COLOR_BLANCO};
             border-right: 1px solid #eee;
         }}
         
-        /* Estilos para Tarjetas de Logística */
+        /* Tarjetas Logística */
         .delivery-card {{
             background-color: white;
             padding: 15px;
@@ -195,8 +194,11 @@ def leer_datos(ws):
     try:
         data = ws.get_all_records()
         df = pd.DataFrame(data)
+        
+        # Limpieza de columnas numéricas clave
         for col in ['Precio', 'Stock', 'Monto', 'Total']:
             if col in df.columns:
+                # Convertir a numérico, forzar errores a 0 y rellenar nulos con 0
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         # Estandarizar fechas si existen
@@ -227,7 +229,6 @@ def actualizar_stock(ws_inv, items):
             if idx:
                 fila = idx[0] + 2
                 stock_act = int(df.iloc[idx[0]]['Stock'])
-                # Usamos la cantidad vendida
                 nuevo = max(0, stock_act - int(item['Cantidad']))
                 ws_inv.update_cell(fila, 5, nuevo) 
         return True
@@ -237,15 +238,15 @@ def actualizar_stock(ws_inv, items):
 
 def actualizar_estado_envio(ws_ven, id_venta, nuevo_estado):
     try:
-        # Buscar la celda que contiene el ID de la venta
         cell = ws_ven.find(str(id_venta))
         if cell:
-            # Asumimos que la columna 'Estado_Envio' es la columna 7 (G)
-            # 1:ID, 2:Fecha, 3:Cedula, 4:Nombre, 5:Tipo, 6:Direccion, 7:Estado
-            # Si has cambiado el orden de las columnas, ajusta este número.
-            # Una forma más segura es encontrar el número de columna por header:
             headers = ws_ven.row_values(1)
-            col_index = headers.index("Estado_Envio") + 1
+            # Buscar índice de columna de forma segura
+            try:
+                col_index = headers.index("Estado_Envio") + 1
+            except ValueError:
+                # Fallback por si acaso
+                col_index = 7
             
             ws_ven.update_cell(cell.row, col_index, nuevo_estado)
             return True
@@ -259,7 +260,6 @@ def actualizar_estado_envio(ws_ven, id_venta, nuevo_estado):
 
 def generar_pdf_html(venta_data, items):
     try:
-        # Usamos una plantilla simple embebida si no existe el archivo
         try:
             with open("factura.html", "r", encoding="utf-8") as f:
                 template_str = f.read()
@@ -323,34 +323,129 @@ def generar_pdf_html(venta_data, items):
         return None
 
 def generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin):
+    """
+    Genera un Excel profesional con formato corporativo usando XlsxWriter.
+    Maneja excepciones de columnas vacías.
+    """
     output = BytesIO()
     try:
+        # Calcular valores seguros para evitar KeyErrors
+        total_ingresos = df_v['Total'].sum() if not df_v.empty and 'Total' in df_v.columns else 0
+        total_gastos = df_g['Monto'].sum() if not df_g.empty and 'Monto' in df_g.columns else 0
+        total_capital = df_c['Monto'].sum() if not df_c.empty and 'Monto' in df_c.columns else 0
+        utilidad = total_ingresos - total_gastos
+        margen = (utilidad / total_ingresos * 100) if total_ingresos > 0 else 0
+
+        # Crear Workbook
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            # 1. Hoja Resumen
-            resumen_data = {
-                'Concepto': ['Ingresos (Ventas)', 'Gastos Totales', 'Inversión/Capital', 'Utilidad Neta', 'Rango Fechas'],
-                'Monto': [
-                    df_v['Total'].sum(), 
-                    df_g['Monto'].sum(), 
-                    df_c['Monto'].sum(), 
-                    df_v['Total'].sum() - df_g['Monto'].sum(),
-                    f"{f_inicio} a {f_fin}"
-                ]
-            }
-            pd.DataFrame(resumen_data).to_excel(writer, sheet_name='Resumen Gerencial', index=False)
+            workbook = writer.book
             
-            # 2. Hojas de Datos
-            if not df_v.empty:
-                df_v.to_excel(writer, sheet_name='Ventas Detalle', index=False)
-            if not df_g.empty:
-                df_g.to_excel(writer, sheet_name='Gastos Detalle', index=False)
-            if not df_c.empty:
-                df_c.to_excel(writer, sheet_name='Inversiones Detalle', index=False)
+            # --- DEFINICIÓN DE FORMATOS ---
+            fmt_header = workbook.add_format({
+                'bold': True, 'font_color': 'white', 'bg_color': COLOR_PRIMARIO, 
+                'border': 1, 'align': 'center', 'valign': 'vcenter'
+            })
+            fmt_title = workbook.add_format({
+                'bold': True, 'font_size': 14, 'font_color': COLOR_PRIMARIO, 'bottom': 2
+            })
+            fmt_money = workbook.add_format({'num_format': '$#,##0', 'border': 1})
+            fmt_money_bold = workbook.add_format({'num_format': '$#,##0', 'bold': True, 'border': 1})
+            fmt_date = workbook.add_format({'num_format': 'dd/mm/yyyy', 'border': 1})
+            fmt_base = workbook.add_format({'border': 1})
+            fmt_kpi_label = workbook.add_format({'bold': True, 'bg_color': '#f2f2f2', 'border': 1})
+            fmt_kpi_val = workbook.add_format({'num_format': '$#,##0', 'bold': True, 'font_size': 12, 'border': 1})
+
+            # --- HOJA 1: RESUMEN EJECUTIVO ---
+            ws_resumen = workbook.add_worksheet("Resumen Gerencial")
+            ws_resumen.set_column('B:C', 25)
+            ws_resumen.hide_gridlines(2)
+
+            ws_resumen.write('B2', f"Reporte Financiero: Nexus Pro", fmt_title)
+            ws_resumen.write('B3', f"Periodo: {f_inicio} al {f_fin}")
+
+            # Tabla de KPIs
+            ws_resumen.write('B5', "Concepto", fmt_header)
+            ws_resumen.write('C5', "Valor", fmt_header)
+
+            kpis = [
+                ("Ingresos Totales (Ventas)", total_ingresos),
+                ("Gastos Operativos & Costos", total_gastos),
+                ("Utilidad Neta del Periodo", utilidad),
+                ("Capital / Inversión Acum.", total_capital)
+            ]
+
+            row = 5
+            for label, value in kpis:
+                ws_resumen.write(row, 1, label, fmt_kpi_label)
                 
+                # Formato condicional simple para utilidad
+                if "Utilidad" in label and value < 0:
+                     fmt_temp = workbook.add_format({'num_format': '$#,##0', 'bold': True, 'font_color': 'red', 'border': 1})
+                     ws_resumen.write(row, 2, value, fmt_temp)
+                else:
+                     ws_resumen.write(row, 2, value, fmt_kpi_val)
+                row += 1
+
+            # Margen Porcentual
+            ws_resumen.write(row, 1, "Margen Neto (%)", fmt_kpi_label)
+            ws_resumen.write(row, 2, f"{margen:.2f}%", fmt_base)
+
+            # --- HOJA 2: DETALLE VENTAS ---
+            if not df_v.empty:
+                df_v_export = df_v.copy()
+                # Asegurar formato fecha para Excel
+                if 'Fecha' in df_v_export.columns:
+                    df_v_export['Fecha'] = df_v_export['Fecha'].astype(str) # Simplificar para evitar problemas de tz
+                
+                df_v_export.to_excel(writer, sheet_name='Detalle Ventas', index=False, startrow=1)
+                ws_ventas = writer.sheets['Detalle Ventas']
+                
+                # Aplicar formatos a la tabla de ventas
+                (max_row, max_col) = df_v_export.shape
+                col_names = [{'header': col} for col in df_v_export.columns]
+                
+                # Estilo tabla automático
+                ws_ventas.add_table(0, 0, max_row, max_col - 1, {
+                    'columns': col_names,
+                    'style': 'Table Style Medium 2',
+                    'name': 'TablaVentas'
+                })
+                # Ajustar anchos
+                ws_ventas.set_column(0, max_col - 1, 15)
+
+            # --- HOJA 3: DETALLE GASTOS ---
+            if not df_g.empty:
+                df_g_export = df_g.copy()
+                if 'Fecha' in df_g_export.columns:
+                    df_g_export['Fecha'] = df_g_export['Fecha'].astype(str)
+
+                df_g_export.to_excel(writer, sheet_name='Detalle Gastos', index=False, startrow=1)
+                ws_gastos = writer.sheets['Detalle Gastos']
+                
+                (max_row, max_col) = df_g_export.shape
+                col_names = [{'header': col} for col in df_g_export.columns]
+                
+                ws_gastos.add_table(0, 0, max_row, max_col - 1, {
+                    'columns': col_names,
+                    'style': 'Table Style Medium 4', # Color diferente para gastos
+                    'name': 'TablaGastos'
+                })
+                ws_gastos.set_column(0, max_col - 1, 15)
+
+            # --- HOJA 4: CAPITAL ---
+            if not df_c.empty:
+                df_c.to_excel(writer, sheet_name='Historial Capital', index=False)
+
         return output.getvalue()
+
     except Exception as e:
-        st.error(f"Error generando Excel: {e}")
-        return None
+        # En caso de error crítico, devolver un Excel con el mensaje de error para depurar
+        output_err = BytesIO()
+        with pd.ExcelWriter(output_err, engine='xlsxwriter') as writer:
+             df_err = pd.DataFrame({'Error': [str(e)]})
+             df_err.to_excel(writer, sheet_name='Error Log')
+        st.error(f"Error generando Excel Avanzado: {e}")
+        return output_err.getvalue()
 
 # --- 4. MÓDULOS DE NEGOCIO ---
 
@@ -585,9 +680,13 @@ def tab_logistica(ws_ven):
         st.info("No hay datos de ventas.")
         return
 
-    # Filtrar solo Envío a Domicilio y que estén Pendientes
-    mask_pendientes = (df['Tipo_Entrega'] == 'Envío a Domicilio') & (df['Estado_Envio'] == 'Pendiente')
-    pendientes = df[mask_pendientes].copy()
+    # Comprobar si existen las columnas necesarias antes de filtrar
+    if 'Tipo_Entrega' in df.columns and 'Estado_Envio' in df.columns:
+        mask_pendientes = (df['Tipo_Entrega'] == 'Envío a Domicilio') & (df['Estado_Envio'] == 'Pendiente')
+        pendientes = df[mask_pendientes].copy()
+    else:
+        st.warning("Estructura de datos de ventas incorrecta. Faltan columnas Tipo_Entrega o Estado_Envio.")
+        return
 
     if pendientes.empty:
         st.success("✅ ¡Todo al día! No hay domicilios pendientes de despacho.")
@@ -604,13 +703,13 @@ def tab_logistica(ws_ven):
                     <hr style="margin: 10px 0;">
                     <div style="display:flex; justify-content:space-between;">
                         <div>
-                            <strong>👤 Cliente:</strong> {row['Cliente']}<br>
-                            <strong>📍 Dirección:</strong> {row['Direccion']}<br>
-                            <strong>📦 Items:</strong> {row['Items']}
+                            <strong>👤 Cliente:</strong> {row.get('Cliente', 'N/A')}<br>
+                            <strong>📍 Dirección:</strong> {row.get('Direccion', 'N/A')}<br>
+                            <strong>📦 Items:</strong> {row.get('Items', 'N/A')}
                         </div>
                         <div style="text-align:right;">
-                             <h3 style="color:{COLOR_ACENTO}; margin:0;">${row['Total']:,.0f}</h3>
-                             <small>{row['Metodo_Pago']}</small>
+                             <h3 style="color:{COLOR_ACENTO}; margin:0;">${row.get('Total', 0):,.0f}</h3>
+                             <small>{row.get('Metodo_Pago', '')}</small>
                         </div>
                     </div>
                 </div>
@@ -740,9 +839,15 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     # --- SECCIÓN 1: CUADRE DE CAJA FÍSICA (EFECTIVO) ---
     st.subheader("1. Cuadre de Efectivo")
     
-    # Cálculos Efectivo
-    ventas_efectivo = v_dia[v_dia['Metodo_Pago'] == 'Efectivo']['Total'].sum()
-    gastos_efectivo = g_dia[g_dia['Banco_Origen'].isin(['Caja General', 'Caja Menor', 'Efectivo'])]['Monto'].sum()
+    # Cálculos Efectivo - Verificando columnas
+    ventas_efectivo = 0
+    if not v_dia.empty and 'Metodo_Pago' in v_dia.columns:
+        ventas_efectivo = v_dia[v_dia['Metodo_Pago'] == 'Efectivo']['Total'].sum()
+    
+    gastos_efectivo = 0
+    if not g_dia.empty and 'Banco_Origen' in g_dia.columns:
+        gastos_efectivo = g_dia[g_dia['Banco_Origen'].isin(['Caja General', 'Caja Menor', 'Efectivo'])]['Monto'].sum()
+    
     teorico_caja = base_caja + ventas_efectivo - gastos_efectivo
 
     col_res1, col_res2, col_res3 = st.columns(3)
@@ -777,13 +882,14 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     datos_digitales = []
     total_digital = 0
     
-    for medio in medios_digitales:
-        mask = v_dia['Metodo_Pago'].astype(str).str.contains(medio, case=False) | v_dia['Banco_Destino'].astype(str).str.contains(medio, case=False)
-        total_medio = v_dia[mask]['Total'].sum()
-        
-        if total_medio > 0:
-            datos_digitales.append({"Medio": medio, "Total Venta": total_medio})
-            total_digital += total_medio
+    if not v_dia.empty and 'Metodo_Pago' in v_dia.columns:
+        for medio in medios_digitales:
+            mask = v_dia['Metodo_Pago'].astype(str).str.contains(medio, case=False) | v_dia['Banco_Destino'].astype(str).str.contains(medio, case=False)
+            total_medio = v_dia[mask]['Total'].sum()
+            
+            if total_medio > 0:
+                datos_digitales.append({"Medio": medio, "Total Venta": total_medio})
+                total_digital += total_medio
             
     if datos_digitales:
         col_graf, col_tabla = st.columns([1, 1])
@@ -792,7 +898,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
             st.metric("Total Digital Esperado", f"${total_digital:,.0f}")
         with col_graf:
             fig = px.pie(datos_digitales, names='Medio', values='Total Venta', title='Ingresos Digitales', hole=0.5,
-                          color_discrete_sequence=[COLOR_PRIMARIO, COLOR_ACENTO, COLOR_SECUNDARIO, "#2c3e50"])
+                         color_discrete_sequence=[COLOR_PRIMARIO, COLOR_ACENTO, COLOR_SECUNDARIO, "#2c3e50"])
             fig.update_layout(height=250, margin=dict(t=30, b=0, l=0, r=0))
             st.plotly_chart(fig, use_container_width=True)
     else:
@@ -818,7 +924,14 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
             st.write("") 
             st.write("") 
             if st.button("📥 Descargar Reporte Excel", type="primary"):
-                excel_file = generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin)
+                # Filtramos data para el reporte Excel basado en fechas seleccionadas
+                if not df_v.empty: df_v['Fecha_Dt'] = df_v['Fecha'].dt.date
+                if not df_g.empty: df_g['Fecha_Dt'] = df_g['Fecha'].dt.date
+                
+                v_excel = df_v[(df_v['Fecha_Dt'] >= f_inicio) & (df_v['Fecha_Dt'] <= f_fin)] if not df_v.empty else pd.DataFrame()
+                g_excel = df_g[(df_g['Fecha_Dt'] >= f_inicio) & (df_g['Fecha_Dt'] <= f_fin)] if not df_g.empty else pd.DataFrame()
+                
+                excel_file = generar_excel_financiero(v_excel, g_excel, df_c, f_inicio, f_fin)
                 if excel_file:
                     st.download_button(
                         label="📄 Guardar Excel",
@@ -827,7 +940,7 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
 
-    # Procesar Fechas
+    # Procesar Fechas en Dataframes principales
     if not df_v.empty: df_v['Fecha_Dt'] = df_v['Fecha'].dt.date
     if not df_g.empty: df_g['Fecha_Dt'] = df_g['Fecha'].dt.date
     if not df_c.empty: df_c['Fecha_Dt'] = df_c['Fecha'].dt.date
@@ -837,14 +950,15 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     g_rango = df_g[(df_g['Fecha_Dt'] >= f_inicio) & (df_g['Fecha_Dt'] <= f_fin)] if not df_g.empty else pd.DataFrame()
 
     # --- CÁLCULOS KPI AVANZADOS ---
-    ingresos = v_rango['Total'].sum() if not v_rango.empty else 0
+    # Verificar existencia de columna 'Total'
+    ingresos = v_rango['Total'].sum() if not v_rango.empty and 'Total' in v_rango.columns else 0
     transacciones = len(v_rango)
     ticket_promedio = (ingresos / transacciones) if transacciones > 0 else 0
     
     costos_directos = 0 
     gastos_operativos = 0 
     
-    if not g_rango.empty:
+    if not g_rango.empty and 'Categoria' in g_rango.columns and 'Monto' in g_rango.columns:
         mask_costo = g_rango['Categoria'].isin(['Compra de Mercancía', 'Costo de Venta'])
         costos_directos = g_rango[mask_costo]['Monto'].sum()
         gastos_operativos = g_rango[~mask_costo]['Monto'].sum()
@@ -853,7 +967,7 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     utilidad_neta = utilidad_bruta - gastos_operativos
     margen_neto = (utilidad_neta / ingresos * 100) if ingresos > 0 else 0
 
-    # Punto de Equilibrio (Simplified)
+    # Punto de Equilibrio (Simplificado: Gastos Ops * Factor de Seguridad)
     punto_equilibrio = gastos_operativos * 1.5 
 
     # --- VISUALIZACIÓN DE KPIs ---
@@ -896,11 +1010,11 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
         else:
             st.info("Sin gastos registrados.")
 
-    # --- NUEVA SECCIÓN: ANÁLISIS POR CANAL (DOMICILIO VS MOSTRADOR) ---
+    # --- NUEVA SECCIÓN: ANÁLISIS POR CANAL ---
     st.markdown("---")
     st.subheader("🚚 Análisis de Canales: Domicilios vs. Mostrador")
     
-    if not v_rango.empty:
+    if not v_rango.empty and 'Tipo_Entrega' in v_rango.columns:
         c_dom1, c_dom2 = st.columns([1, 1])
         
         # Agrupar por Tipo de Entrega
@@ -932,7 +1046,7 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     # Gráfico 3: Top Productos Vendidos
     with col_g3:
         st.subheader("🏆 Top Productos")
-        if not v_rango.empty:
+        if not v_rango.empty and 'Items' in v_rango.columns:
             items_list = []
             for idx, row in v_rango.iterrows():
                 try:
@@ -970,9 +1084,10 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     st.markdown("---")
     st.subheader("🏦 Estado de Inversión (Histórico)")
     
-    total_invertido = df_c['Monto'].sum() if not df_c.empty else 0
-    h_ventas = df_v['Total'].sum() if not df_v.empty else 0
-    h_gastos = df_g['Monto'].sum() if not df_g.empty else 0
+    # Cálculos seguros
+    total_invertido = df_c['Monto'].sum() if not df_c.empty and 'Monto' in df_c.columns else 0
+    h_ventas = df_v['Total'].sum() if not df_v.empty and 'Total' in df_v.columns else 0
+    h_gastos = df_g['Monto'].sum() if not df_g.empty and 'Monto' in df_g.columns else 0
     utilidad_historica = h_ventas - h_gastos
     
     roi = (utilidad_historica / total_invertido * 100) if total_invertido > 0 else 0
@@ -1013,7 +1128,7 @@ def main():
         
         st.markdown("---")
         
-        # MENÚ PRINCIPAL CON NUEVA OPCIÓN
+        # MENÚ PRINCIPAL
         opcion = st.radio("Menú Principal", 
             ["Punto de Venta", "Despachos y Envíos", "Gestión de Clientes", "Inversión y Gastos", "Cuadre Diario (Caja)", "Finanzas & Resultados"],
             index=0
@@ -1030,7 +1145,7 @@ def main():
 
     if opcion == "Punto de Venta":
         tab_punto_venta(ws_inv, ws_cli, ws_ven)
-    elif opcion == "📦 Despachos y Envíos":
+    elif opcion == "Despachos y Envíos":
         tab_logistica(ws_ven)
     elif opcion == "Gestión de Clientes":
         tab_clientes(ws_cli)
