@@ -30,7 +30,12 @@ iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAABmJLR0QA/wD/AP+gvaeTAAAHpElEQVRo
 ArwCXBBCHJ/wOicamQf8CngAyDSZ3wWeBz4VQoybdEsmQgjRDHwfeAlIN5kPAz8RQlROtH1jZiQIrADeBBabzIeAHwFnhRCHJ9yCCcII8F3gH4DL
 ZH4v8HMhRMVE2zchRgLAA8B7gM9kPgD8SAhxfcItmACMAE8BHwNuk/k9wDeEEJcm2r6JGakH3gXWmcyHgO8LIc5MuAUTgBHgceBfJvNu4MdCiCsT
 bd+EGKkF3gU2mswHgO8IIU5NuAUTgBHgCeBvJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8w
-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
+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
@@ -760,23 +765,23 @@ def tab_clientes(ws_cli):
 def tab_gestion_capital(ws_cap, ws_gas):
     st.markdown(f"### <span style='color:{COLOR_ACENTO}'>💰</span> Inversión y Gastos (Nexus Pro)", unsafe_allow_html=True)
 
-    tab1, tab2 = st.tabs(["📉 Registrar Gasto/Egreso", "📈 Registrar Inversión/Capital"])
+    tab1, tab2, tab3 = st.tabs(["📉 Gastos Operativos", "💸 Pago Proveedores (Inventario)", "📈 Registrar Capital"])
 
-    # --- TAB GASTOS ---
+    # --- TAB 1: GASTOS OPERATIVOS ---
     with tab1:
-        st.markdown("#### Salida de Dinero")
+        st.markdown("#### Salida de Dinero (Gastos Generales)")
         with st.form("form_gasto"):
             col1, col2 = st.columns(2)
             with col1:
-                tipo_gasto = st.selectbox("Clasificación", ["Gasto Fijo", "Gasto Variable", "Costo de Venta (Mercancía)"])
-                categoria = st.selectbox("Concepto", ["Compra de Mercancía", "Arriendo", "Nómina", "Servicios", "Publicidad", "Mantenimiento", "Otros"])
-                descripcion = st.text_input("Detalle")
+                tipo_gasto = st.selectbox("Clasificación", ["Gasto Fijo", "Gasto Variable", "Mantenimiento", "Impuestos"])
+                categoria = st.selectbox("Concepto", ["Arriendo", "Nómina", "Servicios Públicos", "Publicidad", "Transporte", "Insumos Aseo", "Otros"])
+                descripcion = st.text_input("Detalle del gasto")
             with col2:
                 monto = st.number_input("Monto Salida ($)", min_value=0.0)
-                origen = st.selectbox("¿De dónde salió el dinero?", ["Caja General", "Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Caja Menor"])
+                origen = st.selectbox("¿De dónde salió el dinero?", ["Caja General", "Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Caja Menor"], key="orig_gast")
                 fecha_gasto = st.date_input("Fecha Gasto", value=date.today())
 
-            if st.form_submit_button("🔴 Registrar Gasto", type="primary"):
+            if st.form_submit_button("🔴 Registrar Gasto Operativo", type="primary"):
                 if monto > 0:
                     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     datos = [ts, str(fecha_gasto), tipo_gasto, categoria, descripcion, monto, "N/A", origen]
@@ -787,8 +792,50 @@ def tab_gestion_capital(ws_cap, ws_gas):
                 else:
                     st.error("El monto debe ser mayor a 0.")
 
-    # --- TAB INVERSIONES ---
+    # --- TAB 2: PAGO PROVEEDORES (NUEVO) ---
     with tab2:
+        st.markdown("#### 📦 Registro de Compras de Inventario")
+        st.caption("Utiliza este módulo para registrar pagos a proveedores. Esto se contabilizará como Costo de Venta.")
+        
+        with st.form("form_proveedor"):
+            c_prov1, c_prov2 = st.columns(2)
+            with c_prov1:
+                proveedor = st.text_input("Nombre del Proveedor / Laboratorio", placeholder="Ej: Italcol, Gabrica...")
+                num_factura = st.text_input("Número de Factura / Referencia")
+                notas_compra = st.text_area("Productos / Notas Adicionales", placeholder="Detalle breve de la compra...")
+            
+            with c_prov2:
+                monto_prov = st.number_input("Total Pagado ($)", min_value=0.0)
+                origen_pago = st.selectbox("Método de Pago", ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Efectivo", "Tarjeta Crédito"], key="orig_prov")
+                fecha_compra = st.date_input("Fecha de Compra", value=date.today(), key="fecha_prov")
+            
+            if st.form_submit_button("💸 Registrar Pago a Proveedor", type="primary"):
+                if monto_prov > 0 and proveedor:
+                    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # Estructuramos la descripción para guardar la info del proveedor sin cambiar las columnas del sheet
+                    desc_completa = f"[PROV: {proveedor}] [REF: {num_factura}] - {notas_compra}"
+                    
+                    # Categoría fija para analisis financiero
+                    datos_prov = [
+                        ts, str(fecha_compra), 
+                        "Costo de Venta",      # TIPO
+                        "Compra Inventario",   # CATEGORIA (Clave para análisis)
+                        desc_completa,         # DESCRIPCION
+                        monto_prov,            # MONTO
+                        "N/A", 
+                        origen_pago            # ORIGEN
+                    ]
+                    
+                    if escribir_fila(ws_gas, datos_prov):
+                        st.toast(f"Pago a {proveedor} registrado por ${monto_prov:,.0f}", icon="🚚")
+                        time.sleep(1)
+                        st.rerun()
+                else:
+                    st.warning("El monto debe ser positivo y debes indicar el Proveedor.")
+
+    # --- TAB 3: INVERSIONES ---
+    with tab3:
         st.markdown("#### Entrada de Dinero (Inversión)")
         st.caption("Capital inicial o inyecciones de socios.")
         
@@ -853,7 +900,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     col_res1, col_res2, col_res3 = st.columns(3)
     col_res1.metric("Base Inicial", f"${base_caja:,.0f}")
     col_res2.metric("Ventas Efectivo", f"${ventas_efectivo:,.0f}")
-    col_res3.metric("Gastos Efectivo", f"${gastos_efectivo:,.0f}")
+    col_res3.metric("Salidas Efectivo", f"${gastos_efectivo:,.0f}")
 
     st.markdown(f"<h3 style='text-align:center; color:{COLOR_PRIMARIO}'>💰 DEBE HABER EN CAJÓN: ${teorico_caja:,.0f}</h3>", unsafe_allow_html=True)
     
@@ -898,7 +945,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
             st.metric("Total Digital Esperado", f"${total_digital:,.0f}")
         with col_graf:
             fig = px.pie(datos_digitales, names='Medio', values='Total Venta', title='Ingresos Digitales', hole=0.5,
-                         color_discrete_sequence=[COLOR_PRIMARIO, COLOR_ACENTO, COLOR_SECUNDARIO, "#2c3e50"])
+                          color_discrete_sequence=[COLOR_PRIMARIO, COLOR_ACENTO, COLOR_SECUNDARIO, "#2c3e50"])
             fig.update_layout(height=250, margin=dict(t=30, b=0, l=0, r=0))
             st.plotly_chart(fig, use_container_width=True)
     else:
@@ -958,8 +1005,10 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     costos_directos = 0 
     gastos_operativos = 0 
     
+    # Análisis de Gastos y Costos (Integración de Proveedores)
     if not g_rango.empty and 'Categoria' in g_rango.columns and 'Monto' in g_rango.columns:
-        mask_costo = g_rango['Categoria'].isin(['Compra de Mercancía', 'Costo de Venta'])
+        # Aquí clasificamos "Compra Inventario" y "Costo de Venta" como Costo Directo
+        mask_costo = g_rango['Categoria'].isin(['Compra de Mercancía', 'Costo de Venta', 'Compra Inventario', 'Pago Proveedores'])
         costos_directos = g_rango[mask_costo]['Monto'].sum()
         gastos_operativos = g_rango[~mask_costo]['Monto'].sum()
 
@@ -977,7 +1026,7 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     k1.metric("Ventas Totales", f"${ingresos:,.0f}", help="Ingreso bruto")
     k2.metric("Utilidad Neta", f"${utilidad_neta:,.0f}", delta=f"{margen_neto:.1f}% Margen")
     k3.metric("Ticket Promedio", f"${ticket_promedio:,.0f}")
-    k4.metric("Costos Mercancía", f"${costos_directos:,.0f}", delta="-Costo", delta_color="inverse")
+    k4.metric("Compras Inventario", f"${costos_directos:,.0f}", delta="-Costo", delta_color="inverse", help="Pagos a Proveedores")
     k5.metric("Gastos Operativos", f"${gastos_operativos:,.0f}", delta="-Gasto", delta_color="inverse")
 
     st.markdown("---")
@@ -998,11 +1047,13 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
         else:
             st.info("Sin datos para graficar.")
 
-    # Gráfico 2: Estructura de Gastos
+    # Gráfico 2: Estructura de Gastos Y COMPRAS
     with col_g2:
-        st.subheader("💸 Gastos")
+        st.subheader("💸 Estructura de Costos")
         if not g_rango.empty:
+            # Agrupar para ver claramente proveedores vs otros
             fig_pie = px.pie(g_rango, values='Monto', names='Categoria', hole=0.4,
+                             title="Distribución del Egreso",
                              color_discrete_sequence=[COLOR_ACENTO, COLOR_PRIMARIO, COLOR_SECUNDARIO, "#95a5a6"])
             fig_pie.update_layout(height=350, showlegend=False)
             fig_pie.update_traces(textposition='inside', textinfo='percent+label')
@@ -1010,9 +1061,46 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
         else:
             st.info("Sin gastos registrados.")
 
-    # --- NUEVA SECCIÓN: ANÁLISIS POR CANAL ---
+    # --- ANÁLISIS DE PROVEEDORES (NUEVO BLOQUE) ---
     st.markdown("---")
-    st.subheader("🚚 Análisis de Canales: Domicilios vs. Mostrador")
+    st.subheader("📦 Análisis de Compras a Proveedores")
+    
+    if not g_rango.empty and 'Categoria' in g_rango.columns:
+        # Filtrar solo compras de inventario
+        mask_prov = g_rango['Categoria'].isin(['Compra Inventario', 'Compra de Mercancía'])
+        df_prov = g_rango[mask_prov].copy()
+        
+        if not df_prov.empty:
+            p1, p2 = st.columns([1, 1])
+            
+            with p1:
+                # Tabla detalle
+                st.markdown("##### Historial de Compras")
+                df_view_prov = df_prov[['Fecha_Dt', 'Descripcion', 'Monto']].sort_values(by='Fecha_Dt', ascending=False)
+                st.dataframe(df_view_prov, use_container_width=True, hide_index=True)
+            
+            with p2:
+                 # Intentar extraer nombre del proveedor de la descripción si sigue el formato [PROV: Nombre]
+                 try:
+                     # Regex simple o split para sacar el proveedor. Asumimos formato "[PROV: Nombre]..."
+                     df_prov['Proveedor_Ext'] = df_prov['Descripcion'].apply(
+                         lambda x: x.split("]")[0].replace("[PROV:", "").strip() if "[PROV:" in x else "Varios"
+                     )
+                     agrupado_prov = df_prov.groupby('Proveedor_Ext')['Monto'].sum().reset_index()
+                     
+                     fig_bar_prov = px.bar(agrupado_prov, x='Monto', y='Proveedor_Ext', orientation='h',
+                                           title="Total Comprado por Proveedor", text_auto='.2s')
+                     fig_bar_prov.update_traces(marker_color=COLOR_SECUNDARIO)
+                     st.plotly_chart(fig_bar_prov, use_container_width=True)
+                     
+                 except Exception as e:
+                     st.info("No hay suficientes datos formateados para graficar proveedores específicos.")
+        else:
+            st.info("No hay registros de compras de inventario en este periodo.")
+
+    # --- ANÁLISIS POR CANAL ---
+    st.markdown("---")
+    st.subheader("🚚 Ventas por Canal: Domicilios vs. Mostrador")
     
     if not v_rango.empty and 'Tipo_Entrega' in v_rango.columns:
         c_dom1, c_dom2 = st.columns([1, 1])
