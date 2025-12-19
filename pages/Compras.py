@@ -13,8 +13,8 @@ import re
 # ==========================================
 
 st.set_page_config(
-    page_title="Recepción Inteligente Colombia v10.0 FINAL", 
-    page_icon="🇨🇴", 
+    page_title="Recepción Inteligente Colombia v11.0 PRO", 
+    page_icon="📥", 
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -171,8 +171,14 @@ def conectar_sheets():
         except:
             ws_hist = sh.add_worksheet("Historial_Recepciones", 1000, 7)
             ws_hist.append_row(["Fecha", "Folio", "Proveedor", "Items", "Total", "Usuario", "Estado"])
+        
+        # --- MEJORA 2: CONEXIÓN A GASTOS ---
+        try: ws_gas = sh.worksheet("Gastos")
+        except:
+            ws_gas = sh.add_worksheet("Gastos", 1000, 8)
+            ws_gas.append_row(["Timestamp", "Fecha", "Tipo", "Categoria", "Descripcion", "Monto", "Responsable", "Banco_Origen"])
 
-        return sh, ws_inv, ws_map, ws_hist
+        return sh, ws_inv, ws_map, ws_hist, ws_gas
     except Exception as e:
         st.error(f"Error Conexión Sheets: {e}")
         st.stop()
@@ -239,8 +245,7 @@ def cargar_cerebro(_ws_inv, _ws_map):
 def parsear_xml_colombia(archivo):
     """
     Lee XMLs de Facturación Electrónica Colombia.
-    Calcula el precio unitario restando el primer descuento al precio base
-    para coincidir con el PDF y prioriza el StandardID.
+    Calcula el precio unitario restando el primer descuento al precio base.
     """
     try:
         tree = ET.parse(archivo)
@@ -292,11 +297,9 @@ def parsear_xml_colombia(archivo):
                 qty = float(line.find('cbc:InvoicedQuantity', ns).text)
                 
                 # --- PRECIO CORREGIDO ---
-                # 1. Obtener precio base (Lista)
                 price_node = line.find('.//cac:Price/cbc:PriceAmount', ns)
                 base_price = float(price_node.text) if price_node is not None else 0.0
                 
-                # 2. Buscar el PRIMER descuento (AllowanceCharge con ChargeIndicator=false)
                 discount_amount = 0.0
                 allowances = line.findall('.//cac:AllowanceCharge', ns)
                 if allowances:
@@ -343,17 +346,16 @@ def parsear_xml_colombia(archivo):
         return None
 
 # ==========================================
-# 6. LÓGICA DE GUARDADO (Cerebro Mejorado)
+# 6. LÓGICA DE GUARDADO (INTEGRADA CON FINANZAS)
 # ==========================================
 
-def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
+def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_pago):
     """
-    Actualiza Inventario, Precios, Costos y Memoria.
-    CORRECCIÓN: Asegura que si es NUEVO, se genere el ID primero y ESE ID
-    se guarde en el mapeo para que la próxima vez lo encuentre.
+    Actualiza Inventario, Precios, Costos, Memoria Y REGISTRA GASTO AUTOMÁTICO.
     """
     try:
         fecha = datetime.now().strftime("%Y-%m-%d")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # --- A. LEER INVENTARIO ACTUAL ---
         inv_data = ws_inv.get_all_values()
@@ -378,7 +380,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
         appends = []
         logs = []
         
-        # --- B. BUCLE PRINCIPAL (Unificado) ---
+        # --- B. BUCLE PRINCIPAL (INVENTARIO) ---
         for index_row, row in df_final.iterrows():
             sel = row['SKU_Interno_Seleccionado']
             sku_prov_factura = str(row['SKU_Proveedor'])
@@ -388,40 +390,38 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
             cant_recibida_xml = float(row['Cantidad_Recibida'])
             cant_total_unidades = cant_recibida_xml * factor
             costo_unitario_xml = float(row['Costo_Unitario']) / factor
-            costo_nuevo_con_iva = costo_unitario_xml * 1.05 # +5%
+            costo_nuevo_con_iva = costo_unitario_xml * 1.05 # +5% de margen seguridad costo
             
             # 1. DETERMINAR ID INTERNO REAL
             final_internal_id = ""
             es_producto_nuevo = False
             
             if "NUEVO" in sel:
-                # Caso: Crear Nuevo. Generamos el ID aquí mismo.
+                # Caso: Crear Nuevo.
                 es_producto_nuevo = True
                 
                 # Intentar usar el SKU del proveedor como ID interno si es válido
                 if sku_prov_factura and sku_prov_factura != "S/C":
                     final_internal_id = sku_prov_factura
                 else:
-                    # Generar ID único temporal
                     final_internal_id = f"N-{int(time.time())}-{index_row}"
             else:
-                # Caso: Producto Existente seleccionado de la lista
+                # Caso: Producto Existente
                 final_internal_id = sel.split(" | ")[0].strip()
             
-            # 2. GUARDAR MAPEO (Aprendizaje)
-            # Aquí está la corrección clave: guardamos el mapping usando final_internal_id
-            new_mappings.append([
-                str(meta_xml['ID_Proveedor']),
-                str(meta_xml['Proveedor']),
-                sku_prov_factura,
-                final_internal_id, # <--- Este es el ID correcto, no "NUEVO..."
-                factor,
-                fecha
-            ])
+            # 2. GUARDAR MAPEO (Solo si viene de XML o tiene ref proveedor)
+            if sku_prov_factura != "S/C":
+                new_mappings.append([
+                    str(meta_xml['ID_Proveedor']),
+                    str(meta_xml['Proveedor']),
+                    sku_prov_factura,
+                    final_internal_id, 
+                    factor,
+                    fecha
+                ])
             
             # 3. ACTUALIZAR INVENTARIO (Append o Update)
             if es_producto_nuevo:
-                # Crear Fila Nueva
                 precio_sugerido = redondear_centena(costo_nuevo_con_iva * 1.30)
                 
                 new_row = [""] * len(header)
@@ -435,11 +435,9 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
                 appends.append(new_row)
                 logs.append(f"✨ CREADO: {final_internal_id} | {row['Descripcion']}")
                 
-                # Actualizar mapa_filas temporalmente por si hay duplicados en la misma factura (raro pero posible)
                 mapa_filas[normalizar_str(final_internal_id)] = len(inv_data) + len(appends)
             
             else:
-                # Actualizar Fila Existente
                 sku_norm = normalizar_str(final_internal_id)
                 if sku_norm in mapa_filas:
                     fila = mapa_filas[sku_norm]
@@ -468,14 +466,14 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
                     else:
                         logs.append(f"🔄 STOCK: {final_internal_id} (+{cant_total_unidades})")
 
-        # --- C. EJECUTAR ESCRITURAS ---
-        if new_mappings: ws_map.append_rows(new_mappings) # ¡Guarda el aprendizaje!
+        # --- C. EJECUTAR ESCRITURAS INVENTARIO ---
+        if new_mappings: ws_map.append_rows(new_mappings)
         if updates: ws_inv.batch_update(updates)
         if appends: ws_inv.append_rows(appends)
 
         # --- D. HISTORIAL ---
         ws_hist.append_row([
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            timestamp,
             str(meta_xml['Folio']),
             str(meta_xml['Proveedor']),
             len(df_final),
@@ -483,6 +481,25 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
             "Admin",
             "OK"
         ])
+
+        # --- E. MEJORA 2: REGISTRAR GASTO AUTOMÁTICO EN APP PRINCIPAL ---
+        # Formato Gastos: [Timestamp, Fecha, Tipo, Categoria, Descripcion, Monto, Responsable, Banco_Origen]
+        try:
+            descripcion_gasto = f"[PROV: {meta_xml['Proveedor']}] [REF: {meta_xml['Folio']}] - Compra Mercancía"
+            datos_gasto = [
+                timestamp,
+                fecha,
+                "Costo de Venta",      # Tipo
+                "Compra Inventario",   # Categoría Clave para Nexus Pro
+                descripcion_gasto,
+                meta_xml['Total'],
+                "Módulo Compras",
+                info_pago['Origen']    # Banco seleccionado en UI
+            ]
+            ws_gas.append_row(datos_gasto)
+            logs.append(f"💰 Gasto Registrado: ${meta_xml['Total']:,.0f} desde {info_pago['Origen']}")
+        except Exception as ex_gas:
+            logs.append(f"⚠️ Alerta: No se registró en Gastos: {ex_gas}")
 
         return True, logs
 
@@ -494,39 +511,134 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, df_final, meta_xml):
 # ==========================================
 
 def main():
-    st.markdown('<div class="main-header">Recepción Inteligente 🇨🇴</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">Recepción & Compras 📥</div>', unsafe_allow_html=True)
     
     if 'step' not in st.session_state: st.session_state.step = 1
     
     # Conexión
-    sh, ws_inv, ws_map, ws_hist = conectar_sheets()
+    sh, ws_inv, ws_map, ws_hist, ws_gas = conectar_sheets()
 
-    # --- PASO 1: CARGA ---
+    # --- PASO 1: SELECCIÓN DE MODO (MEJORA 1) ---
     if st.session_state.step == 1:
-        st.markdown('<div class="sub-header">Arrastra tu Factura XML aquí para comenzar</div>', unsafe_allow_html=True)
-        uploaded = st.file_uploader("", type=['xml'])
+        st.markdown('<div class="sub-header">Selecciona el método de ingreso</div>', unsafe_allow_html=True)
         
-        if uploaded:
-            with st.spinner("🤖 Analizando estructura DIAN y calculando descuentos..."):
-                data = parsear_xml_colombia(uploaded)
-                if not data: st.stop()
-                
-                # Cargar Memoria
-                lst_prods, dct_prods, memoria = cargar_cerebro(ws_inv, ws_map)
-                
-                # Session
-                st.session_state.xml_data = data
-                st.session_state.lst_prods = lst_prods
-                st.session_state.dct_prods = dct_prods
-                st.session_state.memoria = memoria
-                st.session_state.step = 2
-                st.rerun()
+        tab_xml, tab_manual = st.tabs(["📂 Cargar XML (Factura Electrónica)", "✍️ Ingreso Manual"])
+        
+        # --- OPCIÓN A: XML ---
+        with tab_xml:
+            st.info("Arrastra tu Factura XML de la DIAN para autocompletar.")
+            uploaded = st.file_uploader("", type=['xml'], key="xml_upl")
+            
+            if uploaded:
+                with st.spinner("🤖 Analizando estructura DIAN..."):
+                    data = parsear_xml_colombia(uploaded)
+                    if not data: st.stop()
+                    
+                    # Cargar Memoria
+                    lst_prods, dct_prods, memoria = cargar_cerebro(ws_inv, ws_map)
+                    
+                    st.session_state.xml_data = data
+                    st.session_state.lst_prods = lst_prods
+                    st.session_state.dct_prods = dct_prods
+                    st.session_state.memoria = memoria
+                    st.session_state.origen_datos = "XML"
+                    st.session_state.step = 2
+                    st.rerun()
 
-    # --- PASO 2: VERIFICACIÓN ---
+        # --- OPCIÓN B: MANUAL (MEJORA 1) ---
+        with tab_manual:
+            st.warning("Usa esta opción si no tienes el XML digital.")
+            
+            with st.form("form_manual_header"):
+                c1, c2, c3 = st.columns(3)
+                prov_man = c1.text_input("Proveedor", placeholder="Ej: Italcol")
+                nit_man = c2.text_input("NIT / ID Proveedor", value="000")
+                folio_man = c3.text_input("No. Factura", placeholder="FAC-123")
+                
+                st.markdown("---")
+                st.write("📝 **Agregar Items a la Factura**")
+                
+                # Cargamos inventario para que el selectbox funcione
+                if 'lst_prods_cache' not in st.session_state:
+                    l, d, m = cargar_cerebro(ws_inv, ws_map)
+                    st.session_state.lst_prods_cache = l
+                    st.session_state.dct_prods_cache = d
+                    st.session_state.memoria_cache = m
+
+                # Data Editor Dinámico
+                df_template = pd.DataFrame([{
+                    "Producto": "", 
+                    "Cantidad": 1, 
+                    "Costo_Total_Item": 0.0
+                }])
+                
+                edited_manual = st.data_editor(
+                    df_template,
+                    num_rows="dynamic",
+                    column_config={
+                        "Producto": st.column_config.SelectboxColumn(
+                            "Producto (Inventario)",
+                            options=st.session_state.lst_prods_cache,
+                            required=True,
+                            width="large"
+                        ),
+                        "Cantidad": st.column_config.NumberColumn("Cant. Unidades", min_value=1),
+                        "Costo_Total_Item": st.column_config.NumberColumn("Costo Total Línea ($)", min_value=0.0)
+                    },
+                    use_container_width=True,
+                    key="manual_editor"
+                )
+
+                submit_manual = st.form_submit_button("Siguiente Paso ➡️")
+                
+                if submit_manual:
+                    if not prov_man or not folio_man:
+                        st.error("Debes indicar Proveedor y Factura.")
+                    else:
+                        # Convertir manual a estructura estándar
+                        items_std = []
+                        total_manual = 0.0
+                        
+                        for i, row in edited_manual.iterrows():
+                            if row["Producto"]:
+                                c_tot = float(row["Costo_Total_Item"])
+                                qty = float(row["Cantidad"])
+                                c_unit = c_tot / qty if qty > 0 else 0
+                                total_manual += c_tot
+                                
+                                # Simulamos estructura XML
+                                items_std.append({
+                                    'SKU_Proveedor': "S/C",
+                                    'Descripcion': row["Producto"].split(" | ")[1] if " | " in row["Producto"] else row["Producto"],
+                                    'Cantidad': qty,
+                                    'Costo_Unitario': c_unit
+                                })
+                        
+                        if not items_std:
+                            st.error("Agrega al menos un producto.")
+                        else:
+                            # Guardar en sesión
+                            st.session_state.xml_data = {
+                                'Proveedor': prov_man,
+                                'ID_Proveedor': nit_man,
+                                'Folio': folio_man,
+                                'Total': total_manual,
+                                'Items': items_std
+                            }
+                            # Usamos caché
+                            st.session_state.lst_prods = st.session_state.lst_prods_cache
+                            st.session_state.dct_prods = st.session_state.dct_prods_cache
+                            st.session_state.memoria = st.session_state.memoria_cache
+                            st.session_state.origen_datos = "MANUAL"
+                            st.session_state.step = 2
+                            st.rerun()
+
+    # --- PASO 2: VERIFICACIÓN Y PAGO (MEJORA 2) ---
     elif st.session_state.step == 2:
         d = st.session_state.xml_data
         mem = st.session_state.memoria
         dct = st.session_state.dct_prods
+        origen = st.session_state.origen_datos
         
         # --- Tarjetas Métricas ---
         st.markdown(f"""
@@ -557,16 +669,26 @@ def main():
             sku_prov = it['SKU_Proveedor']
             key = f"{nit_clean}_{normalizar_str(sku_prov)}"
             
-            sel_def = "NUEVO (Crear Producto)"
-            fac_def = 1.0
-            
-            # Búsqueda en memoria
-            if key in mem:
-                sku_int = mem[key]['SKU_Interno']
-                if sku_int in dct:
-                    sel_def = dct[sku_int]
-                    fac_def = mem[key]['Factor']
-                    matches += 1
+            # Lógica: Si viene de Manual, ya seleccionó el producto, así que lo pre-asignamos
+            if origen == "MANUAL":
+                # Intentamos buscar coincidencia inversa por nombre
+                sel_def = "NUEVO (Crear Producto)"
+                # En manual el "Descripcion" ya es el nombre seleccionado o escrito
+                for p in st.session_state.lst_prods:
+                    if it['Descripcion'] in p:
+                        sel_def = p
+                        break
+                fac_def = 1.0
+            else:
+                # Lógica XML (Busca en memoria)
+                sel_def = "NUEVO (Crear Producto)"
+                fac_def = 1.0
+                if key in mem:
+                    sku_int = mem[key]['SKU_Interno']
+                    if sku_int in dct:
+                        sel_def = dct[sku_int]
+                        fac_def = mem[key]['Factor']
+                        matches += 1
             
             rows_edit.append({
                 "SKU_Proveedor": sku_prov,
@@ -578,27 +700,41 @@ def main():
                 "Costo_Unitario": it['Costo_Unitario']
             })
         
-        if matches > 0: st.success(f"🧠 {matches} productos identificados automáticamente.")
-        else: st.info("ℹ️ Asocia los productos por primera vez. El sistema aprenderá para la próxima.")
+        if origen == "XML":
+            if matches > 0: st.success(f"🧠 {matches} productos identificados automáticamente.")
+            else: st.info("ℹ️ Asocia los productos por primera vez.")
 
         # Editor
         df_show = pd.DataFrame(rows_edit)
         edited = st.data_editor(
             df_show,
             column_config={
-                "SKU_Proveedor": st.column_config.TextColumn("Ref. Prov", disabled=True, help="Referencia leída del XML (Standard ID)"),
+                "SKU_Proveedor": st.column_config.TextColumn("Ref. Prov", disabled=True),
                 "Descripcion": st.column_config.TextColumn("Producto Factura", disabled=True, width="medium"),
                 "SKU_Interno_Seleccionado": st.column_config.SelectboxColumn("📌 Tu Inventario", options=st.session_state.lst_prods, required=True, width="large"),
                 "Factor_Pack": st.column_config.NumberColumn("Factor (Uds/Caja)", min_value=0.1, help="Si llega 1 caja de 12, pon 12"),
                 "Cantidad_XML": st.column_config.NumberColumn("Cant. Fac", disabled=True),
                 "Cantidad_Recibida": st.column_config.NumberColumn("✅ Recibido"),
-                "Costo_Unitario": st.column_config.NumberColumn("Costo Base", format="$%d", disabled=True, help="Precio Unitario del PDF (Base - Descuento)")
+                "Costo_Unitario": st.column_config.NumberColumn("Costo Base", format="$%d", disabled=True)
             },
             use_container_width=True,
             hide_index=True,
-            height=500
+            height=400
         )
         
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # --- SECCIÓN FINANCIERA (MEJORA 2 CRÍTICA) ---
+        with st.container(border=True):
+            st.markdown("#### 💰 Fuente de Pago (Para Registro de Gastos)")
+            st.info("Selecciona de dónde sale el dinero para que se registre automáticamente en Finanzas.")
+            
+            col_banco, col_dummy = st.columns([1, 2])
+            origen_pago = col_banco.selectbox(
+                "Cuenta de Egreso", 
+                ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Efectivo", "Crédito Proveedor (CxP)"]
+            )
+
         # Botones Acción
         st.markdown("<br>", unsafe_allow_html=True)
         colA, colB = st.columns([1, 4])
@@ -606,15 +742,20 @@ def main():
             st.session_state.step = 1
             st.rerun()
         
-        if colB.button("🚀 PROCESAR ENTRADA Y ACTUALIZAR PRECIOS", type="primary", use_container_width=True):
+        if colB.button("🚀 PROCESAR ENTRADA Y REGISTRAR GASTO", type="primary", use_container_width=True):
             with st.status("⚙️ Aplicando lógica de negocio...", expanded=True):
-                st.write("Calculando IVA 5% y redondeos...")
-                ok, logs = procesar_guardado(ws_map, ws_inv, ws_hist, edited, d)
+                st.write("Calculando Costos e Inventario...")
+                
+                # Preparamos info de pago
+                info_pago = {"Origen": origen_pago}
+                
+                # LLAMADA ACTUALIZADA CON WS_GAS
+                ok, logs = procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, edited, d, info_pago)
                 
                 if ok:
                     st.write("✅ Inventario Actualizado")
                     st.write("✅ Precios Recalculados")
-                    st.write("✅ Aprendizaje Guardado") # Confirmación visual
+                    st.write("✅ Gasto Insertado en Finanzas") 
                     time.sleep(1)
                     st.balloons()
                     st.success("¡Proceso Terminado Exitosamente!")
@@ -622,7 +763,7 @@ def main():
                     with st.expander("📄 Ver Reporte de Cambios (Logs)"):
                         for l in logs:
                             if "SUBIÓ" in l: st.warning(l)
-                            elif "BAJÓ" in l: st.success(l)
+                            elif "Gasto" in l: st.info(l)
                             else: st.text(l)
                     
                     if st.button("Nueva Factura"):
