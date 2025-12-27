@@ -6,6 +6,7 @@ import numpy as np
 import json
 import uuid
 import time
+import io
 from datetime import datetime, timedelta, date
 from urllib.parse import quote
 import smtplib
@@ -17,7 +18,7 @@ from email.mime.multipart import MIMEMultipart
 # ==========================================
 
 st.set_page_config(
-    page_title="Bigotes & Paticas | Nexus Pro",
+    page_title="Bigotes & Paticas | Nexus Pro WMS",
     page_icon="🐾",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -63,12 +64,7 @@ st.markdown("""
         color: white;
         border-color: #187f77;
     }
-    /* Botón Primario (Acciones Fuertes) */
-    div.stButton > button:focus:not(:active) {
-        border-color: #f5a641;
-        color: #f5a641;
-    }
-
+    
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] {
@@ -87,9 +83,18 @@ st.markdown("""
     /* Dataframe y Tablas */
     div[data-testid="stDataFrame"] { border: 1px solid #e0f2f1; }
     
-    /* Alertas y Mensajes */
-    .stAlert { background-color: #fff7ed; border: 1px solid #f5a641; color: #9a3412; }
+    /* Input Fields */
+    .stTextInput > div > div > input { border-radius: 8px; }
     
+    /* Custom Box for Totals */
+    .total-box {
+        background-color: #e0f2f1;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #187f77;
+        text-align: right;
+        margin-bottom: 20px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -135,6 +140,7 @@ def cargar_datos_completos(sh):
     cols_prov = ['ID_Proveedor', 'Nombre_Proveedor', 'SKU_Proveedor', 'SKU_Interno', 'Factor_Pack', 'Ultima_Actualizacion', 'Email', 'Costo_Proveedor']
     cols_ord = ['ID_Orden', 'Proveedor', 'Fecha_Orden', 'Items_JSON', 'Total_Dinero', 'Estado', 'Fecha_Recepcion', 'Lead_Time_Real', 'Calificacion']
     cols_recep = ['Fecha_Recepcion', 'Folio_Factura', 'Proveedor', 'Fecha_Emision_Factura', 'Dias_Entrega', 'Total_Items', 'Total_Costo']
+    cols_ajustes = ['ID_Ajuste', 'Fecha', 'ID_Producto', 'Nombre', 'Stock_Anterior', 'Conteo_Fisico', 'Diferencia', 'Tipo_Movimiento', 'Usuario']
 
     # Obtener Hojas
     ws_inv = get_worksheet_safe(sh, "Inventario", cols_inv)
@@ -142,6 +148,7 @@ def cargar_datos_completos(sh):
     ws_prov = get_worksheet_safe(sh, "Maestro_Proveedores", cols_prov)
     ws_ord = get_worksheet_safe(sh, "Historial_Ordenes", cols_ord)
     ws_recep = get_worksheet_safe(sh, "Historial_Recepciones", cols_recep)
+    ws_ajustes = get_worksheet_safe(sh, "Historial_Ajustes", cols_ajustes)
 
     # DataFrames
     df_inv = pd.DataFrame(ws_inv.get_all_records())
@@ -151,15 +158,17 @@ def cargar_datos_completos(sh):
     
     # --- LIMPIEZA Y NORMALIZACIÓN ---
     
-    # 1. Inventario (Asegurar ID único es string)
+    # 1. Inventario
     if not df_inv.empty:
+        # Asegurar columnas
         for c in cols_inv: 
             if c not in df_inv.columns: df_inv[c] = ""
+        
         df_inv['Stock'] = pd.to_numeric(df_inv['Stock'], errors='coerce').fillna(0)
         df_inv['Costo'] = df_inv['Costo'].apply(clean_currency)
         df_inv['Precio'] = df_inv['Precio'].apply(clean_currency)
         df_inv['ID_Producto'] = df_inv['ID_Producto'].astype(str).str.strip()
-        # PROTECCIÓN CONTRA DUPLICADOS EN LA HOJA DE INVENTARIO
+        # Drop duplicates para la lógica, pero mantenemos referencia al WS
         df_inv.drop_duplicates(subset=['ID_Producto'], keep='first', inplace=True)
     else:
         df_inv = pd.DataFrame(columns=cols_inv)
@@ -188,11 +197,11 @@ def cargar_datos_completos(sh):
         "df_ven": df_ven, "ws_ven": ws_ven,
         "df_prov": df_prov, "ws_prov": ws_prov,
         "df_ord": df_ord, "ws_ord": ws_ord,
-        "ws_recep": ws_recep
+        "ws_recep": ws_recep, "ws_ajustes": ws_ajustes
     }
 
 # ==========================================
-# 3. LÓGICA DE NEGOCIO (SIN DUPLICADOS)
+# 3. LÓGICA DE NEGOCIO Y EXCEL
 # ==========================================
 
 def procesar_inventario_avanzado(df_inv, df_ven, df_prov):
@@ -215,9 +224,7 @@ def procesar_inventario_avanzado(df_inv, df_ven, df_prov):
     else:
         df_sales = pd.DataFrame(columns=['Nombre', 'Ventas_90d'])
 
-    # 2. MERGE INVENTARIO + VENTAS (Mantiene Unicidad)
-    # Hacemos el merge por 'Nombre' o 'ID' según corresponda. 
-    # El df_inv YA tiene los duplicados eliminados en la función de carga.
+    # 2. MERGE INVENTARIO + VENTAS
     if not df_inv.empty and 'Nombre' in df_inv.columns:
         master = pd.merge(df_inv, df_sales, on='Nombre', how='left').fillna({'Ventas_90d': 0})
     else:
@@ -236,21 +243,10 @@ def procesar_inventario_avanzado(df_inv, df_ven, df_prov):
     master['Stock_Objetivo'] = master['Velocidad_Diaria'] * 45
     master['Faltante_Unidades'] = (master['Stock_Objetivo'] - master['Stock']).clip(lower=0)
 
-    # 4. TRATAMIENTO DE PROVEEDORES (LA SOLUCIÓN A TU PROBLEMA)
-    # Creamos dos dataframes:
-    # A) master_unico: Para ver la base de datos limpia (1 fila por producto).
-    #    Si hay varios proveedores, tomamos el más económico o el primero.
-    # B) master_buy: Para generar órdenes (puede tener múltiples filas si hay varios proveedores).
-
+    # 4. TRATAMIENTO DE PROVEEDORES
     if not df_prov.empty:
-        # Paso clave: Ordenar proveedores por costo (ascendente) y quedarse con el primero por SKU_Interno
-        # Esto nos da el "Mejor Proveedor" para la vista resumida
         df_prov_unico = df_prov.sort_values('Costo_Proveedor', ascending=True).drop_duplicates(subset=['SKU_Interno'], keep='first')
-        
-        # Merge para la vista ÚNICA (Tablas de Inventario y Base de Datos)
         master_unico = pd.merge(master, df_prov_unico, left_on='ID_Producto', right_on='SKU_Interno', how='left')
-        
-        # Merge para la vista de COMPRAS (Permite ver todas las opciones)
         master_buy = pd.merge(master, df_prov, left_on='ID_Producto', right_on='SKU_Interno', how='left')
     else:
         master_unico = master.copy()
@@ -261,7 +257,7 @@ def procesar_inventario_avanzado(df_inv, df_ven, df_prov):
             df['Costo_Proveedor'] = df['Costo']
             df['Email'] = ''
 
-    # Limpieza final de Nulos
+    # Limpieza final
     for df in [master_unico, master_buy]:
         df['Nombre_Proveedor'] = df['Nombre_Proveedor'].fillna('Sin Asignar')
         df['Factor_Pack'] = df['Factor_Pack'].fillna(1).replace(0, 1)
@@ -270,8 +266,49 @@ def procesar_inventario_avanzado(df_inv, df_ven, df_prov):
 
     return master_unico, master_buy
 
+def generar_excel_pro(df_data, nombre_hoja="Reporte"):
+    """Genera un archivo Excel profesional con formatos y estilos."""
+    output = io.BytesIO()
+    
+    # Crear el escritor de Pandas usando xlsxwriter
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df_data.to_excel(writer, sheet_name=nombre_hoja, index=False)
+        
+        workbook = writer.book
+        worksheet = writer.sheets[nombre_hoja]
+        
+        # Formatos
+        header_fmt = workbook.add_format({
+            'bold': True, 'text_wrap': True, 'valign': 'top', 
+            'fg_color': '#187f77', 'font_color': '#FFFFFF', 'border': 1
+        })
+        currency_fmt = workbook.add_format({'num_format': '$#,##0', 'border': 1})
+        num_fmt = workbook.add_format({'num_format': '#,##0', 'border': 1})
+        base_fmt = workbook.add_format({'border': 1})
+        
+        # Aplicar formato a headers
+        for col_num, value in enumerate(df_data.columns.values):
+            worksheet.write(0, col_num, value, header_fmt)
+            
+            # Anchos automáticos estimados
+            col_width = max(len(str(value)) + 2, 12)
+            worksheet.set_column(col_num, col_num, col_width)
+
+        # Aplicar formato a columnas de Dinero
+        money_cols = ['Precio', 'Costo', 'Total', 'Valor', 'Costo_Proveedor']
+        for i, col in enumerate(df_data.columns):
+            if col in money_cols or 'Precio' in col or 'Costo' in col or 'Valor' in col:
+                worksheet.set_column(i, i, 15, currency_fmt)
+            elif 'Stock' in col or 'Ventas' in col or 'Diferencia' in col or 'Conteo' in col:
+                worksheet.set_column(i, i, 12, num_fmt)
+            else:
+                worksheet.set_column(i, i, 20, base_fmt)
+                
+    output.seek(0)
+    return output
+
 # ==========================================
-# 4. UTILS: COMUNICACIÓN
+# 4. UTILS: COMUNICACIÓN Y DB
 # ==========================================
 
 def enviar_correo(destinatario, proveedor, df_orden):
@@ -347,91 +384,192 @@ def main():
     if not sh: return
 
     # Carga Inicial
-    with st.spinner('🐾 Sincronizando sistema Nexus...'):
+    with st.spinner('🐾 Sincronizando sistema Nexus WMS...'):
         data = cargar_datos_completos(sh)
-        # Procesamiento: master_unico (para ver), master_buy (para comprar)
         master_unico, master_buy = procesar_inventario_avanzado(data['df_inv'], data['df_ven'], data['df_prov'])
 
     # HEADER
-    st.title("🐾 Bigotes & Paticas | Nexus PRO")
+    st.title("🐾 Bigotes & Paticas | Nexus WMS")
     st.markdown(f"**Fecha Sistema:** {date.today()} | **Usuario:** Admin")
 
-    # KPIs (Estilo Cian/Naranja)
+    # KPIs
     k1, k2, k3, k4 = st.columns(4)
     valor_inv = (master_unico['Stock'] * master_unico['Costo']).sum()
     agotados = master_unico[master_unico['Estado_Stock'] == '💀 AGOTADO'].shape[0]
     
     k1.metric("💰 Valor Inventario", f"${valor_inv:,.0f}")
-    k2.metric("⚠️ Referencias Agotadas", agotados, delta="Atención Inmediata" if agotados > 0 else "Stock Saludable", delta_color="inverse")
-    k3.metric("📦 Total Referencias", len(master_unico)) # ¡AHORA SÍ DARÁ EL NÚMERO REAL SIN REPETIDOS!
+    k2.metric("⚠️ Referencias Agotadas", agotados, delta="Atención" if agotados > 0 else "OK", delta_color="inverse")
+    k3.metric("📦 Referencias Totales", len(master_unico))
     k4.metric("📉 Tasa Venta (90d)", f"{int(master_unico['Ventas_90d'].sum())} unds")
 
     # TABS
-    tabs = st.tabs(["📊 Tablero Visual", "🛒 Generar Pedidos", "📥 Recepción Bodega", "💾 Base de Datos Maestra"])
+    tabs = st.tabs(["📊 Inventario y Auditoría", "🛒 Generar Pedidos", "📥 Recepción Bodega", "💾 Base de Datos Maestra"])
 
-    # --- TAB 1: VISUALIZACIÓN (USA MASTER_UNICO) ---
+    # --- TAB 1: INVENTARIO CONTEO FÍSICO Y CREACIÓN ---
     with tabs[0]:
-        col_g1, col_g2 = st.columns([2, 1])
+        st.subheader("📋 Control de Inventario & Auditoría")
         
-        with col_g1:
-            st.subheader("Mapa de Calor del Inventario")
-            # Treemap con los colores corporativos
-            if not master_unico.empty:
-                fig = px.treemap(
-                    master_unico[master_unico['Stock']>0], 
-                    path=['Categoria', 'Estado_Stock', 'Nombre'], 
-                    values='Stock',
-                    color='Estado_Stock', 
-                    color_discrete_map={'💀 AGOTADO':'#f5a641', '🚨 Pedir':'#fcd34d', '✅ OK':'#187f77'},
-                    title="Distribución de Stock"
-                )
-                fig.update_layout(margin=dict(t=30, l=10, r=10, b=10))
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("No hay datos de stock para graficar.")
+        col_ctrl, col_act = st.columns([3, 1])
+        
+        # 1. Agregar Producto Nuevo
+        with col_ctrl.expander("✨ Agregar Nuevo Producto (Alta en Sistema)"):
+            with st.form("nuevo_prod_form"):
+                c1, c2, c3 = st.columns(3)
+                nuevo_nombre = c1.text_input("Nombre Producto")
+                nuevo_sku = c2.text_input("ID/Código Barras")
+                nuevo_cat = c3.selectbox("Categoría", ["Alimento Seco", "Húmedo", "Accesorios", "Farmacia", "Higiene"])
+                
+                c4, c5, c6 = st.columns(3)
+                nuevo_costo = c4.number_input("Costo Unitario ($)", min_value=0.0)
+                nuevo_precio = c5.number_input("Precio Venta ($)", min_value=0.0)
+                nuevo_stock = c6.number_input("Stock Inicial", min_value=0, step=1)
+                
+                if st.form_submit_button("💾 Crear Producto"):
+                    if nuevo_nombre and nuevo_sku:
+                        # Verificar si existe
+                        if nuevo_sku in data['df_inv']['ID_Producto'].values:
+                            st.error("❌ El ID de Producto ya existe.")
+                        else:
+                            with st.spinner("Creando ficha de producto..."):
+                                # Inventario
+                                row_inv = [nuevo_sku, "", nuevo_nombre, nuevo_stock, nuevo_precio, nuevo_costo, nuevo_cat]
+                                data['ws_inv'].append_row(row_inv)
+                                # Si hay stock inicial, registrar ajuste inicial
+                                if nuevo_stock > 0:
+                                    row_ajuste = [str(uuid.uuid4())[:8], str(date.today()), nuevo_sku, nuevo_nombre, 0, nuevo_stock, nuevo_stock, "Alta Inicial", "Admin"]
+                                    data['ws_ajustes'].append_row(row_ajuste)
+                                
+                                st.success("¡Producto creado exitosamente!")
+                                time.sleep(1.5)
+                                st.rerun()
+                    else:
+                        st.warning("Nombre y ID son obligatorios.")
 
-        with col_g2:
-            st.subheader("🔥 Top 5 Más Vendidos")
-            top = master_unico.sort_values('Ventas_90d', ascending=False).head(5)
-            st.dataframe(top[['Nombre', 'Stock', 'Ventas_90d']], hide_index=True, use_container_width=True)
+        st.divider()
+
+        # 2. Tabla de Auditoría (Edición Masiva)
+        st.markdown("### 🕵️ Auditoría de Stock")
+        st.info("Instrucciones: Modifica la columna 'Conteo Físico'. Si hay diferencias, el sistema las resaltará. Al finalizar, presiona 'Confirmar Ajustes'.")
+
+        # Preparamos dataframe para edición
+        df_audit = master_unico[['ID_Producto', 'Nombre', 'Categoria', 'Stock', 'Costo']].copy()
+        df_audit.rename(columns={'Stock': 'Sistema'}, inplace=True)
+        # Inicializamos Conteo Físico igual al Sistema (asumiendo que está bien hasta que se diga lo contrario)
+        df_audit['Conteo_Físico'] = df_audit['Sistema']
+        df_audit['Diferencia'] = 0
+        df_audit['Acción'] = "✅ OK"
+
+        # Configuración del Editor
+        edited_df = st.data_editor(
+            df_audit,
+            key="audit_editor",
+            use_container_width=True,
+            column_config={
+                "ID_Producto": st.column_config.TextColumn("SKU", disabled=True),
+                "Nombre": st.column_config.TextColumn("Producto", disabled=True, width="large"),
+                "Sistema": st.column_config.NumberColumn("Stock Sistema", disabled=True),
+                "Conteo_Físico": st.column_config.NumberColumn("🔢 Conteo Físico", min_value=0, step=1, required=True),
+                "Diferencia": st.column_config.NumberColumn("Diff", disabled=True),
+                "Acción": st.column_config.TextColumn("Estado", disabled=True),
+                "Costo": st.column_config.NumberColumn("Costo Unit", format="$%.2f", disabled=True)
+            },
+            hide_index=True
+        )
+
+        # 3. Lógica de Detección de Cambios
+        # Recalculamos diferencias en el dataframe editado (visual solamente)
+        cambios = edited_df[edited_df['Conteo_Físico'] != edited_df['Sistema']].copy()
+        cambios['Diferencia'] = cambios['Conteo_Físico'] - cambios['Sistema']
+        
+        if not cambios.empty:
+            st.warning(f"⚠️ Se han detectado {len(cambios)} discrepancias en el inventario.")
             
-            st.markdown("---")
-            st.subheader("🚨 Alertas de Stock")
-            criticos = master_unico[master_unico['Estado_Stock'] != '✅ OK'][['Nombre', 'Stock', 'Estado_Stock']]
-            st.dataframe(criticos, hide_index=True, use_container_width=True)
+            # Vista previa de cambios
+            st.dataframe(cambios[['Nombre', 'Sistema', 'Conteo_Físico', 'Diferencia']], hide_index=True)
+            
+            col_b1, col_b2 = st.columns(2)
+            if col_b1.button("✅ CONFIRMAR Y GUARDAR AJUSTES", type="primary", use_container_width=True):
+                with st.spinner("Actualizando Inventario en la Nube..."):
+                    logs = []
+                    errores = 0
+                    
+                    for idx, row in cambios.iterrows():
+                        try:
+                            # 1. Actualizar Stock en Hoja Inventario
+                            # Buscamos celda por ID
+                            cell = data['ws_inv'].find(str(row['ID_Producto']))
+                            if cell:
+                                # Asumiendo columna 4 es Stock (Verificar indices en funcion carga)
+                                # Cols: ID(1), SKU(2), Nombre(3), Stock(4)...
+                                data['ws_inv'].update_cell(cell.row, 4, int(row['Conteo_Físico']))
+                                
+                                # 2. Registrar en Historial Ajustes
+                                tipo = "Faltante" if row['Diferencia'] < 0 else "Sobrante"
+                                log_row = [
+                                    str(uuid.uuid4())[:8], 
+                                    str(date.today()), 
+                                    str(row['ID_Producto']), 
+                                    row['Nombre'], 
+                                    int(row['Sistema']), 
+                                    int(row['Conteo_Físico']), 
+                                    int(row['Diferencia']), 
+                                    tipo, 
+                                    "Admin"
+                                ]
+                                data['ws_ajustes'].append_row(log_row)
+                                logs.append(f"{row['Nombre']}: {row['Diferencia']}")
+                            else:
+                                errores += 1
+                        except Exception as e:
+                            st.error(f"Error actualizando {row['Nombre']}: {e}")
+                            errores += 1
+                    
+                    if errores == 0:
+                        st.balloons()
+                        st.success("¡Inventario sincronizado perfectamente!")
+                        time.sleep(2)
+                        st.rerun()
+                    else:
+                        st.warning(f"Proceso completado con {errores} errores.")
 
-    # --- TAB 2: COMPRAS (USA MASTER_BUY PARA VER OPCIONES) ---
+        # 4. Descarga Reporte Excel
+        st.markdown("---")
+        st.subheader("📂 Reportes Profesionales")
+        
+        excel_file = generar_excel_pro(master_unico, "Inventario_General")
+        
+        st.download_button(
+            label="⬇️ Descargar Inventario Excel (.xlsx)",
+            data=excel_file,
+            file_name=f"Inventario_Bigotes_{date.today()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
+    # --- TAB 2: COMPRAS ---
     with tabs[1]:
         st.subheader("🛒 Gestión de Proveedores y Pedidos")
         
-        # 1. Selector Proveedor
         provs = sorted(master_buy['Nombre_Proveedor'].unique().tolist())
         sel_prov = st.selectbox("👉 Selecciona Proveedor:", provs)
         
-        # 2. Filtrar
         df_prov_active = master_buy[master_buy['Nombre_Proveedor'] == sel_prov].copy()
         
-        # 3. Agregar Manualmente
         with st.expander("➕ Agregar productos adicionales a esta orden"):
-            # Usamos master_unico para la lista de búsqueda (para no ver repetidos en el dropdown)
             all_products = master_unico['Nombre'].unique().tolist()
             add_prods = st.multiselect("Buscar en catálogo completo:", all_products)
             
             if add_prods:
-                # Buscamos en master_buy para traer datos del proveedor actual si existen, o genéricos
                 manual_rows = master_buy[
                     (master_buy['Nombre'].isin(add_prods)) & 
                     ((master_buy['Nombre_Proveedor'] == sel_prov) | (master_buy['Nombre_Proveedor'] == 'Genérico'))
                 ].copy()
-                # Priorizar proveedor actual eliminando duplicados si salió genérico también
                 manual_rows = manual_rows.sort_values('Nombre_Proveedor').drop_duplicates(subset=['ID_Producto'], keep='first')
                 manual_rows['Cajas_Sugeridas'] = 1
-                
                 df_editor_source = pd.concat([df_prov_active[df_prov_active['Cajas_Sugeridas']>0], manual_rows]).drop_duplicates(subset=['ID_Producto'])
             else:
                 df_editor_source = df_prov_active[df_prov_active['Cajas_Sugeridas'] > 0]
 
-        # 4. Editor
         if df_editor_source.empty:
             st.info(f"El sistema no sugiere pedidos automáticos para {sel_prov}. Agrega productos manualmente arriba.")
             orden_final = pd.DataFrame()
@@ -450,12 +588,11 @@ def main():
                 key="editor_orden"
             )
 
-        # 5. Acciones
         if not orden_final.empty:
             total_orden = (orden_final['Cajas_Sugeridas'] * orden_final['Factor_Pack'] * orden_final['Costo_Proveedor']).sum()
             
             st.markdown(f"""
-            <div style="background-color:#e0f2f1; padding:15px; border-radius:10px; border:1px solid #187f77; text-align:right;">
+            <div class="total-box">
                 <span style="font-size:18px; color:#187f77;">Total Estimado Orden:</span> 
                 <span style="font-size:24px; font-weight:bold; color:#f5a641;">${total_orden:,.0f}</span>
             </div>
@@ -509,7 +646,6 @@ def main():
                 id_act = orden_selec.split(" | ")[0]
                 row_orden = pendientes[pendientes['ID_Orden'] == id_act].iloc[0]
                 
-                # Mostrar items
                 try:
                     items = json.loads(row_orden['Items_JSON'])
                     st.table(pd.DataFrame(items)[['Nombre', 'Cajas_Sugeridas']])
@@ -524,10 +660,8 @@ def main():
                     
                     if st.form_submit_button("✅ INGRESAR AL INVENTARIO"):
                         with st.spinner("Actualizando stock..."):
-                            # 1. Loop actualización
                             log_txt = []
                             for it in items:
-                                # Buscar factor pack en master_unico para convertir cajas a unidades
                                 prod_info = master_unico[master_unico['ID_Producto'] == it['ID_Producto']]
                                 factor = prod_info['Factor_Pack'].values[0] if not prod_info.empty else 1
                                 cant_und = float(it['Cajas_Sugeridas']) * factor
@@ -536,36 +670,45 @@ def main():
                                 actualizar_stock_gsheets(data['ws_inv'], it['ID_Producto'], cant_und)
                                 log_txt.append(f"{it['Nombre']}: +{cant_und} unds")
                             
-                            # 2. Guardar Recepción
+                            # Guardar Recepción
                             row_recep = [str(date.today()), folio, row_orden['Proveedor'], str(fecha_fac), 0, len(items), row_orden['Total_Dinero']]
                             data['ws_recep'].append_row(row_recep)
                             
-                            # 3. Cerrar Orden
+                            # Cerrar Orden
                             cell = data['ws_ord'].find(id_act)
-                            data['ws_ord'].update_cell(cell.row, 6, "Recibido") # Estado
-                            data['ws_ord'].update_cell(cell.row, 7, str(date.today())) # Fecha Recep
+                            data['ws_ord'].update_cell(cell.row, 6, "Recibido")
+                            data['ws_ord'].update_cell(cell.row, 7, str(date.today()))
                             
                             st.success("¡Inventario actualizado correctamente!")
                             st.write(log_txt)
                             time.sleep(3)
                             st.rerun()
 
-    # --- TAB 4: BASE DE DATOS (AQUÍ ESTÁ LA SOLUCIÓN VISUAL) ---
+    # --- TAB 4: BASE DE DATOS Y LOGS ---
     with tabs[3]:
-        st.subheader("💾 Base de Datos Unificada")
-        st.markdown("""
-        <div style="background-color:#e0f2f1; padding:10px; border-radius:5px; border-left:4px solid #187f77; margin-bottom:15px;">
-            <b>ℹ️ Nota:</b> Esta vista muestra <b>referencias únicas</b>. Si un producto tiene múltiples proveedores, 
-            aquí se muestra el proveedor principal (menor costo). Para ver todos los proveedores, ve a la pestaña "Generar Pedidos".
-        </div>
-        """, unsafe_allow_html=True)
+        st.subheader("💾 Base de Datos & Logs")
         
-        # Mostramos master_unico que garantiza 1 fila por ID_Producto
-        st.dataframe(
-            master_unico[['ID_Producto', 'Nombre', 'Stock', 'Costo', 'Precio', 'Nombre_Proveedor', 'Costo_Proveedor', 'Estado_Stock']],
-            use_container_width=True,
-            hide_index=True
-        )
+        tab_bd1, tab_bd2 = st.tabs(["📦 Inventario Maestro", "🕵️ Historial Ajustes"])
+        
+        with tab_bd1:
+            st.dataframe(
+                master_unico[['ID_Producto', 'Nombre', 'Stock', 'Costo', 'Precio', 'Nombre_Proveedor', 'Estado_Stock']],
+                use_container_width=True,
+                hide_index=True
+            )
+            excel_bd = generar_excel_pro(master_unico, "Maestro_Completo")
+            st.download_button("⬇️ Descargar Maestro", excel_bd, "Maestro.xlsx")
+            
+        with tab_bd2:
+            st.markdown("##### Historial de Movimientos Manuales (Auditorías)")
+            try:
+                df_ajustes = pd.DataFrame(data['ws_ajustes'].get_all_records())
+                if not df_ajustes.empty:
+                    st.dataframe(df_ajustes, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No hay registros de ajustes manuales.")
+            except:
+                st.error("No se pudo leer la hoja de Ajustes. Verifica que exista la hoja 'Historial_Ajustes' en Google Sheets.")
 
 # ==========================================
 # 6. FUNCIONES DE ESCRITURA
@@ -581,7 +724,6 @@ def actualizar_stock_gsheets(ws_inv, id_producto, unidades_sumar):
     try:
         cell = ws_inv.find(str(id_producto))
         if cell:
-            # Asumiendo columna 4 es Stock (ID, SKU, Nombre, STOCK...)
             col_stock = 4 
             val_act = ws_inv.cell(cell.row, col_stock).value
             nuevo = float(val_act if val_act else 0) + unidades_sumar
