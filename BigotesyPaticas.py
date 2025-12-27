@@ -10,7 +10,8 @@ import jinja2
 from weasyprint import HTML, CSS
 import plotly.express as px
 import plotly.graph_objects as go
-import xlsxwriter # Necesario para el reporte profesional
+import xlsxwriter 
+import urllib.parse # Necesario para codificar el mensaje de WhatsApp
 
 # --- 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME) ---
 
@@ -21,6 +22,7 @@ COLOR_ACENTO = "#f5a641"        # Naranja (Alertas)
 COLOR_FONDO = "#f8f9fa"         # Fondo gris muy claro
 COLOR_TEXTO = "#262730"
 COLOR_BLANCO = "#ffffff"
+COLOR_WHATSAPP = "#25D366"      # Verde oficial WhatsApp
 
 # Logo Verificado (Huella simple en PNG Base64)
 LOGO_B64 = """
@@ -44,8 +46,8 @@ tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP
 AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD5
 69Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWb
 OGu+++mzVr1rBmzRrWrFnDmjVrWLNmjan/w8PDjOyRkRFG9vDwsJH9+9//HpD9Hx4eBmT/R0ZGATn/R0ZGADn/R0ZGGBoaYmhoiKGhIYaGhhgaG
-mJoaIje3l56e3vp7e2lt7eX3t5eent72b9/P/v372f//v3s37+f/fv3s3//fuJG/H4/dXV11NXVUVdXR11dHXV1dfj9furq6qirq6Ouro66ujrq
-6urw+/1G//F6/f8A7r0yHqfVv+oAAAAASUVORK5CYII=
+mJoaIje3l56e3vp7e2lt7eX3t5eent72b9/P/v372f//v3s37+f/fv3s37+f/fv3s3//fuJG/H4/dXV11NXVUVdXR11dHXV1dfj9furq6qirq6O
+uro66ujrq6urw+/1G//F6/f8A7r0yHqfVv+oAAAAASUVORK5CYII=
 """
 
 def configurar_pagina():
@@ -110,6 +112,27 @@ def configurar_pagina():
             border: 2px solid {COLOR_PRIMARIO};
             color: {COLOR_PRIMARIO};
             border-radius: 8px;
+        }}
+
+        /* Botón WhatsApp */
+        .whatsapp-btn {{
+            display: inline-block;
+            background-color: {COLOR_WHATSAPP};
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            text-align: center;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background-color 0.3s;
+            width: 100%;
+        }}
+        .whatsapp-btn:hover {{
+            background-color: #1ebc57;
+            color: white;
+            text-decoration: none;
         }}
 
         /* Inputs */
@@ -260,6 +283,37 @@ def actualizar_estado_envio(ws_ven, id_venta, nuevo_estado):
     except Exception as e:
         st.error(f"Error actualizando estado del envío: {e}")
         return False
+
+# --- NUEVO: FUNCIÓN PARA GENERAR MENSAJE DE WHATSAPP ---
+def generar_mensaje_whatsapp(nombre_cliente, mascota, tipo_cliente, items_str, total):
+    """
+    Genera un link de WhatsApp con mensaje personalizado según el tipo de cliente.
+    """
+    saludo = ""
+    cuerpo = ""
+    despedida = "¡Muchas gracias y feliz día! 🐾"
+    
+    # 1. Lógica emotiva según tipo de cliente
+    if tipo_cliente == "NUEVO":
+        saludo = f"¡Hola {nombre_cliente}! 👋 Bienvenido/a a la familia *Bigotes y Patitas*."
+        cuerpo = f"Nos emociona mucho que nos hayas elegido para consentir a *{mascota}*. 🥰 Estamos seguros de que le encantará lo que llevas."
+    
+    elif tipo_cliente == "REACTIVADO":
+        saludo = f"¡Hola {nombre_cliente}! 👋 ¡Qué alegría inmensa tenerte de vuelta!"
+        cuerpo = f"Te habíamos extrañado a ti y a *{mascota}* ❤️. Nos hace muy felices que confíes nuevamente en nosotros."
+    
+    else: # RECURRENTE
+        saludo = f"¡Hola de nuevo {nombre_cliente}! 👋"
+        cuerpo = f"Qué gusto verte otra vez. 🌟 Gracias por ser un cliente tan especial y seguir eligiendo lo mejor para *{mascota}*."
+
+    # 2. Resumen de compra
+    resumen = f"\n\n🧾 *Resumen de tu compra:*\n{items_str}\n\n💰 *Total:* ${total:,.0f}"
+
+    # 3. Ensamblar mensaje
+    mensaje_completo = f"{saludo}\n{cuerpo}{resumen}\n\n{despedida}"
+    
+    # 4. Codificar para URL
+    return urllib.parse.quote(mensaje_completo)
 
 # --- 3. GENERADOR DE PDF Y EXCEL ---
 
@@ -463,6 +517,9 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
     if 'cliente_actual' not in st.session_state: st.session_state.cliente_actual = None
     if 'ultimo_pdf' not in st.session_state: st.session_state.ultimo_pdf = None
     if 'ultima_venta_id' not in st.session_state: st.session_state.ultima_venta_id = None
+    
+    # Nuevo estado para guardar la info del mensaje de WhatsApp
+    if 'whatsapp_link' not in st.session_state: st.session_state.whatsapp_link = None
 
     col_izq, col_der = st.columns([1.6, 1])
 
@@ -578,11 +635,20 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
             
             st.markdown("---")
             
-            # Si hay venta procesada, mostrar PDF y Botón Limpiar
+            # Si hay venta procesada, mostrar PDF y Botón WhatsApp
             if st.session_state.ultimo_pdf:
                 st.success("✅ ¡Venta Exitosa!")
                 st.markdown(f"**Ticket #{st.session_state.ultima_venta_id}**")
                 
+                # --- BOTÓN DE WHATSAPP ---
+                if st.session_state.whatsapp_link:
+                    st.markdown(f"""
+                        <a href="https://wa.me/{st.session_state.whatsapp_link['telefono']}?text={st.session_state.whatsapp_link['mensaje']}" target="_blank" class="whatsapp-btn">
+                            📲 Enviar Comprobante por WhatsApp
+                        </a>
+                        <br><br>
+                    """, unsafe_allow_html=True)
+
                 c_pdf, c_new = st.columns(2)
                 c_pdf.download_button(
                     "🖨️ PDF",
@@ -597,6 +663,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     st.session_state.cliente_actual = None
                     st.session_state.ultimo_pdf = None
                     st.session_state.ultima_venta_id = None
+                    st.session_state.whatsapp_link = None # Reset link
                     st.rerun()
             
             # Formulario de Pago
@@ -632,6 +699,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                             for i in st.session_state.carrito:
                                 items_str_list.append(f"{i['Nombre_Producto']} (x{i['Cantidad']})")
                             items_str = ", ".join(items_str_list)
+                            items_str_formato_wa = "\n".join([f"• {i['Nombre_Producto']} x{i['Cantidad']}" for i in st.session_state.carrito])
                             
                             estado_envio = "Entregado" if tipo_entrega == "Punto de Venta" else "Pendiente"
                             
@@ -645,6 +713,53 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                                 total_general, items_str
                             ]
                             
+                            # 1. ANTES de guardar, calculamos el Historial para WhatsApp
+                            df_hist_ventas = leer_datos(ws_ven)
+                            cedula_cliente = str(st.session_state.cliente_actual.get('Cedula', '0'))
+                            
+                            # Filtrar ventas anteriores de este cliente
+                            historial = pd.DataFrame()
+                            if not df_hist_ventas.empty and 'Cedula_Cliente' in df_hist_ventas.columns:
+                                df_hist_ventas['Cedula_Cliente'] = df_hist_ventas['Cedula_Cliente'].astype(str)
+                                historial = df_hist_ventas[df_hist_ventas['Cedula_Cliente'] == cedula_cliente]
+
+                            # Determinar tipo de cliente
+                            tipo_cliente_wa = "RECURRENTE"
+                            if historial.empty:
+                                tipo_cliente_wa = "NUEVO"
+                            else:
+                                # Comprobar fechas
+                                if 'Fecha' in historial.columns:
+                                    historial['Fecha'] = pd.to_datetime(historial['Fecha'])
+                                    ultima_fecha = historial['Fecha'].max()
+                                    dias_dif = (datetime.now() - ultima_fecha).days
+                                    
+                                    if dias_dif > 35:
+                                        tipo_cliente_wa = "REACTIVADO"
+                                    else:
+                                        tipo_cliente_wa = "RECURRENTE"
+                            
+                            # Generar Link WhatsApp
+                            telefono = str(st.session_state.cliente_actual.get('Telefono', ''))
+                            # Limpieza básica de teléfono (asumiendo Colombia +57 si no lo tiene)
+                            telefono = ''.join(filter(str.isdigit, telefono))
+                            if telefono and not telefono.startswith('57') and len(telefono) == 10:
+                                telefono = '57' + telefono
+                            
+                            mensaje_wa = generar_mensaje_whatsapp(
+                                st.session_state.cliente_actual.get('Nombre', 'Cliente'),
+                                st.session_state.cliente_actual.get('Mascota', 'tu peludito'),
+                                tipo_cliente_wa,
+                                items_str_formato_wa,
+                                total_general
+                            )
+                            
+                            st.session_state.whatsapp_link = {
+                                "telefono": telefono,
+                                "mensaje": mensaje_wa
+                            }
+
+                            # 2. Guardar Venta
                             if escribir_fila(ws_ven, datos_venta):
                                 # Descontar Inventario
                                 actualizar_stock(ws_inv, st.session_state.carrito)
@@ -819,12 +934,12 @@ def tab_gestion_capital(ws_cap, ws_gas):
                     # Categoría fija para analisis financiero
                     datos_prov = [
                         ts, str(fecha_compra), 
-                        "Costo de Venta",      # TIPO
-                        "Compra Inventario",   # CATEGORIA (Clave para análisis)
-                        desc_completa,         # DESCRIPCION
-                        monto_prov,            # MONTO
+                        "Costo de Venta",       # TIPO
+                        "Compra Inventario",    # CATEGORIA (Clave para análisis)
+                        desc_completa,          # DESCRIPCION
+                        monto_prov,             # MONTO
                         "N/A", 
-                        origen_pago            # ORIGEN
+                        origen_pago             # ORIGEN
                     ]
                     
                     if escribir_fila(ws_gas, datos_prov):
@@ -945,7 +1060,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
             st.metric("Total Digital Esperado", f"${total_digital:,.0f}")
         with col_graf:
             fig = px.pie(datos_digitales, names='Medio', values='Total Venta', title='Ingresos Digitales', hole=0.5,
-                          color_discrete_sequence=[COLOR_PRIMARIO, COLOR_ACENTO, COLOR_SECUNDARIO, "#2c3e50"])
+                         color_discrete_sequence=[COLOR_PRIMARIO, COLOR_ACENTO, COLOR_SECUNDARIO, "#2c3e50"])
             fig.update_layout(height=250, margin=dict(t=30, b=0, l=0, r=0))
             st.plotly_chart(fig, use_container_width=True)
     else:
@@ -1212,7 +1327,7 @@ def main():
         # Título y Branding
         st.markdown(f"<h1 style='color:{COLOR_PRIMARIO}; text-align: center;'>Nexus Pro</h1>", unsafe_allow_html=True)
         st.markdown(f"<h4 style='color:{COLOR_TEXTO}; text-align: center; margin-top: -20px;'>Bigotes y Patitas</h4>", unsafe_allow_html=True)
-        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v6.0 PRO</span></center>", unsafe_allow_html=True)
+        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v6.1 WhatsApp Pro</span></center>", unsafe_allow_html=True)
         
         st.markdown("---")
         
