@@ -422,7 +422,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             
             # 3. ACTUALIZAR INVENTARIO (Append o Update)
             if es_producto_nuevo:
-                precio_sugerido = redondear_centena(costo_nuevo_con_iva * 1.30)
+                precio_sugerido = redondear_centena(costo_nuevo_con_iva * 1.15)
                 
                 new_row = [""] * len(header)
                 new_row[0] = final_internal_id
@@ -459,7 +459,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                     nuevo_precio = precio_curr
                     if costo_nuevo_con_iva > costo_curr:
                         margen = (precio_curr / costo_curr) if costo_curr > 0 else 1.30
-                        if margen < 1.05: margen = 1.30
+                        if margen < 1.10: margen = 1.15
                         nuevo_precio = redondear_centena(costo_nuevo_con_iva * margen)
                         updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_precio+1), 'values': [[nuevo_precio]]})
                         logs.append(f"📈 SUBIÓ: {final_internal_id} | P: ${nuevo_precio:,.0f}")
