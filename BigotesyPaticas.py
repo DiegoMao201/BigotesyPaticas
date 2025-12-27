@@ -33,21 +33,124 @@ ArwCXBBCHJ/wOicamQf8CngAyDSZ3wWeBz4VQoybdEsmQgjRDHwfeAlIN5kPAz8RQlROtH1jZiQIrADe
 ZH4v8HMhRMVE2zchRgLAA8B7gM9kPgD8SAhxfcItmACMAE8BHwNuk/k9wDeEEJcm2r6JGakH3gXWmcyHgO8LIc5MuAUTgBHgceBfJvNu4MdCiCsT
 bd+EGKkF3gU2mswHgO8IIU5NuAUTgBHgCeBvJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8w
 HgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHg
-SeAjJvNu4EdCiCsTbd+EGNkM/ADYajIfAL4jhDg14RZMMEaAp4CPmMw7gR8JIa5MtH0TM7IZ+CGwzWQ+APyHEOLMhFswARgBngH+YTJvB34khLgy0
-fZNmL0eAF4E7jWZDwK/EEL8b8ItmACMAKuAD4AcMv8B8B0hRG2i7ZuQ2WsFsA3IMpkPAj8RQlROuAUTiBFgJbADyCOzf9K+TwhxbaLtmzAjQWAL8
-DqQaTIfAv5J+xMhRPVE2zchRgLAKuAdIMdkPgT8SwhxdsItmACMAKuA94BcMv+X9v1CiGsTbd/EjASBFcC7QC6Z/0f7fiHEmQm3YIIwAqwC3gNyy
-fxA2/cLIS5PtH0TYmQFsB3IMZkPAv8WQpybcAsmACPASuADIDvI/EDbDwghrk20fRNmJAhsA34O5JD5gbYfFEJUTLR9E2IkCKwC3gdyyPxA2w8KIc
-5OuAUTgBFgJfARkE3mB9p+WAhxbSJsJ8xIEFgH/BLIMZk/0PZjQoiK0bZ5QoyUAI3AaiDfzD4M/EwIcWykbSYAI8BK4GMg
-y8w+DPxcCHF1JG0mZEQIsRb4BZBjZh8Gfi6EOObVNlJGehFCfAfIMbMPAz8XQoyY2Yz5P0wIsR74BZBjZh8GfiGEODrSNhM4ewmwc+cuI7t27TKyt
-2zZzMjeunUrd999F3ffvYV169awfv06duzYxo4d29i8eRObN29m8+ZNfPe736GxsZGGhga2b99OQ0MD27ZtY+vWzTQ2NrJ16xZ8Ph/19fV4PB68X
-i+1tbXU1tZSW1tLbW0t27ZtY/v27TQ0NNDQ0EBDQwPbtm2joaGBHTt2sHnzZjZv3szmzZvZvHkzmzdvZs+e3YzsAwcOMrKPHj3KyD5+/DgA58+fZ
-2RfuXKFkX3t2jVG9vXr1xnZIyMjAGzZsoW1a9cCsHbtWtatW8f69etZv349GzZsYP369axbt4577rmHdevWsWbNGlauXMmKFS
+SeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiCiTbd+EGNkM/ADYajIfAL4jhDg14RZMMEaAp4CPmMw7gR8JIa5Mt
+H0TM7IZ+CGwzWQ+APyHEOLMhFswARgBngH+YTJvB34khLgy0fZNmL0eAF4E7jWZDwK/EEL8b8ItmACMAKuAD4AcMv8B8B0hRG2i7ZuQ2WsFsA3IMpk
+PAj8RQlROuAUTiBFgJbADyCOzf9K+TwhxbaLtmzAjQWAL8DqQaTIfAv5J+xMhRPVE2zchRgLAKuAdIMdkPgT8SwhxdsItmACMAKuA94BcMv+X9v1
+CiGsTbd/EjASBFcC7QC6Z/0f7fiHEmQm3YIIwAqwC3gNyyfxA2/cLIS5PtH0TYmQFsB3IMZkPAv8WQpybcAsmACPASuADIDvI/EDbDwghrk20fRNm
+JAhsA34O5JD5gbYfFEJUTLR9E2IkCKwC3gdyyPxA2w8KIc5OuAUTgBFgJfARkE3mB9p+WAhxbSJsJ8xIEFgH/BLIMZk/0PZjQoiK0bZ5QoyUAI3Aai
+DfzD4M/EwIcWykbSYAI8BK4GMg y8w+DPxcCHF1JG0mZEQIsRb4BZBjZh8Gfi6EOObVNlJGehFCfAfIMbMPAz8XQoyY2Yz5P0wIsR74BZBjZh8Gfi
+GEODrSNhM4ewmwc+cuI7t27TKyt2zZzMjeunUrd999F3ffvYV169awfv06duzYxo4d29i8eRObN29m8+ZNfPe736GxsZGGhga2b99OQ0MD27ZtY+vW
+zTQ2NrJ16xZ8Ph/19fV4PB68Xi+1tbXU1tZSW1tLbW0t27ZtY/v27TQ0NNDQ0EBDQwPbtm2joaGBHTt2sHnzZjZv3szmzZvZvHkzmzdvZs+e3YzsAw
+cOMrKPHj3KyD5+/DgA586dY2RfuXKFkX3t2jVG9vXr1xnZIyMjAGzZsoW1a9cCsHbtWtatW8f69etZv349GzZsYP369axbt4577rmHdevWsWbNGlauXM
+mKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/
+AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+
+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS
+tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwM
+MDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586d
+Y2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3
+feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+
+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b
+3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+h
+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
-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
+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 tYsWIFd955J3
+feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+
+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b
+3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+h
+Ej+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr
+9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG
+9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEy
+dOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8
+Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd
+955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U
+6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8
+Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFix
+ghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOA
+fL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1
++v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWr
+WbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/f
+z/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbK
+PHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbN
+GlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/A
+wMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A
+586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J
+3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1
++vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX3
+9+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEy
+dOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw
++/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwA
+rVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M
+2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF
+4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5U
+pWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L
+/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/
+9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmj
+WsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399P
+f38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7
+e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWI
+Fd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4
+wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3
+/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9i
+xY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/
+Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd9
+55JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dO
+AbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9e
+L1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVr
+By5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/Cxc
+uyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mj
+VriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmD
+WvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f
+309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnC
+yD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlau
+XMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDD
+AwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A58
+6dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955
+J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4w
+b+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf
+3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c
+/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4
+vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6W
+kX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hE
+j+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq
+8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6Wk
+X39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+
+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+
+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZk
+f3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3fe
+eaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIE
+DB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A58
+6dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS
+tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38
+/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnC
+yD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrG
+HNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9du
+kR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9
+H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5
+UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOAL
+L/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vX
+q8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955
+JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOAL
+L/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL
+1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/
+6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3fe
+eaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMD
+AwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj
++7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsW
+bNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz
+/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/
+mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy
+5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fO
+ALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTv
+F4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33X
+cfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4
+zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+v
+F4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF4/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2
+RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS
 """
 
 def configurar_pagina():
@@ -118,8 +221,8 @@ def configurar_pagina():
         .whatsapp-btn {{
             display: inline-block;
             background-color: {COLOR_WHATSAPP};
-            color: white;
-            padding: 10px 20px;
+            color: white !important;
+            padding: 12px 20px;
             border-radius: 8px;
             text-decoration: none;
             font-weight: bold;
@@ -128,11 +231,13 @@ def configurar_pagina():
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             transition: background-color 0.3s;
             width: 100%;
+            margin-top: 10px;
+            margin-bottom: 20px;
         }}
         .whatsapp-btn:hover {{
             background-color: #1ebc57;
-            color: white;
             text-decoration: none;
+            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
         }}
 
         /* Inputs */
@@ -245,20 +350,48 @@ def escribir_fila(ws, datos):
         st.error(f"Error guardando en Google Sheets: {e}")
         return False
 
+# --- FUNCIÓN CORREGIDA PARA ACTUALIZAR STOCK EN COLUMNA CORRECTA ---
 def actualizar_stock(ws_inv, items):
     try:
-        records = ws_inv.get_all_records()
-        df = pd.DataFrame(records)
-        df['ID_Producto'] = df['ID_Producto'].astype(str)
+        # Obtenemos todos los valores como lista de listas para evitar ambigüedades con headers de pandas
+        all_values = ws_inv.get_all_values()
         
+        # Asumimos que la fila 1 son encabezados. Empezamos datos desde fila 2.
+        # Estructura esperada por usuario: ID_Producto, SKU_Proveedor, Nombre, Stock, Precio...
+        # Indices (base 0) en la lista:   0             1             2       3      4
+        # Indices (base 1) para gspread:  1             2             3       4      5
+        
+        # Mapeamos ID_Producto -> Número de fila en la hoja
+        id_a_fila = {}
+        for idx, row in enumerate(all_values):
+            if idx == 0: continue # Saltar header
+            # Convertimos a string y quitamos espacios por seguridad
+            p_id = str(row[0]).strip() 
+            id_a_fila[p_id] = idx + 1 # +1 porque gspread usa base-1
+            
         for item in items:
-            id_p = str(item['ID_Producto'])
-            idx = df.index[df['ID_Producto'] == id_p].tolist()
-            if idx:
-                fila = idx[0] + 2
-                stock_act = int(df.iloc[idx[0]]['Stock'])
-                nuevo = max(0, stock_act - int(item['Cantidad']))
-                ws_inv.update_cell(fila, 5, nuevo) 
+            id_buscado = str(item['ID_Producto']).strip()
+            
+            if id_buscado in id_a_fila:
+                fila_num = id_a_fila[id_buscado]
+                
+                # Obtenemos el stock actual de esa fila (Columna 4 es 'Stock' en base-1, indice 3 en la lista 'row')
+                # Por seguridad leemos la celda actual directamente para evitar condiciones de carrera si es posible,
+                # pero por velocidad usaremos el valor que ya traíamos o calculamos.
+                
+                # Como 'row' en el bucle 'enumerate' es una copia, mejor calcular el nuevo stock basado en lo que sabemos
+                # Ojo: Para ser precisos, obtenemos el valor actual de la celda antes de escribir.
+                stock_actual_val = ws_inv.cell(fila_num, 4).value # Leer columna 4 (Stock)
+                try:
+                    stock_actual = int(float(stock_actual_val)) if stock_actual_val else 0
+                except:
+                    stock_actual = 0
+                
+                nuevo_stock = max(0, stock_actual - int(item['Cantidad']))
+                
+                # ACTUALIZAMOS COLUMNA 4 (STOCK) - NO LA 5 (PRECIO)
+                ws_inv.update_cell(fila_num, 4, nuevo_stock) 
+                
         return True
     except Exception as e:
         st.error(f"Error actualizando stock: {e}")
@@ -269,11 +402,9 @@ def actualizar_estado_envio(ws_ven, id_venta, nuevo_estado):
         cell = ws_ven.find(str(id_venta))
         if cell:
             headers = ws_ven.row_values(1)
-            # Buscar índice de columna de forma segura
             try:
                 col_index = headers.index("Estado_Envio") + 1
             except ValueError:
-                # Fallback por si acaso
                 col_index = 7
             
             ws_ven.update_cell(cell.row, col_index, nuevo_estado)
@@ -284,7 +415,7 @@ def actualizar_estado_envio(ws_ven, id_venta, nuevo_estado):
         st.error(f"Error actualizando estado del envío: {e}")
         return False
 
-# --- NUEVO: FUNCIÓN PARA GENERAR MENSAJE DE WHATSAPP ---
+# --- FUNCIÓN PARA GENERAR MENSAJE DE WHATSAPP ---
 def generar_mensaje_whatsapp(nombre_cliente, mascota, tipo_cliente, items_str, total):
     """
     Genera un link de WhatsApp con mensaje personalizado según el tipo de cliente.
@@ -382,24 +513,17 @@ def generar_pdf_html(venta_data, items):
         return None
 
 def generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin):
-    """
-    Genera un Excel profesional con formato corporativo usando XlsxWriter.
-    Maneja excepciones de columnas vacías.
-    """
     output = BytesIO()
     try:
-        # Calcular valores seguros para evitar KeyErrors
         total_ingresos = df_v['Total'].sum() if not df_v.empty and 'Total' in df_v.columns else 0
         total_gastos = df_g['Monto'].sum() if not df_g.empty and 'Monto' in df_g.columns else 0
         total_capital = df_c['Monto'].sum() if not df_c.empty and 'Monto' in df_c.columns else 0
         utilidad = total_ingresos - total_gastos
         margen = (utilidad / total_ingresos * 100) if total_ingresos > 0 else 0
 
-        # Crear Workbook
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             workbook = writer.book
             
-            # --- DEFINICIÓN DE FORMATOS ---
             fmt_header = workbook.add_format({
                 'bold': True, 'font_color': 'white', 'bg_color': COLOR_PRIMARIO, 
                 'border': 1, 'align': 'center', 'valign': 'vcenter'
@@ -407,12 +531,9 @@ def generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin):
             fmt_title = workbook.add_format({
                 'bold': True, 'font_size': 14, 'font_color': COLOR_PRIMARIO, 'bottom': 2
             })
-            fmt_money = workbook.add_format({'num_format': '$#,##0', 'border': 1})
-            fmt_money_bold = workbook.add_format({'num_format': '$#,##0', 'bold': True, 'border': 1})
-            fmt_date = workbook.add_format({'num_format': 'dd/mm/yyyy', 'border': 1})
-            fmt_base = workbook.add_format({'border': 1})
             fmt_kpi_label = workbook.add_format({'bold': True, 'bg_color': '#f2f2f2', 'border': 1})
             fmt_kpi_val = workbook.add_format({'num_format': '$#,##0', 'bold': True, 'font_size': 12, 'border': 1})
+            fmt_base = workbook.add_format({'border': 1})
 
             # --- HOJA 1: RESUMEN EJECUTIVO ---
             ws_resumen = workbook.add_worksheet("Resumen Gerencial")
@@ -422,7 +543,6 @@ def generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin):
             ws_resumen.write('B2', f"Reporte Financiero: Nexus Pro", fmt_title)
             ws_resumen.write('B3', f"Periodo: {f_inicio} al {f_fin}")
 
-            # Tabla de KPIs
             ws_resumen.write('B5', "Concepto", fmt_header)
             ws_resumen.write('C5', "Valor", fmt_header)
 
@@ -436,8 +556,6 @@ def generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin):
             row = 5
             for label, value in kpis:
                 ws_resumen.write(row, 1, label, fmt_kpi_label)
-                
-                # Formato condicional simple para utilidad
                 if "Utilidad" in label and value < 0:
                      fmt_temp = workbook.add_format({'num_format': '$#,##0', 'bold': True, 'font_color': 'red', 'border': 1})
                      ws_resumen.write(row, 2, value, fmt_temp)
@@ -445,31 +563,25 @@ def generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin):
                      ws_resumen.write(row, 2, value, fmt_kpi_val)
                 row += 1
 
-            # Margen Porcentual
             ws_resumen.write(row, 1, "Margen Neto (%)", fmt_kpi_label)
             ws_resumen.write(row, 2, f"{margen:.2f}%", fmt_base)
 
             # --- HOJA 2: DETALLE VENTAS ---
             if not df_v.empty:
                 df_v_export = df_v.copy()
-                # Asegurar formato fecha para Excel
                 if 'Fecha' in df_v_export.columns:
-                    df_v_export['Fecha'] = df_v_export['Fecha'].astype(str) # Simplificar para evitar problemas de tz
+                    df_v_export['Fecha'] = df_v_export['Fecha'].astype(str)
                 
                 df_v_export.to_excel(writer, sheet_name='Detalle Ventas', index=False, startrow=1)
                 ws_ventas = writer.sheets['Detalle Ventas']
-                
-                # Aplicar formatos a la tabla de ventas
                 (max_row, max_col) = df_v_export.shape
                 col_names = [{'header': col} for col in df_v_export.columns]
                 
-                # Estilo tabla automático
                 ws_ventas.add_table(0, 0, max_row, max_col - 1, {
                     'columns': col_names,
                     'style': 'Table Style Medium 2',
                     'name': 'TablaVentas'
                 })
-                # Ajustar anchos
                 ws_ventas.set_column(0, max_col - 1, 15)
 
             # --- HOJA 3: DETALLE GASTOS ---
@@ -480,13 +592,12 @@ def generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin):
 
                 df_g_export.to_excel(writer, sheet_name='Detalle Gastos', index=False, startrow=1)
                 ws_gastos = writer.sheets['Detalle Gastos']
-                
                 (max_row, max_col) = df_g_export.shape
                 col_names = [{'header': col} for col in df_g_export.columns]
                 
                 ws_gastos.add_table(0, 0, max_row, max_col - 1, {
                     'columns': col_names,
-                    'style': 'Table Style Medium 4', # Color diferente para gastos
+                    'style': 'Table Style Medium 4', 
                     'name': 'TablaGastos'
                 })
                 ws_gastos.set_column(0, max_col - 1, 15)
@@ -498,7 +609,6 @@ def generar_excel_financiero(df_v, df_g, df_c, f_inicio, f_fin):
         return output.getvalue()
 
     except Exception as e:
-        # En caso de error crítico, devolver un Excel con el mensaje de error para depurar
         output_err = BytesIO()
         with pd.ExcelWriter(output_err, engine='xlsxwriter') as writer:
              df_err = pd.DataFrame({'Error': [str(e)]})
@@ -517,8 +627,6 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
     if 'cliente_actual' not in st.session_state: st.session_state.cliente_actual = None
     if 'ultimo_pdf' not in st.session_state: st.session_state.ultimo_pdf = None
     if 'ultima_venta_id' not in st.session_state: st.session_state.ultima_venta_id = None
-    
-    # Nuevo estado para guardar la info del mensaje de WhatsApp
     if 'whatsapp_link' not in st.session_state: st.session_state.whatsapp_link = None
 
     col_izq, col_der = st.columns([1.6, 1])
@@ -550,6 +658,8 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
         df_inv = leer_datos(ws_inv)
         
         if not df_inv.empty:
+            # Asegurar que ID sea string para visualización
+            df_inv['ID_Producto'] = df_inv['ID_Producto'].astype(str)
             prod_lista = df_inv.apply(lambda x: f"{x.get('Nombre', 'N/A')} | Stock: {x.get('Stock', 0)} | ${x.get('Precio', 0):,.0f} | ID:{x.get('ID_Producto', '')}", axis=1).tolist()
             
             sel_prod_str = st.selectbox("Escriba para buscar producto...", [""] + prod_lista)
@@ -559,7 +669,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                 if sel_prod_str:
                     try:
                         id_p = sel_prod_str.split("ID:")[1]
-                        info_p = df_inv[df_inv['ID_Producto'].astype(str) == id_p].iloc[0]
+                        info_p = df_inv[df_inv['ID_Producto'] == id_p].iloc[0]
                         
                         # Verificar si ya existe en carrito para sumar
                         existe = False
@@ -568,11 +678,12 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                                 item['Cantidad'] += 1
                                 item['Subtotal'] = item['Cantidad'] * item['Precio']
                                 existe = True
+                                item['Eliminar'] = False
                                 break
                         
                         if not existe:
                             nuevo_item = {
-                                "ID_Producto": info_p['ID_Producto'],
+                                "ID_Producto": str(info_p['ID_Producto']),
                                 "Nombre_Producto": info_p['Nombre'],
                                 "Precio": float(info_p['Precio']),
                                 "Cantidad": 1,
@@ -635,18 +746,19 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
             
             st.markdown("---")
             
-            # Si hay venta procesada, mostrar PDF y Botón WhatsApp
+            # --- SI LA VENTA FUE EXITOSA ---
             if st.session_state.ultimo_pdf:
                 st.success("✅ ¡Venta Exitosa!")
                 st.markdown(f"**Ticket #{st.session_state.ultima_venta_id}**")
                 
-                # --- BOTÓN DE WHATSAPP ---
+                # --- BOTÓN DE WHATSAPP (AQUÍ ESTÁ LA CORRECCIÓN) ---
                 if st.session_state.whatsapp_link:
+                    link_wa = f"https://wa.me/{st.session_state.whatsapp_link['telefono']}?text={st.session_state.whatsapp_link['mensaje']}"
+                    
                     st.markdown(f"""
-                        <a href="https://wa.me/{st.session_state.whatsapp_link['telefono']}?text={st.session_state.whatsapp_link['mensaje']}" target="_blank" class="whatsapp-btn">
-                            📲 Enviar Comprobante por WhatsApp
+                        <a href="{link_wa}" target="_blank" class="whatsapp-btn">
+                            📲 Enviar Recibo por WhatsApp
                         </a>
-                        <br><br>
                     """, unsafe_allow_html=True)
 
                 c_pdf, c_new = st.columns(2)
@@ -658,7 +770,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     type="primary",
                     use_container_width=True
                 )
-                if c_new.button("🔄 Nueva", use_container_width=True):
+                if c_new.button("🔄 Nueva Venta", use_container_width=True):
                     st.session_state.carrito = []
                     st.session_state.cliente_actual = None
                     st.session_state.ultimo_pdf = None
@@ -666,7 +778,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     st.session_state.whatsapp_link = None # Reset link
                     st.rerun()
             
-            # Formulario de Pago
+            # --- FORMULARIO DE COBRO ---
             elif st.session_state.carrito:
                 with st.form("form_cobro"):
                     st.markdown("#### 💳 Detalles de Pago")
@@ -713,7 +825,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                                 total_general, items_str
                             ]
                             
-                            # 1. ANTES de guardar, calculamos el Historial para WhatsApp
+                            # 1. GENERAR LINK WHATSAPP ANTES DE RENDERIZAR
                             df_hist_ventas = leer_datos(ws_ven)
                             cedula_cliente = str(st.session_state.cliente_actual.get('Cedula', '0'))
                             
@@ -728,7 +840,6 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                             if historial.empty:
                                 tipo_cliente_wa = "NUEVO"
                             else:
-                                # Comprobar fechas
                                 if 'Fecha' in historial.columns:
                                     historial['Fecha'] = pd.to_datetime(historial['Fecha'])
                                     ultima_fecha = historial['Fecha'].max()
@@ -739,7 +850,6 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                                     else:
                                         tipo_cliente_wa = "RECURRENTE"
                             
-                            # Generar Link WhatsApp
                             telefono = str(st.session_state.cliente_actual.get('Telefono', ''))
                             # Limpieza básica de teléfono (asumiendo Colombia +57 si no lo tiene)
                             telefono = ''.join(filter(str.isdigit, telefono))
@@ -759,12 +869,12 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                                 "mensaje": mensaje_wa
                             }
 
-                            # 2. Guardar Venta
+                            # 2. GUARDAR VENTA
                             if escribir_fila(ws_ven, datos_venta):
-                                # Descontar Inventario
+                                # 3. DESCONTAR INVENTARIO (CORREGIDO: Columna 4 Stock)
                                 actualizar_stock(ws_inv, st.session_state.carrito)
                                 
-                                # Generar PDF
+                                # 4. GENERAR PDF
                                 cliente_pdf_data = {
                                     "ID": id_venta,
                                     "Fecha": fecha,
@@ -813,7 +923,6 @@ def tab_logistica(ws_ven):
     else:
         st.markdown(f"#### ⏳ Pedidos Pendientes ({len(pendientes)})")
         
-        # Iterar sobre los pendientes y mostrar tarjetas
         for index, row in pendientes.iterrows():
             with st.container():
                 st.markdown(f"""
@@ -835,7 +944,6 @@ def tab_logistica(ws_ven):
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Botón de Acción
                 col_btn, col_espacio = st.columns([1, 4])
                 if col_btn.button(f"🚀 Marcar como ENVIADO", key=f"btn_{row['ID']}", type="primary"):
                     if actualizar_estado_envio(ws_ven, row['ID'], "Enviado"):
@@ -928,10 +1036,8 @@ def tab_gestion_capital(ws_cap, ws_gas):
                 if monto_prov > 0 and proveedor:
                     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
-                    # Estructuramos la descripción para guardar la info del proveedor sin cambiar las columnas del sheet
                     desc_completa = f"[PROV: {proveedor}] [REF: {num_factura}] - {notas_compra}"
                     
-                    # Categoría fija para analisis financiero
                     datos_prov = [
                         ts, str(fecha_compra), 
                         "Costo de Venta",       # TIPO
@@ -1001,7 +1107,7 @@ def tab_cuadre_diario(ws_ven, ws_gas, ws_cap):
     # --- SECCIÓN 1: CUADRE DE CAJA FÍSICA (EFECTIVO) ---
     st.subheader("1. Cuadre de Efectivo")
     
-    # Cálculos Efectivo - Verificando columnas
+    # Cálculos Efectivo
     ventas_efectivo = 0
     if not v_dia.empty and 'Metodo_Pago' in v_dia.columns:
         ventas_efectivo = v_dia[v_dia['Metodo_Pago'] == 'Efectivo']['Total'].sum()
@@ -1086,7 +1192,6 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
             st.write("") 
             st.write("") 
             if st.button("📥 Descargar Reporte Excel", type="primary"):
-                # Filtramos data para el reporte Excel basado en fechas seleccionadas
                 if not df_v.empty: df_v['Fecha_Dt'] = df_v['Fecha'].dt.date
                 if not df_g.empty: df_g['Fecha_Dt'] = df_g['Fecha'].dt.date
                 
@@ -1112,7 +1217,6 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     g_rango = df_g[(df_g['Fecha_Dt'] >= f_inicio) & (df_g['Fecha_Dt'] <= f_fin)] if not df_g.empty else pd.DataFrame()
 
     # --- CÁLCULOS KPI AVANZADOS ---
-    # Verificar existencia de columna 'Total'
     ingresos = v_rango['Total'].sum() if not v_rango.empty and 'Total' in v_rango.columns else 0
     transacciones = len(v_rango)
     ticket_promedio = (ingresos / transacciones) if transacciones > 0 else 0
@@ -1120,9 +1224,7 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     costos_directos = 0 
     gastos_operativos = 0 
     
-    # Análisis de Gastos y Costos (Integración de Proveedores)
     if not g_rango.empty and 'Categoria' in g_rango.columns and 'Monto' in g_rango.columns:
-        # Aquí clasificamos "Compra Inventario" y "Costo de Venta" como Costo Directo
         mask_costo = g_rango['Categoria'].isin(['Compra de Mercancía', 'Costo de Venta', 'Compra Inventario', 'Pago Proveedores'])
         costos_directos = g_rango[mask_costo]['Monto'].sum()
         gastos_operativos = g_rango[~mask_costo]['Monto'].sum()
@@ -1130,8 +1232,6 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     utilidad_bruta = ingresos - costos_directos
     utilidad_neta = utilidad_bruta - gastos_operativos
     margen_neto = (utilidad_neta / ingresos * 100) if ingresos > 0 else 0
-
-    # Punto de Equilibrio (Simplificado: Gastos Ops * Factor de Seguridad)
     punto_equilibrio = gastos_operativos * 1.5 
 
     # --- VISUALIZACIÓN DE KPIs ---
@@ -1149,7 +1249,6 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     # --- GRÁFICOS INTERACTIVOS ---
     col_g1, col_g2 = st.columns([2, 1])
 
-    # Gráfico 1: Evolución de Ventas Diarias
     with col_g1:
         st.subheader("📈 Tendencia de Ventas")
         if not v_rango.empty:
@@ -1162,11 +1261,9 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
         else:
             st.info("Sin datos para graficar.")
 
-    # Gráfico 2: Estructura de Gastos Y COMPRAS
     with col_g2:
         st.subheader("💸 Estructura de Costos")
         if not g_rango.empty:
-            # Agrupar para ver claramente proveedores vs otros
             fig_pie = px.pie(g_rango, values='Monto', names='Categoria', hole=0.4,
                              title="Distribución del Egreso",
                              color_discrete_sequence=[COLOR_ACENTO, COLOR_PRIMARIO, COLOR_SECUNDARIO, "#95a5a6"])
@@ -1176,40 +1273,35 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
         else:
             st.info("Sin gastos registrados.")
 
-    # --- ANÁLISIS DE PROVEEDORES (NUEVO BLOQUE) ---
+    # --- ANÁLISIS DE PROVEEDORES ---
     st.markdown("---")
     st.subheader("📦 Análisis de Compras a Proveedores")
     
     if not g_rango.empty and 'Categoria' in g_rango.columns:
-        # Filtrar solo compras de inventario
         mask_prov = g_rango['Categoria'].isin(['Compra Inventario', 'Compra de Mercancía'])
         df_prov = g_rango[mask_prov].copy()
         
         if not df_prov.empty:
             p1, p2 = st.columns([1, 1])
-            
             with p1:
-                # Tabla detalle
                 st.markdown("##### Historial de Compras")
                 df_view_prov = df_prov[['Fecha_Dt', 'Descripcion', 'Monto']].sort_values(by='Fecha_Dt', ascending=False)
                 st.dataframe(df_view_prov, use_container_width=True, hide_index=True)
             
             with p2:
-                 # Intentar extraer nombre del proveedor de la descripción si sigue el formato [PROV: Nombre]
                  try:
-                     # Regex simple o split para sacar el proveedor. Asumimos formato "[PROV: Nombre]..."
-                     df_prov['Proveedor_Ext'] = df_prov['Descripcion'].apply(
-                         lambda x: x.split("]")[0].replace("[PROV:", "").strip() if "[PROV:" in x else "Varios"
-                     )
-                     agrupado_prov = df_prov.groupby('Proveedor_Ext')['Monto'].sum().reset_index()
-                     
-                     fig_bar_prov = px.bar(agrupado_prov, x='Monto', y='Proveedor_Ext', orientation='h',
-                                           title="Total Comprado por Proveedor", text_auto='.2s')
-                     fig_bar_prov.update_traces(marker_color=COLOR_SECUNDARIO)
-                     st.plotly_chart(fig_bar_prov, use_container_width=True)
-                     
+                      df_prov['Proveedor_Ext'] = df_prov['Descripcion'].apply(
+                          lambda x: x.split("]")[0].replace("[PROV:", "").strip() if "[PROV:" in x else "Varios"
+                      )
+                      agrupado_prov = df_prov.groupby('Proveedor_Ext')['Monto'].sum().reset_index()
+                      
+                      fig_bar_prov = px.bar(agrupado_prov, x='Monto', y='Proveedor_Ext', orientation='h',
+                                            title="Total Comprado por Proveedor", text_auto='.2s')
+                      fig_bar_prov.update_traces(marker_color=COLOR_SECUNDARIO)
+                      st.plotly_chart(fig_bar_prov, use_container_width=True)
+                      
                  except Exception as e:
-                     st.info("No hay suficientes datos formateados para graficar proveedores específicos.")
+                      st.info("No hay suficientes datos formateados para graficar proveedores específicos.")
         else:
             st.info("No hay registros de compras de inventario en este periodo.")
 
@@ -1219,12 +1311,9 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     
     if not v_rango.empty and 'Tipo_Entrega' in v_rango.columns:
         c_dom1, c_dom2 = st.columns([1, 1])
-        
-        # Agrupar por Tipo de Entrega
         por_canal = v_rango.groupby('Tipo_Entrega')['Total'].sum().reset_index()
         
         with c_dom1:
-            # Gráfico de Torta
             fig_canal = px.pie(por_canal, values='Total', names='Tipo_Entrega', 
                                title="Participación por Canal ($)",
                                color_discrete_sequence=[COLOR_PRIMARIO, COLOR_ACENTO])
@@ -1232,7 +1321,6 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
             st.plotly_chart(fig_canal, use_container_width=True)
             
         with c_dom2:
-            # Dataframe detalle
             st.markdown("##### Detalle Numérico")
             resumen_canal = v_rango.groupby('Tipo_Entrega').agg(
                 Ventas_Totales=('Total', 'sum'),
@@ -1246,7 +1334,6 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     st.markdown("---")
     col_g3, col_g4 = st.columns(2)
     
-    # Gráfico 3: Top Productos Vendidos
     with col_g3:
         st.subheader("🏆 Top Productos")
         if not v_rango.empty and 'Items' in v_rango.columns:
@@ -1267,7 +1354,6 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
                 fig_bar.update_layout(yaxis={'categoryorder':'total ascending'}, height=300)
                 st.plotly_chart(fig_bar, use_container_width=True)
 
-    # Gráfico 4: Análisis de Punto de Equilibrio
     with col_g4:
         st.subheader("⚖️ Salud Financiera")
         st.markdown(f"""
@@ -1287,7 +1373,6 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
     st.markdown("---")
     st.subheader("🏦 Estado de Inversión (Histórico)")
     
-    # Cálculos seguros
     total_invertido = df_c['Monto'].sum() if not df_c.empty and 'Monto' in df_c.columns else 0
     h_ventas = df_v['Total'].sum() if not df_v.empty and 'Total' in df_v.columns else 0
     h_gastos = df_g['Monto'].sum() if not df_g.empty and 'Monto' in df_g.columns else 0
@@ -1316,22 +1401,18 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cap):
         fig_waterfall.update_layout(title = "Evolución del Capital", height=300)
         st.plotly_chart(fig_waterfall, use_container_width=True)
 
-
 # --- MAIN ---
 
 def main():
     configurar_pagina()
     
-    # Sidebar Estilizado Nexus Pro
     with st.sidebar:
-        # Título y Branding
         st.markdown(f"<h1 style='color:{COLOR_PRIMARIO}; text-align: center;'>Nexus Pro</h1>", unsafe_allow_html=True)
         st.markdown(f"<h4 style='color:{COLOR_TEXTO}; text-align: center; margin-top: -20px;'>Bigotes y Patitas</h4>", unsafe_allow_html=True)
-        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v6.1 WhatsApp Pro</span></center>", unsafe_allow_html=True)
+        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v6.2 Final Fixed</span></center>", unsafe_allow_html=True)
         
         st.markdown("---")
         
-        # MENÚ PRINCIPAL
         opcion = st.radio("Menú Principal", 
             ["Punto de Venta", "Despachos y Envíos", "Gestión de Clientes", "Inversión y Gastos", "Cuadre Diario (Caja)", "Finanzas & Resultados"],
             index=0
