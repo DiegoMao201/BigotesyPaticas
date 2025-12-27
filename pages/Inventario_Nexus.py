@@ -448,11 +448,16 @@ def main():
         st.divider()
 
         # 2. Tabla de Auditoría (Edición Masiva)
-        st.markdown("### 🕵️ Auditoría de Stock")
-        st.info("Instrucciones: Modifica la columna 'Conteo Físico'. Si hay diferencias, el sistema las resaltará. Al finalizar, presiona 'Confirmar Ajustes'.")
+        st.markdown("### 🕵️ Auditoría de Stock (Solo productos en Bodega)")
+        st.info("Mostrando únicamente productos con **Stock > 0** para facilitar el conteo.")
 
         # Preparamos dataframe para edición
         df_audit = master_unico[['ID_Producto', 'Nombre', 'Categoria', 'Stock', 'Costo']].copy()
+        
+        # --- FILTRO SOLICITADO: SOLO STOCK POSITIVO ---
+        df_audit = df_audit[df_audit['Stock'] > 0]
+        # ----------------------------------------------
+
         df_audit.rename(columns={'Stock': 'Sistema'}, inplace=True)
         # Inicializamos Conteo Físico igual al Sistema (asumiendo que está bien hasta que se diga lo contrario)
         df_audit['Conteo_Físico'] = df_audit['Sistema']
