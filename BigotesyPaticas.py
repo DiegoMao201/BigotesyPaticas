@@ -12,6 +12,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import xlsxwriter
 import urllib.parse
+import json  # Nuevo: Para manejar múltiples mascotas
 
 # --- 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME) ---
 
@@ -33,7 +34,7 @@ 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
-SeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiCiTbd+EGNkM/ADYajIfAL4jhDg14RZMMEaAp4CPmMw7gR8JIa5MtH0TM7IZ+CGwzWQ+APyHEOLMhFswARgBngH+YTJvB34khLgy0fZNmL0eAF4E7jWZDwK/EEL8b8ItmACMAKuAD4AcMv8B8B0hRG2i7ZuQ2WsFsA3IMZkPAv8RQlROuAUTiBFgJbADyCOzf9K+TwhxbaLtmzAjQWAL8DqQaTIfAv5J+xMhRPVE2zchRgLAKuAdIMdkPgT8SwhxdsItmACMAKuA94BcMv+X9v1CiGsTbd/EjASBFcC7QC6Z/0f7fiHEmQm3YIIwAqwC3gNyyfxA2/cLIS5PtH0TYmQFsB3IMZkPAv8WQpybcAsmACPASuADIDvI/EDbDwghrk20fRNmJAhsA34O5JD5gbYfFEJUTLR9E2IkCKwC3gdyyPxA2w8KIc5OuAUTgBFgJfARkE3mB9p+WAhxbSJsJ8xIEFgH/BLIMZk/0PZjQoiK0bZ5QoyUAI3AaiDfzD4M/EwIcWykbSYAI8BK4GMg y8w+DPxcCHF1JG0mZEQIsRb4BZBjZh8Gfi6EOObVNlJGehFCfAfIMbMPAz8XQoyY2Yz5P0wIsR74BZBjZh8GfiGEODrSNhM4ewmwc+cuI7t27TKyt2zZzMjeunUrd999F3ffvYV169awfv06duzYxo4d29i8eRObN29m8+ZNfPe736GxsZGGhga2b99OQ0MD27ZtY+vWzTQ2NrJ16xZ8Ph/19fV4PB68Xi+1tbXU1tZSW1tLbW0t27ZtY/v27TQ0NNDQ0EBDQwPbtm2joaGBHTt2sHnzZjZv3szmzZvZvHkzmzdvZs+e3YzsAwcOMrKPHj3KyD5+/DgA586dY2RfuXKFkX3t2jVG9vXr1xnZIyMjAGzZsoW1a9cCsHbtWtatW8f69etZv349GzZsYP369axbt4577rmHdevWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS
+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
 """
 
 def configurar_pagina():
@@ -218,7 +219,7 @@ def leer_datos(ws):
         df = pd.DataFrame(data)
         
         # Limpieza de columnas numéricas clave
-        cols_numericas = ['Precio', 'Stock', 'Monto', 'Total', 'Costo', 'Costo_Total', 'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 'Total_Real', 'Dinero_A_Bancos']
+        cols_numericas = ['Precio', 'Stock', 'Monto', 'Total', 'Costo', 'Costo_Total', 'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 'Total_Real', 'Dinero_A_Bancos', 'Saldo_Teorico', 'Saldo_Real', 'Diferencia']
         
         for col in cols_numericas:
             if col in df.columns:
@@ -239,6 +240,29 @@ def escribir_fila(ws, datos):
     except Exception as e:
         st.error(f"Error guardando en Google Sheets: {e}")
         return False
+
+# --- FUNCIÓN CLAVE PARA ACTUALIZAR CIERRE EN LUGAR DE DUPLICAR ---
+def actualizar_cierre_diario(ws_cie, fecha_str, datos_nuevos):
+    """
+    Busca si ya existe la fecha. Si existe, actualiza la fila. Si no, crea nueva.
+    """
+    try:
+        cell = ws_cie.find(fecha_str) # Busca la fecha en la hoja (normalmente columna 1)
+        datos_limpios = [sanitizar_dato(d) for d in datos_nuevos]
+        
+        if cell:
+            # Encontrado: Actualizar fila
+            # Convertimos rango de celdas A{fila}:J{fila} (ejemplo)
+            # Nota: gspread update toma lista de listas
+            ws_cie.update(f"A{cell.row}", [datos_limpios])
+            return "actualizado"
+        else:
+            # No encontrado: Crear fila
+            ws_cie.append_row(datos_limpios)
+            return "creado"
+    except Exception as e:
+        st.error(f"Error en persistencia de cierre: {e}")
+        return "error"
 
 def actualizar_stock(ws_inv, items):
     try:
@@ -447,6 +471,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
     
     if 'carrito' not in st.session_state: st.session_state.carrito = []
     if 'cliente_actual' not in st.session_state: st.session_state.cliente_actual = None
+    if 'mascota_seleccionada' not in st.session_state: st.session_state.mascota_seleccionada = None
     if 'ultimo_pdf' not in st.session_state: st.session_state.ultimo_pdf = None
     if 'ultima_venta_id' not in st.session_state: st.session_state.ultima_venta_id = None
     if 'whatsapp_link' not in st.session_state: st.session_state.whatsapp_link = None
@@ -465,12 +490,29 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     res = df_c[df_c['Cedula'] == busqueda.strip()]
                     if not res.empty:
                         st.session_state.cliente_actual = res.iloc[0].to_dict()
+                        
+                        # Parsear mascotas
+                        mascotas_raw = st.session_state.cliente_actual.get('Info_Mascotas', '[]')
+                        try:
+                            mascotas_list = json.loads(mascotas_raw)
+                        except:
+                            # Soporte legacy
+                            mascotas_list = [{'Nombre': st.session_state.cliente_actual.get('Mascota', 'General'), 'Tipo': 'N/A'}]
+                        
+                        st.session_state.cliente_actual['Lista_Mascotas'] = mascotas_list
+                        
                         st.toast(f"Cliente cargado: {st.session_state.cliente_actual.get('Nombre')}", icon="✅")
                     else:
                         st.warning("Cliente no encontrado.")
         
         if st.session_state.cliente_actual:
-            st.info(f"🟢 **{st.session_state.cliente_actual.get('Nombre')}** | Mascota: **{st.session_state.cliente_actual.get('Mascota', 'N/A')}**")
+            nombres_mascotas = [m.get('Nombre', 'Sin Nombre') for m in st.session_state.cliente_actual.get('Lista_Mascotas', [])]
+            nombres_mascotas.append("Varios / Otro")
+            
+            st.info(f"🟢 **{st.session_state.cliente_actual.get('Nombre')}**")
+            
+            # Selector de Mascota para la venta
+            st.session_state.mascota_seleccionada = st.selectbox("🐾 ¿Para quién es esta compra?", options=nombres_mascotas)
 
         st.markdown("---")
         
@@ -593,6 +635,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                 if c_new.button("🔄 Nueva", use_container_width=True):
                     st.session_state.carrito = []
                     st.session_state.cliente_actual = None
+                    st.session_state.mascota_seleccionada = None
                     st.session_state.ultimo_pdf = None
                     st.session_state.ultima_venta_id = None
                     st.session_state.whatsapp_link = None
@@ -626,6 +669,8 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                             items_str = ", ".join(items_str_list)
                             estado_envio = "Entregado" if tipo_entrega == "Punto de Venta" else "Pendiente"
                             
+                            mascota_final = st.session_state.mascota_seleccionada if st.session_state.mascota_seleccionada else "Varios"
+
                             # Guardar en Sheet Ventas
                             datos_venta = [
                                 id_venta, fecha, 
@@ -634,7 +679,8 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                                 tipo_entrega, direccion_envio, estado_envio,
                                 metodo, banco_destino, 
                                 total_general, items_str,
-                                total_costo_venta # Costo total
+                                total_costo_venta, # Costo total
+                                mascota_final # Guardar para qué mascota fue
                             ]
                             
                             # Generar Link WhatsApp
@@ -646,7 +692,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                             
                             mensaje_wa = generar_mensaje_whatsapp(
                                 st.session_state.cliente_actual.get('Nombre', 'Cliente'),
-                                st.session_state.cliente_actual.get('Mascota', 'tu peludito'),
+                                mascota_final,
                                 "RECURRENTE", items_wa, total_general
                             )
                             st.session_state.whatsapp_link = {"telefono": telefono, "mensaje": mensaje_wa}
@@ -658,7 +704,8 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                                     "ID": id_venta, "Fecha": fecha,
                                     "Cliente": st.session_state.cliente_actual.get('Nombre', 'Consumidor'),
                                     "Cedula_Cliente": str(st.session_state.cliente_actual.get('Cedula', '')),
-                                    "Direccion": direccion_envio, "Mascota": st.session_state.cliente_actual.get('Mascota', ''),
+                                    "Direccion": direccion_envio, 
+                                    "Mascota": mascota_final,
                                     "Total": total_general, "Metodo": metodo, "Tipo_Entrega": tipo_entrega
                                 }
                                 pdf_bytes = generar_pdf_html(cliente_pdf_data, st.session_state.carrito)
@@ -698,25 +745,61 @@ def tab_logistica(ws_ven):
                     st.rerun()
 
 def tab_clientes(ws_cli):
-    st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>👥</span> Gestión de Clientes", unsafe_allow_html=True)
+    st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>👥</span> Gestión de Clientes Multi-Mascota", unsafe_allow_html=True)
+    
+    if "mascotas_temp" not in st.session_state:
+        st.session_state.mascotas_temp = [{"Nombre": "", "Tipo": "Perro", "Cumpleaños": date.today()}]
+
     with st.form("form_cliente"):
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns([1, 1.5])
         with col1:
+            st.markdown("##### Datos del Dueño")
             cedula = st.text_input("Cédula / ID *")
             nombre = st.text_input("Nombre Completo *")
             telefono = st.text_input("Teléfono *")
             email = st.text_input("Correo")
-        with col2:
             direccion = st.text_input("Dirección")
-            nombre_mascota = st.text_input("Nombre Mascota *")
-            tipo_mascota = st.selectbox("Tipo", ["Perro", "Gato", "Otro"])
-            fecha_nac = st.date_input("Cumpleaños Mascota", value=None)
+        
+        with col2:
+            st.markdown("##### 🐶 Mis Mascotas (Agrega hasta 10)")
+            
+            # Editor de mascotas en tabla
+            df_mascotas_input = pd.DataFrame(st.session_state.mascotas_temp)
+            
+            column_config = {
+                "Nombre": st.column_config.TextColumn("Nombre", required=True),
+                "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Perro", "Gato", "Ave", "Roedor", "Otro"], required=True),
+                "Cumpleaños": st.column_config.DateColumn("Cumpleaños")
+            }
+            
+            edited_mascotas = st.data_editor(
+                df_mascotas_input, 
+                column_config=column_config, 
+                num_rows="dynamic", 
+                use_container_width=True,
+                key="editor_mascotas"
+            )
 
-        if st.form_submit_button("💾 Guardar Cliente", type="primary"):
-            if cedula and nombre and nombre_mascota:
-                datos = [cedula, nombre, telefono, email, direccion, nombre_mascota, tipo_mascota, str(fecha_nac), str(date.today())]
+        if st.form_submit_button("💾 Guardar Cliente y Mascotas", type="primary"):
+            if cedula and nombre:
+                # Convertir mascotas a JSON
+                mascotas_finales = []
+                # Iterar sobre el dataframe editado
+                for index, row in edited_mascotas.iterrows():
+                    if row['Nombre']: # Solo guardar si tiene nombre
+                        mascotas_finales.append({
+                            "Nombre": row['Nombre'],
+                            "Tipo": row['Tipo'],
+                            "Cumpleaños": str(row['Cumpleaños'])
+                        })
+                
+                json_mascotas = json.dumps(mascotas_finales)
+                
+                # Columnas: Cedula, Nombre, Telefono, Email, Direccion, Info_Mascotas (JSON), Fecha_Reg
+                datos = [cedula, nombre, telefono, email, direccion, json_mascotas, str(date.today())]
+                
                 if escribir_fila(ws_cli, datos):
-                    st.success("Cliente guardado.")
+                    st.success("Cliente guardado correctamente.")
                     
                     # Link de bienvenida Angela
                     msg_bienvenida = f"¡Hola {nombre}! 👋\nBienvenido a *Bigotes y Patitas* 🐾. Soy Angela, guardame como contacto para tus domicilios: 320 687 6633"
@@ -725,11 +808,13 @@ def tab_clientes(ws_cli):
                     link = f"https://wa.me/{tel_clean}?text={urllib.parse.quote(msg_bienvenida)}"
                     st.markdown(f'<a href="{link}" target="_blank" class="whatsapp-btn">📲 Enviar Bienvenida</a>', unsafe_allow_html=True)
             else:
-                st.warning("Completa los campos obligatorios.")
+                st.warning("Completa Cédula y Nombre como mínimo.")
     
     st.markdown("---")
     df = leer_datos(ws_cli)
-    st.dataframe(df, use_container_width=True)
+    if not df.empty:
+        # Ocultar la columna JSON cruda y mostrar datos básicos
+        st.dataframe(df[['Cedula', 'Nombre', 'Telefono', 'Direccion']], use_container_width=True)
 
 def tab_gestion_capital(ws_cap, ws_gas):
     st.markdown(f"### <span style='color:{COLOR_ACENTO}'>💰</span> Inversión y Gastos", unsafe_allow_html=True)
@@ -791,7 +876,7 @@ def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
     col_f1, col_f2 = st.columns([1, 3])
     fecha_cierre = col_f1.date_input("📅 Fecha a Cuadrar", value=date.today())
     
-    # 2. CARGA DE DATOS PARA ESA FECHA ESPECÍFICA
+    # 2. CARGA DE DATOS
     df_v = leer_datos(ws_ven)
     df_g = leer_datos(ws_gas)
     df_c = leer_datos(ws_cie)
@@ -804,73 +889,70 @@ def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
     v_dia = df_v[df_v['Fecha_Dt'] == fecha_cierre] if not df_v.empty else pd.DataFrame()
     g_dia = df_g[df_g['Fecha_Dt'] == fecha_cierre] if not df_g.empty else pd.DataFrame()
     
-    # --- LÓGICA DE PERSISTENCIA Y LIMPIEZA DE INPUTS ---
-    # Verificar si YA existe un cierre guardado para este día
-    registro_dia = df_c[df_c['Fecha_Dt'] == fecha_cierre] if not df_c.empty else pd.DataFrame()
-
-    # Valores por defecto (se sobreescriben si hay registro guardado o si calculamos nueva base)
-    val_base = 0.0
-    val_consignacion = 0.0
-    val_saldo_real_previo = 0.0
-    msg_base = "Sin registros anteriores."
-
-    if not registro_dia.empty:
-        # MODO EDICIÓN: Si ya existe el día, cargamos lo que se guardó.
-        fila_guardada = registro_dia.iloc[0]
-        val_base = float(fila_guardada.get('Base_Inicial', 0))
-        val_consignacion = float(fila_guardada.get('Dinero_A_Bancos', 0))
-        val_saldo_real_previo = float(fila_guardada.get('Saldo_Real', 0)) # Opcional si quieres mostrar lo que contaste esa vez
-        msg_base = "Editando cierre ya registrado."
-        st.warning(f"⚠️ Ya existe un cierre para el {fecha_cierre}. Los datos mostrados vienen de la base de datos.")
-    else:
-        # MODO NUEVO DÍA: La consignación empieza en 0 y la Base es el saldo real del día anterior
-        val_consignacion = 0.0 # ¡AQUI ESTÁ LA CLAVE! Se reinicia a 0 si es un día nuevo
-        val_saldo_real_previo = 0.0
-        
-        # Buscar el cierre más cercano ANTERIOR
-        if not df_c.empty:
-            cierres_anteriores = df_c[df_c['Fecha_Dt'] < fecha_cierre].sort_values(by='Fecha_Dt')
-            if not cierres_anteriores.empty:
-                ultimo_cierre = cierres_anteriores.iloc[-1]
-                try:
-                    val_base = float(ultimo_cierre['Saldo_Real']) # La base es lo que quedó en caja (Real)
-                except:
-                    val_base = 0.0
-                msg_base = f"Base traída del cierre del {ultimo_cierre['Fecha_Dt']}"
-
-    # --- CÁLCULOS DEL DÍA SELECCIONADO ---
+    # --- LOGICA DE CONTINUIDAD DE CAJA (Requirement 1) ---
     
-    # INGRESOS
+    # A) Buscar si YA existe un cierre para HOY (Modo Edición)
+    registro_hoy = df_c[df_c['Fecha_Dt'] == fecha_cierre] if not df_c.empty else pd.DataFrame()
+    
+    modo_edicion = False
+    base_sugerida = 0.0
+    consignacion_guardada = 0.0
+    saldo_real_guardado = 0.0
+    msg_base = ""
+
+    if not registro_hoy.empty:
+        # ¡Existe! Cargamos lo que guardaste para editarlo
+        modo_edicion = True
+        fila = registro_hoy.iloc[0]
+        base_sugerida = float(fila.get('Base_Inicial', 0))
+        consignacion_guardada = float(fila.get('Dinero_A_Bancos', 0))
+        saldo_real_guardado = float(fila.get('Saldo_Real', 0))
+        msg_base = "🟡 Editando cierre existente (sobreescribirá al guardar)."
+        st.warning(f"⚠️ Ya existe un cierre para el {fecha_cierre}. Estás en modo EDICIÓN.")
+    else:
+        # B) Es un día nuevo. Buscar el cierre del día ANTERIOR más cercano
+        msg_base = "Día nuevo."
+        if not df_c.empty:
+            # Filtramos fechas MENORES a la fecha seleccionada
+            cierres_anteriores = df_c[df_c['Fecha_Dt'] < fecha_cierre].sort_values(by='Fecha_Dt', ascending=True)
+            
+            if not cierres_anteriores.empty:
+                ultimo_cierre = cierres_anteriores.iloc[-1] # El último día registrado antes de hoy
+                # La base de hoy ES el saldo real de ayer
+                base_sugerida = float(ultimo_cierre['Saldo_Real'])
+                msg_base = f"🟢 Base traída automáticamente del cierre del {ultimo_cierre['Fecha_Dt']} (${base_sugerida:,.0f})"
+            else:
+                base_sugerida = 0.0
+                msg_base = "No hay cierres anteriores. Base inicia en 0."
+        
+        consignacion_guardada = 0.0
+        saldo_real_guardado = 0.0
+
+    # --- CÁLCULOS DEL DÍA ---
     venta_total_dia = v_dia['Total'].sum() if not v_dia.empty else 0
-    # Desglose por método
+    
     if not v_dia.empty:
         ventas_efectivo = v_dia[v_dia['Metodo_Pago'] == 'Efectivo']['Total'].sum()
         ventas_bancos = v_dia[v_dia['Metodo_Pago'] != 'Efectivo']['Total'].sum()
-        # Calcular Margen del día
         costo_dia = v_dia['Costo_Total'].sum() if 'Costo_Total' in v_dia.columns else 0
         utilidad_dia = venta_total_dia - costo_dia
     else:
         ventas_efectivo = 0; ventas_bancos = 0; costo_dia = 0; utilidad_dia = 0
 
-    # EGRESOS (Gastos)
     gastos_total_dia = g_dia['Monto'].sum() if not g_dia.empty else 0
     gastos_efectivo = 0
     if not g_dia.empty:
-        # Asumiendo que Banco_Origen dice 'Caja General', 'Efectivo' o 'Caja Menor'
         mask_efec = g_dia['Banco_Origen'].isin(['Caja General', 'Efectivo', 'Caja Menor'])
         gastos_efectivo = g_dia[mask_efec]['Monto'].sum()
 
-    # --- VISUALIZACIÓN DE CONTROL (Dashboard del Día) ---
+    # --- VISUALIZACIÓN ---
     st.markdown("---")
-    st.markdown(f"#### 📊 Resultados del {fecha_cierre}")
-    
     k1, k2, k3, k4 = st.columns(4)
     k1.metric("Ventas Totales", f"${venta_total_dia:,.0f}")
-    k2.metric("Entró a Bancos (Digital)", f"${ventas_bancos:,.0f}", help="Nequi, Daviplata, Tarjetas")
+    k2.metric("Entró a Bancos", f"${ventas_bancos:,.0f}")
     k3.metric("Entró en Efectivo", f"${ventas_efectivo:,.0f}")
-    k4.metric("Utilidad Bruta (Aprox)", f"${utilidad_dia:,.0f}", help="Ventas - Costo Mercancía")
+    k4.metric("Utilidad Bruta", f"${utilidad_dia:,.0f}")
 
-    # --- SECCIÓN DE CUADRE DE CAJA FÍSICA ---
     st.markdown("---")
     st.subheader("🔐 Cuadre de Caja (Efectivo)")
     
@@ -878,69 +960,67 @@ def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
         col_base, col_info = st.columns([1, 2])
         
         with col_base:
-            # Usamos key dinámico para que se resetee al cambiar la fecha
+            # Base inicial automática pero editable
             base_inicial = st.number_input(
                 "Base Inicial (Dinero en caja al abrir)", 
-                value=val_base, 
+                value=base_sugerida, 
                 step=1000.0, 
-                help=msg_base,
-                key=f"base_{fecha_cierre}" 
+                help="Debe coincidir con el Saldo Real del día anterior."
             )
         
         with col_info:
-            st.info(f"💡 {msg_base}. Si este valor es incorrecto, corrígelo manualmente aquí.")
+            st.info(msg_base)
 
         st.markdown("##### Movimientos de Efectivo")
         c1, c2, c3 = st.columns(3)
         c1.markdown(f"**(+) Ventas Efec:** ${ventas_efectivo:,.0f}")
         c2.markdown(f"**(-) Gastos Efec:** ${gastos_efectivo:,.0f}")
         
-        # INPUT DE CONSIGNACIÓN CON KEY DINÁMICO
-        # Esto asegura que si cambias de fecha, el input se vuelve a crear con el valor correcto (0 o guardado)
         dinero_a_bancos = c3.number_input(
             "(-) Consignación a Bancos", 
             min_value=0.0, 
-            value=val_consignacion,
+            value=consignacion_guardada,
             step=1000.0, 
-            help="Dinero físico que sacaste de la caja ESTE DÍA para meter al banco",
-            key=f"cons_{fecha_cierre}" 
+            help="Dinero físico que sacaste hoy para meter al banco"
         )
 
-        # Cálculo Teórico
+        # Fórmula Maestra de Flujo de Caja
         saldo_teorico = base_inicial + ventas_efectivo - gastos_efectivo - dinero_a_bancos
         
-        st.markdown("---")
         st.markdown(f"### 🎯 La caja DEBE tener: <span style='color:{COLOR_PRIMARIO}'>${saldo_teorico:,.0f}</span>", unsafe_allow_html=True)
         
-        # Conteo Real
-        saldo_real = st.number_input("💵 ¿Cuánto dinero contaste REALMENTE?", min_value=0.0, step=50.0, value=val_saldo_real_previo, key=f"real_{fecha_cierre}")
+        saldo_real = st.number_input("💵 ¿Cuánto dinero contaste REALMENTE?", min_value=0.0, step=50.0, value=saldo_real_guardado if modo_edicion else 0.0)
         notas = st.text_area("Observaciones del cierre")
         
         diferencia = saldo_real - saldo_teorico
         
         if saldo_real > 0:
             if abs(diferencia) < 100:
-                st.success(f"✅ CUADRE PERFECTO")
+                st.success(f"✅ CUADRE PERFECTO. Mañana iniciarás con: ${saldo_real:,.0f}")
             elif diferencia > 0:
                 st.info(f"💰 Sobra: ${diferencia:,.0f}")
             else:
                 st.error(f"🚨 Falta: ${diferencia:,.0f}")
 
-        if st.form_submit_button("💾 GUARDAR CIERRE Y REGISTRAR MOVIMIENTOS", type="primary", use_container_width=True):
-            # Guardar en Sheet Cierres
+        texto_boton = "🔄 ACTUALIZAR CIERRE" if modo_edicion else "💾 GUARDAR NUEVO CIERRE"
+
+        if st.form_submit_button(texto_boton, type="primary", use_container_width=True):
             datos_cierre = [
                 str(fecha_cierre), datetime.now().strftime("%H:%M:%S"),
                 base_inicial, ventas_efectivo, gastos_efectivo, dinero_a_bancos,
                 saldo_teorico, saldo_real, diferencia, notas
             ]
             
-            # Si ya existe, deberíamos intentar actualizar (pero append simple es más seguro para historial)
-            # Para evitar duplicados molestos, aquí una lógica simple: si existe, borrar anterior NO es trivial en gspread sin row id.
-            # Simplemente añadimos y el sistema lee el último.
-            if escribir_fila(ws_cie, datos_cierre):
+            # Usamos la nueva función inteligente de actualización
+            res = actualizar_cierre_diario(ws_cie, str(fecha_cierre), datos_cierre)
+            
+            if res != "error":
                 st.balloons()
-                st.success("Cierre guardado exitosamente.")
-                time.sleep(1)
+                if res == "actualizado":
+                    st.success("✅ Cierre actualizado correctamente. El historial se mantiene limpio.")
+                else:
+                    st.success("✅ Cierre guardado. Mañana la base se cargará automáticamente.")
+                time.sleep(1.5)
                 st.rerun()
 
 def tab_finanzas_pro(ws_ven, ws_gas, ws_cie):
@@ -1029,7 +1109,7 @@ def main():
     
     with st.sidebar:
         st.markdown(f"<h1 style='color:{COLOR_PRIMARIO}; text-align: center;'>Nexus Pro</h1>", unsafe_allow_html=True)
-        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v8.5 Master</span></center>", unsafe_allow_html=True)
+        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v9.0 Multi-Pet</span></center>", unsafe_allow_html=True)
         st.markdown("---")
         
         opcion = st.radio("Menú Principal", 
