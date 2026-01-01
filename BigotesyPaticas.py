@@ -12,7 +12,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import xlsxwriter
 import urllib.parse
-import json  # Nuevo: Para manejar múltiples mascotas
+import json
 
 # --- 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME) ---
 
@@ -34,7 +34,7 @@ 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
-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
+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
 """
 
 def configurar_pagina():
@@ -198,6 +198,9 @@ def conectar_google_sheets():
 
         try:
             ws_cie = sh.worksheet("Cierres")
+            # Verificar si está vacía e inicializar encabezados si es necesario
+            if not ws_cie.get_all_values():
+                ws_cie.append_row(["Fecha", "Hora", "Base_Inicial", "Ventas_Efectivo", "Gastos_Efectivo", "Dinero_A_Bancos", "Saldo_Teorico", "Saldo_Real", "Diferencia", "Notas"])
         except:
             st.error("⚠️ CRÍTICO: Falta la hoja 'Cierres'.")
             ws_cie = None
@@ -217,6 +220,9 @@ def leer_datos(ws):
     try:
         data = ws.get_all_records()
         df = pd.DataFrame(data)
+        
+        # Limpieza de nombres de columnas (eliminar espacios extra)
+        df.columns = df.columns.str.strip()
         
         # Limpieza de columnas numéricas clave
         cols_numericas = ['Precio', 'Stock', 'Monto', 'Total', 'Costo', 'Costo_Total', 'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 'Total_Real', 'Dinero_A_Bancos', 'Saldo_Teorico', 'Saldo_Real', 'Diferencia']
@@ -252,8 +258,6 @@ def actualizar_cierre_diario(ws_cie, fecha_str, datos_nuevos):
         
         if cell:
             # Encontrado: Actualizar fila
-            # Convertimos rango de celdas A{fila}:J{fila} (ejemplo)
-            # Nota: gspread update toma lista de listas
             ws_cie.update(f"A{cell.row}", [datos_limpios])
             return "actualizado"
         else:
@@ -263,6 +267,30 @@ def actualizar_cierre_diario(ws_cie, fecha_str, datos_nuevos):
     except Exception as e:
         st.error(f"Error en persistencia de cierre: {e}")
         return "error"
+
+# --- FUNCION PARA ACTUALIZAR CLIENTE (MIXTO LEGACY/JSON) ---
+def guardar_actualizar_cliente(ws_cli, cedula, nuevos_datos):
+    """
+    Busca al cliente por cedula. Si existe, actualiza su fila. Si no, crea uno nuevo.
+    Mantiene compatibilidad con columnas antiguas y nuevas.
+    """
+    try:
+        cell = ws_cli.find(str(cedula))
+        datos_limpios = [sanitizar_dato(d) for d in nuevos_datos]
+        
+        if cell:
+            # Actualizar fila existente
+            # Asumimos que la hoja tiene las columnas en orden:
+            # Cedula, Nombre, Telefono, Email, Direccion, Mascota, Tipo_Mascota, Cumpleaños, Registro, Info_Mascotas
+            ws_cli.update(f"A{cell.row}", [datos_limpios])
+            return True
+        else:
+            # Crear nuevo
+            ws_cli.append_row(datos_limpios)
+            return True
+    except Exception as e:
+        st.error(f"Error guardando cliente: {e}")
+        return False
 
 def actualizar_stock(ws_inv, items):
     try:
@@ -489,17 +517,28 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     df_c['Cedula'] = df_c['Cedula'].astype(str)
                     res = df_c[df_c['Cedula'] == busqueda.strip()]
                     if not res.empty:
-                        st.session_state.cliente_actual = res.iloc[0].to_dict()
+                        cliente_data = res.iloc[0].to_dict()
                         
-                        # Parsear mascotas
-                        mascotas_raw = st.session_state.cliente_actual.get('Info_Mascotas', '[]')
+                        # --- LÓGICA HÍBRIDA MASCOTAS ---
+                        # 1. Intentar leer nueva columna JSON (Info_Mascotas)
+                        mascotas_list = []
+                        json_raw = cliente_data.get('Info_Mascotas', '')
+                        
                         try:
-                            mascotas_list = json.loads(mascotas_raw)
+                            if json_raw and str(json_raw).strip() and len(str(json_raw)) > 2:
+                                mascotas_list = json.loads(str(json_raw))
                         except:
-                            # Soporte legacy
-                            mascotas_list = [{'Nombre': st.session_state.cliente_actual.get('Mascota', 'General'), 'Tipo': 'N/A'}]
+                            mascotas_list = []
+                            
+                        # 2. Si falló el JSON o está vacío, leer columnas LEGACY (Mascota, Tipo_Mascota)
+                        if not mascotas_list:
+                            nombre_old = cliente_data.get('Mascota', '')
+                            tipo_old = cliente_data.get('Tipo_Mascota', 'N/A')
+                            if nombre_old:
+                                mascotas_list = [{'Nombre': nombre_old, 'Tipo': tipo_old}]
                         
-                        st.session_state.cliente_actual['Lista_Mascotas'] = mascotas_list
+                        cliente_data['Lista_Mascotas'] = mascotas_list
+                        st.session_state.cliente_actual = cliente_data
                         
                         st.toast(f"Cliente cargado: {st.session_state.cliente_actual.get('Nombre')}", icon="✅")
                     else:
@@ -747,24 +786,65 @@ def tab_logistica(ws_ven):
 def tab_clientes(ws_cli):
     st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>👥</span> Gestión de Clientes Multi-Mascota", unsafe_allow_html=True)
     
-    if "mascotas_temp" not in st.session_state:
-        st.session_state.mascotas_temp = [{"Nombre": "", "Tipo": "Perro", "Cumpleaños": date.today()}]
+    # Buscador para editar clientes existentes
+    st.caption("🔍 Busca un cliente para ver sus mascotas o crea uno nuevo abajo.")
+    cedula_buscar = st.text_input("Buscar Cliente por Cédula (para editar/ver)", key="search_cli_edit")
+    
+    cliente_en_edicion = None
+    mascotas_init = [{"Nombre": "", "Tipo": "Perro", "Cumpleaños": date.today()}]
+    
+    if cedula_buscar:
+        df = leer_datos(ws_cli)
+        if not df.empty:
+            res = df[df['Cedula'].astype(str) == str(cedula_buscar)]
+            if not res.empty:
+                cliente_en_edicion = res.iloc[0].to_dict()
+                st.success(f"Editando a: {cliente_en_edicion.get('Nombre')}")
+                
+                # Cargar mascotas existentes (JSON o Legacy)
+                json_raw = cliente_en_edicion.get('Info_Mascotas', '')
+                try:
+                    if json_raw and len(str(json_raw)) > 2:
+                        mascotas_init = json.loads(str(json_raw))
+                        # Convertir fecha string a date object para el editor
+                        for m in mascotas_init:
+                            try:
+                                m['Cumpleaños'] = datetime.strptime(m['Cumpleaños'], "%Y-%m-%d").date()
+                            except:
+                                m['Cumpleaños'] = date.today()
+                    else:
+                        # Legacy
+                        if cliente_en_edicion.get('Mascota'):
+                            mascotas_init = [{
+                                "Nombre": cliente_en_edicion.get('Mascota'),
+                                "Tipo": cliente_en_edicion.get('Tipo_Mascota', 'N/A'),
+                                "Cumpleaños": date.today() # No teníamos fecha antes
+                            }]
+                except:
+                     mascotas_init = [{"Nombre": "", "Tipo": "Perro", "Cumpleaños": date.today()}]
 
     with st.form("form_cliente"):
         col1, col2 = st.columns([1, 1.5])
         with col1:
             st.markdown("##### Datos del Dueño")
-            cedula = st.text_input("Cédula / ID *")
-            nombre = st.text_input("Nombre Completo *")
-            telefono = st.text_input("Teléfono *")
-            email = st.text_input("Correo")
-            direccion = st.text_input("Dirección")
+            # Prellenar si estamos editando
+            val_ced = cliente_en_edicion.get('Cedula') if cliente_en_edicion else ""
+            val_nom = cliente_en_edicion.get('Nombre') if cliente_en_edicion else ""
+            val_tel = cliente_en_edicion.get('Telefono') if cliente_en_edicion else ""
+            val_ema = cliente_en_edicion.get('Email') if cliente_en_edicion else ""
+            val_dir = cliente_en_edicion.get('Direccion') if cliente_en_edicion else ""
+            
+            cedula = st.text_input("Cédula / ID *", value=str(val_ced))
+            nombre = st.text_input("Nombre Completo *", value=str(val_nom))
+            telefono = st.text_input("Teléfono *", value=str(val_tel))
+            email = st.text_input("Correo", value=str(val_ema))
+            direccion = st.text_input("Dirección", value=str(val_dir))
         
         with col2:
             st.markdown("##### 🐶 Mis Mascotas (Agrega hasta 10)")
             
             # Editor de mascotas en tabla
-            df_mascotas_input = pd.DataFrame(st.session_state.mascotas_temp)
+            df_mascotas_input = pd.DataFrame(mascotas_init)
             
             column_config = {
                 "Nombre": st.column_config.TextColumn("Nombre", required=True),
@@ -784,6 +864,10 @@ def tab_clientes(ws_cli):
             if cedula and nombre:
                 # Convertir mascotas a JSON
                 mascotas_finales = []
+                mascota_principal = ""
+                tipo_principal = ""
+                cumple_principal = ""
+
                 # Iterar sobre el dataframe editado
                 for index, row in edited_mascotas.iterrows():
                     if row['Nombre']: # Solo guardar si tiene nombre
@@ -793,28 +877,34 @@ def tab_clientes(ws_cli):
                             "Cumpleaños": str(row['Cumpleaños'])
                         })
                 
+                # Definir datos para columnas legacy (usamos la primera mascota de la lista)
+                if mascotas_finales:
+                    mascota_principal = mascotas_finales[0]['Nombre']
+                    tipo_principal = mascotas_finales[0]['Tipo']
+                    cumple_principal = mascotas_finales[0]['Cumpleaños']
+                
                 json_mascotas = json.dumps(mascotas_finales)
                 
-                # Columnas: Cedula, Nombre, Telefono, Email, Direccion, Info_Mascotas (JSON), Fecha_Reg
-                datos = [cedula, nombre, telefono, email, direccion, json_mascotas, str(date.today())]
+                # Columnas del usuario: Cedula, Nombre, Telefono, Email, Direccion, Mascota, Tipo_Mascota, Cumpleaños_mascota, Registro, Info_Mascotas (NUEVA)
+                datos = [
+                    cedula, nombre, telefono, email, direccion, 
+                    mascota_principal, tipo_principal, cumple_principal, 
+                    str(date.today()), json_mascotas
+                ]
                 
-                if escribir_fila(ws_cli, datos):
+                if guardar_actualizar_cliente(ws_cli, cedula, datos):
                     st.success("Cliente guardado correctamente.")
-                    
-                    # Link de bienvenida Angela
-                    msg_bienvenida = f"¡Hola {nombre}! 👋\nBienvenido a *Bigotes y Patitas* 🐾. Soy Angela, guardame como contacto para tus domicilios: 320 687 6633"
-                    tel_clean = ''.join(filter(str.isdigit, str(telefono)))
-                    if len(tel_clean) == 10: tel_clean = "57" + tel_clean
-                    link = f"https://wa.me/{tel_clean}?text={urllib.parse.quote(msg_bienvenida)}"
-                    st.markdown(f'<a href="{link}" target="_blank" class="whatsapp-btn">📲 Enviar Bienvenida</a>', unsafe_allow_html=True)
+                    time.sleep(1)
+                    st.rerun()
             else:
                 st.warning("Completa Cédula y Nombre como mínimo.")
     
     st.markdown("---")
     df = leer_datos(ws_cli)
     if not df.empty:
-        # Ocultar la columna JSON cruda y mostrar datos básicos
-        st.dataframe(df[['Cedula', 'Nombre', 'Telefono', 'Direccion']], use_container_width=True)
+        # Mostrar tabla resumen
+        cols_mostrar = ['Cedula', 'Nombre', 'Telefono', 'Mascota']
+        st.dataframe(df[[c for c in cols_mostrar if c in df.columns]], use_container_width=True)
 
 def tab_gestion_capital(ws_cap, ws_gas):
     st.markdown(f"### <span style='color:{COLOR_ACENTO}'>💰</span> Inversión y Gastos", unsafe_allow_html=True)
@@ -889,7 +979,7 @@ def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
     v_dia = df_v[df_v['Fecha_Dt'] == fecha_cierre] if not df_v.empty else pd.DataFrame()
     g_dia = df_g[df_g['Fecha_Dt'] == fecha_cierre] if not df_g.empty else pd.DataFrame()
     
-    # --- LOGICA DE CONTINUIDAD DE CAJA (Requirement 1) ---
+    # --- LOGICA DE CONTINUIDAD DE CAJA (CORREGIDA PARA EVITAR KEYERROR) ---
     
     # A) Buscar si YA existe un cierre para HOY (Modo Edición)
     registro_hoy = df_c[df_c['Fecha_Dt'] == fecha_cierre] if not df_c.empty else pd.DataFrame()
@@ -904,6 +994,7 @@ def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
         # ¡Existe! Cargamos lo que guardaste para editarlo
         modo_edicion = True
         fila = registro_hoy.iloc[0]
+        # Usamos .get para evitar KeyError si las columnas no coinciden exactamente
         base_sugerida = float(fila.get('Base_Inicial', 0))
         consignacion_guardada = float(fila.get('Dinero_A_Bancos', 0))
         saldo_real_guardado = float(fila.get('Saldo_Real', 0))
@@ -918,12 +1009,15 @@ def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
             
             if not cierres_anteriores.empty:
                 ultimo_cierre = cierres_anteriores.iloc[-1] # El último día registrado antes de hoy
-                # La base de hoy ES el saldo real de ayer
-                base_sugerida = float(ultimo_cierre['Saldo_Real'])
-                msg_base = f"🟢 Base traída automáticamente del cierre del {ultimo_cierre['Fecha_Dt']} (${base_sugerida:,.0f})"
+                # La base de hoy ES el saldo real de ayer. Usamos .get por seguridad.
+                base_sugerida = float(ultimo_cierre.get('Saldo_Real', 0.0))
+                fecha_prev = ultimo_cierre.get('Fecha', 'Anterior')
+                msg_base = f"🟢 Base traída automáticamente del cierre anterior (${base_sugerida:,.0f})"
             else:
                 base_sugerida = 0.0
                 msg_base = "No hay cierres anteriores. Base inicia en 0."
+        else:
+            msg_base = "Primera vez que se usa el módulo de Cierres."
         
         consignacion_guardada = 0.0
         saldo_real_guardado = 0.0
@@ -1109,7 +1203,7 @@ def main():
     
     with st.sidebar:
         st.markdown(f"<h1 style='color:{COLOR_PRIMARIO}; text-align: center;'>Nexus Pro</h1>", unsafe_allow_html=True)
-        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v9.0 Multi-Pet</span></center>", unsafe_allow_html=True)
+        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v9.1 Multi-Pet Hybrid</span></center>", unsafe_allow_html=True)
         st.markdown("---")
         
         opcion = st.radio("Menú Principal", 
