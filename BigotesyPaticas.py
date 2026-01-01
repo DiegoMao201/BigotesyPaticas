@@ -33,7 +33,7 @@ ArwCXBBCHJ/wOicamQf8CngAyDSZ3wWeBz4VQoybdEsmQgjRDHwfeAlIN5kPAz8RQlROtH1jZiQIrADe
 ZH4v8HMhRMVE2zchRgLAA8B7gM9kPgD8SAhxfcItmACMAE8BHwNuk/k9wDeEEJcm2r6JGakH3gXWmcyHgO8LIc5MuAUTgBHgceBfJvNu4MdCiCsT
 bd+EGKkF3gU2m8wHgO8IIU5NuAUTgBHgCeBvJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8w
 HgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHg
-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
+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
 """
 
 def configurar_pagina():
@@ -198,7 +198,7 @@ def conectar_google_sheets():
         try:
             ws_cie = sh.worksheet("Cierres")
         except:
-            st.error("⚠️ CRÍTICO: Falta la hoja 'Cierres'. Créala con columnas: Fecha, Hora, Base_Inicial, Ventas_Efectivo, Gastos_Efectivo, Retiros_Bancos, Total_Teorico, Total_Real, Diferencia, Notas")
+            st.error("⚠️ CRÍTICO: Falta la hoja 'Cierres'.")
             ws_cie = None
         
         return ws_inv, ws_cli, ws_ven, ws_gas, ws_cap, ws_cie
@@ -218,8 +218,7 @@ def leer_datos(ws):
         df = pd.DataFrame(data)
         
         # Limpieza de columnas numéricas clave
-        # 'Costo' es nuevo, 'Costo_Total' es nuevo para calcular márgenes
-        cols_numericas = ['Precio', 'Stock', 'Monto', 'Total', 'Costo', 'Costo_Total', 'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 'Total_Real']
+        cols_numericas = ['Precio', 'Stock', 'Monto', 'Total', 'Costo', 'Costo_Total', 'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 'Total_Real', 'Dinero_A_Bancos']
         
         for col in cols_numericas:
             if col in df.columns:
@@ -254,7 +253,7 @@ def actualizar_stock(ws_inv, items):
             id_buscado = str(item['ID_Producto']).strip()
             if id_buscado in id_a_fila:
                 fila_num = id_a_fila[id_buscado]
-                stock_actual_val = ws_inv.cell(fila_num, 4).value # Leer columna 4 (Stock)
+                stock_actual_val = ws_inv.cell(fila_num, 4).value 
                 try:
                     stock_actual = int(float(stock_actual_val)) if stock_actual_val else 0
                 except:
@@ -627,7 +626,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                             items_str = ", ".join(items_str_list)
                             estado_envio = "Entregado" if tipo_entrega == "Punto de Venta" else "Pendiente"
                             
-                            # Guardar en Sheet Ventas (AHORA INCLUYE COSTO_TOTAL AL FINAL)
+                            # Guardar en Sheet Ventas
                             datos_venta = [
                                 id_venta, fecha, 
                                 str(st.session_state.cliente_actual.get('Cedula', '0')), 
@@ -635,7 +634,7 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                                 tipo_entrega, direccion_envio, estado_envio,
                                 metodo, banco_destino, 
                                 total_general, items_str,
-                                total_costo_venta # <--- NUEVO CAMPO IMPORTANTE
+                                total_costo_venta # Costo total
                             ]
                             
                             # Generar Link WhatsApp
@@ -691,9 +690,10 @@ def tab_logistica(ws_ven):
                 <div class="delivery-card">
                     <h4 style="margin:0; color:{COLOR_PRIMARIO};">Pedido #{row.get('ID', 'N/A')}</h4>
                     <p>{row.get('Cliente', 'N/A')} - {row.get('Direccion', 'N/A')}</p>
+                    <p><i>{row.get('Items', '')}</i></p>
                 </div>
                 """, unsafe_allow_html=True)
-                if st.button(f"🚀 Enviado #{row.get('ID')}", key=f"btn_{index}"):
+                if st.button(f"🚀 Marcar Enviado #{row.get('ID')}", key=f"btn_{index}"):
                     actualizar_estado_envio(ws_ven, row.get('ID', ''), "Enviado")
                     st.rerun()
 
@@ -784,116 +784,132 @@ def tab_gestion_capital(ws_cap, ws_gas):
                     escribir_fila(ws_cap, datos)
                     st.success("Capital registrado.")
 
-def tab_cuadre_diario_flujo(ws_ven, ws_gas, ws_cie):
-    st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>⚖️</span> Cuadre Diario de Caja (Flujo Continuo)", unsafe_allow_html=True)
-    st.info("Este módulo calcula el efectivo físico basándose en el cierre de ayer.")
-
-    # 1. OBTENER BASE ANTERIOR (Automática)
-    df_cierres = leer_datos(ws_cie)
-    base_traida = 0.0
-    fecha_ultimo_cierre = "Sin registros previos"
+def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
+    st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>⚖️</span> Centro de Control y Cuadre Diario", unsafe_allow_html=True)
     
-    if not df_cierres.empty:
-        # Asumiendo orden cronológico, tomamos la última fila
-        ultimo_cierre = df_cierres.iloc[-1]
-        try:
-            # La base de hoy es el "Total_Real" de ayer
-            base_traida = float(ultimo_cierre['Total_Real'])
-            fecha_ultimo_cierre = str(ultimo_cierre['Fecha'])
-        except:
-            base_traida = 0.0
-
-    # 2. SELECCIONAR FECHA DE HOY
-    fecha_hoy = st.date_input("Fecha de Cierre", value=date.today())
+    # 1. SELECCIÓN DE FECHA (Permite pasado)
+    col_f1, col_f2 = st.columns([1, 3])
+    fecha_cierre = col_f1.date_input("📅 Fecha a Cuadrar", value=date.today())
     
-    st.write(f"**💰 Base Inicial (Viene del cierre del {fecha_ultimo_cierre}):** ${base_traida:,.0f}")
-    
-    # 3. CALCULAR ENTRADAS Y SALIDAS DE HOY (EFECTIVO SOLAMENTE)
+    # 2. CARGA DE DATOS PARA ESA FECHA ESPECÍFICA
     df_v = leer_datos(ws_ven)
     df_g = leer_datos(ws_gas)
+    df_c = leer_datos(ws_cie)
 
     if not df_v.empty: df_v['Fecha_Dt'] = df_v['Fecha'].dt.date
     if not df_g.empty: df_g['Fecha_Dt'] = df_g['Fecha'].dt.date
-    
-    # Filtrar solo registros de HOY
-    v_hoy = df_v[df_v['Fecha_Dt'] == fecha_hoy] if not df_v.empty else pd.DataFrame()
-    g_hoy = df_g[df_g['Fecha_Dt'] == fecha_hoy] if not df_g.empty else pd.DataFrame()
-    
-    # A. Ventas en Efectivo (+)
-    entradas_efectivo = 0.0
-    if not v_hoy.empty and 'Metodo_Pago' in v_hoy.columns:
-        entradas_efectivo = v_hoy[v_hoy['Metodo_Pago'] == 'Efectivo']['Total'].sum()
-    
-    # B. Gastos pagados en Efectivo (-) (Incluye pagos a proveedores si salieron de Caja General)
-    salidas_gastos_efectivo = 0.0
-    if not g_hoy.empty and 'Banco_Origen' in g_hoy.columns:
-        # Filtramos por origen "Caja General" o "Efectivo"
-        mask_origen = g_hoy['Banco_Origen'].isin(['Caja General', 'Efectivo', 'Caja Menor'])
-        salidas_gastos_efectivo = g_hoy[mask_origen]['Monto'].sum()
+    if not df_c.empty: df_c['Fecha_Dt'] = df_c['Fecha'].dt.date
 
-    # C. Retiros / Consignaciones Bancarias (-)
-    # Esto es manual porque es un movimiento físico que haces al cerrar o durante el día
+    # Filtrar movimientos SOLO de la fecha seleccionada
+    v_dia = df_v[df_v['Fecha_Dt'] == fecha_cierre] if not df_v.empty else pd.DataFrame()
+    g_dia = df_g[df_g['Fecha_Dt'] == fecha_cierre] if not df_g.empty else pd.DataFrame()
+    
+    # Verificar si ya existe cierre para ese día
+    cierre_existente = df_c[df_c['Fecha_Dt'] == fecha_cierre] if not df_c.empty else pd.DataFrame()
+    
+    if not cierre_existente.empty:
+        st.warning(f"⚠️ Ya existe un cierre registrado para el {fecha_cierre}. Si guardas de nuevo, se duplicará el registro (útil para correcciones).")
+
+    # --- LÓGICA DE BASE INICIAL (RETROACTIVA) ---
+    base_sugerida = 0.0
+    msg_base = "No hay registros anteriores. Iniciando en $0."
+    
+    # Buscar el cierre más cercano ANTERIOR a la fecha seleccionada
+    if not df_c.empty:
+        cierres_anteriores = df_c[df_c['Fecha_Dt'] < fecha_cierre].sort_values(by='Fecha_Dt')
+        if not cierres_anteriores.empty:
+            ultimo_cierre = cierres_anteriores.iloc[-1]
+            try:
+                base_sugerida = float(ultimo_cierre['Total_Real'])
+            except:
+                base_sugerida = 0.0
+            msg_base = f"Base tomada del cierre del {ultimo_cierre['Fecha_Dt']}"
+    
+    # --- CÁLCULOS DEL DÍA SELECCIONADO ---
+    
+    # INGRESOS
+    venta_total_dia = v_dia['Total'].sum() if not v_dia.empty else 0
+    # Desglose por método
+    if not v_dia.empty:
+        ventas_efectivo = v_dia[v_dia['Metodo_Pago'] == 'Efectivo']['Total'].sum()
+        ventas_bancos = v_dia[v_dia['Metodo_Pago'] != 'Efectivo']['Total'].sum()
+        # Calcular Margen del día
+        costo_dia = v_dia['Costo_Total'].sum() if 'Costo_Total' in v_dia.columns else 0
+        utilidad_dia = venta_total_dia - costo_dia
+    else:
+        ventas_efectivo = 0; ventas_bancos = 0; costo_dia = 0; utilidad_dia = 0
+
+    # EGRESOS (Gastos)
+    gastos_total_dia = g_dia['Monto'].sum() if not g_dia.empty else 0
+    gastos_efectivo = 0
+    if not g_dia.empty:
+        # Asumiendo que Banco_Origen dice 'Caja General', 'Efectivo' o 'Caja Menor'
+        mask_efec = g_dia['Banco_Origen'].isin(['Caja General', 'Efectivo', 'Caja Menor'])
+        gastos_efectivo = g_dia[mask_efec]['Monto'].sum()
+
+    # --- VISUALIZACIÓN DE CONTROL (Dashboard del Día) ---
     st.markdown("---")
-    st.subheader("🏦 Movimientos de Caja a Bancos (Hoy)")
-    st.caption("Si sacaste dinero de la caja para consignar en el banco hoy, ingrésalo aquí para que descuente del efectivo.")
-    retiro_bancos = st.number_input("Total Consignado / Retirado de Caja hoy ($)", min_value=0.0, step=1000.0)
-
-    # 4. CÁLCULO TEÓRICO
-    # Base + Ventas - Gastos - Retiros
-    saldo_teorico = base_traida + entradas_efectivo - salidas_gastos_efectivo - retiro_bancos
+    st.markdown(f"#### 📊 Resultados del {fecha_cierre}")
     
-    # VISUALIZACIÓN DE FLUJO
-    st.markdown("#### 🌊 Flujo de Efectivo del Día")
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("1. Base Inicial", f"${base_traida:,.0f}")
-    col2.metric("2. (+) Ventas Efec.", f"${entradas_efectivo:,.0f}")
-    col3.metric("3. (-) Gastos Efec.", f"${salidas_gastos_efectivo:,.0f}")
-    col4.metric("4. (-) A Bancos", f"${retiro_bancos:,.0f}")
-    col5.metric("= CAJA DEBE TENER", f"${saldo_teorico:,.0f}", delta="Objetivo")
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Ventas Totales", f"${venta_total_dia:,.0f}")
+    k2.metric("Entró a Bancos (Digital)", f"${ventas_bancos:,.0f}", help="Nequi, Daviplata, Tarjetas")
+    k3.metric("Entró en Efectivo", f"${ventas_efectivo:,.0f}")
+    k4.metric("Utilidad Bruta (Aprox)", f"${utilidad_dia:,.0f}", help="Ventas - Costo Mercancía")
 
+    # --- SECCIÓN DE CUADRE DE CAJA FÍSICA ---
     st.markdown("---")
+    st.subheader("🔐 Cuadre de Caja (Efectivo)")
     
-    # 5. CONTEO REAL Y CIERRE
-    st.subheader("🔐 Cierre Físico")
-    
-    with st.form("form_cierre_caja"):
-        saldo_real = st.number_input("💵 ¿Cuánto dinero contaste realmente en el cajón?", min_value=0.0, step=100.0)
-        notas_cierre = st.text_area("Notas / Observaciones del día")
+    with st.form("form_cuadre_diario"):
+        col_base, col_info = st.columns([1, 2])
+        
+        with col_base:
+            # PERMITIR EDITAR LA BASE (Crucial para cuadrar días pasados si faltan datos)
+            base_inicial = st.number_input("Base Inicial (Dinero en caja al abrir)", value=base_sugerida, step=1000.0, help=msg_base)
+        
+        with col_info:
+            st.info(f"💡 {msg_base}. Si este valor es incorrecto (porque no registraste el día anterior), corrígelo manualmente aquí.")
+
+        st.markdown("##### Movimientos de Efectivo")
+        c1, c2, c3 = st.columns(3)
+        c1.markdown(f"**(+) Ventas Efec:** ${ventas_efectivo:,.0f}")
+        c2.markdown(f"**(-) Gastos Efec:** ${gastos_efectivo:,.0f}")
+        
+        # CAMPO NUEVO: Dinero que sacaste de la caja para el banco
+        dinero_a_bancos = c3.number_input("(-) Consignación a Bancos", min_value=0.0, step=1000.0, help="Dinero físico que sacaste de la caja hoy para meter al banco")
+
+        # Cálculo Teórico
+        saldo_teorico = base_inicial + ventas_efectivo - gastos_efectivo - dinero_a_bancos
+        
+        st.markdown("---")
+        st.markdown(f"### 🎯 La caja DEBE tener: <span style='color:{COLOR_PRIMARIO}'>${saldo_teorico:,.0f}</span>", unsafe_allow_html=True)
+        
+        # Conteo Real
+        saldo_real = st.number_input("💵 ¿Cuánto dinero contaste REALMENTE?", min_value=0.0, step=50.0)
+        notas = st.text_area("Observaciones del cierre")
         
         diferencia = saldo_real - saldo_teorico
         
-        # Alerta visual
         if saldo_real > 0:
-            if abs(diferencia) < 50:
-                st.success(f"✅ CUADRE PERFECTO (Dif: ${diferencia:,.0f})")
+            if abs(diferencia) < 100:
+                st.success(f"✅ CUADRE PERFECTO")
             elif diferencia > 0:
-                st.info(f"💰 Sobra dinero: ${diferencia:,.0f}")
+                st.info(f"💰 Sobra: ${diferencia:,.0f}")
             else:
-                st.error(f"🚨 Faltante: ${diferencia:,.0f}")
+                st.error(f"🚨 Falta: ${diferencia:,.0f}")
 
-        st.markdown("**Al guardar, el 'Saldo Real' se convertirá en la 'Base Inicial' de mañana.**")
-        
-        if st.form_submit_button("🔒 GUARDAR CIERRE DE CAJA DIARIO", type="primary"):
-            # Verificar si ya existe cierre hoy para no duplicar (Opcional, pero recomendado)
-            # Aquí permitimos guardar múltiples por si hay correcciones, pero idealmente se hace uno.
-            
+        if st.form_submit_button("💾 GUARDAR CIERRE Y REGISTRAR MOVIMIENTOS", type="primary", use_container_width=True):
+            # Guardar en Sheet Cierres
             datos_cierre = [
-                str(fecha_hoy),
-                datetime.now().strftime("%H:%M:%S"),
-                base_traida,
-                entradas_efectivo,
-                salidas_gastos_efectivo,
-                retiro_bancos,
-                saldo_teorico,
-                saldo_real,
-                diferencia,
-                notas_cierre
+                str(fecha_cierre), datetime.now().strftime("%H:%M:%S"),
+                base_inicial, ventas_efectivo, gastos_efectivo, dinero_a_bancos,
+                saldo_teorico, saldo_real, diferencia, notas
             ]
-            
             if escribir_fila(ws_cie, datos_cierre):
                 st.balloons()
-                st.success("Cierre guardado exitosamente. ¡Hasta mañana!")
-                time.sleep(2)
+                st.success("Cierre guardado exitosamente.")
+                time.sleep(1)
                 st.rerun()
 
 def tab_finanzas_pro(ws_ven, ws_gas, ws_cie):
@@ -921,25 +937,15 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cie):
     ingresos = v_rango['Total'].sum() if not v_rango.empty else 0
     
     # 2. Costo de Mercancía Vendida (COGS)
-    # Sumamos la columna 'Costo_Total' de las ventas en el rango
     costo_mercancia = v_rango['Costo_Total'].sum() if not v_rango.empty and 'Costo_Total' in v_rango.columns else 0
     
     # 3. Utilidad Bruta
     utilidad_bruta = ingresos - costo_mercancia
     margen_bruto = (utilidad_bruta / ingresos * 100) if ingresos > 0 else 0
 
-    # 4. Gastos Operativos (Filtrar compras de inventario para no duplicar si se analizan aparte)
-    # En este modelo, los gastos operativos son todo lo que está en 'Gastos' EXCEPTO lo marcado como Costo de Venta
-    # Si quieres restar las compras de inventario del flujo de caja, es una cosa.
-    # Pero para GANANCIA (P&L), restamos el costo del producto vendido (ya calculado arriba) y los gastos fijos.
-    
+    # 4. Gastos Operativos (Filtrar compras de inventario para no duplicar)
     gastos_operativos = 0
     if not g_rango.empty:
-        # Excluimos "Compra Inventario" o "Costo de Venta" de los gastos operativos puros, 
-        # porque el costo de venta ya lo restamos arriba basado en lo vendido (Accrual basis vs Cash basis).
-        # Si prefieres flujo de caja puro: Resta todo lo que salió de la cuenta.
-        # Aquí haremos P&L (Estado de Resultados): Venta - Costo Prod Vendido - Gastos Fijos
-        
         mask_operativo = ~g_rango['Tipo_Gasto'].isin(['Costo de Venta']) 
         gastos_operativos = g_rango[mask_operativo]['Monto'].sum()
 
@@ -958,6 +964,7 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cie):
     st.progress(max(0, min(100, int(margen_neto))))
 
     # GRÁFICO CASCADA (Waterfall)
+    
     fig = go.Figure(go.Waterfall(
         name = "P&L", orientation = "v",
         measure = ["relative", "relative", "total", "relative", "total"],
@@ -977,7 +984,7 @@ def tab_finanzas_pro(ws_ven, ws_gas, ws_cie):
     st.markdown("---")
     if st.button("📥 Descargar Reporte Financiero (Excel)"):
         # Necesitamos cargar Capital para pasar al generador
-        ws_cap_temp = conectar_google_sheets()[4] # Hack sucio para reusar funcion conexion
+        ws_cap_temp = conectar_google_sheets()[4] 
         df_c_temp = leer_datos(ws_cap_temp)
         
         excel_data = generar_excel_financiero(v_rango, g_rango, df_c_temp, f_inicio, f_fin)
@@ -991,7 +998,7 @@ def main():
     
     with st.sidebar:
         st.markdown(f"<h1 style='color:{COLOR_PRIMARIO}; text-align: center;'>Nexus Pro</h1>", unsafe_allow_html=True)
-        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v7.0 Cuadre Real</span></center>", unsafe_allow_html=True)
+        st.markdown(f"<center><span style='background-color:{COLOR_ACENTO}; color:white; padding: 2px 8px; border-radius: 10px; font-size: 0.8em;'>v8.5 Master</span></center>", unsafe_allow_html=True)
         st.markdown("---")
         
         opcion = st.radio("Menú Principal", 
@@ -1000,7 +1007,7 @@ def main():
         )
         st.markdown("---")
         with st.container(border=True):
-            st.caption("Recuerda llenar el Costo en Inventario para que el cálculo de ganancias sea exacto.")
+            st.caption("Sistema integrado para Bigotes y Patitas.")
 
     ws_inv, ws_cli, ws_ven, ws_gas, ws_cap, ws_cie = conectar_google_sheets()
 
@@ -1017,7 +1024,7 @@ def main():
     elif opcion == "Inversión y Gastos":
         tab_gestion_capital(ws_cap, ws_gas)
     elif opcion == "Cuadre Diario (Caja)":
-        tab_cuadre_diario_flujo(ws_ven, ws_gas, ws_cie)
+        tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie)
     elif opcion == "Finanzas & Resultados":
         tab_finanzas_pro(ws_ven, ws_gas, ws_cie)
 
