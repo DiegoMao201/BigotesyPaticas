@@ -33,7 +33,7 @@ ArwCXBBCHJ/wOicamQf8CngAyDSZ3wWeBz4VQoybdEsmQgjRDHwfeAlIN5kPAz8RQlROtH1jZiQIrADe
 ZH4v8HMhRMVE2zchRgLAA8B7gM9kPgD8SAhxfcItmACMAE8BHwNuk/k9wDeEEJcm2r6JGakH3gXWmcyHgO8LIc5MuAUTgBHgceBfJvNu4MdCiCsT
 bd+EGKkF3gU2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8w
 HgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHg
-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
+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
 """
 
 def configurar_pagina():
@@ -260,9 +260,11 @@ def guardar_actualizar_cliente(ws_cli, cedula, nuevos_datos):
         datos_limpios = [sanitizar_dato(d) for d in nuevos_datos]
         
         if cell:
+            # Actualizar fila
             ws_cli.update(f"A{cell.row}", [datos_limpios])
             return True
         else:
+            # Crear nuevo
             ws_cli.append_row(datos_limpios)
             return True
     except Exception as e:
@@ -289,7 +291,7 @@ def actualizar_stock(ws_inv, items):
                 except:
                     stock_actual = 0
                 
-                # AQUÍ ESTÁ EL CAMBIO: Se permite stock negativo
+                # AQUÍ ESTÁ EL CAMBIO: Restamos directamente, permitiendo negativos.
                 nuevo_stock = stock_actual - int(item['Cantidad'])
                 
                 ws_inv.update_cell(fila_num, 4, nuevo_stock) 
@@ -497,47 +499,44 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     if not res.empty:
                         cliente_data = res.iloc[0].to_dict()
                         
-                        # --- CORRECCIÓN LÓGICA MASCOTAS ---
-                        mascotas_clean_list = []
+                        # --- CORRECCIÓN DEL DROPDOWN (LEER JSON CORRECTAMENTE) ---
+                        mascotas_para_dropdown = []
                         json_raw = cliente_data.get('Info_Mascotas', '')
                         
-                        # 1. Intentar Parsear JSON
                         try:
+                            # Intentar parsear JSON
                             if json_raw and str(json_raw).strip():
-                                parsed = json.loads(str(json_raw))
-                                if isinstance(parsed, list):
-                                    mascotas_clean_list = parsed
+                                parsed_list = json.loads(str(json_raw))
+                                if isinstance(parsed_list, list):
+                                    # Extraer SOLO los nombres para el selectbox
+                                    mascotas_para_dropdown = [m.get('Nombre') for m in parsed_list if m.get('Nombre')]
                         except:
-                            mascotas_clean_list = []
+                            pass
                         
-                        # 2. Si falló o estaba vacío, buscar en columnas LEGACY
-                        if not mascotas_clean_list:
+                        # Si falló el JSON o está vacío, fallback a columnas antiguas
+                        if not mascotas_para_dropdown:
                             nombre_old = cliente_data.get('Mascota', '')
-                            tipo_old = cliente_data.get('Tipo_Mascota', 'N/A')
                             if nombre_old:
-                                mascotas_clean_list = [{'Nombre': nombre_old, 'Tipo': tipo_old}]
+                                mascotas_para_dropdown = [nombre_old]
                         
-                        cliente_data['Lista_Mascotas_Clean'] = mascotas_clean_list
+                        # Si aún no hay nada, poner 'Varios'
+                        if not mascotas_para_dropdown:
+                            mascotas_para_dropdown = ["Varios"]
+                        
+                        # Guardar la lista limpia de nombres en el estado
+                        cliente_data['Lista_Nombres_Mascotas'] = mascotas_para_dropdown
+                        
                         st.session_state.cliente_actual = cliente_data
-                        
                         st.toast(f"Cliente cargado: {st.session_state.cliente_actual.get('Nombre')}", icon="✅")
                     else:
                         st.warning("Cliente no encontrado.")
         
         if st.session_state.cliente_actual:
-            # Aquí extraemos SOLO LOS NOMBRES para el selectbox
-            lista_objs = st.session_state.cliente_actual.get('Lista_Mascotas_Clean', [])
-            nombres_mascotas = [m.get('Nombre', 'Sin Nombre') for m in lista_objs]
-            
-            if not nombres_mascotas:
-                nombres_mascotas = ["General / Varios"]
-            else:
-                nombres_mascotas.append("General / Varios")
-            
             st.info(f"🟢 **{st.session_state.cliente_actual.get('Nombre')}**")
             
-            # Selector de Mascota corregido (Muestra nombres, no JSON)
-            st.session_state.mascota_seleccionada = st.selectbox("🐾 ¿Para quién es esta compra?", options=nombres_mascotas)
+            # --- AQUÍ USAMOS LA LISTA LIMPIA DE NOMBRES ---
+            opciones_mascotas = st.session_state.cliente_actual.get('Lista_Nombres_Mascotas', ["Varios"])
+            st.session_state.mascota_seleccionada = st.selectbox("🐾 ¿Para quién es esta compra?", options=opciones_mascotas)
 
         st.markdown("---")
         
@@ -867,7 +866,8 @@ def tab_clientes(ws_cli):
                 
                 json_mascotas = json.dumps(mascotas_finales)
                 
-                # Columnas del usuario
+                # --- CORRECCIÓN COLUMNAS DE CLIENTES (Orden exacto) ---
+                # Cedula, Nombre, Telefono, Email, Direccion, Mascota, Tipo_Mascota, Cumpleaños_mascota, Registro, Info_Mascotas
                 datos = [
                     cedula, nombre, telefono, email, direccion, 
                     mascota_principal, tipo_principal, cumple_principal, 
