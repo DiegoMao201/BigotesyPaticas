@@ -33,7 +33,7 @@ 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
-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
+SeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiB8n2r6JGakF3gM2m8wHgO8IIU5NuAUTgBHgSeAjJvNu4EdCiCiTbd+EGNkM/ADYajIfAL4jhDg14RZMMEaAp4CPmMw7gR8JIa5MtH0TM7IZ+CGwzWQ+APyHEOLMhFswARgBngH+YTJvB34khLgy0fZNmL0eAF4E7jWZDwK/EEL8b8ItmACMAKuAD4AcMv8B8B0hRG2i7ZuQ2WsFsA3IMZkPAv8RQlROtH1jZiQIrADeBBabzIeAHwFnhRCHJ9yCCcII8F3gH4DLZH4v8HMhRMVE2zchRgLAKuAdIMdkPgT8SwhxdsItmACMAKuA94BcMv+X9v1CiGsTbd/EjASBFcC7QC6Z/0f7fiHEmQm3YIIwAqwC3gNyyfxA2/cLIS5PtH0TYmQFsB3IMZkPAv8WQpybcAsmACPASuADIDvI/EDbDwghrk20fRNmJAhsA34O5JD5gbYfFEJUTLR9E2IkCKwC3gdyyPxA2w8KIc5OuAUTgBFgJfARkE3mB9p+WAhxbSJsJ8xIEFgH/BLIMZk/0PZjQoiK0bZ5QoyUAI3AaiDfzD4M/EwIcWykbSYAI8BK4GMg y8w+DPxcCHF1JG0mZEQIsRb4BZBjZh8Gfi6EOObVNlJGehFCfAfIMbMPAz8XQoyY2Yz5P0wIsR74BZBjZh8GfiGEODrSNhM4ewmwc+cuI7t27TKyt2zZzMjeunUrd999F3ffvYV169awfv06duzYxo4d29i8eRObN29m8+ZNfPe736GxsZGGhga2b99OQ0MD27ZtY+vWzTQ2NrJ16xZ8Ph/19fV4PB68Xi+1tbXU1tZSW1tLbW0t27ZtY/v27TQ0NNDQ0EBDQwPbtm2joaGBHTt2sHnzZjZv3szmzZvZvHkzmzdvZs+e3YzsAwcOMrKPHj3KyD5+/DgA586dY2RfuXKFkX3t2jVG9vXr1xnZIyMjAGzZsoW1a9cCsHbtWtatW8f69etZv349GzZsYP369axbt4577rmHdevWsWbNGlauXMmKFS tYsWIFd955J3feeaep/0c/+hEj+9ixY4zsEydOALL/EydOALL/U6dOAbL/M2fOALL/c+fOAfL/CxcuyP7L/i9dukR/fz/9/f309/fT399Pf38/AwMDDAwMMDAwwIEDB4wb+f1+vF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Xi8Xjw+/3U19dTvF4vXq8Xr9eL1+vF6/Hg8/uN/v1+v9H/mjVriP1/9atfMbKPHDnCyD569Cgj+7e//S0A586dY2RfvnyZkf3b3/6WkX39+nVG9sjICAD33Xcfd955JwArVqxgxYoVrFixghUrVrBy5UpWrVrFqlWrWbNmDWvWrGHNmjWsWbNGlauXMmKFS
 """
 
 def configurar_pagina():
@@ -159,16 +159,6 @@ def configurar_pagina():
             background-color: {COLOR_BLANCO};
             border-right: 1px solid #eee;
         }}
-        
-        /* Tarjetas Logística */
-        .delivery-card {{
-            background-color: white;
-            padding: 15px;
-            border-radius: 10px;
-            border: 1px solid #eee;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            margin-bottom: 15px;
-        }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -271,7 +261,6 @@ def guardar_actualizar_cliente(ws_cli, cedula, nuevos_datos):
         st.error(f"Error guardando cliente: {e}")
         return False
 
-# --- FUNCIÓN CORREGIDA: INVENTARIO NEGATIVO PERMITIDO ---
 def actualizar_stock(ws_inv, items):
     try:
         all_values = ws_inv.get_all_values()
@@ -291,7 +280,7 @@ def actualizar_stock(ws_inv, items):
                 except:
                     stock_actual = 0
                 
-                # AQUÍ ESTÁ EL CAMBIO: Restamos directamente, permitiendo negativos.
+                # Restamos permitiendo negativos
                 nuevo_stock = stock_actual - int(item['Cantidad'])
                 
                 ws_inv.update_cell(fila_num, 4, nuevo_stock) 
@@ -302,18 +291,27 @@ def actualizar_stock(ws_inv, items):
         return False
 
 def actualizar_estado_envio(ws_ven, id_venta, nuevo_estado):
+    """
+    Busca la venta por ID_Venta y actualiza la columna 'Estado_Envio' a 'nuevo_estado'.
+    """
     try:
+        # 1. Encontrar la celda del ID
         cell = ws_ven.find(str(id_venta))
+        
         if cell:
+            # 2. Encontrar dinámicamente la columna 'Estado_Envio'
             headers = ws_ven.row_values(1)
             try:
                 col_index = headers.index("Estado_Envio") + 1
             except ValueError:
-                col_index = 7
+                # Fallback si no encuentra el nombre exacto
+                col_index = 7 
             
+            # 3. Actualizar la celda específica
             ws_ven.update_cell(cell.row, col_index, nuevo_estado)
             return True
         else:
+            st.error(f"No se encontró la venta ID: {id_venta}")
             return False
     except Exception as e:
         st.error(f"Error actualizando estado del envío: {e}")
@@ -499,31 +497,25 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     if not res.empty:
                         cliente_data = res.iloc[0].to_dict()
                         
-                        # --- CORRECCIÓN DEL DROPDOWN (LEER JSON CORRECTAMENTE) ---
                         mascotas_para_dropdown = []
                         json_raw = cliente_data.get('Info_Mascotas', '')
                         
                         try:
-                            # Intentar parsear JSON
                             if json_raw and str(json_raw).strip():
                                 parsed_list = json.loads(str(json_raw))
                                 if isinstance(parsed_list, list):
-                                    # Extraer SOLO los nombres para el selectbox
                                     mascotas_para_dropdown = [m.get('Nombre') for m in parsed_list if m.get('Nombre')]
                         except:
                             pass
                         
-                        # Si falló el JSON o está vacío, fallback a columnas antiguas
                         if not mascotas_para_dropdown:
                             nombre_old = cliente_data.get('Mascota', '')
                             if nombre_old:
                                 mascotas_para_dropdown = [nombre_old]
                         
-                        # Si aún no hay nada, poner 'Varios'
                         if not mascotas_para_dropdown:
                             mascotas_para_dropdown = ["Varios"]
                         
-                        # Guardar la lista limpia de nombres en el estado
                         cliente_data['Lista_Nombres_Mascotas'] = mascotas_para_dropdown
                         
                         st.session_state.cliente_actual = cliente_data
@@ -534,7 +526,6 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
         if st.session_state.cliente_actual:
             st.info(f"🟢 **{st.session_state.cliente_actual.get('Nombre')}**")
             
-            # --- AQUÍ USAMOS LA LISTA LIMPIA DE NOMBRES ---
             opciones_mascotas = st.session_state.cliente_actual.get('Lista_Nombres_Mascotas', ["Varios"])
             st.session_state.mascota_seleccionada = st.selectbox("🐾 ¿Para quién es esta compra?", options=opciones_mascotas)
 
@@ -691,16 +682,22 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                             
                             mascota_final = st.session_state.mascota_seleccionada if st.session_state.mascota_seleccionada else "Varios"
 
-                            # Guardar en Sheet Ventas
+                            # --- GUARDADO EN SHEETS CON COLUMNAS EXACTAS + MASCOTA ---
+                            # Columnas solicitadas: ID_Venta, Fecha, Cedula_Cliente, Nombre_Cliente, Tipo_Entrega, Direccion_Envio, Estado_Envio, Metodo_Pago, Banco_Destino, Total, Items, Costo_Total
                             datos_venta = [
-                                id_venta, fecha, 
+                                id_venta, 
+                                fecha, 
                                 str(st.session_state.cliente_actual.get('Cedula', '0')), 
                                 st.session_state.cliente_actual.get('Nombre', 'Consumidor'),
-                                tipo_entrega, direccion_envio, estado_envio,
-                                metodo, banco_destino, 
-                                total_general, items_str,
-                                total_costo_venta, # Costo total
-                                mascota_final # Guardar para qué mascota fue
+                                tipo_entrega, 
+                                direccion_envio, 
+                                estado_envio,
+                                metodo, 
+                                banco_destino, 
+                                total_general, 
+                                items_str,
+                                total_costo_venta, 
+                                mascota_final # Guardamos Mascota al final (columna 13) para usarla en despachos
                             ]
                             
                             # Generar Link WhatsApp
@@ -739,30 +736,69 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                             st.error(f"Error procesando venta: {e}")
 
 def tab_logistica(ws_ven):
-    st.markdown(f"### <span style='color:{COLOR_ACENTO}'>🛵</span> Gestión de Despachos", unsafe_allow_html=True)
-    df = leer_datos(ws_ven)
-    if df.empty: return
+    st.markdown(f"### <span style='color:{COLOR_ACENTO}'>🚀</span> Centro de Despachos", unsafe_allow_html=True)
+    st.caption("Gestiona los envíos pendientes. Al despachar, el estado cambiará a 'Entregado'.")
 
-    if 'Tipo_Entrega' in df.columns and 'Estado_Envio' in df.columns:
-        mask_pendientes = (df['Tipo_Entrega'] == 'Envío a Domicilio') & (df['Estado_Envio'] == 'Pendiente')
-        pendientes = df[mask_pendientes].copy()
-    else: return
+    # Leer datos de Ventas
+    df = leer_datos(ws_ven)
+    if df.empty:
+        st.info("No hay datos de ventas registrados.")
+        return
+
+    # Verificar que las columnas necesarias existan
+    if 'Tipo_Entrega' not in df.columns or 'Estado_Envio' not in df.columns:
+         st.error("⚠️ Faltan columnas críticas en la hoja de ventas (Tipo_Entrega o Estado_Envio).")
+         return
+
+    # Filtrar solo Envío a Domicilio y Pendientes
+    mask_pendientes = (df['Tipo_Entrega'] == 'Envío a Domicilio') & (df['Estado_Envio'] == 'Pendiente')
+    pendientes = df[mask_pendientes].copy()
 
     if pendientes.empty:
-        st.success("✅ No hay domicilios pendientes.")
+        st.success("🎉 ¡Todo al día! No hay pedidos pendientes por despachar.")
+        st.balloons()
     else:
+        # Mostrar contadores
+        st.metric("Pedidos Pendientes", len(pendientes))
+        st.markdown("---")
+
+        # Iterar y mostrar tarjetas profesionales
         for index, row in pendientes.iterrows():
-            with st.container():
-                st.markdown(f"""
-                <div class="delivery-card">
-                    <h4 style="margin:0; color:{COLOR_PRIMARIO};">Pedido #{row.get('ID', 'N/A')}</h4>
-                    <p>{row.get('Cliente', 'N/A')} - {row.get('Direccion', 'N/A')}</p>
-                    <p><i>{row.get('Items', '')}</i></p>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button(f"🚀 Marcar Enviado #{row.get('ID')}", key=f"btn_{index}"):
-                    actualizar_estado_envio(ws_ven, row.get('ID', ''), "Enviado")
-                    st.rerun()
+            with st.container(border=True):
+                # Layout de Tarjeta
+                col_info, col_detalles, col_accion = st.columns([1.2, 2, 1])
+                
+                # Columna 1: ID y Datos básicos
+                with col_info:
+                    st.markdown(f"**Pedido #:** `{row.get('ID_Venta', 'N/A')}`")
+                    st.caption(f"📅 {row.get('Fecha')}")
+                    st.markdown(f"💰 **Total: ${row.get('Total', 0):,.0f}**")
+                
+                # Columna 2: Cliente, Dirección y Mascota
+                with col_detalles:
+                    st.markdown(f"👤 **Cliente:** {row.get('Nombre_Cliente', 'Sin Nombre')}")
+                    # Mostramos la mascota (asumiendo que se guardó en la col extra o intentamos leerla)
+                    mascota = row.get('Mascota', '---') # Intenta leer la columna Mascota si existe
+                    st.markdown(f"🐶 **Mascota:** {mascota}")
+                    
+                    # Dirección destacada
+                    direccion = row.get('Direccion_Envio', 'Sin dirección')
+                    st.info(f"📍 **Destino:** {direccion}")
+                    
+                    with st.expander("📦 Ver Productos"):
+                        st.text(row.get('Items', ''))
+
+                # Columna 3: Botón de Acción
+                with col_accion:
+                    st.markdown("<br>", unsafe_allow_html=True) # Espaciador
+                    # Botón grande para despachar
+                    if st.button(f"✅ DESPACHAR", key=f"btn_despacho_{row.get('ID_Venta')}", type="primary", use_container_width=True):
+                        # Lógica: Cambiar a ENTREGADO y Recargar
+                        exito = actualizar_estado_envio(ws_ven, row.get('ID_Venta'), "Entregado")
+                        if exito:
+                            st.toast(f"Pedido #{row.get('ID_Venta')} marcado como ENTREGADO.", icon="🚚")
+                            time.sleep(1) # Espera breve para feedback visual
+                            st.rerun()
 
 def tab_clientes(ws_cli):
     st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>👥</span> Gestión de Clientes Multi-Mascota", unsafe_allow_html=True)
