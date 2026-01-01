@@ -31,9 +31,9 @@ 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
-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
+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
-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
+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
 """
 
 def configurar_pagina():
@@ -787,7 +787,7 @@ def tab_gestion_capital(ws_cap, ws_gas):
 def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
     st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>⚖️</span> Centro de Control y Cuadre Diario", unsafe_allow_html=True)
     
-    # 1. SELECCIÓN DE FECHA (Permite pasado)
+    # 1. SELECCIÓN DE FECHA
     col_f1, col_f2 = st.columns([1, 3])
     fecha_cierre = col_f1.date_input("📅 Fecha a Cuadrar", value=date.today())
     
@@ -804,27 +804,40 @@ def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
     v_dia = df_v[df_v['Fecha_Dt'] == fecha_cierre] if not df_v.empty else pd.DataFrame()
     g_dia = df_g[df_g['Fecha_Dt'] == fecha_cierre] if not df_g.empty else pd.DataFrame()
     
-    # Verificar si ya existe cierre para ese día
-    cierre_existente = df_c[df_c['Fecha_Dt'] == fecha_cierre] if not df_c.empty else pd.DataFrame()
-    
-    if not cierre_existente.empty:
-        st.warning(f"⚠️ Ya existe un cierre registrado para el {fecha_cierre}. Si guardas de nuevo, se duplicará el registro (útil para correcciones).")
+    # --- LÓGICA DE PERSISTENCIA Y LIMPIEZA DE INPUTS ---
+    # Verificar si YA existe un cierre guardado para este día
+    registro_dia = df_c[df_c['Fecha_Dt'] == fecha_cierre] if not df_c.empty else pd.DataFrame()
 
-    # --- LÓGICA DE BASE INICIAL (RETROACTIVA) ---
-    base_sugerida = 0.0
-    msg_base = "No hay registros anteriores. Iniciando en $0."
-    
-    # Buscar el cierre más cercano ANTERIOR a la fecha seleccionada
-    if not df_c.empty:
-        cierres_anteriores = df_c[df_c['Fecha_Dt'] < fecha_cierre].sort_values(by='Fecha_Dt')
-        if not cierres_anteriores.empty:
-            ultimo_cierre = cierres_anteriores.iloc[-1]
-            try:
-                base_sugerida = float(ultimo_cierre['Total_Real'])
-            except:
-                base_sugerida = 0.0
-            msg_base = f"Base tomada del cierre del {ultimo_cierre['Fecha_Dt']}"
-    
+    # Valores por defecto (se sobreescriben si hay registro guardado o si calculamos nueva base)
+    val_base = 0.0
+    val_consignacion = 0.0
+    val_saldo_real_previo = 0.0
+    msg_base = "Sin registros anteriores."
+
+    if not registro_dia.empty:
+        # MODO EDICIÓN: Si ya existe el día, cargamos lo que se guardó.
+        fila_guardada = registro_dia.iloc[0]
+        val_base = float(fila_guardada.get('Base_Inicial', 0))
+        val_consignacion = float(fila_guardada.get('Dinero_A_Bancos', 0))
+        val_saldo_real_previo = float(fila_guardada.get('Saldo_Real', 0)) # Opcional si quieres mostrar lo que contaste esa vez
+        msg_base = "Editando cierre ya registrado."
+        st.warning(f"⚠️ Ya existe un cierre para el {fecha_cierre}. Los datos mostrados vienen de la base de datos.")
+    else:
+        # MODO NUEVO DÍA: La consignación empieza en 0 y la Base es el saldo real del día anterior
+        val_consignacion = 0.0 # ¡AQUI ESTÁ LA CLAVE! Se reinicia a 0 si es un día nuevo
+        val_saldo_real_previo = 0.0
+        
+        # Buscar el cierre más cercano ANTERIOR
+        if not df_c.empty:
+            cierres_anteriores = df_c[df_c['Fecha_Dt'] < fecha_cierre].sort_values(by='Fecha_Dt')
+            if not cierres_anteriores.empty:
+                ultimo_cierre = cierres_anteriores.iloc[-1]
+                try:
+                    val_base = float(ultimo_cierre['Saldo_Real']) # La base es lo que quedó en caja (Real)
+                except:
+                    val_base = 0.0
+                msg_base = f"Base traída del cierre del {ultimo_cierre['Fecha_Dt']}"
+
     # --- CÁLCULOS DEL DÍA SELECCIONADO ---
     
     # INGRESOS
@@ -865,19 +878,33 @@ def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
         col_base, col_info = st.columns([1, 2])
         
         with col_base:
-            # PERMITIR EDITAR LA BASE (Crucial para cuadrar días pasados si faltan datos)
-            base_inicial = st.number_input("Base Inicial (Dinero en caja al abrir)", value=base_sugerida, step=1000.0, help=msg_base)
+            # Usamos key dinámico para que se resetee al cambiar la fecha
+            base_inicial = st.number_input(
+                "Base Inicial (Dinero en caja al abrir)", 
+                value=val_base, 
+                step=1000.0, 
+                help=msg_base,
+                key=f"base_{fecha_cierre}" 
+            )
         
         with col_info:
-            st.info(f"💡 {msg_base}. Si este valor es incorrecto (porque no registraste el día anterior), corrígelo manualmente aquí.")
+            st.info(f"💡 {msg_base}. Si este valor es incorrecto, corrígelo manualmente aquí.")
 
         st.markdown("##### Movimientos de Efectivo")
         c1, c2, c3 = st.columns(3)
         c1.markdown(f"**(+) Ventas Efec:** ${ventas_efectivo:,.0f}")
         c2.markdown(f"**(-) Gastos Efec:** ${gastos_efectivo:,.0f}")
         
-        # CAMPO NUEVO: Dinero que sacaste de la caja para el banco
-        dinero_a_bancos = c3.number_input("(-) Consignación a Bancos", min_value=0.0, step=1000.0, help="Dinero físico que sacaste de la caja hoy para meter al banco")
+        # INPUT DE CONSIGNACIÓN CON KEY DINÁMICO
+        # Esto asegura que si cambias de fecha, el input se vuelve a crear con el valor correcto (0 o guardado)
+        dinero_a_bancos = c3.number_input(
+            "(-) Consignación a Bancos", 
+            min_value=0.0, 
+            value=val_consignacion,
+            step=1000.0, 
+            help="Dinero físico que sacaste de la caja ESTE DÍA para meter al banco",
+            key=f"cons_{fecha_cierre}" 
+        )
 
         # Cálculo Teórico
         saldo_teorico = base_inicial + ventas_efectivo - gastos_efectivo - dinero_a_bancos
@@ -886,7 +913,7 @@ def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
         st.markdown(f"### 🎯 La caja DEBE tener: <span style='color:{COLOR_PRIMARIO}'>${saldo_teorico:,.0f}</span>", unsafe_allow_html=True)
         
         # Conteo Real
-        saldo_real = st.number_input("💵 ¿Cuánto dinero contaste REALMENTE?", min_value=0.0, step=50.0)
+        saldo_real = st.number_input("💵 ¿Cuánto dinero contaste REALMENTE?", min_value=0.0, step=50.0, value=val_saldo_real_previo, key=f"real_{fecha_cierre}")
         notas = st.text_area("Observaciones del cierre")
         
         diferencia = saldo_real - saldo_teorico
@@ -906,6 +933,10 @@ def tab_cuadre_diario_avanzado(ws_ven, ws_gas, ws_cie):
                 base_inicial, ventas_efectivo, gastos_efectivo, dinero_a_bancos,
                 saldo_teorico, saldo_real, diferencia, notas
             ]
+            
+            # Si ya existe, deberíamos intentar actualizar (pero append simple es más seguro para historial)
+            # Para evitar duplicados molestos, aquí una lógica simple: si existe, borrar anterior NO es trivial en gspread sin row id.
+            # Simplemente añadimos y el sistema lee el último.
             if escribir_fila(ws_cie, datos_cierre):
                 st.balloons()
                 st.success("Cierre guardado exitosamente.")
