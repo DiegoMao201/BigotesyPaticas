@@ -6,124 +6,124 @@ import numpy as np
 import time
 from datetime import datetime
 import math
-import re
 
 # ==========================================
-# 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS
+# 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME)
 # ==========================================
+
+# Paleta de Colores Nexus Pro
+COLOR_PRIMARIO = "#187f77"      # Cian Oscuro
+COLOR_SECUNDARIO = "#125e58"    # Variante oscura
+COLOR_ACENTO = "#f5a641"        # Naranja
+COLOR_FONDO = "#f8f9fa"         # Gris claro
+COLOR_BLANCO = "#ffffff"
 
 st.set_page_config(
-    page_title="Recepción Inteligente Colombia v11.0 PRO", 
+    page_title="Compras & Recepción | Nexus Pro", 
     page_icon="📥", 
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS Profesionales
-st.markdown("""
+# Estilos CSS idénticos a tu app principal
+st.markdown(f"""
     <style>
-    /* Fondo general */
-    .stApp { background-color: #f0f2f6; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+    .stApp {{ background-color: {COLOR_FONDO}; font-family: 'Inter', sans-serif; }}
+    
+    h1, h2, h3 {{ color: {COLOR_PRIMARIO}; font-weight: 700; }}
     
     /* Header Principal */
-    .main-header { 
-        font-size: 3rem; 
+    .main-header {{ 
+        font-size: 2.5rem; 
         font-weight: 800; 
-        color: #1e3a8a; 
+        color: {COLOR_PRIMARIO}; 
         margin-top: 1rem;
         margin-bottom: 0.5rem; 
         text-align: center; 
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-    }
+    }}
     
-    .sub-header { 
-        font-size: 1.2rem; 
+    .sub-header {{ 
+        font-size: 1.1rem; 
         color: #64748b; 
-        margin-bottom: 2.5rem; 
+        margin-bottom: 2rem; 
         text-align: center; 
-    }
+    }}
 
-    /* Tarjetas Métricas (KPIs) */
-    .metric-container {
+    /* Tarjetas Métricas */
+    .metric-container {{
         display: flex;
         justify-content: center;
-        gap: 30px;
-        margin-bottom: 40px;
-    }
+        gap: 20px;
+        margin-bottom: 30px;
+    }}
 
-    .metric-card {
-        background-color: #ffffff;
-        border-radius: 15px;
-        padding: 25px 20px;
+    .metric-card {{
+        background-color: {COLOR_BLANCO};
+        border-radius: 12px;
+        padding: 20px;
         width: 30%;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        border-left: 6px solid #3b82f6;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border-left: 5px solid {COLOR_ACENTO};
         text-align: center;
-        transition: transform 0.2s;
-    }
-    
-    .metric-card:hover {
-        transform: translateY(-5px);
-    }
+    }}
 
-    .metric-label {
+    .metric-label {{
         color: #64748b;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         text-transform: uppercase;
-        letter-spacing: 1px;
         font-weight: 600;
-        margin-bottom: 10px;
-    }
+        margin-bottom: 5px;
+    }}
 
-    .metric-value {
-        color: #1e293b;
-        font-size: 1.8rem;
+    .metric-value {{
+        color: {COLOR_PRIMARIO};
+        font-size: 1.5rem;
         font-weight: 800;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+    }}
 
-    /* Ajustes de contenedores Streamlit */
-    div[data-testid="stExpander"] { 
-        background-color: white; 
+    /* Botones */
+    .stButton>button {{
+        border-radius: 8px;
+        font-weight: bold;
+        height: 3rem;
+        transition: all 0.3s ease;
+    }}
+    
+    div[data-testid="stExpander"] {{ 
+        background-color: {COLOR_BLANCO}; 
         border-radius: 10px; 
         box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
         border: none;
-    }
-    
-    .stButton>button {
-        font-weight: bold;
-        border-radius: 8px;
-        height: 3rem;
-    }
+    }}
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. UTILIDADES Y MATEMÁTICAS
+# 2. UTILIDADES MATEMÁTICAS
 # ==========================================
 
 def normalizar_str(valor):
-    """Estandariza textos para comparaciones (Upper + Trim + Strings vacíos)."""
+    """Limpieza de strings para búsquedas (Mayúsculas, sin espacios extra)."""
     if pd.isna(valor) or valor == "":
         return ""
     return str(valor).strip().upper()
 
 def clean_currency(val):
-    """Convierte strings de dinero ($1.000,00 o 1,000.00) a float puro."""
+    """Convierte strings de dinero ($1.000,00) a float."""
     if isinstance(val, (int, float)): return float(val)
     if isinstance(val, str):
         val = val.replace('$', '').replace(' ', '').strip()
         if not val: return 0.0
         try:
-            # Detección automática de formato decimal (coma vs punto)
+            # Lógica para detectar formato latino (1.000,00) vs gringo (1,000.00)
             if ',' in val and '.' in val:
-                if val.find('.') < val.find(','): # 1.000,00 -> Latino
+                if val.find('.') < val.find(','): # 1.000,00
                     val = val.replace('.', '').replace(',', '.')
-                else: # 1,000.00 -> Gringo
+                else: # 1,000.00
                     val = val.replace(',', '')
-            elif ',' in val: # 1000,00 -> Latino simple
+            elif ',' in val: 
                 val = val.replace(',', '.')
             return float(val)
         except:
@@ -131,16 +131,13 @@ def clean_currency(val):
     return 0.0
 
 def sanitizar_para_sheet(val):
-    """Convierte tipos de numpy a tipos nativos de Python para Gspread."""
+    """Tipos numpy a nativos python."""
     if isinstance(val, (np.int64, np.int32)): return int(val)
     if isinstance(val, (np.float64, np.float32)): return float(val)
     return val
 
 def redondear_centena(valor):
-    """
-    Redondea hacia ARRIBA a la centena más cercana.
-    Ej: 1420 -> 1500, 1500 -> 1500, 1501 -> 1600.
-    """
+    """Redondea hacia ARRIBA a la centena más cercana (Ej: 1420 -> 1500)."""
     if not valor: return 0.0
     return math.ceil(valor / 100.0) * 100.0
 
@@ -148,31 +145,30 @@ def redondear_centena(valor):
 # 3. CONEXIÓN A GOOGLE SHEETS
 # ==========================================
 
-@st.cache_resource
+@st.cache_resource(ttl=600)
 def conectar_sheets():
     try:
         if "google_service_account" not in st.secrets:
-            st.error("❌ CRÍTICO: Falta configuración 'google_service_account' en secrets.toml")
+            st.error("❌ Falta configuración en secrets.toml")
             st.stop()
         
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
         sh = gc.open_by_url(st.secrets["SHEET_URL"])
         
-        # Verificar o Crear Hojas necesarias
+        # Hojas necesarias
         try: ws_inv = sh.worksheet("Inventario")
-        except: st.error("❌ Falta la hoja 'Inventario'. Créala con columnas: ID, Nombre, Stock, Costo, Precio"); st.stop()
+        except: st.error("Falta hoja 'Inventario'"); st.stop()
         
         try: ws_map = sh.worksheet("Maestro_Proveedores")
         except: 
-            ws_map = sh.add_worksheet("Maestro_Proveedores", 1000, 6)
-            ws_map.append_row(["ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Factor_Pack", "Ultima_Actualizacion"])
+            ws_map = sh.add_worksheet("Maestro_Proveedores", 1000, 7)
+            ws_map.append_row(["ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Factor_Pack", "Ultima_Actualizacion", "Ultimo_IVA"])
 
         try: ws_hist = sh.worksheet("Historial_Recepciones")
         except:
             ws_hist = sh.add_worksheet("Historial_Recepciones", 1000, 7)
             ws_hist.append_row(["Fecha", "Folio", "Proveedor", "Items", "Total", "Usuario", "Estado"])
         
-        # --- MEJORA 2: CONEXIÓN A GASTOS ---
         try: ws_gas = sh.worksheet("Gastos")
         except:
             ws_gas = sh.add_worksheet("Gastos", 1000, 8)
@@ -184,7 +180,7 @@ def conectar_sheets():
         st.stop()
 
 # ==========================================
-# 4. CEREBRO Y MEMORIA
+# 4. CEREBRO Y MEMORIA (Carga IVA y SKU)
 # ==========================================
 
 @st.cache_data(ttl=60)
@@ -194,45 +190,41 @@ def cargar_cerebro(_ws_inv, _ws_map):
         d_inv = _ws_inv.get_all_records()
         df_inv = pd.DataFrame(d_inv)
         
-        # --- LÓGICA DE COLUMNAS MEJORADA ---
+        # Columnas clave
         cols = df_inv.columns
-        
-        # A. Buscar columna ID
-        col_id = next((c for c in cols if 'ID' in c or 'SKU' in c or 'Ref' in c), None)
-        
-        # B. Buscar columna NOMBRE (Prioridad estricta a 'Nombre')
-        col_nm = next((c for c in cols if 'Nombre' in c), None)
-        if not col_nm:
-            # Fallback si no hay "Nombre", busca "Desc" o "Prod"
-            col_nm = next((c for c in cols if 'Desc' in c or 'Prod' in c), None)
-        
-        if not col_id: return [], {}, {}
-        
-        # Si no encuentra columna nombre, usa el ID (para que no falle), pero avisa
-        if not col_nm: col_nm = col_id 
+        col_id = next((c for c in cols if 'ID' in c or 'SKU' in c), 'ID_Producto')
+        col_nm = next((c for c in cols if 'Nombre' in c), 'Nombre')
 
-        # Crear lista display visual: "1010 | CHUNKY POLLO"
+        # Crear lista visual
         df_inv['Display'] = df_inv[col_id].astype(str) + " | " + df_inv[col_nm].astype(str)
-        
         lista_prods = sorted(df_inv['Display'].unique().tolist())
         lista_prods.insert(0, "NUEVO (Crear Producto)")
         
         # Diccionario para búsqueda rápida
         dict_prods = pd.Series(df_inv['Display'].values, index=df_inv[col_id].apply(normalizar_str)).to_dict()
-    except Exception as e:
-        print(f"Error cargando cerebro: {e}")
+    except:
         lista_prods, dict_prods = ["NUEVO (Crear Producto)"], {}
 
-    # 2. Cargar Mapeo Proveedores (Memoria)
+    # 2. Cargar Mapeo Proveedores (Memoria de IVA y Factor)
     memoria = {}
     try:
         d_map = _ws_map.get_all_records()
+        # Asegurarnos de que existan las columnas aunque la hoja sea vieja
         for r in d_map:
-            # Clave única: NIT_PROVEEDOR + "_" + SKU_PROVEEDOR
+            # Clave: NIT_PROVEEDOR + SKU_PROVEEDOR
             k = f"{normalizar_str(r.get('ID_Proveedor'))}_{normalizar_str(r.get('SKU_Proveedor'))}"
+            
+            # Recuperar IVA aprendido
+            iva_guardado = r.get('Ultimo_IVA')
+            if iva_guardado in [0, 5, 19, "0", "5", "19", 0.0, 5.0, 19.0]:
+                iva_val = int(float(iva_guardado))
+            else:
+                iva_val = 0 # Default si no sabe
+            
             memoria[k] = {
                 'SKU_Interno': normalizar_str(r.get('SKU_Interno')),
-                'Factor': float(r.get('Factor_Pack', 1)) if r.get('Factor_Pack') else 1.0
+                'Factor': float(r.get('Factor_Pack', 1)) if r.get('Factor_Pack') else 1.0,
+                'IVA_Aprendido': iva_val
             }
     except: pass
 
@@ -244,34 +236,28 @@ def cargar_cerebro(_ws_inv, _ws_map):
 
 def parsear_xml_colombia(archivo):
     """
-    Lee XMLs de Facturación Electrónica Colombia.
-    Calcula el precio unitario restando el primer descuento al precio base.
+    Lee XML UBL 2.1. Extrae precio BASE (sin impuestos).
+    La UI se encargará de asignar el impuesto correcto.
     """
     try:
         tree = ET.parse(archivo)
         root = tree.getroot()
         
-        # Namespaces globales
         ns_map = {
             'cac': 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2',
             'cbc': 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2',
-            'ext': 'urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2'
         }
 
-        # 1. Manejo de AttachedDocument (Contenedor DIAN)
+        # 1. AttachedDocument (Contenedor DIAN)
         invoice_root = root
         if 'AttachedDocument' in root.tag:
             desc_node = root.find('.//cac:Attachment/cac:ExternalReference/cbc:Description', ns_map)
-            if desc_node is not None and desc_node.text:
+            if desc_node is not None and desc_node.text and "<Invoice" in desc_node.text:
                 xml_string = desc_node.text.strip()
-                if "<Invoice" in xml_string:
-                    xml_string = xml_string[xml_string.find("<Invoice"):]
+                xml_string = xml_string[xml_string.find("<Invoice"):]
                 invoice_root = ET.fromstring(xml_string)
-            else:
-                st.error("XML inválido: AttachedDocument vacío.")
-                return None
 
-        # 2. Extracción de Datos Header
+        # 2. Header
         ns = ns_map 
         try:
             prov_node = invoice_root.find('.//cac:AccountingSupplierParty/cac:Party', ns)
@@ -285,10 +271,10 @@ def parsear_xml_colombia(archivo):
         try: folio = invoice_root.find('cbc:ID', ns).text
         except: folio = "S/F"
 
-        try: total = float(invoice_root.find('.//cac:LegalMonetaryTotal/cbc:PayableAmount', ns).text)
-        except: total = 0.0
+        try: total_pagar_factura = float(invoice_root.find('.//cac:LegalMonetaryTotal/cbc:PayableAmount', ns).text)
+        except: total_pagar_factura = 0.0
 
-        # 3. Extracción de Items con Lógica de Precios Corregida
+        # 3. Items
         items = []
         lines = invoice_root.findall('.//cac:InvoiceLine', ns)
         
@@ -296,40 +282,39 @@ def parsear_xml_colombia(archivo):
             try:
                 qty = float(line.find('cbc:InvoicedQuantity', ns).text)
                 
-                # --- PRECIO CORREGIDO ---
+                # Precio Base (Antes de IVA)
                 price_node = line.find('.//cac:Price/cbc:PriceAmount', ns)
                 base_price = float(price_node.text) if price_node is not None else 0.0
                 
+                # Descuentos a nivel de línea
                 discount_amount = 0.0
                 allowances = line.findall('.//cac:AllowanceCharge', ns)
                 if allowances:
                     first_allowance = allowances[0] 
                     is_charge = first_allowance.find('cbc:ChargeIndicator', ns).text
-                    if is_charge == 'false':
-                        discount_amount = float(first_allowance.find('cbc:Amount', ns).text)
+                    if is_charge == 'false': # Es descuento
+                        val = first_allowance.find('cbc:Amount', ns).text
+                        discount_amount = float(val) if val else 0.0
 
-                # Precio Final (Coincide con la columna "Valor Unit." del PDF)
-                final_unit_price = base_price - discount_amount
+                # Precio Base Neto = Precio Lista - Descuento (Aún sin IVA)
+                final_base_price = base_price - discount_amount
                 
-                # --- REFERENCIA CORREGIDA ---
+                # Descripción y Referencia
                 item_node = line.find('cac:Item', ns)
                 desc = item_node.find('cbc:Description', ns).text
                 
-                # Priorizar StandardItemIdentification
                 sku_prov = "S/C"
                 std_id = item_node.find('.//cac:StandardItemIdentification/cbc:ID', ns)
                 seller_id = item_node.find('.//cac:SellersItemIdentification/cbc:ID', ns)
                 
-                if std_id is not None and std_id.text:
-                    sku_prov = std_id.text
-                elif seller_id is not None:
-                    sku_prov = seller_id.text
+                if std_id is not None and std_id.text: sku_prov = std_id.text
+                elif seller_id is not None: sku_prov = seller_id.text
                 
                 items.append({
                     'SKU_Proveedor': sku_prov,
                     'Descripcion': desc,
                     'Cantidad': qty,
-                    'Costo_Unitario': final_unit_price 
+                    'Costo_Base_Unitario': final_base_price 
                 })
             except: continue
 
@@ -337,7 +322,7 @@ def parsear_xml_colombia(archivo):
             'Proveedor': nombre_prov,
             'ID_Proveedor': nit_prov,
             'Folio': folio,
-            'Total': total,
+            'Total': total_pagar_factura,
             'Items': items
         }
 
@@ -346,12 +331,12 @@ def parsear_xml_colombia(archivo):
         return None
 
 # ==========================================
-# 6. LÓGICA DE GUARDADO (INTEGRADA CON FINANZAS)
+# 6. LÓGICA DE GUARDADO Y APRENDIZAJE
 # ==========================================
 
 def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_pago):
     """
-    Actualiza Inventario, Precios, Costos, Memoria Y REGISTRA GASTO AUTOMÁTICO.
+    Actualiza Inventario, Precios con Fórmula / 0.85, Memoria (IVA) y Gasto.
     """
     try:
         fecha = datetime.now().strftime("%Y-%m-%d")
@@ -361,18 +346,18 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
         inv_data = ws_inv.get_all_values()
         header = inv_data[0]
         
-        # Índices de columnas
+        # Detectar columnas dinámicamente
         try:
             idx_id = 0 
-            idx_nombre = next(i for i, c in enumerate(header) if 'Nombre' in c or 'Nom' in c or 'Desc' in c)
+            idx_nombre = next(i for i, c in enumerate(header) if 'Nombre' in c)
             idx_stock = next(i for i, c in enumerate(header) if 'Stock' in c)
             idx_costo = next(i for i, c in enumerate(header) if 'Costo' in c)
-            idx_precio = next(i for i, c in enumerate(header) if any(x in c for x in ['Precio', 'Venta', 'PVP']))
+            idx_precio = next(i for i, c in enumerate(header) if 'Precio' in c)
         except:
-            # Fallback
+            # Fallback estructura estándar
             idx_nombre = 1; idx_stock = 2; idx_costo = 3; idx_precio = 4
 
-        # Mapa de filas para actualizaciones rápidas
+        # Mapa de filas para actualizaciones rápidas {ID_PRODUCTO: NUM_FILA}
         mapa_filas = {normalizar_str(r[idx_id]): i+1 for i, r in enumerate(inv_data)}
 
         new_mappings = []
@@ -385,56 +370,69 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             sel = row['SKU_Interno_Seleccionado']
             sku_prov_factura = str(row['SKU_Proveedor'])
             
-            # Datos Numéricos
+            # Datos Numéricos de la Interfaz
             factor = float(row['Factor_Pack']) if row['Factor_Pack'] > 0 else 1.0
             cant_recibida_xml = float(row['Cantidad_Recibida'])
-            cant_total_unidades = cant_recibida_xml * factor
-            costo_unitario_xml = float(row['Costo_Unitario']) / factor
-            costo_nuevo_con_iva = costo_unitario_xml * 1.05 # +5% de margen seguridad costo
+            iva_seleccionado = float(row['IVA_Porcentaje']) # 0, 5, 19
+            costo_base_xml = float(row['Costo_Base_Unitario'])
             
-            # 1. DETERMINAR ID INTERNO REAL
+            # CÁLCULOS MATEMÁTICOS DE COSTO Y PRECIO
+            # 1. Costo Base Unitario Real (por unidad suelta)
+            costo_base_unitario_real = costo_base_xml / factor
+            
+            # 2. Costo Neto (Costo Base + IVA)
+            iva_monto_unitario = costo_base_unitario_real * (iva_seleccionado / 100.0)
+            costo_neto_final = costo_base_unitario_real + iva_monto_unitario
+            
+            # 3. Cantidad Total a ingresar al stock
+            cant_total_unidades = cant_recibida_xml * factor
+            
+            # 4. Precio de Venta (Fórmula Solicitada: Costo / 0.85)
+            # Esto da un margen del 15% sobre el precio de venta (aprox 17.6% sobre costo)
+            precio_sugerido_calculado = costo_neto_final / 0.85
+            precio_sugerido_redondeado = redondear_centena(precio_sugerido_calculado)
+
+            # --- DETERMINAR ID INTERNO ---
             final_internal_id = ""
             es_producto_nuevo = False
             
             if "NUEVO" in sel:
-                # Caso: Crear Nuevo.
                 es_producto_nuevo = True
-                
-                # Intentar usar el SKU del proveedor como ID interno si es válido
                 if sku_prov_factura and sku_prov_factura != "S/C":
                     final_internal_id = sku_prov_factura
                 else:
                     final_internal_id = f"N-{int(time.time())}-{index_row}"
             else:
-                # Caso: Producto Existente
                 final_internal_id = sel.split(" | ")[0].strip()
             
-            # 2. GUARDAR MAPEO (Solo si viene de XML o tiene ref proveedor)
+            # --- APRENDIZAJE: ACTUALIZAR MEMORIA (MAPEO + IVA) ---
+            # Si tiene referencia de proveedor, guardamos que este proveedor vende este producto con ESTE IVA
             if sku_prov_factura != "S/C":
+                # Borramos mapeos anteriores de este par (opcional, aquí solo agregamos al final, Gspread es append-only fácil)
+                # Formato Mapeo: [ID_Prov, Nom_Prov, SKU_Prov, SKU_Int, Factor, Fecha, IVA_Detectado]
                 new_mappings.append([
                     str(meta_xml['ID_Proveedor']),
                     str(meta_xml['Proveedor']),
                     sku_prov_factura,
                     final_internal_id, 
                     factor,
-                    fecha
+                    fecha,
+                    iva_seleccionado # <--- AQUÍ GUARDA EL IVA PARA LA PRÓXIMA
                 ])
             
-            # 3. ACTUALIZAR INVENTARIO (Append o Update)
+            # --- ACTUALIZAR INVENTARIO ---
             if es_producto_nuevo:
-                precio_sugerido = redondear_centena(costo_nuevo_con_iva * 1.15)
-                
                 new_row = [""] * len(header)
-                new_row[0] = final_internal_id
-                
+                new_row[0] = final_internal_id # ID
                 if idx_nombre < len(new_row): new_row[idx_nombre] = row['Descripcion']
                 if idx_stock < len(new_row): new_row[idx_stock] = sanitizar_para_sheet(cant_total_unidades)
-                if idx_costo < len(new_row): new_row[idx_costo] = sanitizar_para_sheet(costo_nuevo_con_iva)
-                if idx_precio < len(new_row): new_row[idx_precio] = sanitizar_para_sheet(precio_sugerido)
+                if idx_costo < len(new_row): new_row[idx_costo] = sanitizar_para_sheet(costo_neto_final)
+                if idx_precio < len(new_row): new_row[idx_precio] = sanitizar_para_sheet(precio_sugerido_redondeado)
                 
                 appends.append(new_row)
-                logs.append(f"✨ CREADO: {final_internal_id} | {row['Descripcion']}")
+                logs.append(f"✨ CREADO: {row['Descripcion']} | Precio: ${precio_sugerido_redondeado:,.0f} (IVA {iva_seleccionado}%)")
                 
+                # Actualizar mapa temporal por si se repite en el mismo XML
                 mapa_filas[normalizar_str(final_internal_id)] = len(inv_data) + len(appends)
             
             else:
@@ -445,28 +443,26 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                     
                     try: stock_curr = clean_currency(row_actual[idx_stock])
                     except: stock_curr = 0.0
-                    try: costo_curr = clean_currency(row_actual[idx_costo])
-                    except: costo_curr = 0.0
                     try: precio_curr = clean_currency(row_actual[idx_precio])
                     except: precio_curr = 0.0
                     
-                    # Actualizar Stock y Costo
+                    # Nuevos Valores
                     new_stock = stock_curr + cant_total_unidades
-                    updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_stock+1), 'values': [[new_stock]]})
-                    updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_costo+1), 'values': [[costo_nuevo_con_iva]]})
                     
-                    # Lógica Precio Inteligente
-                    nuevo_precio = precio_curr
-                    if costo_nuevo_con_iva > costo_curr:
-                        margen = (precio_curr / costo_curr) if costo_curr > 0 else 1.30
-                        if margen < 1.10: margen = 1.15
-                        nuevo_precio = redondear_centena(costo_nuevo_con_iva * margen)
-                        updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_precio+1), 'values': [[nuevo_precio]]})
-                        logs.append(f"📈 SUBIÓ: {final_internal_id} | P: ${nuevo_precio:,.0f}")
+                    # Actualizar Stock
+                    updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_stock+1), 'values': [[new_stock]]})
+                    # Actualizar Costo (Siempre actualizamos al último costo de reposición)
+                    updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_costo+1), 'values': [[costo_neto_final]]})
+                    
+                    # Actualizar Precio: Solo si el nuevo sugerido es MAYOR al actual (para no perder margen)
+                    # Opcional: Puedes forzar siempre el nuevo precio si prefieres. Aquí uso lógica "Smart"
+                    if precio_sugerido_redondeado > precio_curr:
+                        updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_precio+1), 'values': [[precio_sugerido_redondeado]]})
+                        logs.append(f"📈 SUBIÓ PRECIO: {final_internal_id} a ${precio_sugerido_redondeado:,.0f} (Costo subió)")
                     else:
-                        logs.append(f"🔄 STOCK: {final_internal_id} (+{cant_total_unidades})")
+                        logs.append(f"📦 STOCK: {final_internal_id} (+{cant_total_unidades}) - Precio mantenido")
 
-        # --- C. EJECUTAR ESCRITURAS INVENTARIO ---
+        # --- C. EJECUTAR ESCRITURAS ---
         if new_mappings: ws_map.append_rows(new_mappings)
         if updates: ws_inv.batch_update(updates)
         if appends: ws_inv.append_rows(appends)
@@ -478,23 +474,22 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             str(meta_xml['Proveedor']),
             len(df_final),
             meta_xml['Total'],
-            "Admin",
+            "Admin Nexus",
             "OK"
         ])
 
-        # --- E. MEJORA 2: REGISTRAR GASTO AUTOMÁTICO EN APP PRINCIPAL ---
-        # Formato Gastos: [Timestamp, Fecha, Tipo, Categoria, Descripcion, Monto, Responsable, Banco_Origen]
+        # --- E. REGISTRAR GASTO (Costo de Venta) ---
         try:
             descripcion_gasto = f"[PROV: {meta_xml['Proveedor']}] [REF: {meta_xml['Folio']}] - Compra Mercancía"
             datos_gasto = [
                 timestamp,
                 fecha,
-                "Costo de Venta",      # Tipo
-                "Compra Inventario",   # Categoría Clave para Nexus Pro
+                "Costo de Venta",    # Tipo fijo para separar en P&L
+                "Compra Inventario", # Categoría
                 descripcion_gasto,
-                meta_xml['Total'],
+                meta_xml['Total'],   # Monto Total Factura
                 "Módulo Compras",
-                info_pago['Origen']    # Banco seleccionado en UI
+                info_pago['Origen']  # Banco seleccionado
             ]
             ws_gas.append_row(datos_gasto)
             logs.append(f"💰 Gasto Registrado: ${meta_xml['Total']:,.0f} desde {info_pago['Origen']}")
@@ -518,19 +513,19 @@ def main():
     # Conexión
     sh, ws_inv, ws_map, ws_hist, ws_gas = conectar_sheets()
 
-    # --- PASO 1: SELECCIÓN DE MODO (MEJORA 1) ---
+    # --- PASO 1: CARGA DE DATOS ---
     if st.session_state.step == 1:
         st.markdown('<div class="sub-header">Selecciona el método de ingreso</div>', unsafe_allow_html=True)
         
         tab_xml, tab_manual = st.tabs(["📂 Cargar XML (Factura Electrónica)", "✍️ Ingreso Manual"])
         
-        # --- OPCIÓN A: XML ---
+        # OPCIÓN A: XML
         with tab_xml:
             st.info("Arrastra tu Factura XML de la DIAN para autocompletar.")
             uploaded = st.file_uploader("", type=['xml'], key="xml_upl")
             
             if uploaded:
-                with st.spinner("🤖 Analizando estructura DIAN..."):
+                with st.spinner("🤖 Analizando XML y Consultando Memoria..."):
                     data = parsear_xml_colombia(uploaded)
                     if not data: st.stop()
                     
@@ -545,10 +540,8 @@ def main():
                     st.session_state.step = 2
                     st.rerun()
 
-        # --- OPCIÓN B: MANUAL (MEJORA 1) ---
+        # OPCIÓN B: MANUAL
         with tab_manual:
-            st.warning("Usa esta opción si no tienes el XML digital.")
-            
             with st.form("form_manual_header"):
                 c1, c2, c3 = st.columns(3)
                 prov_man = c1.text_input("Proveedor", placeholder="Ej: Italcol")
@@ -556,46 +549,39 @@ def main():
                 folio_man = c3.text_input("No. Factura", placeholder="FAC-123")
                 
                 st.markdown("---")
-                st.write("📝 **Agregar Items a la Factura**")
+                st.write("📝 **Items de la Factura**")
                 
-                # Cargamos inventario para que el selectbox funcione
+                # Cargar inventario para el selectbox
                 if 'lst_prods_cache' not in st.session_state:
                     l, d, m = cargar_cerebro(ws_inv, ws_map)
                     st.session_state.lst_prods_cache = l
                     st.session_state.dct_prods_cache = d
                     st.session_state.memoria_cache = m
 
-                # Data Editor Dinámico
+                # Data Editor para Manual
                 df_template = pd.DataFrame([{
                     "Producto": "", 
                     "Cantidad": 1, 
-                    "Costo_Total_Item": 0.0
+                    "Costo_Total_Item": 0.0,
+                    "IVA_Porc": 0
                 }])
                 
                 edited_manual = st.data_editor(
                     df_template,
                     num_rows="dynamic",
                     column_config={
-                        "Producto": st.column_config.SelectboxColumn(
-                            "Producto (Inventario)",
-                            options=st.session_state.lst_prods_cache,
-                            required=True,
-                            width="large"
-                        ),
-                        "Cantidad": st.column_config.NumberColumn("Cant. Unidades", min_value=1),
-                        "Costo_Total_Item": st.column_config.NumberColumn("Costo Total Línea ($)", min_value=0.0)
+                        "Producto": st.column_config.SelectboxColumn("Producto", options=st.session_state.lst_prods_cache, width="large"),
+                        "Cantidad": st.column_config.NumberColumn("Cant.", min_value=1),
+                        "Costo_Total_Item": st.column_config.NumberColumn("Costo Total Línea ($)", min_value=0.0),
+                        "IVA_Porc": st.column_config.SelectboxColumn("IVA %", options=[0, 5, 19], required=True)
                     },
-                    use_container_width=True,
-                    key="manual_editor"
+                    use_container_width=True
                 )
 
-                submit_manual = st.form_submit_button("Siguiente Paso ➡️")
-                
-                if submit_manual:
+                if st.form_submit_button("Siguiente Paso ➡️"):
                     if not prov_man or not folio_man:
-                        st.error("Debes indicar Proveedor y Factura.")
+                        st.error("Falta Proveedor o Factura.")
                     else:
-                        # Convertir manual a estructura estándar
                         items_std = []
                         total_manual = 0.0
                         
@@ -603,29 +589,29 @@ def main():
                             if row["Producto"]:
                                 c_tot = float(row["Costo_Total_Item"])
                                 qty = float(row["Cantidad"])
-                                c_unit = c_tot / qty if qty > 0 else 0
+                                iva_p = int(row["IVA_Porc"])
+                                
+                                # Calcular Costo Base Unitario (Antes de IVA) para estandarizar con XML
+                                # Costo Total = (Base + IVA) * Cantidad
+                                # Base_Unit = (Total / Cantidad) / (1 + IVA%)
+                                c_unit_con_iva = c_tot / qty if qty > 0 else 0
+                                c_base_unit = c_unit_con_iva / (1 + (iva_p/100.0))
+                                
                                 total_manual += c_tot
                                 
-                                # Simulamos estructura XML
                                 items_std.append({
                                     'SKU_Proveedor': "S/C",
                                     'Descripcion': row["Producto"].split(" | ")[1] if " | " in row["Producto"] else row["Producto"],
                                     'Cantidad': qty,
-                                    'Costo_Unitario': c_unit
+                                    'Costo_Base_Unitario': c_base_unit,
+                                    'IVA_Manual': iva_p # Dato extra para prellenar
                                 })
                         
-                        if not items_std:
-                            st.error("Agrega al menos un producto.")
-                        else:
-                            # Guardar en sesión
+                        if items_std:
                             st.session_state.xml_data = {
-                                'Proveedor': prov_man,
-                                'ID_Proveedor': nit_man,
-                                'Folio': folio_man,
-                                'Total': total_manual,
-                                'Items': items_std
+                                'Proveedor': prov_man, 'ID_Proveedor': nit_man, 'Folio': folio_man,
+                                'Total': total_manual, 'Items': items_std
                             }
-                            # Usamos caché
                             st.session_state.lst_prods = st.session_state.lst_prods_cache
                             st.session_state.dct_prods = st.session_state.dct_prods_cache
                             st.session_state.memoria = st.session_state.memoria_cache
@@ -633,22 +619,22 @@ def main():
                             st.session_state.step = 2
                             st.rerun()
 
-    # --- PASO 2: VERIFICACIÓN Y PAGO (MEJORA 2) ---
+    # --- PASO 2: VERIFICACIÓN Y ASIGNACIÓN DE IVA ---
     elif st.session_state.step == 2:
         d = st.session_state.xml_data
         mem = st.session_state.memoria
         dct = st.session_state.dct_prods
         origen = st.session_state.origen_datos
         
-        # --- Tarjetas Métricas ---
+        # Tarjetas KPIs
         st.markdown(f"""
             <div class="metric-container">
                 <div class="metric-card">
                     <div class="metric-label">PROVEEDOR</div>
-                    <div class="metric-value">{d['Proveedor'][:20]}</div>
+                    <div class="metric-value">{d['Proveedor'][:15]}</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">No. FACTURA</div>
+                    <div class="metric-label">FACTURA</div>
                     <div class="metric-value">{d['Folio']}</div>
                 </div>
                 <div class="metric-card">
@@ -658,9 +644,7 @@ def main():
             </div>
         """, unsafe_allow_html=True)
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Pre-llenado inteligente
+        # Preparar datos para el Editor
         nit_clean = normalizar_str(d['ID_Proveedor'])
         rows_edit = []
         matches = 0
@@ -669,25 +653,28 @@ def main():
             sku_prov = it['SKU_Proveedor']
             key = f"{nit_clean}_{normalizar_str(sku_prov)}"
             
-            # Lógica: Si viene de Manual, ya seleccionó el producto, así que lo pre-asignamos
+            # Valores por defecto
+            sel_def = "NUEVO (Crear Producto)"
+            fac_def = 1.0
+            iva_def = 0 # Por defecto exento
+            
+            # Si viene manual, usamos lo que puso el usuario
             if origen == "MANUAL":
-                # Intentamos buscar coincidencia inversa por nombre
-                sel_def = "NUEVO (Crear Producto)"
-                # En manual el "Descripcion" ya es el nombre seleccionado o escrito
+                iva_def = it.get('IVA_Manual', 0)
+                # Buscar nombre en lista
                 for p in st.session_state.lst_prods:
                     if it['Descripcion'] in p:
-                        sel_def = p
-                        break
-                fac_def = 1.0
+                        sel_def = p; break
+            
+            # Si viene de XML, usamos MEMORIA
             else:
-                # Lógica XML (Busca en memoria)
-                sel_def = "NUEVO (Crear Producto)"
-                fac_def = 1.0
                 if key in mem:
+                    # Encontramos este producto de este proveedor antes
                     sku_int = mem[key]['SKU_Interno']
                     if sku_int in dct:
                         sel_def = dct[sku_int]
                         fac_def = mem[key]['Factor']
+                        iva_def = mem[key]['IVA_Aprendido'] # <--- AQUÍ RECUPERA EL IVA
                         matches += 1
             
             rows_edit.append({
@@ -695,72 +682,77 @@ def main():
                 "Descripcion": it['Descripcion'],
                 "SKU_Interno_Seleccionado": sel_def,
                 "Factor_Pack": fac_def,
+                "IVA_Porcentaje": iva_def, # Columna clave para tu lógica
                 "Cantidad_XML": it['Cantidad'],
                 "Cantidad_Recibida": it['Cantidad'],
-                "Costo_Unitario": it['Costo_Unitario']
+                "Costo_Base_Unitario": it['Costo_Base_Unitario']
             })
         
         if origen == "XML":
-            if matches > 0: st.success(f"🧠 {matches} productos identificados automáticamente.")
-            else: st.info("ℹ️ Asocia los productos por primera vez.")
+            if matches > 0: st.success(f"🧠 {matches} productos identificados con su IVA histórico.")
+            else: st.info("ℹ️ Asigna los productos e IVAs. El sistema aprenderá para la próxima.")
 
-        # Editor
+        # EDITOR PRINCIPAL
+        st.markdown("### 🕵️ Verificación de Productos e Impuestos")
+        st.caption("Ajusta el IVA (0, 5, 19). El sistema calculará el Costo Neto y aplicará el margen del 15%.")
+        
         df_show = pd.DataFrame(rows_edit)
+        
         edited = st.data_editor(
             df_show,
             column_config={
-                "SKU_Proveedor": st.column_config.TextColumn("Ref. Prov", disabled=True),
+                "SKU_Proveedor": st.column_config.TextColumn("Ref. Prov", disabled=True, width="small"),
                 "Descripcion": st.column_config.TextColumn("Producto Factura", disabled=True, width="medium"),
                 "SKU_Interno_Seleccionado": st.column_config.SelectboxColumn("📌 Tu Inventario", options=st.session_state.lst_prods, required=True, width="large"),
-                "Factor_Pack": st.column_config.NumberColumn("Factor (Uds/Caja)", min_value=0.1, help="Si llega 1 caja de 12, pon 12"),
+                "Factor_Pack": st.column_config.NumberColumn("Factor", min_value=1.0, help="Unidades por caja"),
+                "IVA_Porcentaje": st.column_config.SelectboxColumn("IVA %", options=[0, 5, 19], required=True, help="Selecciona el IVA para calcular el costo real"),
                 "Cantidad_XML": st.column_config.NumberColumn("Cant. Fac", disabled=True),
                 "Cantidad_Recibida": st.column_config.NumberColumn("✅ Recibido"),
-                "Costo_Unitario": st.column_config.NumberColumn("Costo Base", format="$%d", disabled=True)
+                "Costo_Base_Unitario": st.column_config.NumberColumn("Costo Base", format="$%d", disabled=True, help="Precio antes de IVA")
             },
             use_container_width=True,
             hide_index=True,
             height=400
         )
         
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # --- SECCIÓN FINANCIERA (MEJORA 2 CRÍTICA) ---
+        st.markdown("---")
+        
+        # SECCIÓN DE PAGO (FINANZAS)
         with st.container(border=True):
-            st.markdown("#### 💰 Fuente de Pago (Para Registro de Gastos)")
-            st.info("Selecciona de dónde sale el dinero para que se registre automáticamente en Finanzas.")
-            
-            col_banco, col_dummy = st.columns([1, 2])
-            origen_pago = col_banco.selectbox(
+            st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>💰</span> Origen del Pago", unsafe_allow_html=True)
+            col_b, col_msg = st.columns([1, 2])
+            origen_pago = col_b.selectbox(
                 "Cuenta de Egreso", 
-                ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Efectivo", "Crédito Proveedor (CxP)"]
+                ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Efectivo", "Caja General", "Crédito Proveedor (CxP)"]
             )
+            col_msg.info("El total se registrará automáticamente en el módulo de Gastos > Costo de Venta.")
 
-        # Botones Acción
-        st.markdown("<br>", unsafe_allow_html=True)
+        # BOTONES FINALES
         colA, colB = st.columns([1, 4])
-        if colA.button("🔙 Cancelar"):
+        if colA.button("🔙 Volver"):
             st.session_state.step = 1
             st.rerun()
         
-        if colB.button("🚀 PROCESAR ENTRADA Y REGISTRAR GASTO", type="primary", use_container_width=True):
+        if colB.button("🚀 PROCESAR ENTRADA", type="primary", use_container_width=True):
             with st.status("⚙️ Aplicando lógica de negocio...", expanded=True):
-                st.write("Calculando Costos e Inventario...")
+                st.write("Calculando Costos Netos (Base + IVA)...")
+                st.write("Aplicando margen del 15% (Costo / 0.85)...")
+                st.write("Aprendiendo preferencias de IVA...")
                 
-                # Preparamos info de pago
                 info_pago = {"Origen": origen_pago}
                 
-                # LLAMADA ACTUALIZADA CON WS_GAS
+                # LLAMADA A GUARDADO
                 ok, logs = procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, edited, d, info_pago)
                 
                 if ok:
                     st.write("✅ Inventario Actualizado")
                     st.write("✅ Precios Recalculados")
-                    st.write("✅ Gasto Insertado en Finanzas") 
+                    st.write("✅ Gasto Insertado")
                     time.sleep(1)
                     st.balloons()
-                    st.success("¡Proceso Terminado Exitosamente!")
+                    st.success("¡Recepción Completada!")
                     
-                    with st.expander("📄 Ver Reporte de Cambios (Logs)"):
+                    with st.expander("📄 Ver Detalles de la Operación"):
                         for l in logs:
                             if "SUBIÓ" in l: st.warning(l)
                             elif "Gasto" in l: st.info(l)
@@ -770,7 +762,7 @@ def main():
                         st.session_state.step = 1
                         st.rerun()
                 else:
-                    st.error("Hubo un error guardando.")
+                    st.error("Error guardando datos.")
                     for l in logs: st.error(l)
 
 if __name__ == "__main__":
