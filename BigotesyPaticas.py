@@ -551,7 +551,7 @@ def main():
         tab_punto_venta(ws_inv, ws_cli, ws_ven)
     elif menu == "Nexus Loyalty":
         # Importa y llama la función principal del módulo de loyalty
-        import pages.3_Nexus_Loyalty as loyalty
+        import pages.Nexus_Loyalty as loyalty
         loyalty.main()
     elif menu == "Compras":
         import pages.Compras as compras
