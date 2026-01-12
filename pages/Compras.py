@@ -543,8 +543,8 @@ def main():
                     st.rerun()
 
             c1, c2 = st.columns(2)
-            c_transporte = c1.number_input("Costo Transporte ($)", min_value=0.0, value=0.0, help="Costo total de transporte para la factura")
-            c_descuento = c2.number_input("Descuento Total ($)", min_value=0.0, value=0.0, help="Descuento total aplicado por el proveedor")
+            c_transporte = c1.number_input("Costo Transporte ($)", min_value=0.0, value=0.0, help="Costo total de transporte para la factura", key="transporte_tab_xml")
+            c_descuento = c2.number_input("Descuento Total ($)", min_value=0.0, value=0.0, help="Descuento total aplicado por el proveedor", key="descuento_tab_xml")
             st.session_state.c_transporte = c_transporte
             st.session_state.c_descuento = c_descuento
 
@@ -628,8 +628,8 @@ def main():
                             st.rerun()
 
             c1, c2 = st.columns(2)
-            c_transporte = c1.number_input("Costo Transporte ($)", min_value=0.0, value=0.0, help="Costo total de transporte para la factura")
-            c_descuento = c2.number_input("Descuento Total ($)", min_value=0.0, value=0.0, help="Descuento total aplicado por el proveedor")
+            c_transporte = c1.number_input("Costo Transporte ($)", min_value=0.0, value=0.0, help="Costo total de transporte para la factura", key="transporte_tab_manual")
+            c_descuento = c2.number_input("Descuento Total ($)", min_value=0.0, value=0.0, help="Descuento total aplicado por el proveedor", key="descuento_tab_manual")
             st.session_state.c_transporte = c_transporte
             st.session_state.c_descuento = c_descuento
 
