@@ -531,3 +531,34 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                 else:
                     st.info("No hay ventas registradas para este cliente.")
     # ...rest of POS code...
+
+def main():
+    configurar_pagina()
+    ws_inv, ws_cli, ws_ven, ws_gas, ws_cap, ws_cie = conectar_google_sheets()
+
+    # --- MENÚ PRINCIPAL ---
+    menu = st.sidebar.radio(
+        "Navegación",
+        [
+            "BigotesyPaticas",
+            "Nexus Loyalty",
+            "Compras",
+            "Inventario Nexus"
+        ]
+    )
+
+    if menu == "BigotesyPaticas":
+        tab_punto_venta(ws_inv, ws_cli, ws_ven)
+    elif menu == "Nexus Loyalty":
+        # Importa y llama la función principal del módulo de loyalty
+        import pages.3_Nexus_Loyalty as loyalty
+        loyalty.main()
+    elif menu == "Compras":
+        import pages.Compras as compras
+        compras.main()
+    elif menu == "Inventario Nexus":
+        import pages.Inventario_Nexus as inventario
+        inventario.main()
+
+if __name__ == "__main__":
+    main()
