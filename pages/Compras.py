@@ -378,7 +378,8 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             
             # CÁLCULOS MATEMÁTICOS DE COSTO Y PRECIO
             # 1. Costo Base Unitario Real (por unidad suelta)
-            costo_base_unitario_real = costo_base_xml / factor
+            costo_base_unitario_real = costo_base_xml + st.session_state.get("c_transporte", 0.0) - st.session_state.get("c_descuento", 0.0)
+            costo_base_unitario_real = costo_base_unitario_real / factor
             
             # 2. Costo Neto (Costo Base + IVA)
             iva_monto_unitario = costo_base_unitario_real * (iva_seleccionado / 100.0)
@@ -481,18 +482,19 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
         # --- E. REGISTRAR GASTO (Costo de Venta) ---
         try:
             descripcion_gasto = f"[PROV: {meta_xml['Proveedor']}] [REF: {meta_xml['Folio']}] - Compra Mercancía"
+            monto_total_gasto = meta_xml['Total'] + float(info_pago.get("Transporte", 0.0)) - float(info_pago.get("Descuento", 0.0))
             datos_gasto = [
                 timestamp,
                 fecha,
                 "Costo de Venta",    # Tipo fijo para separar en P&L
                 "Compra Inventario", # Categoría
                 descripcion_gasto,
-                meta_xml['Total'],   # Monto Total Factura
+                monto_total_gasto,   # Monto Total Factura
                 "Módulo Compras",
                 info_pago['Origen']  # Banco seleccionado
             ]
             ws_gas.append_row(datos_gasto)
-            logs.append(f"💰 Gasto Registrado: ${meta_xml['Total']:,.0f} desde {info_pago['Origen']}")
+            logs.append(f"💰 Gasto Registrado: ${monto_total_gasto:,.0f} desde {info_pago['Origen']}")
         except Exception as ex_gas:
             logs.append(f"⚠️ Alerta: No se registró en Gastos: {ex_gas}")
 
@@ -539,6 +541,12 @@ def main():
                     st.session_state.origen_datos = "XML"
                     st.session_state.step = 2
                     st.rerun()
+
+            c1, c2 = st.columns(2)
+            c_transporte = c1.number_input("Costo Transporte ($)", min_value=0.0, value=0.0, help="Costo total de transporte para la factura")
+            c_descuento = c2.number_input("Descuento Total ($)", min_value=0.0, value=0.0, help="Descuento total aplicado por el proveedor")
+            st.session_state.c_transporte = c_transporte
+            st.session_state.c_descuento = c_descuento
 
         # OPCIÓN B: MANUAL
         with tab_manual:
@@ -618,6 +626,12 @@ def main():
                             st.session_state.origen_datos = "MANUAL"
                             st.session_state.step = 2
                             st.rerun()
+
+            c1, c2 = st.columns(2)
+            c_transporte = c1.number_input("Costo Transporte ($)", min_value=0.0, value=0.0, help="Costo total de transporte para la factura")
+            c_descuento = c2.number_input("Descuento Total ($)", min_value=0.0, value=0.0, help="Descuento total aplicado por el proveedor")
+            st.session_state.c_transporte = c_transporte
+            st.session_state.c_descuento = c_descuento
 
     # --- PASO 2: VERIFICACIÓN Y ASIGNACIÓN DE IVA ---
     elif st.session_state.step == 2:
@@ -739,7 +753,7 @@ def main():
                 st.write("Aplicando margen del 15% (Costo / 0.85)...")
                 st.write("Aprendiendo preferencias de IVA...")
                 
-                info_pago = {"Origen": origen_pago}
+                info_pago = {"Origen": origen_pago, "Transporte": st.session_state.get("c_transporte", 0.0), "Descuento": st.session_state.get("c_descuento", 0.0)}
                 
                 # LLAMADA A GUARDADO
                 ok, logs = procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, edited, d, info_pago)
