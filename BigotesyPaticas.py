@@ -194,16 +194,28 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
             precio_mod = st.number_input("Precio Unitario", min_value=0, value=int(prod_row['Precio']), key="precio_agregar")
             descuento = st.number_input("Descuento", min_value=0, value=0, key="descuento_agregar")
             if st.button("Agregar al Carrito", help="Agrega el producto al carrito"):
-                subtotal = (precio_mod - descuento) * cantidad
-                st.session_state.carrito.append({
-                    "ID_Producto": prod_row['ID_Producto'],
-                    "Nombre_Producto": prod_row['Nombre'],
-                    "Cantidad": cantidad,
-                    "Precio": precio_mod,
-                    "Descuento": descuento,
-                    "Subtotal": subtotal
-                })
-                st.success(f"{cantidad} x {prod_row['Nombre']} agregado al carrito.")
+                # Busca si el producto ya está en el carrito
+                existe = False
+                for item in st.session_state.carrito:
+                    if item["ID_Producto"] == prod_row['ID_Producto']:
+                        # Si el precio o descuento cambió, actualiza
+                        item["Cantidad"] += cantidad
+                        item["Precio"] = precio_mod
+                        item["Descuento"] = descuento
+                        item["Subtotal"] = (precio_mod - descuento) * item["Cantidad"]
+                        existe = True
+                        break
+                if not existe:
+                    subtotal = (precio_mod - descuento) * cantidad
+                    st.session_state.carrito.append({
+                        "ID_Producto": prod_row['ID_Producto'],
+                        "Nombre_Producto": prod_row['Nombre'],
+                        "Cantidad": cantidad,
+                        "Precio": precio_mod,
+                        "Descuento": descuento,
+                        "Subtotal": subtotal
+                    })
+                st.success(f"{cantidad} x {prod_row['Nombre']} agregado/modificado en el carrito.")
 
     # --- CARRITO VISUAL Y EDICIÓN ---
     with col_izq:
