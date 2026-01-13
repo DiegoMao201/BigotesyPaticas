@@ -415,28 +415,93 @@ def tab_gastos(ws_gas):
     st.dataframe(resultados, use_container_width=True)
 
 def tab_cuadre(ws_ven, ws_gas, ws_cie):
-    st.header("💵 Cuadre de Caja Diario (Avanzado)")
+    st.header("💵 Cuadre de Caja Diario (Avanzado y Robusto)")
+
     df_v = leer_datos(ws_ven)
     df_g = leer_datos(ws_gas)
     df_cie = leer_datos(ws_cie)
     hoy = datetime.now().date()
+
+    # --- Ventas del día ---
     ventas_hoy = df_v[df_v['Fecha'].dt.date == hoy] if not df_v.empty else pd.DataFrame()
+    ventas_pagadas = ventas_hoy[ventas_hoy['Estado_Envio'].isin(["Entregado", "Pagado"])]
+    ventas_pendientes = ventas_hoy[ventas_hoy['Estado_Envio'].isin(["Pendiente", "En camino"])]
+
+    # --- Costo de mercancía y margen ---
+    if 'Costo_Total' in ventas_pagadas.columns:
+        costo_mercancia = ventas_pagadas['Costo_Total'].sum()
+    else:
+        costo_mercancia = 0.0  # Si no tienes el campo, puedes calcularlo sumando el costo de cada producto vendido
+
+    total_ventas = ventas_pagadas['Total'].sum()
+    margen_ganado = total_ventas - costo_mercancia
+
+    # --- Gastos del día ---
     gastos_hoy = df_g[df_g['Fecha'] == hoy.strftime("%Y-%m-%d")] if not df_g.empty else pd.DataFrame()
-    base_inicial = st.number_input("Base Inicial (Efectivo en caja al abrir)", min_value=0.0, value=float(df_cie['Saldo_Real'].iloc[-1]) if not df_cie.empty else 0.0)
-    ventas_efectivo = ventas_hoy[ventas_hoy['Metodo_Pago'] == "Efectivo"]['Total'].sum()
-    ventas_electronico = ventas_hoy[ventas_hoy['Metodo_Pago'].isin(["Nequi", "Daviplata", "Transferencia", "Tarjeta"])]["Total"].sum()
     gastos_efectivo = gastos_hoy[gastos_hoy['Metodo_Pago'] == "Efectivo"]['Monto'].sum() if 'Metodo_Pago' in gastos_hoy.columns else 0.0
+
+    # --- Base inicial y consignaciones ---
+    base_inicial = st.number_input("Base Inicial (Efectivo en caja al abrir)", min_value=0.0, value=float(df_cie['Saldo_Real'].iloc[-1]) if not df_cie.empty else 0.0)
     dinero_a_bancos = st.number_input("Dinero a Bancos (consignaciones)", min_value=0.0, value=0.0)
+
+    # --- Ventas por método de pago ---
+    ventas_efectivo = ventas_pagadas[ventas_pagadas['Metodo_Pago'] == "Efectivo"]['Total'].sum()
+    ventas_electronico = ventas_pagadas[ventas_pagadas['Metodo_Pago'].isin(["Nequi", "Daviplata", "Transferencia", "Tarjeta"])]["Total"].sum()
+
+    # --- Saldos ---
     saldo_teorico = base_inicial + ventas_efectivo - gastos_efectivo - dinero_a_bancos
     saldo_real = st.number_input("Saldo Real contado en caja", min_value=0.0, value=saldo_teorico)
     diferencia = saldo_real - saldo_teorico
+
+    # --- Visualización de métricas ---
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Ventas Efectivo", f"${ventas_efectivo:,.0f}")
+    col2.metric("Ventas Electrónico", f"${ventas_electronico:,.0f}")
+    col3.metric("Costo Mercancía", f"${costo_mercancia:,.0f}")
+    col4.metric("Margen Ganado", f"${margen_ganado:,.0f}")
+
+    col5, col6, col7 = st.columns(3)
+    col5.metric("Gastos Efectivo", f"${gastos_efectivo:,.0f}")
+    col6.metric("Saldo Teórico", f"${saldo_teorico:,.0f}")
+    col7.metric("Diferencia", f"${diferencia:,.0f}")
+
+    # --- Registro rápido de gastos desde el cuadre ---
+    with st.expander("➕ Registrar Gasto Rápido"):
+        with st.form("form_gasto_cuadre"):
+            tipo = st.selectbox("Tipo de Gasto", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"])
+            categoria = st.text_input("Categoría", "General")
+            descripcion = st.text_area("Descripción")
+            monto = st.number_input("Monto", min_value=0.0)
+            metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"])
+            banco = st.text_input("Banco/Origen", "")
+            if st.form_submit_button("Registrar Gasto"):
+                ws_gas.append_row([
+                    f"GAS-{int(datetime.now().timestamp())}",
+                    datetime.now().strftime("%Y-%m-%d"),
+                    tipo,
+                    categoria,
+                    descripcion,
+                    monto,
+                    metodo_pago,
+                    banco
+                ])
+                st.success("Gasto registrado correctamente.")
+                st.rerun()
+
+    # --- Ventas pendientes del día ---
+    st.markdown("### 🚩 Ventas Pendientes de Pago/Entrega")
+    if ventas_pendientes.empty:
+        st.success("No hay ventas pendientes hoy.")
+    else:
+        st.dataframe(ventas_pendientes[['ID_Venta', 'Fecha', 'Nombre_Cliente', 'Total', 'Metodo_Pago', 'Estado_Envio']], use_container_width=True)
+        selected = st.selectbox("Selecciona una venta pendiente para marcar como pagada", ventas_pendientes['ID_Venta'])
+        if st.button("Marcar como Pagada/Entregada"):
+            actualizar_estado_envio(ws_ven, selected, "Entregado")
+            st.success("Venta marcada como pagada/entregada.")
+            st.rerun()
+
+    # --- Notas y guardar cuadre ---
     notas = st.text_area("Notas del cuadre", "")
-    st.metric("Ventas Efectivo", f"${ventas_efectivo:,.0f}")
-    st.metric("Ventas Electrónico", f"${ventas_electronico:,.0f}")
-    st.metric("Gastos Efectivo", f"${gastos_efectivo:,.0f}")
-    st.metric("Saldo Teórico", f"${saldo_teorico:,.0f}")
-    st.metric("Saldo Real", f"${saldo_real:,.0f}")
-    st.metric("Diferencia", f"${diferencia:,.0f}")
     if st.button("Guardar Cuadre en Google Sheets"):
         ws_cie.append_row([
             hoy.strftime("%Y-%m-%d"),
@@ -448,7 +513,9 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
             saldo_teorico,
             saldo_real,
             diferencia,
-            notas
+            notas,
+            costo_mercancia,
+            margen_ganado
         ])
         st.success("Cuadre guardado en Google Sheets.")
 
@@ -463,13 +530,27 @@ def tab_resumen(ws_ven, ws_gas, ws_cie):
         df_v['Metodo_Pago'].str.contains(search_v, case=False, na=False)
     ) if search_v else [True]*len(df_v)
     resultados = df_v[mask]
-    st.dataframe(resultados, use_container_width=True)
     if not resultados.empty:
+        # Mejora visual: Colores por estado
+        def color_estado(val):
+            if val == "Entregado" or val == "Pagado":
+                return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+            elif val == "Pendiente":
+                return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
+            elif val == "Cancelado":
+                return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+            return ''
+        st.dataframe(
+            resultados.style.applymap(color_estado, subset=['Estado_Envio']),
+            use_container_width=True
+        )
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             resultados.to_excel(writer, index=False)
         output.seek(0)
         st.download_button("⬇️ Descargar Ventas en Excel", output, "Ventas.xlsx")
+    else:
+        st.info("No hay ventas para mostrar.")
     st.subheader("Buscar Gastos")
     df_g = leer_datos(ws_gas)
     search_g = st.text_input("Buscar gastos", key="busca_gas")
