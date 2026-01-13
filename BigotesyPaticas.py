@@ -190,6 +190,9 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
     st.markdown("### 🛒 Buscar y Agregar Producto")
     df_inv = leer_datos(ws_inv)
     if not df_inv.empty:
+        # SOLUCIÓN: Normaliza los IDs antes de usarlos
+        if 'ID_Producto_Norm' not in df_inv.columns:
+            df_inv['ID_Producto_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
         opciones = []
         id_map = {}
         for _, row in df_inv.iterrows():
