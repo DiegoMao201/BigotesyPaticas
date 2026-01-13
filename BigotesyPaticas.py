@@ -176,33 +176,33 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
         st.markdown("### 🛒 Buscar y Agregar Producto")
         df_inv = leer_datos(ws_inv)
         if not df_inv.empty:
+            # Opciones con ID para evitar errores de índice
             opciones = []
-            iconos = []
+            id_map = {}
             for _, row in df_inv.iterrows():
                 stock = int(row['Stock'])
                 precio = int(row['Precio'])
                 nombre = row['Nombre']
-                if stock == 0:
-                    icon = "🔴"
-                elif stock <= 5:
-                    icon = "🟡"
-                else:
-                    icon = "🟢"
-                opciones.append(f"{icon} {nombre} | Stock: {stock} | ${precio:,}")
-                iconos.append(icon)
+                icon = "🔴" if stock == 0 else "🟡" if stock <= 5 else "🟢"
+                display = f"{icon} {nombre} | Stock: {stock} | ${precio:,}"
+                opciones.append(display)
+                id_map[display] = row['ID_Producto']
+
             producto_sel = st.selectbox("Producto", opciones, help="Busca por nombre, stock o precio")
-            idx = opciones.index(producto_sel)
-            prod_row = df_inv.iloc[idx]
-            st.info(f"{iconos[idx]} Stock disponible: {prod_row['Stock']} | Precio: ${prod_row['Precio']:,.0f}")
+            id_prod_sel = id_map[producto_sel]
+            # Busca el producto por ID (no por índice)
+            prod_row = df_inv[df_inv['ID_Producto'] == id_prod_sel].iloc[0]
+
+            st.info(f"{icon} Stock disponible: {prod_row['Stock']} | Precio: ${prod_row['Precio']:,.0f}")
             cantidad = st.number_input("Cantidad", min_value=1, value=1, max_value=int(prod_row['Stock']) if int(prod_row['Stock']) > 0 else 1, key="cantidad_agregar")
             precio_mod = st.number_input("Precio Unitario", min_value=0, value=int(prod_row['Precio']), key="precio_agregar")
             descuento = st.number_input("Descuento", min_value=0, value=0, key="descuento_agregar")
+
             if st.button("Agregar al Carrito", help="Agrega el producto al carrito"):
                 # Busca si el producto ya está en el carrito
                 existe = False
                 for item in st.session_state.carrito:
                     if item["ID_Producto"] == prod_row['ID_Producto']:
-                        # Si el precio o descuento cambió, actualiza
                         item["Cantidad"] += cantidad
                         item["Precio"] = precio_mod
                         item["Descuento"] = descuento
