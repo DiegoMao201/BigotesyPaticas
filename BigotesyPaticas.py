@@ -308,3 +308,22 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
         )
     if st.session_state.whatsapp_link:
         st.markdown(f"""<a href="{st.session_state.whatsapp_link}" target="_blank" class="btn-factura">📲 Enviar Resumen por WhatsApp</a>""", unsafe_allow_html=True)
+
+def main():
+    configurar_pagina()
+    ws_inv, ws_cli, ws_ven, ws_gas, ws_cie, ws_cap, ws_prov, ws_ord, ws_rec = conectar_google_sheets()
+    st.title("🐾 Nexus Pro | Bigotes y Patitas")
+    tabs = st.tabs([
+        "🛒 POS",
+        "👤 Clientes",
+        "🚚 Despachos",
+        "💳 Gastos",
+        "💵 Cuadre de Caja",
+        "📊 Resumen"
+    ])
+    with tabs[0]:
+        tab_pos(ws_inv, ws_cli, ws_ven)
+    # ...agrega aquí tus otras pestañas como tab_clientes, tab_despachos, etc...
+
+if __name__ == "__main__":
+    main()
