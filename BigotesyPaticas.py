@@ -426,3 +426,31 @@ def tab_resumen(ws_ven, ws_gas, ws_cie):
             resultados_c.to_excel(writer, index=False)
         output.seek(0)
         st.download_button("⬇️ Descargar Cuadres en Excel", output, "Cuadres.xlsx")
+
+def main():
+    configurar_pagina()
+    ws_inv, ws_cli, ws_ven, ws_gas, ws_cie, ws_cap, ws_prov, ws_ord, ws_rec = conectar_google_sheets()
+    st.title("🐾 Nexus Pro | Bigotes y Patitas")
+    tabs = st.tabs([
+        "🛒 POS",
+        "👤 Clientes",
+        "🚚 Despachos",
+        "💳 Gastos",
+        "💵 Cuadre de Caja",
+        "📊 Resumen"
+    ])
+    with tabs[0]:
+        tab_pos(ws_inv, ws_cli, ws_ven)
+    with tabs[1]:
+        tab_clientes(ws_cli, ws_ven)
+    with tabs[2]:
+        tab_despachos(ws_ven)
+    with tabs[3]:
+        tab_gastos(ws_gas)
+    with tabs[4]:
+        tab_cuadre(ws_ven, ws_gas, ws_cie)
+    with tabs[5]:
+        tab_resumen(ws_ven, ws_gas, ws_cie)
+
+if __name__ == "__main__":
+    main()
