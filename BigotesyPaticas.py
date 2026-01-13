@@ -298,7 +298,7 @@ def tab_clientes(ws_cli, ws_ven):
         df_c['Telefono'].astype(str).str.contains(search, case=False, na=False)
     ) if search else [True]*len(df_c)
     resultados = df_c[mask]
-    st.dataframe(resultados[['Cedula', 'Nombre', 'Mascota', 'Telefono', 'Direccion', 'Email']], use_container_width=True, hide_index=True)
+    st.dataframe(resultados[['Cedula', 'Nombre', 'Telefono', 'Email', 'Direccion', 'Mascota', 'Tipo_Mascota', 'Cumpleaños_mascota', 'Registro']], use_container_width=True, hide_index=True)
     st.markdown("---")
     st.subheader("Historial de Ventas del Cliente")
     selected_idx = st.selectbox("Selecciona un cliente para ver historial", resultados.index, format_func=lambda i: f"{resultados.loc[i, 'Nombre']} ({resultados.loc[i, 'Cedula']})", key="cli_hist")
@@ -319,8 +319,9 @@ def tab_clientes(ws_cli, ws_ven):
             cedula = st.text_input("Cédula")
             nombre = st.text_input("Nombre")
             telefono = st.text_input("Teléfono")
-            direccion = st.text_input("Dirección")
             email = st.text_input("Email")
+            direccion = st.text_input("Dirección")
+            registro = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             st.markdown("#### Mascotas del Cliente")
             num_mascotas = st.number_input("¿Cuántas mascotas tiene?", min_value=1, max_value=5, value=1)
@@ -328,18 +329,42 @@ def tab_clientes(ws_cli, ws_ven):
             for i in range(num_mascotas):
                 st.markdown(f"##### Mascota #{i+1}")
                 nombre_mascota = st.text_input(f"Nombre Mascota #{i+1}", key=f"mascota_nombre_{i}")
-                cumple_mascota = st.date_input(f"Cumpleaños Mascota #{i+1}", key=f"mascota_cumple_{i}")
                 tipo_mascota = st.selectbox(f"Tipo Mascota #{i+1}", ["Perro", "Gato", "Otro"], key=f"mascota_tipo_{i}")
+                cumple_mascota = st.date_input(f"Cumpleaños Mascota #{i+1}", key=f"mascota_cumple_{i}")
                 mascotas.append({
                     "Nombre": nombre_mascota,
-                    "Cumpleaños": cumple_mascota.strftime("%Y-%m-%d"),
-                    "Tipo": tipo_mascota
+                    "Tipo": tipo_mascota,
+                    "Cumpleaños": cumple_mascota.strftime("%Y-%m-%d")
                 })
+
+            # Para mostrar en la tabla principal, tomamos la primera mascota
+            mascota_principal = mascotas[0]['Nombre'] if mascotas else ""
+            tipo_principal = mascotas[0]['Tipo'] if mascotas else ""
+            cumple_principal = mascotas[0]['Cumpleaños'] if mascotas else ""
 
             if st.form_submit_button("Guardar Cliente"):
                 info_mascotas_json = json.dumps(mascotas)
-                ws_cli.append_row([cedula, nombre, "", telefono, direccion, email, info_mascotas_json])
+                ws_cli.append_row([
+                    cedula, nombre, telefono, email, direccion,
+                    mascota_principal, tipo_principal, cumple_principal,
+                    registro, info_mascotas_json
+                ])
                 st.success("Cliente guardado correctamente con sus mascotas.")
+                # Mensaje de bienvenida
+                mensaje = f"""¡Hola {nombre}! 👋
+Bienvenido/a a la familia Bigotes y Patitas 🐾.
+
+Nos alegra mucho tenerte con nosotros y que confíes en nosotros para consentir a tus peluditos.
+
+Recuerda que puedes contactarnos para cualquier cosa que necesite {mascota_principal} o sus amigos. ¡Estamos aquí para ayudarte!
+
+¡Un abrazo y feliz día! 🐶🐱
+"""
+                telefono_clean = str(telefono).replace(" ", "").replace("+", "").replace("-", "")
+                if len(telefono_clean) == 10 and not telefono_clean.startswith("57"):
+                    telefono_clean = "57" + telefono_clean
+                link_wa = f"https://wa.me/{telefono_clean}?text={urllib.parse.quote(mensaje)}"
+                st.markdown(f"""<a href="{link_wa}" target="_blank" style="display:inline-block; background:#25D366; color:white; padding:12px 20px; border-radius:8px; text-decoration:none; font-weight:bold; margin-top:10px;">📲 Enviar Bienvenida por WhatsApp</a>""", unsafe_allow_html=True)
                 st.rerun()
 
 def tab_despachos(ws_ven):
