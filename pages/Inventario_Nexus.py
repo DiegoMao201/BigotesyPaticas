@@ -684,6 +684,7 @@ def main():
                             data['ws_ord'].update_cell(cell.row, 6, "Recibido")
                             data['ws_ord'].update_cell(cell.row, 7, str(date.today()))
                             
+
                             st.success("¡Inventario actualizado correctamente!")
                             st.write(log_txt)
                             time.sleep(3)
@@ -727,12 +728,17 @@ def guardar_orden(ws_ord, proveedor, df_orden, total):
 
 def actualizar_stock_gsheets(ws_inv, id_producto, unidades_sumar):
     try:
-        cell = ws_inv.find(str(id_producto))
-        if cell:
-            col_stock = 4 
-            val_act = ws_inv.cell(cell.row, col_stock).value
-            nuevo = float(val_act if val_act else 0) + unidades_sumar
-            ws_inv.update_cell(cell.row, col_stock, nuevo)
+        id_producto_norm = normalizar_id_producto(id_producto)
+        # Busca todas las filas y compara el ID normalizado
+        all_rows = ws_inv.get_all_values()
+        for idx, row in enumerate(all_rows):
+            if idx == 0: continue  # Saltar encabezado
+            if normalizar_id_producto(row[0]) == id_producto_norm:
+                col_stock = 4
+                val_act = ws_inv.cell(idx+1, col_stock).value
+                nuevo = float(val_act if val_act else 0) + unidades_sumar
+                ws_inv.update_cell(idx+1, col_stock, nuevo)
+                break
     except Exception as e:
         print(f"Error stock: {e}")
 

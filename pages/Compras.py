@@ -779,5 +779,21 @@ def main():
                     st.error("Error guardando datos.")
                     for l in logs: st.error(l)
 
+def actualizar_stock_gsheets(ws_inv, id_producto, unidades_sumar):
+    try:
+        id_producto_norm = normalizar_id_producto(id_producto)
+        # Busca todas las filas y compara el ID normalizado
+        all_rows = ws_inv.get_all_values()
+        for idx, row in enumerate(all_rows):
+            if idx == 0: continue  # Saltar encabezado
+            if normalizar_id_producto(row[0]) == id_producto_norm:
+                col_stock = 4
+                val_act = ws_inv.cell(idx+1, col_stock).value
+                nuevo = float(val_act if val_act else 0) + unidades_sumar
+                ws_inv.update_cell(idx+1, col_stock, nuevo)
+                break
+    except Exception as e:
+        print(f"Error stock: {e}")
+
 if __name__ == "__main__":
     main()
