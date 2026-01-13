@@ -530,7 +530,235 @@ def tab_punto_venta(ws_inv, ws_cli, ws_ven):
                     st.dataframe(historial[['Fecha', 'Total', 'Items', 'Metodo_Pago', 'Tipo_Entrega']], use_container_width=True, hide_index=True)
                 else:
                     st.info("No hay ventas registradas para este cliente.")
-    # ...rest of POS code...
+
+        # --- SELECCIÓN DE PRODUCTOS Y CARRITO ---
+        st.markdown("#### 🛒 Agregar Productos")
+        df_inv = leer_datos(ws_inv)
+        if not df_inv.empty:
+            productos = df_inv['Nombre'].tolist()
+            producto_sel = st.selectbox("Producto", productos)
+            cantidad = st.number_input("Cantidad", min_value=1, value=1)
+            if st.button("Agregar al Carrito"):
+                prod_row = df_inv[df_inv['Nombre'] == producto_sel].iloc[0]
+                st.session_state.carrito.append({
+                    "ID_Producto": prod_row['ID_Producto'],
+                    "Nombre_Producto": prod_row['Nombre'],
+                    "Cantidad": cantidad,
+                    "Precio": prod_row['Precio'],
+                    "Subtotal": cantidad * prod_row['Precio']
+                })
+                st.success(f"{cantidad} x {producto_sel} agregado al carrito.")
+
+        # --- MOSTRAR CARRITO ---
+        if st.session_state.carrito:
+            st.markdown("#### 🧺 Carrito de Compra")
+            df_carrito = pd.DataFrame(st.session_state.carrito)
+            st.dataframe(df_carrito[['Nombre_Producto', 'Cantidad', 'Precio', 'Subtotal']], use_container_width=True, hide_index=True)
+            total = df_carrito['Subtotal'].sum()
+            st.markdown(f"### Total: ${total:,.0f}")
+
+            if st.button("Vaciar Carrito"):
+                st.session_state.carrito = []
+                st.rerun()
+
+    with col_der:
+        # --- FACTURAR ---
+        st.markdown("#### 💳 Facturación")
+        if st.session_state.carrito and st.session_state.cliente_actual:
+            metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Tarjeta", "Transferencia"])
+            tipo_entrega = st.selectbox("Tipo de Entrega", ["Local", "Envío a Domicilio"])
+            direccion = st.text_input("Dirección de Entrega", value=st.session_state.cliente_actual.get('Direccion', ''))
+
+            if st.button("Facturar y Guardar Venta", type="primary"):
+                # Generar ID de venta
+                id_venta = f"VEN-{int(time.time())}"
+                fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                items_str = ", ".join([f"{x['Cantidad']}x{x['Nombre_Producto']}" for x in st.session_state.carrito])
+                total = sum([x['Subtotal'] for x in st.session_state.carrito])
+
+                # Guardar en Google Sheets
+                ws_ven.append_row([
+                    id_venta, fecha,
+                    st.session_state.cliente_actual.get('Cedula', ''),
+                    st.session_state.cliente_actual.get('Nombre', ''),
+                    tipo_entrega, direccion, "Pendiente",
+                    metodo_pago, "", total, items_str
+                ])
+
+                # Actualizar stock
+                actualizar_stock(ws_inv, st.session_state.carrito)
+
+                # Generar PDF
+                venta_data = {
+                    'ID': id_venta,
+                    'Fecha': fecha,
+                    'Cliente': st.session_state.cliente_actual.get('Nombre', ''),
+                    'Cedula_Cliente': st.session_state.cliente_actual.get('Cedula', ''),
+                    'Direccion': direccion,
+                    'Mascota': st.session_state.mascota_seleccionada,
+                    'Metodo_Pago': metodo_pago,
+                    'Tipo_Entrega': tipo_entrega,
+                    'Total': total
+                }
+                pdf_bytes = generar_pdf_html(venta_data, st.session_state.carrito)
+                st.session_state.ultimo_pdf = pdf_bytes
+                st.session_state.ultima_venta_id = id_venta
+
+                # Mensaje WhatsApp
+                mensaje = generar_mensaje_whatsapp(
+                    venta_data['Cliente'],
+                    venta_data['Mascota'],
+                    "NUEVO",  # Puedes mejorar la lógica para distinguir tipo de cliente
+                    items_str,
+                    total
+                )
+                telefono = st.session_state.cliente_actual.get('Telefono', '')
+                if telefono and len(telefono) >= 7:
+                    if not telefono.startswith('57') and len(telefono) == 10:
+                        telefono = '57' + telefono
+                    link_wa = f"https://wa.me/{telefono}?text={mensaje}"
+                    st.session_state.whatsapp_link = link_wa
+
+                st.success("¡Venta registrada y factura generada!")
+                st.session_state.carrito = []
+
+        # --- DESCARGA PDF Y WHATSAPP ---
+        if st.session_state.ultimo_pdf:
+            st.download_button(
+                label="⬇️ Descargar Factura PDF",
+                data=st.session_state.ultimo_pdf,
+                file_name=f"Factura_{st.session_state.ultima_venta_id}.pdf",
+                mime="application/pdf"
+            )
+        if st.session_state.whatsapp_link:
+            st.markdown(f"""<a href="{st.session_state.whatsapp_link}" target="_blank" class="whatsapp-btn">📲 Enviar Resumen por WhatsApp</a>""", unsafe_allow_html=True)
+
+        # --- CUADRE DE CAJA (BÁSICO) ---
+        st.markdown("---")
+        st.markdown("#### 💵 Cuadre de Caja")
+        df_v = leer_datos(ws_ven)
+        hoy = datetime.now().date()
+        ventas_hoy = df_v[df_v['Fecha'].dt.date == hoy] if not df_v.empty else pd.DataFrame()
+        total_ventas = ventas_hoy['Total'].sum() if not ventas_hoy.empty else 0
+        st.metric("Ventas del Día", f"${total_ventas:,.0f}")
+
+# ------------------- PEDIDOS PENDIENTES -------------------
+def tab_pedidos(ws_ven):
+    st.header("🚚 Pedidos Pendientes")
+    df_v = leer_datos(ws_ven)
+    pendientes = df_v[df_v['Estado_Envio'].isin(["Pendiente", "En camino"])]
+    if pendientes.empty:
+        st.success("No hay pedidos pendientes de entrega.")
+    else:
+        st.dataframe(pendientes[['ID_Venta', 'Fecha', 'Nombre_Cliente', 'Direccion_Envio', 'Metodo_Pago', 'Total', 'Estado_Envio']], use_container_width=True)
+        selected = st.selectbox("Selecciona un pedido para marcar como entregado", pendientes['ID_Venta'])
+        if st.button("Marcar como Entregado"):
+            actualizar_estado_envio(ws_ven, selected, "Entregado")
+            st.success("Pedido marcado como entregado.")
+            st.rerun()
+
+# ------------------- CUADRE DE CAJA -------------------
+def tab_cuadre(ws_ven, ws_gas, ws_cie):
+    st.header("💵 Cuadre de Caja Diario")
+    df_v = leer_datos(ws_ven)
+    df_g = leer_datos(ws_gas)
+    hoy = datetime.now().date()
+    ventas_hoy = df_v[df_v['Fecha'].dt.date == hoy] if not df_v.empty else pd.DataFrame()
+    gastos_hoy = df_g[df_g['Fecha'] == hoy.strftime("%Y-%m-%d")] if not df_g.empty else pd.DataFrame()
+    total_ventas = ventas_hoy['Total'].sum() if not ventas_hoy.empty else 0
+    total_costo = ventas_hoy['Costo_Total'].sum() if 'Costo_Total' in ventas_hoy.columns else 0
+    margen_bruto = total_ventas - total_costo
+    total_gastos = gastos_hoy['Monto'].sum() if not gastos_hoy.empty else 0
+    utilidad_neta = margen_bruto - total_gastos
+
+    st.metric("Ventas del Día", f"${total_ventas:,.0f}")
+    st.metric("Margen Bruto", f"${margen_bruto:,.0f}")
+    st.metric("Gastos", f"${total_gastos:,.0f}")
+    st.metric("Utilidad Neta", f"${utilidad_neta:,.0f}")
+
+    if st.button("Guardar Cuadre en Google Sheets"):
+        ws_cie.append_row([
+            hoy.strftime("%Y-%m-%d"),
+            datetime.now().strftime("%H:%M:%S"),
+            "",  # Base inicial (puedes agregar input)
+            ventas_hoy[ventas_hoy['Metodo_Pago'] == "Efectivo"]['Total'].sum(),
+            gastos_hoy[gastos_hoy['Tipo'] == "Efectivo"]['Monto'].sum(),
+            ventas_hoy[ventas_hoy['Metodo_Pago'].isin(["Nequi", "Daviplata", "Transferencia"])]["Total"].sum(),
+            margen_bruto,
+            utilidad_neta,
+            utilidad_neta - margen_bruto,
+            ""  # Notas
+        ])
+        st.success("Cuadre guardado en Google Sheets.")
+
+# ------------------- GASTOS -------------------
+def tab_gastos(ws_gas):
+    st.header("💳 Registrar y Buscar Gastos")
+    with st.form("form_gasto"):
+        tipo = st.selectbox("Tipo de Gasto", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"])
+        categoria = st.text_input("Categoría", "General")
+        descripcion = st.text_area("Descripción")
+        monto = st.number_input("Monto", min_value=0.0)
+        responsable = st.text_input("Responsable", "Admin")
+        banco = st.text_input("Banco/Origen", "")
+        if st.form_submit_button("Registrar Gasto"):
+            ws_gas.append_row([
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                datetime.now().strftime("%Y-%m-%d"),
+                tipo,
+                categoria,
+                descripcion,
+                monto,
+                responsable,
+                banco
+            ])
+            st.success("Gasto registrado correctamente.")
+            st.rerun()
+    # --- Buscar gastos ---
+    st.subheader("Buscar Gastos")
+    df_g = leer_datos(ws_gas)
+    search = st.text_input("Buscar por descripción, responsable, banco, categoría")
+    if search:
+        mask = (
+            df_g['Descripción'].str.contains(search, case=False, na=False) |
+            df_g['Responsable'].str.contains(search, case=False, na=False) |
+            df_g['Banco'].str.contains(search, case=False, na=False) |
+            df_g['Categoría'].str.contains(search, case=False, na=False)
+        )
+        resultados = df_g[mask]
+    else:
+        resultados = df_g
+    st.dataframe(resultados, use_container_width=True)
+
+# ------------------- RESUMEN Y BÚSQUEDAS -------------------
+def tab_resumen(ws_ven, ws_gas, ws_cie):
+    st.header("📊 Resumen y Búsquedas")
+    st.subheader("Buscar Ventas")
+    df_v = leer_datos(ws_ven)
+    search_v = st.text_input("Buscar ventas por cliente, producto, método de pago")
+    if search_v:
+        mask = (
+            df_v['Nombre_Cliente'].str.contains(search_v, case=False, na=False) |
+            df_v['Items'].str.contains(search_v, case=False, na=False) |
+            df_v['Metodo_Pago'].str.contains(search_v, case=False, na=False)
+        )
+        resultados = df_v[mask]
+    else:
+        resultados = df_v
+    st.dataframe(resultados, use_container_width=True)
+
+    st.subheader("Buscar Cuadres de Caja")
+    df_c = leer_datos(ws_cie)
+    search_c = st.text_input("Buscar cuadre por fecha o notas")
+    if search_c:
+        mask = (
+            df_c['Fecha'].astype(str).str.contains(search_c, case=False, na=False) |
+            df_c['Notas'].str.contains(search_c, case=False, na=False)
+        )
+        resultados = df_c[mask]
+    else:
+        resultados = df_c
+    st.dataframe(resultados, use_container_width=True)
 
 def main():
     configurar_pagina()
