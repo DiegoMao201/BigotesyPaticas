@@ -94,7 +94,20 @@ def actualizar_stock(ws_inv, carrito):
 # --- PESTAÑAS ---
 
 def tab_pos(ws_inv, ws_cli, ws_ven):
-    st.header("🛒 Punto de Venta (POS)")
+    # --- ESTILOS VISUALES ---
+    st.markdown("""
+        <style>
+        .main-title { color: #187f77; font-size: 2.2rem; font-weight: 800; margin-bottom: 0.5rem; }
+        .sub-title { color: #f5a641; font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; }
+        .mascota-box { background: #f8f9fa; border-radius: 12px; padding: 10px 18px; margin-bottom: 10px; border-left: 5px solid #f5a641; }
+        .carrito-total { background: #f5a641; color: white; font-size: 1.5rem; font-weight: bold; border-radius: 10px; padding: 12px 24px; text-align: right; margin-top: 10px; }
+        .btn-factura { background: linear-gradient(135deg, #187f77, #f5a641); color: white !important; font-weight: bold; border-radius: 10px; padding: 14px 28px; font-size: 1.1rem; border: none; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="main-title">🐾 Punto de Venta Bigotes y Patitas</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Venta rápida y profesional para consentir a tus peluditos</div>', unsafe_allow_html=True)
+
     if 'carrito' not in st.session_state: st.session_state.carrito = []
     if 'cliente_actual' not in st.session_state: st.session_state.cliente_actual = None
     if 'mascota_seleccionada' not in st.session_state: st.session_state.mascota_seleccionada = None
@@ -103,8 +116,10 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
     if 'whatsapp_link' not in st.session_state: st.session_state.whatsapp_link = None
 
     col_izq, col_der = st.columns([1.6, 1])
+
+    # --- CLIENTE ---
     with col_izq:
-        st.markdown("#### 👤 Buscar Cliente")
+        st.markdown("### 👤 Buscar Cliente")
         df_c = leer_datos(ws_cli)
         if not df_c.empty:
             search = st.text_input("Buscar por nombre, cédula, mascota o teléfono", key="busca_cli_pos")
@@ -116,7 +131,7 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
             ) if search else [True]*len(df_c)
             resultados = df_c[mask]
             selected_idx = st.selectbox("Selecciona un cliente", resultados.index, format_func=lambda i: f"{resultados.loc[i, 'Nombre']} ({resultados.loc[i, 'Cedula']})")
-            if st.button("Cargar Cliente"):
+            if st.button("Cargar Cliente", help="Carga el cliente y sus mascotas"):
                 cliente_data = resultados.loc[selected_idx].to_dict()
                 mascotas_para_dropdown = []
                 json_raw = cliente_data.get('Info_Mascotas', '')
@@ -138,16 +153,46 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
                 st.session_state.mascota_seleccionada = mascotas_para_dropdown[0] if mascotas_para_dropdown else None
                 st.toast(f"Cliente cargado: {st.session_state.cliente_actual.get('Nombre')}", icon="✅")
                 st.rerun()
-        st.markdown("#### 🛒 Agregar Productos")
+        # --- Mascotas visuales ---
+        if st.session_state.cliente_actual:
+            st.markdown("#### 🐶 Mascotas registradas")
+            info_mascotas = st.session_state.cliente_actual.get('Info_Mascotas', '')
+            if info_mascotas:
+                try:
+                    lista = json.loads(info_mascotas)
+                    for m in lista:
+                        st.markdown(f'<div class="mascota-box">🐾 <b>{m["Nombre"]}</b> | Cumpleaños: {m["Cumpleaños"]} | Tipo: {m["Tipo"]}</div>', unsafe_allow_html=True)
+                except:
+                    st.write("Mascotas: " + ", ".join(st.session_state.cliente_actual.get('Lista_Nombres_Mascotas', [])))
+            else:
+                st.write("Mascotas: " + ", ".join(st.session_state.cliente_actual.get('Lista_Nombres_Mascotas', [])))
+
+    # --- PRODUCTOS ---
+    with col_izq:
+        st.markdown("### 🛒 Buscar y Agregar Producto")
         df_inv = leer_datos(ws_inv)
         if not df_inv.empty:
-            st.dataframe(df_inv[['Nombre', 'Stock', 'Precio']], use_container_width=True, hide_index=True)
-            productos = df_inv['Nombre'].tolist()
-            producto_sel = st.selectbox("Producto", productos)
-            prod_row = df_inv[df_inv['Nombre'] == producto_sel].iloc[0]
-            st.info(f"Stock disponible: {prod_row['Stock']} | Precio: ${prod_row['Precio']:,.0f}")
-            cantidad = st.number_input("Cantidad", min_value=1, value=1, max_value=int(prod_row['Stock']))
-            if st.button("Agregar al Carrito"):
+            # Opciones con iconos y colores según stock
+            opciones = []
+            iconos = []
+            for _, row in df_inv.iterrows():
+                stock = int(row['Stock'])
+                precio = int(row['Precio'])
+                nombre = row['Nombre']
+                if stock == 0:
+                    icon = "🔴"
+                elif stock <= 5:
+                    icon = "🟡"
+                else:
+                    icon = "🟢"
+                opciones.append(f"{icon} {nombre} | Stock: {stock} | ${precio:,}")
+                iconos.append(icon)
+            producto_sel = st.selectbox("Producto", opciones, help="Busca por nombre, stock o precio")
+            idx = opciones.index(producto_sel)
+            prod_row = df_inv.iloc[idx]
+            st.info(f"{iconos[idx]} Stock disponible: {prod_row['Stock']} | Precio: ${prod_row['Precio']:,.0f}")
+            cantidad = st.number_input("Cantidad", min_value=1, value=1, max_value=int(prod_row['Stock']) if int(prod_row['Stock']) > 0 else 1)
+            if st.button("Agregar al Carrito", help="Agrega el producto al carrito"):
                 st.session_state.carrito.append({
                     "ID_Producto": prod_row['ID_Producto'],
                     "Nombre_Producto": prod_row['Nombre'],
@@ -155,23 +200,28 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
                     "Precio": prod_row['Precio'],
                     "Subtotal": cantidad * prod_row['Precio']
                 })
-                st.success(f"{cantidad} x {producto_sel} agregado al carrito.")
+                st.success(f"{cantidad} x {prod_row['Nombre']} agregado al carrito.")
+
+    # --- CARRITO VISUAL ---
+    with col_izq:
         if st.session_state.carrito:
-            st.markdown("#### 🧺 Carrito de Compra")
+            st.markdown("### 🧺 Carrito de Compra")
             df_carrito = pd.DataFrame(st.session_state.carrito)
             st.dataframe(df_carrito[['Nombre_Producto', 'Cantidad', 'Precio', 'Subtotal']], use_container_width=True, hide_index=True)
             total = df_carrito['Subtotal'].sum()
-            st.markdown(f"### Total: ${total:,.0f}")
-            if st.button("Vaciar Carrito"):
+            st.markdown(f'<div class="carrito-total">TOTAL: ${total:,.0f}</div>', unsafe_allow_html=True)
+            if st.button("Vaciar Carrito", help="Elimina todos los productos del carrito"):
                 st.session_state.carrito = []
                 st.rerun()
+
+    # --- FACTURACIÓN Y PDF ---
     with col_der:
-        st.markdown("#### 💳 Facturación")
+        st.markdown("### 💳 Facturación")
         if st.session_state.carrito and st.session_state.cliente_actual:
             metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Tarjeta", "Transferencia"])
             tipo_entrega = st.selectbox("Tipo de Entrega", ["Local", "Envío a Domicilio"])
             direccion = st.text_input("Dirección de Entrega", value=st.session_state.cliente_actual.get('Direccion', ''))
-            if st.button("Facturar y Guardar Venta", type="primary"):
+            if st.button("Facturar y Guardar Venta", key="btn_factura", help="Genera la factura y guarda la venta"):
                 id_venta = f"VEN-{int(datetime.now().timestamp())}"
                 fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 items_str = ", ".join([f"{x['Cantidad']}x{x['Nombre_Producto']}" for x in st.session_state.carrito])
@@ -222,7 +272,7 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
                 mime="application/pdf"
             )
         if st.session_state.whatsapp_link:
-            st.markdown(f"""<a href="{st.session_state.whatsapp_link}" target="_blank" class="whatsapp-btn">📲 Enviar Resumen por WhatsApp</a>""", unsafe_allow_html=True)
+            st.markdown(f"""<a href="{st.session_state.whatsapp_link}" target="_blank" class="btn-factura">📲 Enviar Resumen por WhatsApp</a>""", unsafe_allow_html=True)
         if st.session_state.cliente_actual:
             st.markdown("#### Mascotas registradas")
             mascotas = st.session_state.cliente_actual.get('Lista_Nombres_Mascotas', [])
