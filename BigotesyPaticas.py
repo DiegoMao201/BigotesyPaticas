@@ -4,6 +4,10 @@ import gspread
 from datetime import datetime, date
 import json
 import urllib.parse
+import jinja2
+from weasyprint import HTML
+from io import BytesIO
+import io
 
 # --- CONFIGURACIÓN Y CONEXIÓN ---
 def configurar_pagina():
@@ -53,78 +57,185 @@ def generar_mensaje_whatsapp(nombre_cliente, mascota, tipo_cliente, items_str, t
     despedida = "\n\n¡Muchas gracias y feliz día! 🐾"
     return urllib.parse.quote(f"{saludo}\n{cuerpo}{resumen}{despedida}")
 
+def generar_pdf_html(venta_data, items):
+    try:
+        with open("factura.html", "r", encoding="utf-8") as f:
+            template_str = f.read()
+        context = {
+            "id_venta": venta_data['ID'],
+            "fecha": venta_data['Fecha'],
+            "cliente_nombre": venta_data.get('Cliente', 'Consumidor Final'),
+            "cliente_cedula": venta_data.get('Cedula_Cliente', '---'),
+            "cliente_direccion": venta_data.get('Direccion', 'Local'),
+            "cliente_mascota": venta_data.get('Mascota', '---'),
+            "metodo_pago": venta_data.get('Metodo_Pago', 'Efectivo'),
+            "tipo_entrega": venta_data.get('Tipo_Entrega', 'Local'),
+            "items": items,
+            "total": venta_data['Total']
+        }
+        template = jinja2.Template(template_str)
+        html_renderizado = template.render(context)
+        pdf_file = HTML(string=html_renderizado).write_pdf()
+        return pdf_file
+    except Exception as e:
+        st.error(f"Error generando PDF: {e}")
+        return None
+
+def actualizar_stock(ws_inv, carrito):
+    df_inv = leer_datos(ws_inv)
+    for item in carrito:
+        id_prod = item['ID_Producto']
+        cantidad = item['Cantidad']
+        cell = ws_inv.find(str(id_prod))
+        if cell:
+            stock_actual = df_inv[df_inv['ID_Producto'] == id_prod]['Stock'].values[0]
+            ws_inv.update_cell(cell.row, df_inv.columns.get_loc('Stock')+1, int(stock_actual) - int(cantidad))
+
 # --- PESTAÑAS ---
 
 def tab_pos(ws_inv, ws_cli, ws_ven):
     st.header("🛒 Punto de Venta (POS)")
     if 'carrito' not in st.session_state: st.session_state.carrito = []
     if 'cliente_actual' not in st.session_state: st.session_state.cliente_actual = None
+    if 'mascota_seleccionada' not in st.session_state: st.session_state.mascota_seleccionada = None
+    if 'ultimo_pdf' not in st.session_state: st.session_state.ultimo_pdf = None
+    if 'ultima_venta_id' not in st.session_state: st.session_state.ultima_venta_id = None
+    if 'whatsapp_link' not in st.session_state: st.session_state.whatsapp_link = None
 
-    # Buscar cliente
-    df_c = leer_datos(ws_cli)
-    search = st.text_input("Buscar cliente (nombre, cédula, mascota, teléfono)", key="busca_cli_pos")
-    mask = (
-        df_c['Nombre'].str.contains(search, case=False, na=False) |
-        df_c['Cedula'].astype(str).str.contains(search, case=False, na=False) |
-        df_c['Mascota'].str.contains(search, case=False, na=False) |
-        df_c['Telefono'].astype(str).str.contains(search, case=False, na=False)
-    ) if search else [True]*len(df_c)
-    resultados = df_c[mask]
-    selected_idx = st.selectbox("Selecciona un cliente", resultados.index, format_func=lambda i: f"{resultados.loc[i, 'Nombre']} ({resultados.loc[i, 'Cedula']})")
-    if st.button("Cargar Cliente"):
-        st.session_state.cliente_actual = resultados.loc[selected_idx].to_dict()
-        st.success(f"Cliente cargado: {st.session_state.cliente_actual.get('Nombre')}")
-        st.rerun()
-
-    # Productos
-    df_inv = leer_datos(ws_inv)
-    st.dataframe(df_inv[['Nombre', 'Stock', 'Precio']], use_container_width=True, hide_index=True)
-    productos = df_inv['Nombre'].tolist()
-    producto_sel = st.selectbox("Producto", productos)
-    prod_row = df_inv[df_inv['Nombre'] == producto_sel].iloc[0]
-    st.info(f"Stock: {prod_row['Stock']} | Precio: ${prod_row['Precio']:,.0f}")
-    cantidad = st.number_input("Cantidad", min_value=1, value=1, max_value=int(prod_row['Stock']))
-    if st.button("Agregar al Carrito"):
-        st.session_state.carrito.append({
-            "ID_Producto": prod_row['ID_Producto'],
-            "Nombre_Producto": prod_row['Nombre'],
-            "Cantidad": cantidad,
-            "Precio": prod_row['Precio'],
-            "Subtotal": cantidad * prod_row['Precio']
-        })
-        st.success(f"{cantidad} x {producto_sel} agregado al carrito.")
-
-    # Carrito
-    if st.session_state.carrito:
-        st.markdown("#### 🧺 Carrito de Compra")
-        df_carrito = pd.DataFrame(st.session_state.carrito)
-        st.dataframe(df_carrito[['Nombre_Producto', 'Cantidad', 'Precio', 'Subtotal']], use_container_width=True, hide_index=True)
-        total = df_carrito['Subtotal'].sum()
-        st.markdown(f"### Total: ${total:,.0f}")
-        if st.button("Vaciar Carrito"):
-            st.session_state.carrito = []
-            st.rerun()
-
-    # Facturación
-    if st.session_state.carrito and st.session_state.cliente_actual:
-        metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Tarjeta", "Transferencia"])
-        tipo_entrega = st.selectbox("Tipo de Entrega", ["Local", "Envío a Domicilio"])
-        direccion = st.text_input("Dirección de Entrega", value=st.session_state.cliente_actual.get('Direccion', ''))
-        if st.button("Facturar y Guardar Venta", type="primary"):
-            id_venta = f"VEN-{int(datetime.now().timestamp())}"
-            fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            items_str = ", ".join([f"{x['Cantidad']}x{x['Nombre_Producto']}" for x in st.session_state.carrito])
-            total = sum([x['Subtotal'] for x in st.session_state.carrito])
-            ws_ven.append_row([
-                id_venta, fecha,
-                st.session_state.cliente_actual.get('Cedula', ''),
-                st.session_state.cliente_actual.get('Nombre', ''),
-                tipo_entrega, direccion, "Pendiente" if tipo_entrega != "Local" else "Entregado",
-                metodo_pago, "", total, items_str, "", # Costo_Total vacío por ahora
-            ])
-            st.success("¡Venta registrada!")
-            st.session_state.carrito = []
-            st.rerun()
+    col_izq, col_der = st.columns([1.6, 1])
+    with col_izq:
+        st.markdown("#### 👤 Buscar Cliente")
+        df_c = leer_datos(ws_cli)
+        if not df_c.empty:
+            search = st.text_input("Buscar por nombre, cédula, mascota o teléfono", key="busca_cli_pos")
+            mask = (
+                df_c['Nombre'].str.contains(search, case=False, na=False) |
+                df_c['Cedula'].astype(str).str.contains(search, case=False, na=False) |
+                df_c['Mascota'].str.contains(search, case=False, na=False) |
+                df_c['Telefono'].astype(str).str.contains(search, case=False, na=False)
+            ) if search else [True]*len(df_c)
+            resultados = df_c[mask]
+            selected_idx = st.selectbox("Selecciona un cliente", resultados.index, format_func=lambda i: f"{resultados.loc[i, 'Nombre']} ({resultados.loc[i, 'Cedula']})")
+            if st.button("Cargar Cliente"):
+                cliente_data = resultados.loc[selected_idx].to_dict()
+                mascotas_para_dropdown = []
+                json_raw = cliente_data.get('Info_Mascotas', '')
+                try:
+                    if json_raw and str(json_raw).strip():
+                        parsed_list = json.loads(str(json_raw))
+                        if isinstance(parsed_list, list):
+                            mascotas_para_dropdown = [m.get('Nombre') for m in parsed_list if m.get('Nombre')]
+                except:
+                    pass
+                if not mascotas_para_dropdown:
+                    nombre_old = cliente_data.get('Mascota', '')
+                    if nombre_old:
+                        mascotas_para_dropdown = [nombre_old]
+                if not mascotas_para_dropdown:
+                    mascotas_para_dropdown = ["Varios"]
+                cliente_data['Lista_Nombres_Mascotas'] = mascotas_para_dropdown
+                st.session_state.cliente_actual = cliente_data
+                st.session_state.mascota_seleccionada = mascotas_para_dropdown[0] if mascotas_para_dropdown else None
+                st.toast(f"Cliente cargado: {st.session_state.cliente_actual.get('Nombre')}", icon="✅")
+                st.rerun()
+        st.markdown("#### 🛒 Agregar Productos")
+        df_inv = leer_datos(ws_inv)
+        if not df_inv.empty:
+            st.dataframe(df_inv[['Nombre', 'Stock', 'Precio']], use_container_width=True, hide_index=True)
+            productos = df_inv['Nombre'].tolist()
+            producto_sel = st.selectbox("Producto", productos)
+            prod_row = df_inv[df_inv['Nombre'] == producto_sel].iloc[0]
+            st.info(f"Stock disponible: {prod_row['Stock']} | Precio: ${prod_row['Precio']:,.0f}")
+            cantidad = st.number_input("Cantidad", min_value=1, value=1, max_value=int(prod_row['Stock']))
+            if st.button("Agregar al Carrito"):
+                st.session_state.carrito.append({
+                    "ID_Producto": prod_row['ID_Producto'],
+                    "Nombre_Producto": prod_row['Nombre'],
+                    "Cantidad": cantidad,
+                    "Precio": prod_row['Precio'],
+                    "Subtotal": cantidad * prod_row['Precio']
+                })
+                st.success(f"{cantidad} x {producto_sel} agregado al carrito.")
+        if st.session_state.carrito:
+            st.markdown("#### 🧺 Carrito de Compra")
+            df_carrito = pd.DataFrame(st.session_state.carrito)
+            st.dataframe(df_carrito[['Nombre_Producto', 'Cantidad', 'Precio', 'Subtotal']], use_container_width=True, hide_index=True)
+            total = df_carrito['Subtotal'].sum()
+            st.markdown(f"### Total: ${total:,.0f}")
+            if st.button("Vaciar Carrito"):
+                st.session_state.carrito = []
+                st.rerun()
+    with col_der:
+        st.markdown("#### 💳 Facturación")
+        if st.session_state.carrito and st.session_state.cliente_actual:
+            metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Tarjeta", "Transferencia"])
+            tipo_entrega = st.selectbox("Tipo de Entrega", ["Local", "Envío a Domicilio"])
+            direccion = st.text_input("Dirección de Entrega", value=st.session_state.cliente_actual.get('Direccion', ''))
+            if st.button("Facturar y Guardar Venta", type="primary"):
+                id_venta = f"VEN-{int(datetime.now().timestamp())}"
+                fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                items_str = ", ".join([f"{x['Cantidad']}x{x['Nombre_Producto']}" for x in st.session_state.carrito])
+                total = sum([x['Subtotal'] for x in st.session_state.carrito])
+                ws_ven.append_row([
+                    id_venta, fecha,
+                    st.session_state.cliente_actual.get('Cedula', ''),
+                    st.session_state.cliente_actual.get('Nombre', ''),
+                    tipo_entrega, direccion, "Pendiente" if tipo_entrega != "Local" else "Entregado",
+                    metodo_pago, "", total, items_str, "", # Costo_Total vacío por ahora
+                ])
+                actualizar_stock(ws_inv, st.session_state.carrito)
+                venta_data = {
+                    'ID': id_venta,
+                    'Fecha': fecha,
+                    'Cliente': st.session_state.cliente_actual.get('Nombre', ''),
+                    'Cedula_Cliente': st.session_state.cliente_actual.get('Cedula', ''),
+                    'Direccion': direccion,
+                    'Mascota': st.session_state.mascota_seleccionada,
+                    'Metodo_Pago': metodo_pago,
+                    'Tipo_Entrega': tipo_entrega,
+                    'Total': total
+                }
+                pdf_bytes = generar_pdf_html(venta_data, st.session_state.carrito)
+                st.session_state.ultimo_pdf = pdf_bytes
+                st.session_state.ultima_venta_id = id_venta
+                mensaje = generar_mensaje_whatsapp(
+                    venta_data['Cliente'],
+                    venta_data['Mascota'],
+                    "NUEVO",
+                    items_str,
+                    total
+                )
+                telefono = st.session_state.cliente_actual.get('Telefono', '')
+                if telefono and len(str(telefono)) >= 7:
+                    tel = str(telefono)
+                    if not tel.startswith('57') and len(tel) == 10:
+                        tel = '57' + tel
+                    link_wa = f"https://wa.me/{tel}?text={mensaje}"
+                    st.session_state.whatsapp_link = link_wa
+                st.success("¡Venta registrada y factura generada!")
+                st.session_state.carrito = []
+        if st.session_state.ultimo_pdf:
+            st.download_button(
+                label="⬇️ Descargar Factura PDF",
+                data=st.session_state.ultimo_pdf,
+                file_name=f"Factura_{st.session_state.ultima_venta_id}.pdf",
+                mime="application/pdf"
+            )
+        if st.session_state.whatsapp_link:
+            st.markdown(f"""<a href="{st.session_state.whatsapp_link}" target="_blank" class="whatsapp-btn">📲 Enviar Resumen por WhatsApp</a>""", unsafe_allow_html=True)
+        if st.session_state.cliente_actual:
+            st.markdown("#### Mascotas registradas")
+            mascotas = st.session_state.cliente_actual.get('Lista_Nombres_Mascotas', [])
+            info_mascotas = st.session_state.cliente_actual.get('Info_Mascotas', '')
+            if info_mascotas:
+                try:
+                    lista = json.loads(info_mascotas)
+                    for m in lista:
+                        st.info(f"🐾 {m['Nombre']} | Cumpleaños: {m['Cumpleaños']} | Tipo: {m['Tipo']}")
+                except:
+                    st.write("Mascotas: " + ", ".join(mascotas))
+            else:
+                st.write("Mascotas: " + ", ".join(mascotas))
 
 def tab_clientes(ws_cli, ws_ven):
     st.header("👤 Gestión de Clientes")
@@ -141,14 +252,45 @@ def tab_clientes(ws_cli, ws_ven):
     st.markdown("---")
     st.subheader("Historial de Ventas del Cliente")
     selected_idx = st.selectbox("Selecciona un cliente para ver historial", resultados.index, format_func=lambda i: f"{resultados.loc[i, 'Nombre']} ({resultados.loc[i, 'Cedula']})", key="cli_hist")
-    df_v = leer_datos(ws_ven)
-    if not df_v.empty:
-        df_v['Cedula_Cliente'] = df_v['Cedula_Cliente'].astype(str)
-        historial = df_v[df_v['Cedula_Cliente'] == resultados.loc[selected_idx, 'Cedula']]
-        if not historial.empty:
-            st.dataframe(historial[['Fecha', 'Total', 'Items', 'Metodo_Pago', 'Tipo_Entrega']], use_container_width=True, hide_index=True)
-        else:
-            st.info("No hay ventas registradas para este cliente.")
+    cliente = resultados.loc[selected_idx]
+    st.markdown("#### Mascotas registradas")
+    info_mascotas = cliente.get('Info_Mascotas', '')
+    if info_mascotas:
+        try:
+            lista = json.loads(info_mascotas)
+            for m in lista:
+                st.info(f"🐾 {m['Nombre']} | Cumpleaños: {m['Cumpleaños']} | Tipo: {m['Tipo']}")
+        except:
+            st.write("Mascotas: " + str(cliente.get('Mascota', '')))
+    else:
+        st.write("Mascotas: " + str(cliente.get('Mascota', '')))
+    with st.expander("➕ Crear/Editar Cliente"):
+        with st.form("form_cliente"):
+            cedula = st.text_input("Cédula")
+            nombre = st.text_input("Nombre")
+            telefono = st.text_input("Teléfono")
+            direccion = st.text_input("Dirección")
+            email = st.text_input("Email")
+
+            st.markdown("#### Mascotas del Cliente")
+            num_mascotas = st.number_input("¿Cuántas mascotas tiene?", min_value=1, max_value=5, value=1)
+            mascotas = []
+            for i in range(num_mascotas):
+                st.markdown(f"##### Mascota #{i+1}")
+                nombre_mascota = st.text_input(f"Nombre Mascota #{i+1}", key=f"mascota_nombre_{i}")
+                cumple_mascota = st.date_input(f"Cumpleaños Mascota #{i+1}", key=f"mascota_cumple_{i}")
+                tipo_mascota = st.selectbox(f"Tipo Mascota #{i+1}", ["Perro", "Gato", "Otro"], key=f"mascota_tipo_{i}")
+                mascotas.append({
+                    "Nombre": nombre_mascota,
+                    "Cumpleaños": cumple_mascota.strftime("%Y-%m-%d"),
+                    "Tipo": tipo_mascota
+                })
+
+            if st.form_submit_button("Guardar Cliente"):
+                info_mascotas_json = json.dumps(mascotas)
+                ws_cli.append_row([cedula, nombre, "", telefono, direccion, email, info_mascotas_json])
+                st.success("Cliente guardado correctamente con sus mascotas.")
+                st.rerun()
 
 def tab_despachos(ws_ven):
     st.header("🚚 Pedidos Pendientes")
@@ -247,41 +389,40 @@ def tab_resumen(ws_ven, ws_gas, ws_cie):
     ) if search_v else [True]*len(df_v)
     resultados = df_v[mask]
     st.dataframe(resultados, use_container_width=True)
+    if not resultados.empty:
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            resultados.to_excel(writer, index=False)
+        output.seek(0)
+        st.download_button("⬇️ Descargar Ventas en Excel", output, "Ventas.xlsx")
+    st.subheader("Buscar Gastos")
+    df_g = leer_datos(ws_gas)
+    search_g = st.text_input("Buscar gastos", key="busca_gas")
+    mask_g = (
+        df_g['Descripcion'].str.contains(search_g, case=False, na=False) |
+        df_g['Categoria'].str.contains(search_g, case=False, na=False) |
+        df_g['Banco_Origen'].str.contains(search_g, case=False, na=False)
+    ) if search_g else [True]*len(df_g)
+    resultados_g = df_g[mask_g]
+    st.dataframe(resultados_g, use_container_width=True)
+    if not resultados_g.empty:
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            resultados_g.to_excel(writer, index=False)
+        output.seek(0)
+        st.download_button("⬇️ Descargar Gastos en Excel", output, "Gastos.xlsx")
     st.subheader("Buscar Cuadres de Caja")
     df_c = leer_datos(ws_cie)
     search_c = st.text_input("Buscar cuadre", key="busca_cie")
-    mask = (
+    mask_c = (
         df_c['Fecha'].astype(str).str.contains(search_c, case=False, na=False) |
         df_c['Notas'].str.contains(search_c, case=False, na=False)
     ) if search_c else [True]*len(df_c)
-    resultados = df_c[mask]
-    st.dataframe(resultados, use_container_width=True)
-
-# --- MAIN APP ---
-def main():
-    configurar_pagina()
-    ws_inv, ws_cli, ws_ven, ws_gas, ws_cie, ws_cap, ws_prov, ws_ord, ws_rec = conectar_google_sheets()
-    st.title("🐾 Nexus Pro | Bigotes y Patitas")
-    tabs = st.tabs([
-        "🛒 POS",
-        "👤 Clientes",
-        "🚚 Despachos",
-        "💳 Gastos",
-        "💵 Cuadre de Caja",
-        "📊 Resumen"
-    ])
-    with tabs[0]:
-        tab_pos(ws_inv, ws_cli, ws_ven)
-    with tabs[1]:
-        tab_clientes(ws_cli, ws_ven)
-    with tabs[2]:
-        tab_despachos(ws_ven)
-    with tabs[3]:
-        tab_gastos(ws_gas)
-    with tabs[4]:
-        tab_cuadre(ws_ven, ws_gas, ws_cie)
-    with tabs[5]:
-        tab_resumen(ws_ven, ws_gas, ws_cie)
-
-if __name__ == "__main__":
-    main()
+    resultados_c = df_c[mask_c]
+    st.dataframe(resultados_c, use_container_width=True)
+    if not resultados_c.empty:
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            resultados_c.to_excel(writer, index=False)
+        output.seek(0)
+        st.download_button("⬇️ Descargar Cuadres en Excel", output, "Cuadres.xlsx")
