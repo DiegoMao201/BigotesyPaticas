@@ -172,7 +172,6 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
         st.markdown("### 🛒 Buscar y Agregar Producto")
         df_inv = leer_datos(ws_inv)
         if not df_inv.empty:
-            # Opciones con iconos y colores según stock
             opciones = []
             iconos = []
             for _, row in df_inv.iterrows():
@@ -191,28 +190,54 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
             idx = opciones.index(producto_sel)
             prod_row = df_inv.iloc[idx]
             st.info(f"{iconos[idx]} Stock disponible: {prod_row['Stock']} | Precio: ${prod_row['Precio']:,.0f}")
-            cantidad = st.number_input("Cantidad", min_value=1, value=1, max_value=int(prod_row['Stock']) if int(prod_row['Stock']) > 0 else 1)
+            cantidad = st.number_input("Cantidad", min_value=1, value=1, max_value=int(prod_row['Stock']) if int(prod_row['Stock']) > 0 else 1, key="cantidad_agregar")
+            precio_mod = st.number_input("Precio Unitario", min_value=0, value=int(prod_row['Precio']), key="precio_agregar")
+            descuento = st.number_input("Descuento", min_value=0, value=0, key="descuento_agregar")
             if st.button("Agregar al Carrito", help="Agrega el producto al carrito"):
+                subtotal = (precio_mod - descuento) * cantidad
                 st.session_state.carrito.append({
                     "ID_Producto": prod_row['ID_Producto'],
                     "Nombre_Producto": prod_row['Nombre'],
                     "Cantidad": cantidad,
-                    "Precio": prod_row['Precio'],
-                    "Subtotal": cantidad * prod_row['Precio']
+                    "Precio": precio_mod,
+                    "Descuento": descuento,
+                    "Subtotal": subtotal
                 })
                 st.success(f"{cantidad} x {prod_row['Nombre']} agregado al carrito.")
 
-    # --- CARRITO VISUAL ---
+    # --- CARRITO VISUAL Y EDICIÓN ---
     with col_izq:
         if st.session_state.carrito:
             st.markdown("### 🧺 Carrito de Compra")
             df_carrito = pd.DataFrame(st.session_state.carrito)
-            st.dataframe(df_carrito[['Nombre_Producto', 'Cantidad', 'Precio', 'Subtotal']], use_container_width=True, hide_index=True)
-            total = df_carrito['Subtotal'].sum()
+            # Editor para modificar cantidades, precios y descuentos
+            edited = st.data_editor(
+                df_carrito,
+                key="carrito_editor",
+                use_container_width=True,
+                column_config={
+                    "Nombre_Producto": st.column_config.TextColumn("Producto", disabled=True),
+                    "Cantidad": st.column_config.NumberColumn("Cantidad", min_value=1),
+                    "Precio": st.column_config.NumberColumn("Precio", min_value=0),
+                    "Descuento": st.column_config.NumberColumn("Descuento", min_value=0),
+                    "Subtotal": st.column_config.NumberColumn("Subtotal", disabled=True)
+                },
+                hide_index=True
+            )
+            # Recalcula subtotales y actualiza el carrito
+            for i, row in edited.iterrows():
+                edited.at[i, "Subtotal"] = (row["Precio"] - row["Descuento"]) * row["Cantidad"]
+            st.session_state.carrito = edited.to_dict("records")
+            total = sum([item["Subtotal"] for item in st.session_state.carrito])
             st.markdown(f'<div class="carrito-total">TOTAL: ${total:,.0f}</div>', unsafe_allow_html=True)
-            if st.button("Vaciar Carrito", help="Elimina todos los productos del carrito"):
+            col_vac, col_del = st.columns([1,1])
+            if col_vac.button("Vaciar Carrito"):
                 st.session_state.carrito = []
                 st.rerun()
+            if col_del.button("Eliminar Último"):
+                if st.session_state.carrito:
+                    st.session_state.carrito.pop()
+                    st.rerun()
 
     # --- FACTURACIÓN Y PDF ---
     with col_der:
