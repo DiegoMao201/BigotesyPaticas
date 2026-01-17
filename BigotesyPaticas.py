@@ -514,34 +514,47 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
             st.success("Cierre guardado.")
 
 def tab_resumen(ws_ven, ws_gas, ws_cie):
-    st.header("📊 Resumen y Búsquedas")
-    st.subheader("Buscar Ventas")
+    st.header("📊 Torre de Control")
     df_v = leer_datos(ws_ven)
-    search_v = st.text_input("Buscar ventas", key="busca_ven")
-    mask = (
-        df_v['Nombre_Cliente'].str.contains(search_v, case=False, na=False) |
-        df_v['Items'].str.contains(search_v, case=False, na=False) |
-        df_v['Metodo_Pago'].str.contains(search_v, case=False, na=False)
-    ) if search_v else [True]*len(df_v)
-    resultados = df_v[mask]
-    if not resultados.empty:
-        # Mejora visual: Colores por estado
-        def color_estado(val):
-            if val == "Entregado" or val == "Pagado":
-                return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-            elif val == "Pendiente":
-                return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
-            elif val == "Cancelado":
-                return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
-            return ''
-        st.dataframe(
-            resultados.style.applymap(color_estado, subset=['Estado_Envio']),
-            use_container_width=True
-        )
-        # ...descarga Excel igual...
+    df_g = leer_datos(ws_gas)
+
+    hoy = now_co().date()
+    inicio = hoy - timedelta(days=30)
+    fecha_ini, fecha_fin = st.date_input("Rango de fechas", [inicio, hoy])
+
+    if fecha_ini and fecha_fin:
+        if not df_v.empty and 'Fecha' in df_v.columns:
+            df_v_f = df_v[(df_v['Fecha'] >= pd.Timestamp(fecha_ini)) & (df_v['Fecha'] <= pd.Timestamp(fecha_fin))]
+        else:
+            df_v_f = pd.DataFrame()
+        if not df_g.empty and 'Fecha' in df_g.columns:
+            df_g_f = df_g[(pd.to_datetime(df_g['Fecha'], errors='coerce') >= pd.Timestamp(fecha_ini)) & (pd.to_datetime(df_g['Fecha'], errors='coerce') <= pd.Timestamp(fecha_fin))]
+        else:
+            df_g_f = pd.DataFrame()
+
+        ventas_total = df_v_f['Total'].sum() if 'Total' in df_v_f else 0
+        ventas_cnt = len(df_v_f)
+        ventas_efectivo = df_v_f[df_v_f['Metodo_Pago'] == "Efectivo"]['Total'].sum() if 'Metodo_Pago' in df_v_f else 0
+        ventas_elec = df_v_f[df_v_f['Metodo_Pago'].isin(["Nequi","Daviplata","Transferencia","Tarjeta"])]["Total"].sum() if 'Metodo_Pago' in df_v_f else 0
+
+        gastos_total = df_g_f['Monto'].sum() if 'Monto' in df_g_f else 0
+        gastos_fijo = df_g_f[df_g_f['Tipo_Gasto'] == "Fijo"]['Monto'].sum() if 'Tipo_Gasto' in df_g_f else 0
+        gastos_var = df_g_f[df_g_f['Tipo_Gasto'] == "Variable"]['Monto'].sum() if 'Tipo_Gasto' in df_g_f else 0
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Ventas totales", f"${ventas_total:,.0f}", f"{ventas_cnt} ventas")
+        c2.metric("Ventas Efectivo / Electrónico", f"${ventas_efectivo:,.0f}", f"Elec: ${ventas_elec:,.0f}")
+        c3.metric("Gastos totales", f"${gastos_total:,.0f}", f"Fijos: ${gastos_fijo:,.0f} | Var: ${gastos_var:,.0f}")
+
+        st.markdown("---")
+        st.caption("Descarga para análisis completo:")
+        col_d1, col_d2 = st.columns(2)
+        if not df_v_f.empty:
+            col_d1.download_button("⬇️ Descargar Ventas (CSV)", df_v_f.to_csv(index=False).encode('utf-8'), "ventas_filtrado.csv", mime="text/csv", use_container_width=True)
+        if not df_g_f.empty:
+            col_d2.download_button("⬇️ Descargar Gastos (CSV)", df_g_f.to_csv(index=False).encode('utf-8'), "gastos_filtrado.csv", mime="text/csv", use_container_width=True)
     else:
-        st.info("No hay ventas para mostrar.")
-    # ...resto igual...
+        st.info("Selecciona un rango de fechas para ver los indicadores.")
 
 def tab_clientes(ws_cli, ws_ven):
     st.header("👤 Gestión de Clientes")
@@ -554,22 +567,22 @@ def tab_clientes(ws_cli, ws_ven):
         df_c['Telefono'].astype(str).str.contains(search, case=False, na=False)
     ) if search else [True]*len(df_c)
     resultados = df_c[mask]
-    st.dataframe(resultados[['Cedula', 'Nombre', 'Telefono', 'Email', 'Direccion', 'Mascota', 'Tipo_Mascota', 'Cumpleaños_mascota', 'Registro']], use_container_width=True, hide_index=True)
-    st.markdown("---")
-    st.subheader("Historial de Ventas del Cliente")
-    selected_idx = st.selectbox("Selecciona un cliente para ver historial", resultados.index, format_func=lambda i: f"{resultados.loc[i, 'Nombre']} ({resultados.loc[i, 'Cedula']})", key="cli_hist")
-    cliente = resultados.loc[selected_idx]
-    st.markdown("#### Mascotas registradas")
-    info_mascotas = cliente.get('Info_Mascotas', '')
-    if info_mascotas:
-        try:
-            lista = json.loads(info_mascotas)
-            for m in lista:
-                st.info(f"🐾 {m['Nombre']} | Cumpleaños: {m['Cumpleaños']} | Tipo: {m['Tipo']}")
-        except:
-            st.write("Mascotas: " + str(cliente.get('Mascota', '')))
-    else:
-        st.write("Mascotas: " + str(cliente.get('Mascota', '')))
+
+    st.caption(f"Coincidencias: {len(resultados)}")
+    if not resultados.empty:
+        selected_idx = st.selectbox(
+            "Selecciona un cliente para ver detalle",
+            resultados.index,
+            format_func=lambda i: f"{resultados.loc[i, 'Nombre']} ({resultados.loc[i, 'Cedula']})",
+            key="cli_hist"
+        )
+        cliente = resultados.loc[selected_idx]
+        st.markdown(f"**Teléfono:** {cliente.get('Telefono','')}  |  **Email:** {cliente.get('Email','')}")
+        st.markdown(f"**Dirección:** {cliente.get('Direccion','')}")
+        st.markdown(f"**Mascota:** {cliente.get('Mascota','')}  |  **Tipo:** {cliente.get('Tipo_Mascota','')}  |  **Cumple:** {cliente.get('Cumpleaños_mascota','')}")
+        st.markdown("---")
+    # ...resto del bloque Crear/Editar Cliente igual...
+
     with st.expander("➕ Crear/Editar Cliente"):
         if 'cliente_guardado' not in st.session_state:
             st.session_state.cliente_guardado = False
@@ -656,9 +669,7 @@ def tab_despachos(ws_ven):
             st.rerun()
 
 def tab_gastos(ws_gas):
-    st.header("💳 Registro y Consulta de Gastos")
-    df_g = leer_datos(ws_gas)
-    st.dataframe(df_g, use_container_width=True)
+    st.header("💳 Registro de Gastos")
     with st.expander("➕ Registrar Nuevo Gasto"):
         with st.form("form_gasto"):
             tipo_gasto = st.selectbox("Tipo de Gasto", ["Variable", "Fijo"], key="tipo_gasto_form")
@@ -675,7 +686,7 @@ def tab_gastos(ws_gas):
             if st.form_submit_button("Registrar Gasto"):
                 ts = int(now_co().timestamp())
                 ws_gas.append_row([
-                    f"GAS-{ts}",                 # ID_Gasto
+                    f"GAS-{ts}",
                     now_co().strftime("%Y-%m-%d"),
                     tipo_gasto,
                     categoria,
