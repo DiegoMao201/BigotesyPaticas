@@ -115,13 +115,18 @@ def conectar_db():
         st.error(f"🔴 Error de Conexión: {e}")
         return None
 
-def get_worksheet_safe(sh, name, headers):
-    try:
-        return sh.worksheet(name)
-    except gspread.exceptions.WorksheetNotFound:
-        ws = sh.add_worksheet(title=name, rows=100, cols=20)
-        ws.append_row(headers)
-        return ws
+def get_worksheet_safe(sh, name, headers, retries=3, delay=2):
+    for intento in range(retries):
+        try:
+            return sh.worksheet(name)
+        except gspread.exceptions.WorksheetNotFound:
+            ws = sh.add_worksheet(title=name, rows=1000, cols=max(len(headers), 20))
+            ws.append_row(headers)
+            return ws
+        except gspread.exceptions.APIError:
+            if intento == retries - 1:
+                raise
+            time.sleep(delay * (intento + 1))
 
 def clean_currency(x):
     """Limpia formatos de moneda ($1,200.00 -> 1200.00)."""
