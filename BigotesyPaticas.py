@@ -486,19 +486,19 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
     notas = st.text_area("Notas del cuadre", "")
     if st.button("Guardar Cuadre en Google Sheets"):
         fila_valores = [
-            fecha_sel.strftime("%Y-%m-%d"),           # Fecha
-            now_co().strftime("%H:%M:%S"),            # Hora
-            base_inicial,
-            ventas_efectivo,
-            ventas_electronico,
-            gastos_efectivo,
-            dinero_a_bancos,
-            saldo_teorico,
-            saldo_real,
-            diferencia,
-            notas,
-            0.0,                                      # Costo_Mercancia (ajusta si calculas)
-            ventas_efectivo + ventas_electronico - gastos_efectivo  # Margen_Ganado aprox
+            fecha_sel.strftime("%Y-%m-%d"),   # Fecha  (A)
+            now_co().strftime("%H:%M:%S"),    # Hora   (B)
+            base_inicial,                     # C
+            ventas_efectivo,                  # D
+            ventas_electronico,               # E
+            gastos_efectivo,                  # F
+            dinero_a_bancos,                  # G
+            saldo_teorico,                    # H
+            saldo_real,                       # I
+            diferencia,                       # J
+            notas,                            # K
+            0.0,                              # L Costo_Mercancia
+            ventas_efectivo + ventas_electronico - gastos_efectivo  # M Margen_Ganado
         ]
         fila_valores = [sanitizar_para_sheet(x) for x in fila_valores]
 
@@ -507,7 +507,7 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
             st.success("Cierre actualizado.")
         else:
             ws_cie.append_row(fila_valores)
-            st.success("Cierre guardado como nuevo.")
+            st.success("Cierre guardado.")
 
 def tab_resumen(ws_ven, ws_gas, ws_cie):
     st.header("📊 Resumen y Búsquedas")
