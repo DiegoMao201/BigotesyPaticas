@@ -216,7 +216,12 @@ def procesar_inventario_avanzado(df_inv, df_ven, df_prov):
             items_str = str(row.get('Items', ''))
             lista = items_str.split(',')
             for item in lista:
-                nombre_clean = item.split('(')[0].strip()
+                nombre_clean = item.strip()
+                # POS usa formato "2xNombreProducto"
+                if 'x' in nombre_clean:
+                    nombre_clean = nombre_clean.split('x', 1)[1].strip()
+                if '(' in nombre_clean:
+                    nombre_clean = nombre_clean.split('(')[0].strip()
                 if nombre_clean:
                     stats[nombre_clean] = stats.get(nombre_clean, 0) + 1
         
