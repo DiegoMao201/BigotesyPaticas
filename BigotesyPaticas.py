@@ -486,8 +486,8 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
     notas = st.text_area("Notas del cuadre", "")
     if st.button("Guardar Cuadre en Google Sheets"):
         fila_valores = [
-            fecha_sel.strftime("%Y-%m-%d"),
-            now_co().strftime("%H:%M:%S"),
+            fecha_sel.strftime("%Y-%m-%d"),           # Fecha
+            now_co().strftime("%H:%M:%S"),            # Hora
             base_inicial,
             ventas_efectivo,
             ventas_electronico,
@@ -497,14 +497,14 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
             saldo_real,
             diferencia,
             notas,
-            0.0,  # costo_mercancia (ajusta si lo calculas)
-            ventas_efectivo + ventas_electronico - gastos_efectivo
+            0.0,                                      # Costo_Mercancia (ajusta si calculas)
+            ventas_efectivo + ventas_electronico - gastos_efectivo  # Margen_Ganado aprox
         ]
         fila_valores = [sanitizar_para_sheet(x) for x in fila_valores]
 
         if row_number:
             ws_cie.update(f"A{row_number}:M{row_number}", [fila_valores])
-            st.success("Cierre actualizado (sin crear fila nueva).")
+            st.success("Cierre actualizado.")
         else:
             ws_cie.append_row(fila_valores)
             st.success("Cierre guardado como nuevo.")
