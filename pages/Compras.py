@@ -161,8 +161,11 @@ def conectar_sheets():
         
         try: ws_map = sh.worksheet("Maestro_Proveedores")
         except: 
-            ws_map = sh.add_worksheet("Maestro_Proveedores", 1000, 7)
-            ws_map.append_row(["ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Factor_Pack", "Ultima_Actualizacion", "Ultimo_IVA"])
+            ws_map = sh.add_worksheet("Maestro_Proveedores", 1000, 9)
+            ws_map.append_row([
+                "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno",
+                "Factor_Pack", "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Ultimo_IVA"
+            ])
 
         try: ws_hist = sh.worksheet("Historial_Recepciones")
         except:
@@ -411,14 +414,18 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             if sku_prov_factura != "S/C":
                 # Borramos mapeos anteriores de este par (opcional, aquí solo agregamos al final, Gspread es append-only fácil)
                 # Formato Mapeo: [ID_Prov, Nom_Prov, SKU_Prov, SKU_Int, Factor, Fecha, IVA_Detectado]
+                # Costo del pack facturado (neto por pack)
+                costo_pack = costo_neto_final * factor
                 new_mappings.append([
                     str(meta_xml['ID_Proveedor']),
                     str(meta_xml['Proveedor']),
                     sku_prov_factura,
-                    final_internal_id, 
+                    final_internal_id,
                     factor,
-                    fecha,
-                    iva_seleccionado # <--- AQUÍ GUARDA EL IVA PARA LA PRÓXIMA
+                    fecha,           # Ultima_Actualizacion
+                    "",              # Email (si no se captura aquí)
+                    costo_pack,      # Costo_Proveedor
+                    iva_seleccionado # Ultimo_IVA
                 ])
             
             # --- ACTUALIZAR INVENTARIO ---

@@ -459,7 +459,6 @@ def main():
         # ----------------------------------------------
 
         df_audit.rename(columns={'Stock': 'Sistema'}, inplace=True)
-        # Inicializamos Conteo Físico igual al Sistema (asumiendo que está bien hasta que se diga lo contrario)
         df_audit['Conteo_Fisico'] = df_audit['Sistema']
         df_audit['Diferencia'] = 0
         df_audit['Acción'] = "✅ OK"
@@ -473,7 +472,7 @@ def main():
                 "ID_Producto": st.column_config.TextColumn("SKU", disabled=True),
                 "Nombre": st.column_config.TextColumn("Producto", disabled=True, width="large"),
                 "Sistema": st.column_config.NumberColumn("Stock Sistema", disabled=True),
-                "Conteo_Físico": st.column_config.NumberColumn("🔢 Conteo Físico", min_value=0, step=1, required=True),
+                "Conteo_Fisico": st.column_config.NumberColumn("🔢 Conteo Físico", min_value=0, step=1, required=True),
                 "Diferencia": st.column_config.NumberColumn("Diff", disabled=True),
                 "Acción": st.column_config.TextColumn("Estado", disabled=True),
                 "Costo": st.column_config.NumberColumn("Costo Unit", format="$%.2f", disabled=True)
@@ -481,16 +480,17 @@ def main():
             hide_index=True
         )
 
-        # 3. Lógica de Detección de Cambios
-        # Recalculamos diferencias en el dataframe editado (visual solamente)
-        cambios = edited_df[edited_df['Conteo_Físico'] != edited_df['Sistema']].copy()
-        cambios['Diferencia'] = cambios['Conteo_Físico'] - cambios['Sistema']
+        # Recalcular diferencias
+        edited_df['Diferencia'] = edited_df['Conteo_Fisico'] - edited_df['Sistema']
+
+        cambios = edited_df[edited_df['Conteo_Fisico'] != edited_df['Sistema']].copy()
+        cambios['Diferencia'] = cambios['Conteo_Fisico'] - cambios['Sistema']
         
         if not cambios.empty:
             st.warning(f"⚠️ Se han detectado {len(cambios)} discrepancias en el inventario.")
             
             # Vista previa de cambios
-            st.dataframe(cambios[['Nombre', 'Sistema', 'Conteo_Físico', 'Diferencia']], hide_index=True)
+            st.dataframe(cambios[['Nombre', 'Sistema', 'Conteo_Fisico', 'Diferencia']], hide_index=True)
             
             col_b1, col_b2 = st.columns(2)
             if col_b1.button("✅ CONFIRMAR Y GUARDAR AJUSTES", type="primary", use_container_width=True):
