@@ -172,7 +172,7 @@ def conectar_sheets():
         try: ws_gas = sh.worksheet("Gastos")
         except:
             ws_gas = sh.add_worksheet("Gastos", 1000, 8)
-            ws_gas.append_row(["Timestamp", "Fecha", "Tipo", "Categoria", "Descripcion", "Monto", "Responsable", "Banco_Origen"])
+            ws_gas.append_row(["Timestamp","Fecha","Tipo","Categoria","Descripcion","Monto","Metodo_Pago","Banco_Origen","Responsable"])
 
         return sh, ws_inv, ws_map, ws_hist, ws_gas
     except Exception as e:
@@ -486,12 +486,13 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             datos_gasto = [
                 timestamp,
                 fecha,
-                "Costo de Venta",    # Tipo fijo para separar en P&L
-                "Compra Inventario", # Categoría
+                "Costo de Venta",
+                "Compra Inventario",
                 descripcion_gasto,
-                monto_total_gasto,   # Monto Total Factura
-                "Módulo Compras",
-                info_pago['Origen']  # Banco seleccionado
+                monto_total_gasto,
+                info_pago['Origen'],  # Metodo_Pago / cuenta usada
+                info_pago['Origen'],  # Banco_Origen
+                "Módulo Compras"      # Responsable
             ]
             ws_gas.append_row(datos_gasto)
             logs.append(f"💰 Gasto Registrado: ${monto_total_gasto:,.0f} desde {info_pago['Origen']}")
@@ -778,6 +779,13 @@ def main():
                 else:
                     st.error("Error guardando datos.")
                     for l in logs: st.error(l)
+
+def normalizar_id_producto(id_prod):
+    if pd.isna(id_prod):
+        return ""
+    s = str(id_prod).strip()
+    s = s.replace(" ", "").replace(",", "").replace(".", "")
+    return s.upper()
 
 def actualizar_stock_gsheets(ws_inv, id_producto, unidades_sumar):
     try:

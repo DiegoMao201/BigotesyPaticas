@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
 import gspread
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import json
 import urllib.parse
 import jinja2
 from weasyprint import HTML
 from io import BytesIO
 import io
+import pytz
 
 # --- CONFIGURACIÓN Y CONEXIÓN ---
 def configurar_pagina():
@@ -190,37 +191,31 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
     st.markdown("### 🛒 Buscar y Agregar Producto")
     df_inv = leer_datos(ws_inv)
     if not df_inv.empty:
-        # SOLUCIÓN: Normaliza los IDs antes de usarlos
         if 'ID_Producto_Norm' not in df_inv.columns:
             df_inv['ID_Producto_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
-        opciones = []
-        id_map = {}
+        opciones, id_map = [], {}
         for _, row in df_inv.iterrows():
-            stock = int(row['Stock'])
-            precio = int(row['Precio'])
-            nombre = row['Nombre']
-            icon = "🔴" if stock == 0 else "🟡" if stock <= 5 else "🟢"
-            display = f"{icon} {nombre} | Stock: {stock} | ${precio:,}"
-            opciones.append(display)
-            id_map[display] = row['ID_Producto_Norm']
+            stock = int(row['Stock']); precio = int(row['Precio']); nombre = row['Nombre']
+            display = f"{nombre} | Stock: {stock} | ${precio:,}"
+            opciones.append(display); id_map[display] = row['ID_Producto_Norm']
 
         producto_sel = st.selectbox("Producto", opciones, help="Busca por nombre, stock o precio")
         id_prod_sel_norm = id_map[producto_sel]
         prod_row = df_inv[df_inv['ID_Producto_Norm'] == id_prod_sel_norm].iloc[0]
-        st.info(f"{icon} Stock disponible: {prod_row['Stock']} | Precio: ${prod_row['Precio']:,.0f}")
-        cantidad = st.number_input("Cantidad", min_value=1, value=1, max_value=int(prod_row['Stock']) if int(prod_row['Stock']) > 0 else 1, key="cantidad_agregar")
+
+        st.caption(f"{prod_row['Nombre']} · Stock {int(prod_row['Stock'])} · ${int(prod_row['Precio']):,}")
+        cantidad = st.number_input("Cantidad", min_value=1, value=1, max_value=max(int(prod_row['Stock']),1), key="cantidad_agregar")
         precio_mod = st.number_input("Precio Unitario", min_value=0, value=int(prod_row['Precio']), key="precio_agregar")
         descuento = st.number_input("Descuento", min_value=0, value=0, key="descuento_agregar")
         if st.button("Agregar al Carrito", help="Agrega el producto al carrito"):
             existe = False
             for item in st.session_state.carrito:
                 if item["ID_Producto"] == prod_row['ID_Producto']:
-                    item["Cantidad"] += cantidad
+                    item["Cantidad"] = cantidad
                     item["Precio"] = precio_mod
                     item["Descuento"] = descuento
                     item["Subtotal"] = (precio_mod - descuento) * item["Cantidad"]
-                    existe = True
-                    break
+                    existe = True; break
             if not existe:
                 subtotal = (precio_mod - descuento) * cantidad
                 st.session_state.carrito.append({
@@ -231,7 +226,7 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
                     "Descuento": descuento,
                     "Subtotal": subtotal
                 })
-            st.success(f"{cantidad} x {prod_row['Nombre']} agregado/modificado en el carrito.")
+            st.success(f"{prod_row['Nombre']} actualizado en el carrito.")
 
     # --- CARRITO VISUAL Y EDICIÓN ---
     if st.session_state.carrito:
@@ -246,6 +241,7 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
             st.session_state.carrito.pop(selected_row)
             st.success("Producto eliminado del carrito.")
             st.rerun()
+
         edited = st.data_editor(
             df_carrito,
             key="carrito_editor",
@@ -275,8 +271,8 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
         tipo_entrega = st.selectbox("Tipo de Entrega", ["Local", "Envío a Domicilio"])
         direccion = st.text_input("Dirección de Entrega", value=st.session_state.cliente_actual.get('Direccion', ''))
         if st.button("Facturar y Guardar Venta", key="btn_factura", help="Genera la factura y guarda la venta"):
-            id_venta = f"VEN-{int(datetime.now().timestamp())}"
-            fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            id_venta = f"VEN-{int(now_co().timestamp())}"
+            fecha = now_co().strftime("%Y-%m-%d %H:%M:%S")
             items_str = ", ".join([f"{x['Cantidad']}x{x['Nombre_Producto']}" for x in st.session_state.carrito])
             total = sum([x['Subtotal'] for x in st.session_state.carrito])
             ws_ven.append_row([
@@ -333,49 +329,55 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
     df_v = leer_datos(ws_ven)
     df_g = leer_datos(ws_gas)
     df_cie = leer_datos(ws_cie)
-    hoy = datetime.now().date()
+    hoy = now_co().date()
 
-    # --- Ventas del día ---
-    ventas_hoy = df_v[df_v['Fecha'].dt.date == hoy] if not df_v.empty else pd.DataFrame()
-    ventas_pagadas = ventas_hoy[ventas_hoy['Estado_Envio'].isin(["Entregado", "Pagado"])]
-    ventas_pendientes = ventas_hoy[ventas_hoy['Estado_Envio'].isin(["Pendiente", "En camino"])]
+    # --- Selector de fecha para cargar/editar cajas previas ---
+    fecha_sel = st.date_input("Selecciona la fecha de la caja a revisar/editar", value=hoy)
 
-    # --- Costo de mercancía y margen ---
-    if 'Costo_Total' in ventas_pagadas.columns:
-        costo_mercancia = ventas_pagadas['Costo_Total'].sum()
-    else:
-        costo_mercancia = 0.0  # Si no tienes el campo, puedes calcularlo sumando el costo de cada producto vendido
+    # Buscar si ya existe cierre para la fecha seleccionada
+    cierre_existente = df_cie[df_cie['Fecha'].dt.date == fecha_sel] if not df_cie.empty else pd.DataFrame()
+    row_cierre = cierre_existente.iloc[-1] if not cierre_existente.empty else None
+    row_number = (cierre_existente.index[-1] + 2) if not cierre_existente.empty else None  # +2 por header en Sheets
 
-    total_ventas = ventas_pagadas['Total'].sum()
-    margen_ganado = total_ventas - costo_mercancia
+    # --- Ventas del día seleccionado ---
+    ventas_dia = df_v[df_v['Fecha'].dt.date == fecha_sel] if not df_v.empty else pd.DataFrame()
+    ventas_pagadas = ventas_dia[ventas_dia['Estado_Envio'].isin(["Entregado", "Pagado"])]
+    ventas_pendientes = ventas_dia[ventas_dia['Estado_Envio'].isin(["Pendiente", "En camino"])]
 
-    # --- Gastos del día ---
-    gastos_hoy = df_g[df_g['Fecha'] == hoy.strftime("%Y-%m-%d")] if not df_g.empty else pd.DataFrame()
-    gastos_efectivo = gastos_hoy[gastos_hoy['Metodo_Pago'] == "Efectivo"]['Monto'].sum() if 'Metodo_Pago' in gastos_hoy.columns else 0.0
+    # --- Gastos del día seleccionado (flujo único con pestaña Gastos) ---
+    gastos_dia = df_g[df_g['Fecha'] == fecha_sel.strftime("%Y-%m-%d")] if not df_g.empty else pd.DataFrame()
+    gastos_efectivo = gastos_dia[gastos_dia['Metodo_Pago'] == "Efectivo"]['Monto'].sum() if 'Metodo_Pago' in gastos_dia.columns else 0.0
 
-    # --- Base inicial y consignaciones ---
-    base_inicial = st.number_input("Base Inicial (Efectivo en caja al abrir)", min_value=0.0, value=float(df_cie['Saldo_Real'].iloc[-1]) if not df_cie.empty else 0.0)
-    dinero_a_bancos = st.number_input("Dinero a Bancos (consignaciones)", min_value=0.0, value=0.0)
+    # --- Prefills: si hay cierre previo, cargamos sus valores; si no, base inicial es saldo real del día anterior ---
+    saldo_real_prev = 0.0
+    if not df_cie.empty:
+        prev = df_cie[df_cie['Fecha'].dt.date == (fecha_sel - timedelta(days=1))]
+        if not prev.empty:
+            saldo_real_prev = prev.iloc[-1].get('Saldo_Real', 0.0)
 
-    # --- Ventas por método de pago ---
+    base_inicial_default = row_cierre['Base_Inicial'] if row_cierre is not None else saldo_real_prev
     ventas_efectivo = ventas_pagadas[ventas_pagadas['Metodo_Pago'] == "Efectivo"]['Total'].sum()
     ventas_electronico = ventas_pagadas[ventas_pagadas['Metodo_Pago'].isin(["Nequi", "Daviplata", "Transferencia", "Tarjeta"])]["Total"].sum()
 
-    # --- Saldos ---
+    base_inicial = st.number_input("Base Inicial (Efectivo en caja al abrir)", min_value=0.0, value=float(base_inicial_default))
+    dinero_a_bancos = st.number_input("Dinero a Bancos (consignaciones)", min_value=0.0, value=float(row_cierre['Dinero_A_Bancos']) if row_cierre is not None else 0.0)
+
     saldo_teorico = base_inicial + ventas_efectivo - gastos_efectivo - dinero_a_bancos
-    saldo_real = st.number_input("Saldo Real contado en caja", min_value=0.0, value=saldo_teorico)
+    saldo_real = st.number_input("Saldo Real contado en caja", min_value=0.0, value=float(row_cierre['Saldo_Real']) if row_cierre is not None else saldo_teorico)
     diferencia = saldo_real - saldo_teorico
+
+    notas = st.text_area("Notas del cuadre", value=row_cierre['Notas'] if row_cierre is not None and 'Notas' in row_cierre else "")
 
     # --- Visualización de métricas ---
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Ventas Efectivo", f"${ventas_efectivo:,.0f}")
     col2.metric("Ventas Electrónico", f"${ventas_electronico:,.0f}")
-    col3.metric("Costo Mercancía", f"${costo_mercancia:,.0f}")
-    col4.metric("Margen Ganado", f"${margen_ganado:,.0f}")
+    col3.metric("Gastos Efectivo", f"${gastos_efectivo:,.0f}")
+    col4.metric("Base Inicial", f"${base_inicial:,.0f}")
 
     col5, col6, col7 = st.columns(3)
-    col5.metric("Gastos Efectivo", f"${gastos_efectivo:,.0f}")
-    col6.metric("Saldo Teórico", f"${saldo_teorico:,.0f}")
+    col5.metric("Saldo Teórico", f"${saldo_teorico:,.0f}")
+    col6.metric("Saldo Real", f"${saldo_real:,.0f}")
     col7.metric("Diferencia", f"${diferencia:,.0f}")
 
     # --- Registro rápido de gastos desde el cuadre ---
@@ -388,15 +390,17 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
             metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"])
             banco = st.text_input("Banco/Origen", "")
             if st.form_submit_button("Registrar Gasto"):
+                ts = int(now_co().timestamp())
                 ws_gas.append_row([
-                    f"GAS-{int(datetime.now().timestamp())}",
-                    datetime.now().strftime("%Y-%m-%d"),
+                    f"GAS-{ts}",
+                    now_co().strftime("%Y-%m-%d"),
                     tipo,
                     categoria,
                     descripcion,
                     monto,
-                    metodo_pago,
-                    banco
+                    metodo_pago,   # Metodo_Pago
+                    banco,         # Banco_Origen
+                    "Módulo POS"   # Responsable
                 ])
                 st.success("Gasto registrado correctamente.")
                 st.rerun()
@@ -416,21 +420,27 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
     # --- Notas y guardar cuadre ---
     notas = st.text_area("Notas del cuadre", "")
     if st.button("Guardar Cuadre en Google Sheets"):
-        ws_cie.append_row([
-            hoy.strftime("%Y-%m-%d"),
-            datetime.now().strftime("%H:%M:%S"),
+        fila_valores = [
+            fecha_sel.strftime("%Y-%m-%d"),
+            now_co().strftime("%H:%M:%S"),
             base_inicial,
             ventas_efectivo,
+            ventas_electronico,
             gastos_efectivo,
             dinero_a_bancos,
             saldo_teorico,
             saldo_real,
             diferencia,
             notas,
-            costo_mercancia,
-            margen_ganado
-        ])
-        st.success("Cuadre guardado en Google Sheets.")
+            0.0,  # costo_mercancia (ajusta si lo calculas)
+            ventas_efectivo + ventas_electronico - gastos_efectivo  # margen_ganado aprox
+        ]
+        if row_number:
+            ws_cie.update(f"A{row_number}:M{row_number}", [fila_valores])
+            st.success("Cierre actualizado (sin crear fila nueva).")
+        else:
+            ws_cie.append_row(fila_valores)
+            st.success("Cierre guardado como nuevo.")
 
 def tab_resumen(ws_ven, ws_gas, ws_cie):
     st.header("📊 Resumen y Búsquedas")
@@ -490,43 +500,45 @@ def tab_clientes(ws_cli, ws_ven):
     else:
         st.write("Mascotas: " + str(cliente.get('Mascota', '')))
     with st.expander("➕ Crear/Editar Cliente"):
-        with st.form("form_cliente"):
-            cedula = st.text_input("Cédula")
-            nombre = st.text_input("Nombre")
-            telefono = st.text_input("Teléfono")
-            email = st.text_input("Email")
-            direccion = st.text_input("Dirección")
-            registro = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if 'cliente_guardado' not in st.session_state:
+            st.session_state.cliente_guardado = False
+        if 'last_welcome_link' not in st.session_state:
+            st.session_state.last_welcome_link = None
 
-            st.markdown("#### Mascotas del Cliente")
-            num_mascotas = st.number_input("¿Cuántas mascotas tiene?", min_value=1, max_value=5, value=1)
-            mascotas = []
-            for i in range(num_mascotas):
-                st.markdown(f"##### Mascota #{i+1}")
-                nombre_mascota = st.text_input(f"Nombre Mascota #{i+1}", key=f"mascota_nombre_{i}")
-                tipo_mascota = st.selectbox(f"Tipo Mascota #{i+1}", ["Perro", "Gato", "Otro"], key=f"mascota_tipo_{i}")
-                cumple_mascota = st.date_input(f"Cumpleaños Mascota #{i+1}", key=f"mascota_cumple_{i}")
-                mascotas.append({
-                    "Nombre": nombre_mascota,
-                    "Tipo": tipo_mascota,
-                    "Cumpleaños": cumple_mascota.strftime("%Y-%m-%d")
-                })
+        cedula = st.text_input("Cédula", key="cli_cedula")
+        nombre = st.text_input("Nombre", key="cli_nombre")
+        telefono = st.text_input("Teléfono", key="cli_telefono")
+        email = st.text_input("Email", key="cli_email")
+        direccion = st.text_input("Dirección", key="cli_direccion")
+        registro = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            # Para mostrar en la tabla principal, tomamos la primera mascota
+        st.markdown("#### Mascotas del Cliente")
+        num_mascotas = st.number_input("¿Cuántas mascotas tiene?", min_value=1, max_value=5, value=1, key="cli_num_mascotas")
+        mascotas = []
+        for i in range(num_mascotas):
+            st.markdown(f"##### Mascota #{i+1}")
+            nombre_mascota = st.text_input(f"Nombre Mascota #{i+1}", key=f"cli_mascota_nombre_{i}")
+            tipo_mascota = st.selectbox(f"Tipo Mascota #{i+1}", ["Perro", "Gato", "Otro"], key=f"cli_mascota_tipo_{i}")
+            cumple_mascota = st.date_input(f"Cumpleaños Mascota #{i+1}", key=f"cli_mascota_cumple_{i}")
+            mascotas.append({
+                "Nombre": nombre_mascota,
+                "Tipo": tipo_mascota,
+                "Cumpleaños": cumple_mascota.strftime("%Y-%m-%d")
+            })
+
+        if st.button("Guardar Cliente", type="primary", use_container_width=True):
+            info_mascotas_json = json.dumps(mascotas)
             mascota_principal = mascotas[0]['Nombre'] if mascotas else ""
             tipo_principal = mascotas[0]['Tipo'] if mascotas else ""
             cumple_principal = mascotas[0]['Cumpleaños'] if mascotas else ""
-
-            if st.form_submit_button("Guardar Cliente"):
-                info_mascotas_json = json.dumps(mascotas)
-                ws_cli.append_row([
-                    cedula, nombre, telefono, email, direccion,
-                    mascota_principal, tipo_principal, cumple_principal,
-                    registro, info_mascotas_json
-                ])
-                st.success("Cliente guardado correctamente con sus mascotas.")
-                # Mensaje de bienvenida
-                mensaje = f"""¡Hola {nombre}! 👋
+            ws_cli.append_row([
+                cedula, nombre, telefono, email, direccion,
+                mascota_principal, tipo_principal, cumple_principal,
+                registro, info_mascotas_json
+            ])
+            st.session_state.cliente_guardado = True
+            # Generar link de bienvenida y guardarlo
+            mensaje = f"""¡Hola {nombre}! 👋
 Bienvenido/a a la familia Bigotes y Patitas 🐾.
 
 Nos alegra mucho tenerte con nosotros y que confíes en nosotros para consentir a tus peluditos.
@@ -535,12 +547,27 @@ Recuerda que puedes contactarnos para cualquier cosa que necesite {mascota_princ
 
 ¡Un abrazo y feliz día! 🐶🐱
 """
-                telefono_clean = str(telefono).replace(" ", "").replace("+", "").replace("-", "")
-                if len(telefono_clean) == 10 and not telefono_clean.startswith("57"):
-                    telefono_clean = "57" + telefono_clean
-                link_wa = f"https://wa.me/{telefono_clean}?text={urllib.parse.quote(mensaje)}"
-                st.markdown(f"""<a href="{link_wa}" target="_blank" style="display:inline-block; background:#25D366; color:white; padding:12px 20px; border-radius:8px; text-decoration:none; font-weight:bold; margin-top:10px;">📲 Enviar Bienvenida por WhatsApp</a>""", unsafe_allow_html=True)
-                st.rerun()
+            telefono_clean = str(telefono).replace(" ", "").replace("+", "").replace("-", "")
+            if len(telefono_clean) == 10 and not telefono_clean.startswith("57"):
+                telefono_clean = "57" + telefono_clean
+            st.session_state.last_welcome_link = f"https://wa.me/{telefono_clean}?text={urllib.parse.quote(mensaje)}"
+            st.success("Cliente guardado correctamente con sus mascotas.")
+            reset_form_cliente()
+
+        if st.session_state.last_welcome_link:
+            st.markdown(
+                f"""<a href="{st.session_state.last_welcome_link}" target="_blank" style="display:inline-block; background:#25D366; color:white; padding:12px 20px; border-radius:8px; text-decoration:none; font-weight:bold; margin-top:10px;">📲 Enviar Bienvenida por WhatsApp</a>""",
+                unsafe_allow_html=True
+            )
+
+def reset_form_cliente():
+    for k in ["cli_cedula","cli_nombre","cli_telefono","cli_email","cli_direccion","cli_num_mascotas"]:
+        st.session_state.pop(k, None)
+    for i in range(5):
+        st.session_state.pop(f"cli_mascota_nombre_{i}", None)
+        st.session_state.pop(f"cli_mascota_tipo_{i}", None)
+        st.session_state.pop(f"cli_mascota_cumple_{i}", None)
+    st.session_state.cliente_guardado = False
 
 def tab_despachos(ws_ven):
     st.header("🚚 Despachos y Ventas Pendientes")
@@ -571,10 +598,17 @@ def tab_gastos(ws_gas):
             metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"])
             banco = st.text_input("Banco/Origen")
             if st.form_submit_button("Registrar Gasto"):
+                ts = int(now_co().timestamp())
                 ws_gas.append_row([
-                    f"GAS-{int(datetime.now().timestamp())}",
-                    fecha.strftime("%Y-%m-%d"),
-                    tipo, categoria, descripcion, monto, metodo_pago, banco
+                    f"GAS-{ts}",
+                    now_co().strftime("%Y-%m-%d"),
+                    tipo,
+                    categoria,
+                    descripcion,
+                    monto,
+                    metodo_pago,   # Metodo_Pago
+                    banco,         # Banco_Origen
+                    "Módulo POS"   # Responsable
                 ])
                 st.success("Gasto registrado correctamente.")
                 st.rerun()

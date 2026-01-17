@@ -460,7 +460,7 @@ def main():
 
         df_audit.rename(columns={'Stock': 'Sistema'}, inplace=True)
         # Inicializamos Conteo Físico igual al Sistema (asumiendo que está bien hasta que se diga lo contrario)
-        df_audit['Conteo_Físico'] = df_audit['Sistema']
+        df_audit['Conteo_Fisico'] = df_audit['Sistema']
         df_audit['Diferencia'] = 0
         df_audit['Acción'] = "✅ OK"
 
@@ -741,6 +741,13 @@ def actualizar_stock_gsheets(ws_inv, id_producto, unidades_sumar):
                 break
     except Exception as e:
         print(f"Error stock: {e}")
+
+def normalizar_id_producto(id_prod):
+    if pd.isna(id_prod):
+        return ""
+    s = str(id_prod).strip()
+    s = s.replace(" ", "").replace(",", "").replace(".", "")
+    return s.upper()
 
 if __name__ == "__main__":
     main()
