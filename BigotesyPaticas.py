@@ -9,6 +9,7 @@ from weasyprint import HTML
 from io import BytesIO
 import io
 import pytz
+import numpy as np  # <--- agrega este import
 
 TZ_CO = pytz.timezone("America/Bogota")
 def now_co():
@@ -47,6 +48,12 @@ def leer_datos(ws):
     except Exception as e:
         st.error(f"🔴 Error leyendo datos de Google Sheets: {e}")
         return pd.DataFrame()
+
+def sanitizar_para_sheet(val):
+    if isinstance(val, (np.int64, np.int32)): return int(val)
+    if isinstance(val, (np.float64, np.float32)): return float(val)
+    if isinstance(val, (pd.Timestamp, datetime, date)): return val.strftime("%Y-%m-%d %H:%M:%S") if isinstance(val, datetime) else val.strftime("%Y-%m-%d")
+    return val
 
 # --- FUNCIONES DE NEGOCIO (puedes expandirlas según tu lógica actual) ---
 
@@ -473,8 +480,10 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
             diferencia,
             notas,
             0.0,  # costo_mercancia (ajusta si lo calculas)
-            ventas_efectivo + ventas_electronico - gastos_efectivo  # margen_ganado aprox
+            ventas_efectivo + ventas_electronico - gastos_efectivo
         ]
+        fila_valores = [sanitizar_para_sheet(x) for x in fila_valores]
+
         if row_number:
             ws_cie.update(f"A{row_number}:M{row_number}", [fila_valores])
             st.success("Cierre actualizado (sin crear fila nueva).")
