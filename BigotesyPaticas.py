@@ -36,9 +36,27 @@ def conectar_google_sheets():
 
 def leer_datos(ws):
     try:
-        data = ws.get_all_records()
-        df = pd.DataFrame(data)
-        df.columns = df.columns.str.strip()
+        raw = ws.get_all_values()
+        if not raw: 
+            return pd.DataFrame()
+        header = raw[0]
+
+        # Reemplaza encabezados vacíos y hace únicos los duplicados
+        seen = {}
+        clean_header = []
+        for i, h in enumerate(header):
+            if not h or h.strip() == "":
+                h = f"Col_{i+1}"
+            h = h.strip()
+            if h in seen:
+                seen[h] += 1
+                h = f"{h}_{seen[h]}"
+            else:
+                seen[h] = 0
+            clean_header.append(h)
+
+        df = pd.DataFrame(raw[1:], columns=clean_header)
+
         for col in ['Precio', 'Stock', 'Costo', 'Monto', 'Total', 'Costo_Total', 'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 'Dinero_A_Bancos', 'Saldo_Teorico', 'Saldo_Real', 'Diferencia']:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
