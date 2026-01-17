@@ -448,24 +448,28 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
     # --- Registro rápido de gastos desde el cuadre ---
     with st.expander("➕ Registrar Gasto Rápido"):
         with st.form("form_gasto_cuadre"):
-            tipo = st.selectbox("Tipo de Gasto", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"])
-            categoria = st.text_input("Categoría", "General")
-            descripcion = st.text_area("Descripción")
-            monto = st.number_input("Monto", min_value=0.0)
-            metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"])
-            banco = st.text_input("Banco/Origen", "")
+            tipo_gasto = st.selectbox("Tipo de Gasto", ["Variable", "Fijo"], key="tipo_gasto_cuadre")
+            opciones_var = ["Compra Inventario", "Mantenimiento", "Publicidad", "Transporte", "Servicios Públicos", "Otro"]
+            opciones_fijo = ["Arriendo", "Nómina", "Seguridad Social", "Internet", "Servicios Públicos", "Publicidad", "Mantenimiento", "Otro"]
+            categoria = st.selectbox("Categoría", opciones_var if tipo_gasto == "Variable" else opciones_fijo, key="categoria_cuadre")
+            descripcion_extra = ""
+            if categoria == "Otro":
+                descripcion_extra = st.text_input("Describe el gasto (Otro)", "", key="desc_otro_cuadre")
+            descripcion = st.text_area("Descripción", value=descripcion_extra, key="desc_gasto_cuadre")
+            monto = st.number_input("Monto", min_value=0.0, key="monto_gasto_cuadre")
+            metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"], key="metodo_gasto_cuadre")
+            banco = st.text_input("Banco/Origen", "", key="banco_gasto_cuadre")
             if st.form_submit_button("Registrar Gasto"):
                 ts = int(now_co().timestamp())
                 ws_gas.append_row([
                     f"GAS-{ts}",
                     now_co().strftime("%Y-%m-%d"),
-                    tipo,
+                    tipo_gasto,
                     categoria,
                     descripcion,
                     monto,
-                    metodo_pago,   # Metodo_Pago
-                    banco,         # Banco_Origen
-                    "Módulo POS"   # Responsable
+                    metodo_pago,
+                    banco
                 ])
                 st.success("Gasto registrado correctamente.")
                 st.rerun()
@@ -657,25 +661,28 @@ def tab_gastos(ws_gas):
     st.dataframe(df_g, use_container_width=True)
     with st.expander("➕ Registrar Nuevo Gasto"):
         with st.form("form_gasto"):
-            fecha = st.date_input("Fecha", value=date.today())
-            tipo = st.text_input("Tipo de Gasto")
-            categoria = st.text_input("Categoría")
-            descripcion = st.text_area("Descripción")
+            tipo_gasto = st.selectbox("Tipo de Gasto", ["Variable", "Fijo"], key="tipo_gasto_form")
+            opciones_var = ["Compra Inventario", "Mantenimiento", "Publicidad", "Transporte", "Servicios Públicos", "Otro"]
+            opciones_fijo = ["Arriendo", "Nómina", "Seguridad Social", "Internet", "Servicios Públicos", "Publicidad", "Mantenimiento", "Otro"]
+            categoria = st.selectbox("Categoría", opciones_var if tipo_gasto == "Variable" else opciones_fijo, key="categoria_form")
+            descripcion_extra = ""
+            if categoria == "Otro":
+                descripcion_extra = st.text_input("Describe el gasto (Otro)", "")
+            descripcion = st.text_area("Descripción", value=descripcion_extra)
             monto = st.number_input("Monto", min_value=0.0)
             metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"])
             banco = st.text_input("Banco/Origen")
             if st.form_submit_button("Registrar Gasto"):
                 ts = int(now_co().timestamp())
                 ws_gas.append_row([
-                    f"GAS-{ts}",
+                    f"GAS-{ts}",                 # ID_Gasto
                     now_co().strftime("%Y-%m-%d"),
-                    tipo,
+                    tipo_gasto,
                     categoria,
                     descripcion,
                     monto,
-                    metodo_pago,   # Metodo_Pago
-                    banco,         # Banco_Origen
-                    "Módulo POS"   # Responsable
+                    metodo_pago,
+                    banco
                 ])
                 st.success("Gasto registrado correctamente.")
                 st.rerun()

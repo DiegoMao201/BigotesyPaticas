@@ -175,7 +175,7 @@ def conectar_sheets():
         try: ws_gas = sh.worksheet("Gastos")
         except:
             ws_gas = sh.add_worksheet("Gastos", 1000, 8)
-            ws_gas.append_row(["Timestamp","Fecha","Tipo","Categoria","Descripcion","Monto","Metodo_Pago","Banco_Origen","Responsable"])
+            ws_gas.append_row(["ID_Gasto","Fecha","Tipo_Gasto","Categoria","Descripcion","Monto","Metodo_Pago","Banco_Origen"])
 
         return sh, ws_inv, ws_map, ws_hist, ws_gas
     except Exception as e:
@@ -490,16 +490,16 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
         try:
             descripcion_gasto = f"[PROV: {meta_xml['Proveedor']}] [REF: {meta_xml['Folio']}] - Compra Mercancía"
             monto_total_gasto = meta_xml['Total'] + float(info_pago.get("Transporte", 0.0)) - float(info_pago.get("Descuento", 0.0))
+            ts = int(time.time())
             datos_gasto = [
-                timestamp,
+                f"GAS-{ts}",
                 fecha,
-                "Costo de Venta",
-                "Compra Inventario",
+                "Variable",          # Tipo_Gasto
+                "Compra Inventario", # Categoria
                 descripcion_gasto,
                 monto_total_gasto,
-                info_pago['Origen'],  # Metodo_Pago / cuenta usada
-                info_pago['Origen'],  # Banco_Origen
-                "Módulo Compras"      # Responsable
+                info_pago['Origen'], # Metodo_Pago
+                info_pago['Origen']  # Banco_Origen
             ]
             ws_gas.append_row(datos_gasto)
             logs.append(f"💰 Gasto Registrado: ${monto_total_gasto:,.0f} desde {info_pago['Origen']}")
