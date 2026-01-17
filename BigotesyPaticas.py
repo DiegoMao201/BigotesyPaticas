@@ -610,7 +610,25 @@ def tab_clientes(ws_cli, ws_ven):
         st.markdown(f"**Dirección:** {cliente.get('Direccion','')}")
         st.markdown(f"**Mascota:** {cliente.get('Mascota','')}  |  **Tipo:** {cliente.get('Tipo_Mascota','')}  |  **Cumple:** {cliente.get('Cumpleaños_mascota','')}")
         st.markdown("---")
-    # ...resto del bloque Crear/Editar Cliente igual...
+        # Render limpio de mascotas (evita mostrar el JSON crudo)
+        info_mascotas = cliente.get('Info_Mascotas', '')
+        mascotas_render = []
+        if info_mascotas:
+            try:
+                lista = json.loads(str(info_mascotas))
+                if isinstance(lista, list):
+                    for m in lista:
+                        mascotas_render.append(f"{m.get('Nombre','')} | Tipo: {m.get('Tipo','')} | Cumple: {m.get('Cumpleaños','')}")
+            except:
+                pass
+        if not mascotas_render:
+            # Fallback a columnas planas
+            mascotas_render = [f"{cliente.get('Mascota','')} | Tipo: {cliente.get('Tipo_Mascota','')} | Cumple: {cliente.get('Cumpleaños_mascota','')}"]
+
+        st.markdown("**Mascotas:**")
+        for linea in mascotas_render:
+            st.markdown(f"- {linea}")
+        st.markdown("---")
 
     with st.expander("➕ Crear/Editar Cliente"):
         if 'cliente_guardado' not in st.session_state:
