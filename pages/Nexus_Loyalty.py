@@ -352,9 +352,8 @@ def main():
                     mascota = row.get('Mascota', 'tu bebé')
                     tel = row.get('Telefono', '')
                     
-                    msg_hoy = f"¡FELIZ CUMPLEAÑOS {str(mascota).upper()}! 🎂🎈🐶🐱\n\nHola {nom}, sabemos que hoy es un día súper especial porque {mascota} celebra una nueva vuelta al sol. 🌟❤️\n\nEn Bigotes y Patitas queremos ser parte de la fiesta. 🎉\n\n🎁 Tienen un REGALO DE CUMPLEAÑOS: **{regalo_hoy}**. Válido por esta semana.\n\n¡Vengan a visitarnos para darle su abrazo! 🐾✨"
-                    
-                    link = link_whatsapp(tel, msg_hoy)
+                    msg = msg_cumple(mascota, regalo_hoy)  # o regalo_mes
+                    link = link_whatsapp(tel, msg)
                     if link:
                         st.markdown(f"🎈 **{mascota}** (Dueño: {nom}) → [📲 Enviar WhatsApp de Cumpleaños]({link})")
                 
@@ -382,9 +381,9 @@ def main():
                         tel = row.get('Telefono', '')
                         fecha_txt = str(row.get('Cumpleaños_mascota', 'este mes'))
                         
-                        msg_mes = f"¡Hola {nom}! 🐾 Vimos en nuestro calendario que es el mes de cumpleaños de {mascota} ({fecha_txt})! 🎂🎈 Queremos adelantarnos: Tienen **{regalo_mes}** para que celebremos juntos. 🎁 ¡Los esperamos! ✨ *Bigotes y Paticas*"
+                        msg = f"¡Hola {nom}! 🐾 Vimos en nuestro calendario que es el mes de cumpleaños de {mascota} ({fecha_txt})! 🎂🎈 Queremos adelantarnos: Tienen **{regalo_mes}** para que celebremos juntos. 🎁 ¡Los esperamos! ✨ *Bigotes y Paticas*"
                         
-                        link = link_whatsapp(tel, msg_mes)
+                        link = link_whatsapp(tel, msg)
                         if link:
                             st.markdown(f"🗓 **{mascota}** (Fecha: {fecha_txt}) → [📲 Enviar Promo Mes]({link})")
             else:
@@ -415,7 +414,7 @@ def main():
                 prod = str(row.get('Ultimo_Producto', 'su alimento')).split('(')[0]
                 tel = row.get('Telefono', '')
                 
-                msg = f"¡Hola {nom}! 🐾 Soy el asistente virtual de Bigotes y Patitas 🤖❤️. Mi radar me dice que a {mascota} se le podría estar acabando su {prod}. 🥣😟 ¡No queremos pancitas vacías! ¿Te enviamos su refil hoy mismo a casa? 🚚💨"
+                msg = msg_recompra(nom, mascota, prod)
                 link = link_whatsapp(tel, msg)
                 
                 if link:
@@ -508,7 +507,7 @@ def main():
                     mascota = row.get('Mascota', 'tu mascota')
                     tel = row.get('Telefono', '')
                     
-                    msg = f"¡Hola {nom}! 🐾 Notamos que hace mucho no consentimos a {mascota} 🥺. ¡Queremos que vuelvan a la familia Bigotes y Patitas! ❤️ Solo por responder hoy, tienen: {gancho}. 😲🐾 ¿Se lo enviamos? 🚚💨"
+                    msg = msg_inactivo(nom, mascota, gancho)
                     link = link_whatsapp(tel, msg)
                     
                     if link:

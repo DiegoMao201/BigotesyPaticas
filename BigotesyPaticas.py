@@ -144,6 +144,39 @@ def normalizar_id_producto(id_prod):
     s = s.replace(" ", "").replace(",", "").replace(".", "")
     return s.upper()
 
+def limpiar_tel(tel):
+    t = str(tel).replace(" ", "").replace("+", "").replace("-", "").replace("(", "").replace(")", "").strip()
+    if len(t) == 10 and not t.startswith("57"): t = "57" + t
+    return t
+
+def msg_bienvenida(nombre, mascota):
+    return f"""🐾 ¡Hola {nombre}! Bienvenido/a a Bigotes y Patitas.
+🎉 Estamos felices de consentir a {mascota or 'tu peludito'}.
+📦 Necesites comida, snacks o juguetes, aquí estamos.
+🤗 Gracias por confiar en nosotros."""
+
+def msg_venta(nombre, mascota, items_str, total):
+    return f"""🧾 Hola {nombre}, gracias por tu compra en Bigotes y Patitas.
+🐶 Mascota: {mascota or 'tu peludito'}
+🛍️ Items: {items_str}
+💰 Total: ${total:,.0f}
+🚚 Si necesitas algo más, avísanos. ¡Gracias! 🐾"""
+
+def msg_cumple(mascota, regalo):
+    return f"""🎂 ¡Feliz cumple, {mascota}! 🐾
+🎁 Tienes: {regalo}
+🧡 Gracias por ser parte de la familia Bigotes y Patitas."""
+
+def msg_recompra(nombre, mascota, prod):
+    return f"""👋 Hola {nombre}, soy tu asistente de Bigotes y Patitas.
+🥣 Creemos que a {mascota or 'tu peludito'} se le acaba su {prod}.
+🚚 ¿Te enviamos su refil hoy? ¡Estamos atentos! 🐾"""
+
+def msg_inactivo(nombre, mascota, gancho):
+    return f"""💕 Hola {nombre}, extrañamos a {mascota or 'tu peludito'} en Bigotes y Patitas.
+🎁 Tenemos: {gancho}
+🚚 ¿Te enviamos algo especial hoy? 🐾"""
+
 # --- PESTAÑAS ---
 
 def tab_pos(ws_inv, ws_cli, ws_ven):
@@ -358,20 +391,16 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
             pdf_bytes = generar_pdf_html(venta_data, st.session_state.carrito)
             st.session_state.ultimo_pdf = pdf_bytes
             st.session_state.ultima_venta_id = id_venta
-            mensaje = generar_mensaje_whatsapp(
+            mensaje = msg_venta(
                 venta_data['Cliente'],
                 venta_data['Mascota'],
-                "NUEVO",
                 items_str,
                 total
             )
             telefono = st.session_state.cliente_actual.get('Telefono', '')
-            if telefono and len(str(telefono)) >= 7:
-                tel = str(telefono)
-                if not tel.startswith('57') and len(tel) == 10:
-                    tel = '57' + tel
-                link_wa = f"https://wa.me/{tel}?text={mensaje}"
-                st.session_state.whatsapp_link = link_wa
+            tel = limpiar_tel(telefono)
+            if tel and len(tel) >= 7:
+                st.session_state.whatsapp_link = f"https://wa.me/{tel}?text={urllib.parse.quote(mensaje)}"
             st.success("¡Venta registrada y factura generada!")
             st.session_state.carrito = []
     if st.session_state.ultimo_pdf:
@@ -611,31 +640,35 @@ def tab_clientes(ws_cli, ws_ven):
             })
 
         if st.button("Guardar Cliente", type="primary", use_container_width=True):
+            cedula_clean = str(cedula).strip()
             info_mascotas_json = json.dumps(mascotas)
             mascota_principal = mascotas[0]['Nombre'] if mascotas else ""
             tipo_principal = mascotas[0]['Tipo'] if mascotas else ""
             cumple_principal = mascotas[0]['Cumpleaños'] if mascotas else ""
-            ws_cli.append_row([
-                cedula, nombre, telefono, email, direccion,
+
+            # ¿Existe ya el cliente por cédula?
+            fila_existente = None
+            if not df_c.empty and 'Cedula' in df_c.columns:
+                match = df_c[df_c['Cedula'].astype(str).str.strip() == cedula_clean]
+                if not match.empty:
+                    fila_existente = match.index[0] + 2  # +2 por el header en Sheets
+
+            valores = [
+                cedula_clean, nombre, telefono, email, direccion,
                 mascota_principal, tipo_principal, cumple_principal,
                 registro, info_mascotas_json
-            ])
-            st.session_state.cliente_guardado = True
-            # Generar link de bienvenida y guardarlo
-            mensaje = f"""¡Hola {nombre}! 👋
-Bienvenido/a a la familia Bigotes y Patitas 🐾.
+            ]
 
-Nos alegra mucho tenerte con nosotros y que confíes en nosotros para consentir a tus peluditos.
+            if fila_existente:
+                ws_cli.update(f"A{fila_existente}:J{fila_existente}", [valores])
+                st.success("Cliente ya registrado. Datos actualizados.")
+            else:
+                ws_cli.append_row(valores)
+                st.success("Cliente guardado correctamente con sus mascotas.")
 
-Recuerda que puedes contactarnos para cualquier cosa que necesite {mascota_principal} o sus amigos. ¡Estamos aquí para ayudarte!
-
-¡Un abrazo y feliz día! 🐶🐱
-"""
-            telefono_clean = str(telefono).replace(" ", "").replace("+", "").replace("-", "")
-            if len(telefono_clean) == 10 and not telefono_clean.startswith("57"):
-                telefono_clean = "57" + telefono_clean
+            mensaje = msg_bienvenida(nombre, mascota_principal)
+            telefono_clean = limpiar_tel(telefono)
             st.session_state.last_welcome_link = f"https://wa.me/{telefono_clean}?text={urllib.parse.quote(mensaje)}"
-            st.success("Cliente guardado correctamente con sus mascotas.")
             reset_form_cliente()
 
         if st.session_state.last_welcome_link:
