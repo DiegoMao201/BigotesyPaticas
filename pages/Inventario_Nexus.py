@@ -136,7 +136,9 @@ def clean_currency(x):
 def cargar_datos_completos(sh):
     # Columnas exactas requeridas
     cols_inv = ['ID_Producto', 'SKU_Proveedor', 'Nombre', 'Stock', 'Precio', 'Costo', 'Categoria']
-    cols_ven = ['ID_Venta', 'Fecha', 'Cedula_Cliente', 'Nombre_Cliente', 'Tipo_Entrega', 'Direccion_Envio', 'Estado_Envio', 'Metodo_Pago', 'Banco_Destino', 'Total', 'Items']
+    cols_ven = ['ID_Venta','Fecha','Cedula_Cliente','Nombre_Cliente','Tipo_Entrega',
+                'Direccion_Envio','Estado_Envio','Metodo_Pago','Banco_Destino',
+                'Total','Items','Items_Detalle','Costo_Total','Mascota']
     cols_prov = ['ID_Proveedor', 'Nombre_Proveedor', 'SKU_Proveedor', 'SKU_Interno', 'Factor_Pack', 'Ultima_Actualizacion', 'Email', 'Costo_Proveedor']
     cols_ord = ['ID_Orden', 'Proveedor', 'Fecha_Orden', 'Items_JSON', 'Total_Dinero', 'Estado', 'Fecha_Recepcion', 'Lead_Time_Real', 'Calificacion']
     cols_recep = ['Fecha_Recepcion', 'Folio_Factura', 'Proveedor', 'Fecha_Emision_Factura', 'Dias_Entrega', 'Total_Items', 'Total_Costo']
@@ -191,6 +193,14 @@ def cargar_datos_completos(sh):
         df_ord['Total_Dinero'] = df_ord['Total_Dinero'].apply(clean_currency)
     else:
         df_ord = pd.DataFrame(columns=cols_ord)
+
+    # 4. Ventas
+    if not df_ven.empty:
+        for c in cols_ven:
+            if c not in df_ven.columns: df_ven[c] = ""
+        df_ven['Costo_Total'] = pd.to_numeric(df_ven['Costo_Total'], errors='coerce').fillna(0)
+    else:
+        df_ven = pd.DataFrame(columns=cols_ven)
 
     return {
         "df_inv": df_inv, "ws_inv": ws_inv,

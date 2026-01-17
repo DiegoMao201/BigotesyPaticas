@@ -206,11 +206,35 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
         producto_sel = st.selectbox("Producto", opciones, help="Busca por nombre, stock o precio")
         id_prod_sel_norm = id_map[producto_sel]
         prod_row = df_inv[df_inv['ID_Producto_Norm'] == id_prod_sel_norm].iloc[0]
+        costo_unit = float(prod_row.get('Costo', 0))
+        precio_mod = int(prod_row['Precio'])  # Precio desde inventario (sin input manual)
 
-        st.caption(f"{prod_row['Nombre']} · Stock {int(prod_row['Stock'])} · ${int(prod_row['Precio']):,}")
+        # Descuento automático si la mascota está en su mes de cumpleaños
+        default_descuento = 0
+        try:
+            mes_actual = now_co().month
+            mascota_sel = st.session_state.mascota_seleccionada
+            info_mascotas = st.session_state.cliente_actual.get('Info_Mascotas', '')
+            cumple_mascota = None
+            if info_mascotas:
+                lista = json.loads(info_mascotas)
+                for m in lista:
+                    if m.get("Nombre") == mascota_sel:
+                        cumple_mascota = m.get("Cumpleaños")
+                        break
+            if not cumple_mascota:
+                cumple_mascota = st.session_state.cliente_actual.get("Cumpleaños_mascota", "")
+            if cumple_mascota:
+                mes_cumple = pd.to_datetime(cumple_mascota, errors='coerce').month
+                if mes_cumple == mes_actual:
+                    default_descuento = int(precio_mod * 0.10)  # 10% sugerido
+        except:
+            default_descuento = 0
+
+        st.caption(f"{prod_row['Nombre']} · Stock {int(prod_row['Stock'])} · ${precio_mod:,}")
         cantidad = st.number_input("Cantidad", min_value=1, value=1, max_value=max(int(prod_row['Stock']),1), key="cantidad_agregar")
-        precio_mod = st.number_input("Precio Unitario", min_value=0, value=int(prod_row['Precio']), key="precio_agregar")
-        descuento = st.number_input("Descuento", min_value=0, value=0, key="descuento_agregar")
+        descuento = st.number_input("Descuento", min_value=0, value=default_descuento, key="descuento_agregar")
+
         if st.button("Agregar al Carrito", help="Agrega el producto al carrito"):
             existe = False
             for item in st.session_state.carrito:
@@ -218,6 +242,7 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
                     item["Cantidad"] = cantidad
                     item["Precio"] = precio_mod
                     item["Descuento"] = descuento
+                    item["Costo"] = costo_unit
                     item["Subtotal"] = (precio_mod - descuento) * item["Cantidad"]
                     existe = True; break
             if not existe:
@@ -228,6 +253,7 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
                     "Cantidad": cantidad,
                     "Precio": precio_mod,
                     "Descuento": descuento,
+                    "Costo": costo_unit,
                     "Subtotal": subtotal
                 })
             st.success(f"{prod_row['Nombre']} actualizado en el carrito.")
@@ -255,6 +281,7 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
                 "Cantidad": st.column_config.NumberColumn("Cantidad", min_value=1),
                 "Precio": st.column_config.NumberColumn("Precio", min_value=0),
                 "Descuento": st.column_config.NumberColumn("Descuento", min_value=0),
+                "Costo": st.column_config.NumberColumn("Costo Unit", disabled=True),
                 "Subtotal": st.column_config.NumberColumn("Subtotal", disabled=True)
             },
             hide_index=True
@@ -278,13 +305,18 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
             id_venta = f"VEN-{int(now_co().timestamp())}"
             fecha = now_co().strftime("%Y-%m-%d %H:%M:%S")
             items_str = ", ".join([f"{x['Cantidad']}x{x['Nombre_Producto']}" for x in st.session_state.carrito])
+            items_detalle = json.dumps([
+                {"ID": x["ID_Producto"], "Nombre": x["Nombre_Producto"], "Cantidad": x["Cantidad"]}
+                for x in st.session_state.carrito
+            ])
+            costo_total = sum([x.get("Costo", 0) * x["Cantidad"] for x in st.session_state.carrito])
             total = sum([x['Subtotal'] for x in st.session_state.carrito])
             ws_ven.append_row([
                 id_venta, fecha,
                 st.session_state.cliente_actual.get('Cedula', ''),
                 st.session_state.cliente_actual.get('Nombre', ''),
                 tipo_entrega, direccion, "Pendiente" if tipo_entrega != "Local" else "Entregado",
-                metodo_pago, "", total, items_str, "", st.session_state.mascota_seleccionada
+                metodo_pago, "", total, items_str, items_detalle, costo_total, st.session_state.mascota_seleccionada
             ])
             actualizar_stock(ws_inv, st.session_state.carrito)
             venta_data = {
