@@ -10,6 +10,10 @@ from io import BytesIO
 import io
 import pytz
 
+TZ_CO = pytz.timezone("America/Bogota")
+def now_co():
+    return datetime.now(TZ_CO)
+
 # --- CONFIGURACIÓN Y CONEXIÓN ---
 def configurar_pagina():
     st.set_page_config(page_title="Nexus Pro | Bigotes y Patitas", page_icon="🐾", layout="wide")
