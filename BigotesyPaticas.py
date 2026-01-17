@@ -409,14 +409,14 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
     gastos_dia = df_g[df_g['Fecha'] == fecha_sel.strftime("%Y-%m-%d")] if not df_g.empty else pd.DataFrame()
     gastos_efectivo = gastos_dia[gastos_dia['Metodo_Pago'] == "Efectivo"]['Monto'].sum() if 'Metodo_Pago' in gastos_dia.columns else 0.0
 
-    # --- Prefills: si hay cierre previo, cargamos sus valores; si no, base inicial es saldo real del día anterior ---
+    # --- Prefills: base inicial toma el saldo real del cierre anterior más cercano ---
     saldo_real_prev = 0.0
     if not df_cie.empty:
-        prev = df_cie[df_cie['Fecha'].dt.date == (fecha_sel - timedelta(days=1))]
-        if not prev.empty:
-            saldo_real_prev = prev.iloc[-1].get('Saldo_Real', 0.0)
+        cierres_previos = df_cie[df_cie['Fecha'].dt.date <= (fecha_sel - timedelta(days=1))]
+        if not cierres_previos.empty:
+            saldo_real_prev = float(cierres_previos.sort_values('Fecha').iloc[-1].get('Saldo_Real', 0.0))
 
-    base_inicial_default = row_cierre['Base_Inicial'] if row_cierre is not None else saldo_real_prev
+    base_inicial_default = float(row_cierre['Base_Inicial']) if row_cierre is not None else saldo_real_prev
     ventas_efectivo = ventas_pagadas[ventas_pagadas['Metodo_Pago'] == "Efectivo"]['Total'].sum()
     ventas_electronico = ventas_pagadas[ventas_pagadas['Metodo_Pago'].isin(["Nequi", "Daviplata", "Transferencia", "Tarjeta"])]["Total"].sum()
 
