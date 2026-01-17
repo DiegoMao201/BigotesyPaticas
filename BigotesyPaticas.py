@@ -608,7 +608,6 @@ def tab_clientes(ws_cli, ws_ven):
         cliente = resultados.loc[selected_idx]
         st.markdown(f"**Teléfono:** {cliente.get('Telefono','')}  |  **Email:** {cliente.get('Email','')}")
         st.markdown(f"**Dirección:** {cliente.get('Direccion','')}")
-        st.markdown(f"**Mascota:** {cliente.get('Mascota','')}  |  **Tipo:** {cliente.get('Tipo_Mascota','')}  |  **Cumple:** {cliente.get('Cumpleaños_mascota','')}")
         st.markdown("---")
         # Render limpio de mascotas (evita mostrar el JSON crudo)
         info_mascotas = cliente.get('Info_Mascotas', '')
