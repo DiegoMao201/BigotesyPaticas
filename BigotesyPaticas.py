@@ -826,9 +826,35 @@ def tab_gastos(ws_gas):
                 st.success("Gasto registrado correctamente.")
                 st.rerun()
 
+def inicializar_sesion():
+    if "ws_inv" not in st.session_state:
+        ws_inv, ws_cli, ws_ven, ws_gas, ws_cie, ws_cap, ws_prov, ws_ord, ws_rec = conectar_google_sheets()
+        st.session_state.ws_inv = ws_inv
+        st.session_state.ws_cli = ws_cli
+        st.session_state.ws_ven = ws_ven
+        st.session_state.ws_gas = ws_gas
+        st.session_state.ws_cie = ws_cie
+        st.session_state.ws_cap = ws_cap
+        st.session_state.ws_prov = ws_prov
+        st.session_state.ws_ord = ws_ord
+        st.session_state.ws_rec = ws_rec
+
+    # Cargar los datos una sola vez
+    if "df_inv" not in st.session_state:
+        st.session_state.df_inv = leer_datos(st.session_state.ws_inv)
+    if "df_cli" not in st.session_state:
+        st.session_state.df_cli = leer_datos(st.session_state.ws_cli)
+    if "df_ven" not in st.session_state:
+        st.session_state.df_ven = leer_datos(st.session_state.ws_ven)
+    if "df_gas" not in st.session_state:
+        st.session_state.df_gas = leer_datos(st.session_state.ws_gas)
+    if "df_cie" not in st.session_state:
+        st.session_state.df_cie = leer_datos(st.session_state.ws_cie)
+
 def main():
     configurar_pagina()
-    ws_inv, ws_cli, ws_ven, ws_gas, ws_cie, ws_cap, ws_prov, ws_ord, ws_rec = conectar_google_sheets()
+    inicializar_sesion()  # <--- SOLO UNA VEZ POR SESIÓN
+
     st.title("🐾 Nexus Pro | Bigotes y Patitas")
     tabs = st.tabs([
         "🛒 POS",
@@ -839,20 +865,20 @@ def main():
         "📊 Resumen"
     ])
     with tabs[0]:
-        tab_pos(ws_inv, ws_cli, ws_ven)
+        tab_pos(st.session_state.ws_inv, st.session_state.ws_cli, st.session_state.ws_ven)
     with tabs[4]:
-        tab_cuadre(ws_ven, ws_gas, ws_cie)
+        tab_cuadre(st.session_state.ws_ven, st.session_state.ws_gas, st.session_state.ws_cie)
     with tabs[5]:
-        tab_resumen(ws_ven, ws_gas, ws_cie)
+        tab_resumen(st.session_state.ws_ven, st.session_state.ws_gas, st.session_state.ws_cie)
     with tabs[1]:
-        tab_clientes(ws_cli, ws_ven)
+        tab_clientes(st.session_state.ws_cli, st.session_state.ws_ven)
     with tabs[2]:
-        tab_despachos(ws_ven)
+        tab_despachos(st.session_state.ws_ven)
     with tabs[3]:
-        tab_gastos(ws_gas)
+        tab_gastos(st.session_state.ws_gas)
     # Botón para normalizar referencias en inventario
     if st.button("🔄 Normalizar todas las referencias en Inventario"):
-        normalizar_todas_las_referencias(ws_inv)
+        normalizar_todas_las_referencias(st.session_state.ws_inv)
 
 if __name__ == "__main__":
     main()
