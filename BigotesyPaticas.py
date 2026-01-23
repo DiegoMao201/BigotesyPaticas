@@ -194,8 +194,11 @@ def normalizar_todas_las_referencias(ws_inv):
         col_norm = len(headers)+1
     else:
         col_norm = headers.index('ID_Producto_Norm') + 1
-    for i, val in enumerate(df['ID_Producto_Norm']):
-        ws_inv.update_cell(i+2, col_norm, val)
+
+    # Prepara los valores para toda la columna (sin el header)
+    valores = [[val] for val in df['ID_Producto_Norm']]
+    rango = f"{gspread.utils.rowcol_to_a1(2, col_norm)}:{gspread.utils.rowcol_to_a1(len(valores)+1, col_norm)}"
+    ws_inv.update(rango, valores)
     st.success("¡Referencias normalizadas en la hoja Inventario!")
 
 def limpiar_tel(tel):
