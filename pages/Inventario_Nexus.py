@@ -404,19 +404,25 @@ def main():
 
     # --- TAB 1: CONTROL ---
     with tabs[0]:
-        st.subheader("🕵️ Auditoría de Inventario")
+        st.subheader("🕵️ Auditoría de Inventario (Solo productos con stock)")
         col_op, col_filt = st.columns([2,1])
         filtro = col_filt.text_input("🔍 Buscar Producto...")
-        
-        # DataFrame filtrado
-        df_show = master_df.copy()
+
+        # Filtra solo productos con stock > 0
+        df_show = master_df[master_df['Stock'] > 0].copy()
+
         if filtro:
-            df_show = df_show[df_show['Nombre'].str.contains(filtro, case=False) | df_show['ID_Producto'].str.contains(filtro, case=False)]
-        
-        # Editor
+            df_show = df_show[
+                df_show['Nombre'].str.contains(filtro, case=False, na=False) |
+                df_show['ID_Producto_Norm'].str.contains(filtro, case=False, na=False)
+            ]
+
+        # Editor mostrando la referencia normalizada como SKU
         edited = st.data_editor(
-            df_show[['ID_Producto', 'Nombre', 'Stock', 'Estado', 'Costo']],
+            df_show[['ID_Producto_Norm', 'Nombre', 'Stock', 'Estado', 'Costo']],
             column_config={
+                "ID_Producto_Norm": st.column_config.TextColumn("SKU", disabled=True),
+                "Nombre": st.column_config.TextColumn("Producto", disabled=True),
                 "Stock": st.column_config.NumberColumn("Stock Real", step=1),
                 "Estado": st.column_config.TextColumn("Status", disabled=True),
                 "Costo": st.column_config.NumberColumn("Costo", format="$%.0f", disabled=True)
