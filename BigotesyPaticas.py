@@ -601,48 +601,97 @@ def tab_gastos_ui():
 
 def tab_cuadre_ui():
     st.header("Cuadre de Caja")
+
+    # --- NUEVO: Registro de Gastos/Pagos desde Cuadre de Caja ---
+    with st.expander("Registrar Gasto o Pago (afecta cuadre)", expanded=False):
+        with st.form("gasto_cuadre"):
+            tipo = st.selectbox("Tipo", ["Variable", "Fijo"])
+            cat = st.selectbox("Categoría", ["Inventario", "Servicios", "Nómina", "Otro"])
+            desc = st.text_input("Descripción")
+            monto = st.number_input("Monto", min_value=0.0)
+            metodo = st.selectbox("Pago", ["Efectivo", "Bancos", "Nequi"])
+            
+            if st.form_submit_button("Registrar Gasto/Pago"):
+                ts = int(now_co().timestamp())
+                fila = [f"GAS-{ts}", now_co().strftime("%Y-%m-%d"), tipo, cat, desc, monto, metodo, ""]
+                registrar_gasto(fila)
+                st.success("Gasto/Pago guardado y descontado del cuadre")
+                st.rerun()
+
     df_ven = st.session_state.db['ven']
     df_gas = st.session_state.db['gas']
-    
+    df_cie = st.session_state.db['cie']
+
     fecha = st.date_input("Fecha", now_co().date())
-    
-    # Filtros locales
-    # Asegurar tipos
+
+    # --- 1. Saldos previos (último cierre) ---
+    base_inicial = 0.0
+    if not df_cie.empty:
+        df_cie['Fecha_dt'] = pd.to_datetime(df_cie['Fecha'], errors='coerce').dt.date
+        prev_cierre = df_cie[df_cie['Fecha_dt'] < fecha].sort_values('Fecha_dt', ascending=False)
+        if not prev_cierre.empty:
+            base_inicial = prev_cierre.iloc[0]['Saldo_Real']
+
+    # --- 2. Filtros locales ---
     df_ven['Fecha_dt'] = pd.to_datetime(df_ven['Fecha']).dt.date
     if 'Fecha' in df_gas.columns:
         df_gas['Fecha_dt'] = pd.to_datetime(df_gas['Fecha'], errors='coerce').dt.date
-    else: df_gas['Fecha_dt'] = None
-    
+    else:
+        df_gas['Fecha_dt'] = None
+
     v_dia = df_ven[df_ven['Fecha_dt'] == fecha]
     g_dia = df_gas[df_gas['Fecha_dt'] == fecha]
-    
+
+    # --- 3. Ventas por método ---
     v_efec = v_dia[v_dia['Metodo_Pago'] == 'Efectivo']['Total'].sum()
-    v_digi = v_dia[v_dia['Metodo_Pago'].isin(['Nequi','Daviplata','Transferencia'])]['Total'].sum()
+    v_tarj = v_dia[v_dia['Metodo_Pago'] == 'Tarjeta']['Total'].sum()
+    v_digi = v_dia[v_dia['Metodo_Pago'].isin(['Nequi', 'Daviplata', 'Transferencia'])]['Total'].sum()
+    v_elec = v_tarj + v_digi
+
+    # --- 4. Gastos efectivo ---
     g_efec = g_dia[g_dia['Metodo_Pago'] == 'Efectivo']['Monto'].sum()
-    
-    c1,c2,c3 = st.columns(3)
+
+    # --- 5. Costo mercancía y margen ---
+    costo_merc = v_dia['Costo_Total'].sum() if 'Costo_Total' in v_dia.columns else 0.0
+    margen_ganado = v_dia['Total'].sum() - costo_merc
+    margen_pct = (margen_ganado / costo_merc * 100) if costo_merc > 0 else 0
+
+    # --- 6. KPIs ---
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Ventas Efectivo", f"${v_efec:,.0f}")
-    c2.metric("Ventas Digital", f"${v_digi:,.0f}")
-    c3.metric("Gastos Efectivo", f"${g_efec:,.0f}")
-    
+    c2.metric("Ventas Electrónico", f"${v_elec:,.0f}")
+    c3.metric("Ventas Tarjeta", f"${v_tarj:,.0f}")
+    c4.metric("Gastos Efectivo", f"${g_efec:,.0f}")
+    c5.metric("Margen Ganado", f"${margen_ganado:,.0f}", f"{margen_pct:.1f}%")
+
     st.markdown("---")
     with st.form("cierre_caja"):
-        base = st.number_input("Base Inicial", 0.0)
+        base = st.number_input("Base Inicial", value=base_inicial, min_value=0.0)
         bancos = st.number_input("Enviado a Bancos", 0.0)
         real = st.number_input("Saldo Real (Conteo)", 0.0)
         notas = st.text_area("Notas")
-        
+
         teorico = base + v_efec - g_efec - bancos
         dif = real - teorico
         st.caption(f"Teórico: ${teorico:,.0f} | Diferencia: ${dif:,.0f}")
-        
+
         if st.form_submit_button("Guardar Cierre"):
             sh = conectar_google_sheets()
             ws_cie = obtener_worksheets(sh)["cie"]
             fila = [
-                fecha.strftime("%Y-%m-%d"), now_co().strftime("%H:%M:%S"),
-                base, v_efec, v_digi, g_efec, bancos, teorico, real, dif, notas,
-                0, (v_efec+v_digi-g_efec)
+                fecha.strftime("%Y-%m-%d"),
+                now_co().strftime("%H:%M:%S"),
+                base,
+                v_efec,
+                v_elec,
+                g_efec,
+                bancos,
+                teorico,
+                real,
+                dif,
+                notas,
+                costo_merc,
+                margen_ganado
             ]
             fila = [sanitizar_para_sheet(x) for x in fila]
             safe_api_call(ws_cie.append_row, fila)
