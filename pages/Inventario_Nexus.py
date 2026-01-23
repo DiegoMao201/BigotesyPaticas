@@ -727,7 +727,7 @@ def ventas_por_producto(df_ven, df_inv):
                     ventas_dict[ref_norm] = ventas_dict.get(ref_norm, 0) + qty
     return ventas_dict
 
-def sugerencias_compra(df_inv, ventas_dict, dias_ventas=15, dias_stock=8, stock_seguridad=1):
+def sugerencias_compra(df_inv, ventas_dict, dias_ventas=30, dias_stock=8, stock_seguridad=1):
     # Ventas en los últimos X días
     df_inv['Ventas_periodo'] = df_inv['ID_Producto_Norm'].map(ventas_dict).fillna(0)
     # Velocidad diaria
