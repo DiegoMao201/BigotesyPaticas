@@ -529,6 +529,15 @@ def tab_pos():
         if st.session_state.whatsapp_link:
             c2.markdown(f'<a href="{st.session_state.whatsapp_link}" target="_blank" class="btn-factura">📲 Enviar WhatsApp</a>', unsafe_allow_html=True)
 
+    # Botón para limpiar todo y empezar una nueva venta
+    if st.button("🆕 Nueva Venta", help="Iniciar una venta desde cero"):
+        st.session_state.carrito = []
+        st.session_state.cliente_actual = None
+        st.session_state.mascota_seleccionada = None
+        st.session_state.ultimo_pdf = None
+        st.session_state.ultima_venta_id = None
+        st.session_state.whatsapp_link = None
+        st.rerun()
 
 def tab_clientes_ui():
     st.header("Gestión de Clientes")
@@ -565,6 +574,12 @@ def tab_clientes_ui():
                     st.markdown(f"[📲 Enviar Bienvenida]({link})")
 
     st.dataframe(st.session_state.db['cli'], use_container_width=True)
+
+    # Botón para limpiar selección y permitir crear un nuevo cliente
+    if st.button("🆕 Nuevo Cliente", help="Registrar un cliente desde cero"):
+        st.session_state.cliente_actual = None
+        st.session_state.mascota_seleccionada = None
+        st.rerun()
 
 def tab_despachos_ui():
     st.header("🚚 Despachos")
