@@ -459,8 +459,13 @@ def main():
                 subtotal = items_prov['Inversion_Est'].sum()
                 
                 with st.expander(f"🛒 {prov} (${subtotal:,.0f})", expanded=True):
-                    st.table(items_prov[['Nombre', 'Sugerencia_Cajas', 'Unidades_Pedir']])
-                    
+                    # Solo mostrar columnas existentes
+                    cols_to_show = [c for c in ['Nombre', 'Sugerencia_Cajas', 'Unidades_Pedir'] if c in items_prov.columns]
+                    if cols_to_show:
+                        st.table(items_prov[cols_to_show])
+                    else:
+                        st.info("No hay columnas para mostrar en esta orden.")
+                        
                     c_b1, c_b2 = st.columns(2)
                     if c_b1.button(f"Crear Orden {prov}", key=f"btn_{prov}"):
                         new_id = crear_orden_compra(prov, items_prov)
