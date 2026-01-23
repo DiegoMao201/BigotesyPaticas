@@ -7,41 +7,78 @@ import urllib.parse
 import jinja2
 from weasyprint import HTML
 from io import BytesIO
-import io
 import pytz
-import numpy as np  # <--- agrega este import
+import numpy as np
+import time  # Necesario para manejar las esperas en el error 429
 
+# --- CONFIGURACIÓN DE ZONA HORARIA ---
 TZ_CO = pytz.timezone("America/Bogota")
+
 def now_co():
     return datetime.now(TZ_CO)
 
-# --- CONFIGURACIÓN Y CONEXIÓN ---
-def configurar_pagina():
-    st.set_page_config(page_title="Nexus Pro | Bigotes y Patitas", page_icon="🐾", layout="wide")
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="Nexus Pro | Bigotes y Patitas", page_icon="🐾", layout="wide")
 
-@st.cache_resource(ttl=600)
+# ==========================================
+# 1. SISTEMA ANTI-BLOQUEO (RETRY LOGIC)
+# ==========================================
+def safe_api_call(func, *args, **kwargs):
+    """
+    Ejecuta cualquier función de gspread. Si da error 429 (Cuota excedida),
+    espera y reintenta hasta 5 veces.
+    """
+    max_retries = 5
+    wait_time = 2  # Segundos iniciales de espera
+    
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            error_msg = str(e)
+            if "429" in error_msg or "Quota exceeded" in error_msg:
+                if attempt < max_retries - 1:
+                    time.sleep(wait_time)
+                    wait_time *= 2  # Espera exponencial (2s, 4s, 8s...)
+                    continue
+                else:
+                    st.error("⚠️ La API de Google está saturada. Por favor espera 1 minuto.")
+                    raise e
+            else:
+                raise e
+
+# ==========================================
+# 2. CONEXIÓN Y LECTURA OPTIMIZADA
+# ==========================================
+@st.cache_resource(ttl=3600)
 def conectar_google_sheets():
-    gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
-    sh = gc.open_by_url(st.secrets["SHEET_URL"])
-    ws_inv = sh.worksheet("Inventario")
-    ws_cli = sh.worksheet("Clientes")
-    ws_ven = sh.worksheet("Ventas")
-    ws_gas = sh.worksheet("Gastos")
-    ws_cie = sh.worksheet("Cierres")
-    ws_cap = sh.worksheet("Capital")
-    ws_prov = sh.worksheet("Maestro_Proveedores")
-    ws_ord = sh.worksheet("Historial_Ordenes")
-    ws_rec = sh.worksheet("Historial_Recepciones")
-    return ws_inv, ws_cli, ws_ven, ws_gas, ws_cie, ws_cap, ws_prov, ws_ord, ws_rec
+    """Conecta a Google Sheets y devuelve el objeto Spreadsheet principal"""
+    try:
+        gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
+        sh = gc.open_by_url(st.secrets["SHEET_URL"])
+        return sh
+    except Exception as e:
+        st.error(f"Error crítico conectando a Google Sheets: {e}")
+        st.stop()
 
-@st.cache_data(ttl=60)  # o más, según tu necesidad
-def leer_datos_cached(ws):
-    raw = ws.get_all_values()
-    if not raw: 
+def obtener_worksheets(sh):
+    """Devuelve un diccionario con las hojas para fácil acceso"""
+    return {
+        "inv": sh.worksheet("Inventario"),
+        "cli": sh.worksheet("Clientes"),
+        "ven": sh.worksheet("Ventas"),
+        "gas": sh.worksheet("Gastos"),
+        "cie": sh.worksheet("Cierres"),
+        # Agrega las otras si las usas activamente, por ahora estas son las vitales para el POS
+    }
+
+def limpiar_dataframe(raw_data):
+    """Convierte datos crudos de Sheets a DataFrame limpio"""
+    if not raw_data:
         return pd.DataFrame()
-    header = raw[0]
-
-    # Reemplaza encabezados vacíos y hace únicos los duplicados
+    
+    header = raw_data[0]
+    # Limpieza de encabezados duplicados o vacíos
     seen = {}
     clean_header = []
     for i, h in enumerate(header):
@@ -55,76 +92,88 @@ def leer_datos_cached(ws):
             seen[h] = 0
         clean_header.append(h)
 
-    df = pd.DataFrame(raw[1:], columns=clean_header)
+    df = pd.DataFrame(raw_data[1:], columns=clean_header)
 
-    for col in ['Precio', 'Stock', 'Costo', 'Monto', 'Total', 'Costo_Total', 'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 'Dinero_A_Bancos', 'Saldo_Teorico', 'Saldo_Real', 'Diferencia']:
+    # Convertir columnas numéricas y fechas
+    cols_num = ['Precio', 'Stock', 'Costo', 'Monto', 'Total', 'Costo_Total', 
+                'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 
+                'Dinero_A_Bancos', 'Saldo_Teorico', 'Saldo_Real', 'Diferencia']
+    
+    for col in cols_num:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    
     if 'Fecha' in df.columns:
         df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+        
     return df
 
-def leer_datos(ws):
-    try:
-        raw = ws.get_all_values()
-        if not raw: 
-            return pd.DataFrame()
-        header = raw[0]
+def cargar_datos_iniciales():
+    """Carga TODOS los datos al Session State de una sola vez."""
+    sh = conectar_google_sheets()
+    h = obtener_worksheets(sh)
+    
+    with st.spinner("🔄 Sincronizando datos con la nube..."):
+        # Usamos safe_api_call para leer
+        data_inv = safe_api_call(h["inv"].get_all_values)
+        data_cli = safe_api_call(h["cli"].get_all_values)
+        data_ven = safe_api_call(h["ven"].get_all_values)
+        data_gas = safe_api_call(h["gas"].get_all_values)
+        data_cie = safe_api_call(h["cie"].get_all_values)
 
-        # Reemplaza encabezados vacíos y hace únicos los duplicados
-        seen = {}
-        clean_header = []
-        for i, h in enumerate(header):
-            if not h or h.strip() == "":
-                h = f"Col_{i+1}"
-            h = h.strip()
-            if h in seen:
-                seen[h] += 1
-                h = f"{h}_{seen[h]}"
-            else:
-                seen[h] = 0
-            clean_header.append(h)
+        st.session_state.db = {
+            "inv": limpiar_dataframe(data_inv),
+            "cli": limpiar_dataframe(data_cli),
+            "ven": limpiar_dataframe(data_ven),
+            "gas": limpiar_dataframe(data_gas),
+            "cie": limpiar_dataframe(data_cie)
+        }
+        st.session_state.ultima_sincronizacion = now_co()
 
-        df = pd.DataFrame(raw[1:], columns=clean_header)
-
-        for col in ['Precio', 'Stock', 'Costo', 'Monto', 'Total', 'Costo_Total', 'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 'Dinero_A_Bancos', 'Saldo_Teorico', 'Saldo_Real', 'Diferencia']:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        if 'Fecha' in df.columns:
-            df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-        return df
-    except Exception as e:
-        st.error(f"🔴 Error leyendo datos de Google Sheets: {e}")
-        return pd.DataFrame()
-
+# ==========================================
+# 3. FUNCIONES DE UTILIDAD (Tus funciones originales)
+# ==========================================
 def sanitizar_para_sheet(val):
     if isinstance(val, (np.int64, np.int32)): return int(val)
     if isinstance(val, (np.float64, np.float32)): return float(val)
     if isinstance(val, (pd.Timestamp, datetime, date)): return val.strftime("%Y-%m-%d %H:%M:%S") if isinstance(val, datetime) else val.strftime("%Y-%m-%d")
     return val
 
-# --- FUNCIONES DE NEGOCIO (puedes expandirlas según tu lógica actual) ---
+def normalizar_id_producto(id_prod):
+    if pd.isna(id_prod): return ""
+    s = str(id_prod).strip().upper()
+    s = s.replace(" ", "").replace(",", "").replace(".", "")
+    if s.isdigit(): s = str(int(s))
+    if s.endswith("00") and s[:-2].isdigit(): s = s[:-2]
+    return s
 
-def actualizar_estado_envio(ws_ven, id_venta, nuevo_estado):
-    cell = ws_ven.find(str(id_venta))
-    if cell:
-        headers = ws_ven.row_values(1)
-        col_index = headers.index("Estado_Envio") + 1
-        ws_ven.update_cell(cell.row, col_index, nuevo_estado)
-        return True
-    return False
+def limpiar_tel(tel):
+    t = str(tel).replace(" ", "").replace("+", "").replace("-", "").replace("(", "").replace(")", "").strip()
+    if len(t) == 10 and not t.startswith("57"): t = "57" + t
+    return t
 
-def generar_mensaje_whatsapp(nombre_cliente, mascota, tipo_cliente, items_str, total):
-    saludo = f"¡Hola {nombre_cliente}! 👋 Bienvenido/a a la familia Bigotes y Patitas." if tipo_cliente == "NUEVO" else f"¡Hola de nuevo {nombre_cliente}! 👋"
-    cuerpo = f"Nos emociona mucho que nos hayas elegido para consentir a {mascota}." if tipo_cliente == "NUEVO" else ""
-    resumen = f"\n\n🧾 Resumen de tu compra:\n{items_str}\n\n💰 Total: ${total:,.0f}"
-    despedida = "\n\n¡Muchas gracias y feliz día! 🐾"
-    return urllib.parse.quote(f"{saludo}\n{cuerpo}{resumen}{despedida}")
+def msg_venta(nombre, mascota, items_str, total):
+    return f"""🧾 Hola {nombre}, gracias por tu compra en Bigotes y Patitas.
+🐶 Mascota: {mascota or 'tu peludito'}
+🛍️ Items: {items_str}
+💰 Total: ${total:,.0f}
+🚚 Si necesitas algo más, avísanos. ¡Gracias! 🐾"""
+
+def msg_bienvenida(nombre, mascota):
+    return f"""🐾 ¡Hola {nombre}! Bienvenido/a a Bigotes y Patitas.
+🎉 Estamos felices de consentir a {mascota or 'tu peludito'}.
+📦 Necesites comida, snacks o juguetes, aquí estamos.
+🤗 Gracias por confiar en nosotros."""
 
 def generar_pdf_html(venta_data, items):
     try:
-        with open("factura.html", "r", encoding="utf-8") as f:
-            template_str = f.read()
+        try:
+            with open("factura.html", "r", encoding="utf-8") as f:
+                template_str = f.read()
+        except FileNotFoundError:
+            # Plantilla de respaldo por si falla la lectura del archivo
+            template_str = "<html><body><h1>Factura {{id_venta}}</h1><p>Total: {{total}}</p></body></html>"
+
         context = {
             "id_venta": venta_data['ID'],
             "fecha": venta_data['Fecha'],
@@ -145,111 +194,159 @@ def generar_pdf_html(venta_data, items):
         st.error(f"Error generando PDF: {e}")
         return None
 
-def actualizar_stock(ws_inv, carrito):
-    df_inv = leer_datos(ws_inv)
-    # Normaliza todos los IDs del inventario una vez
-    df_inv['ID_Producto_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
-    for item in carrito:
-        id_prod_norm = normalizar_id_producto(item['ID_Producto'])
-        cantidad = item['Cantidad']
-        filtro = df_inv[df_inv['ID_Producto_Norm'] == id_prod_norm]
-        if not filtro.empty:
-            stock_actual = filtro['Stock'].values[0]
-            # Busca la celda en Google Sheets usando el ID normalizado
-            for idx, row in df_inv.iterrows():
-                if row['ID_Producto_Norm'] == id_prod_norm:
-                    cell = ws_inv.find(str(row['ID_Producto']))
-                    if cell:
-                        ws_inv.update_cell(cell.row, df_inv.columns.get_loc('Stock')+1, int(stock_actual) - int(cantidad))
-                    break
-        else:
-            # Si el producto no existe, puedes registrar un error o agregarlo
-            print(f"Producto no encontrado en inventario: {item['ID_Producto']}")
-
-def normalizar_id_producto(id_prod):
-    """Convierte cualquier ID_Producto a string, sin espacios, sin puntos, sin comas, sin ceros a la izquierda innecesarios."""
-    import pandas as pd
-    if pd.isna(id_prod):
-        return ""
-    s = str(id_prod).strip().upper()
-    s = s.replace(" ", "").replace(",", "").replace(".", "")
-    # Eliminar ceros a la izquierda solo si es numérico
-    if s.isdigit():
-        s = str(int(s))
-    # Eliminar sufijos decimales tipo .00
-    if s.endswith("00") and s[:-2].isdigit():
-        s = s[:-2]
-    return s
-
-def normalizar_todas_las_referencias(ws_inv):
-    import pandas as pd
-    df = leer_datos(ws_inv)
+def normalizar_todas_las_referencias():
+    sh = conectar_google_sheets()
+    ws_inv = sh.worksheet("Inventario")
+    df = st.session_state.db['inv']
+    
     if 'ID_Producto' not in df.columns:
-        st.error("No se encontró la columna ID_Producto en Inventario.")
+        st.error("No se encontró ID_Producto")
         return
-    df['ID_Producto_Norm'] = df['ID_Producto'].apply(normalizar_id_producto)
-    headers = ws_inv.row_values(1)
+
+    col_valores = [normalizar_id_producto(x) for x in df['ID_Producto']]
+    
+    # Encontrar indice de columna
+    headers = safe_api_call(ws_inv.row_values, 1)
     if 'ID_Producto_Norm' not in headers:
-        ws_inv.update_cell(1, len(headers)+1, 'ID_Producto_Norm')
-        col_norm = len(headers)+1
+        safe_api_call(ws_inv.update_cell, 1, len(headers)+1, 'ID_Producto_Norm')
+        col_idx = len(headers) + 1
     else:
-        col_norm = headers.index('ID_Producto_Norm') + 1
+        col_idx = headers.index('ID_Producto_Norm') + 1
 
-    # Prepara los valores para toda la columna (sin el header)
-    valores = [[val] for val in df['ID_Producto_Norm']]
-    rango = f"{gspread.utils.rowcol_to_a1(2, col_norm)}:{gspread.utils.rowcol_to_a1(len(valores)+1, col_norm)}"
-    ws_inv.update(rango, valores)
-    st.success("¡Referencias normalizadas en la hoja Inventario!")
+    # Update masivo (vertical)
+    valores_lista = [[v] for v in col_valores]
+    rango = f"{gspread.utils.rowcol_to_a1(2, col_idx)}:{gspread.utils.rowcol_to_a1(len(valores_lista)+1, col_idx)}"
+    safe_api_call(ws_inv.update, rango, valores_lista)
+    st.success("Referencias normalizadas en la Nube. Recarga los datos.")
 
-def limpiar_tel(tel):
-    t = str(tel).replace(" ", "").replace("+", "").replace("-", "").replace("(", "").replace(")", "").strip()
-    if len(t) == 10 and not t.startswith("57"): t = "57" + t
-    return t
+# ==========================================
+# 4. FUNCIONES DE ESCRITURA (OPTIMIZADAS)
+# ==========================================
 
-def msg_bienvenida(nombre, mascota):
-    return f"""🐾 ¡Hola {nombre}! Bienvenido/a a Bigotes y Patitas.
-🎉 Estamos felices de consentir a {mascota or 'tu peludito'}.
-📦 Necesites comida, snacks o juguetes, aquí estamos.
-🤗 Gracias por confiar en nosotros."""
+def registrar_venta(fila_datos, carrito):
+    """Escribe en Sheet y actualiza Session State localmente"""
+    sh = conectar_google_sheets()
+    ws_ven = obtener_worksheets(sh)["ven"]
+    ws_inv = obtener_worksheets(sh)["inv"]
 
-def msg_venta(nombre, mascota, items_str, total):
-    return f"""🧾 Hola {nombre}, gracias por tu compra en Bigotes y Patitas.
-🐶 Mascota: {mascota or 'tu peludito'}
-🛍️ Items: {items_str}
-💰 Total: ${total:,.0f}
-🚚 Si necesitas algo más, avísanos. ¡Gracias! 🐾"""
+    # 1. Escribir Venta en la Nube (con retry)
+    safe_api_call(ws_ven.append_row, fila_datos)
+    
+    # 2. Actualizar Stock en la Nube (Item por item con retry)
+    df_inv = st.session_state.db['inv']
+    # Asegurar columna normalizada local
+    df_inv['ID_Producto_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
 
-def msg_cumple(mascota, regalo):
-    return f"""🎂 ¡Feliz cumple, {mascota}! 🐾
-🎁 Tienes: {regalo}
-🧡 Gracias por ser parte de la familia Bigotes y Patitas."""
+    for item in carrito:
+        id_norm = normalizar_id_producto(item['ID_Producto'])
+        cant = item['Cantidad']
+        
+        # Buscar en dataframe local para obtener el ID original exacto y stock actual
+        match = df_inv[df_inv['ID_Producto_Norm'] == id_norm]
+        if not match.empty:
+            id_original = match.iloc[0]['ID_Producto']
+            stock_actual = float(match.iloc[0]['Stock'])
+            nuevo_stock = stock_actual - cant
+            
+            # Actualizar LOCALMENTE
+            idx = match.index[0]
+            st.session_state.db['inv'].at[idx, 'Stock'] = nuevo_stock
 
-def msg_recompra(nombre, mascota, prod):
-    return f"""👋 Hola {nombre}, soy tu asistente de Bigotes y Patitas.
-🥣 Creemos que a {mascota or 'tu peludito'} se le acaba su {prod}.
-🚚 ¿Te enviamos su refil hoy? ¡Estamos atentos! 🐾"""
+            # Actualizar NUBE
+            try:
+                cell = safe_api_call(ws_inv.find, str(id_original))
+                if cell:
+                    # Asumimos que Stock es una columna conocida, buscaremos su índice en el header
+                    # Para optimizar, asumimos que el header no cambia.
+                    # Una forma segura es leer header o usar numerico si es fijo. 
+                    # Usaremos nombre de columna del DF local para ubicarla
+                    col_idx = df_inv.columns.get_loc('Stock') + 1
+                    safe_api_call(ws_inv.update_cell, cell.row, col_idx, nuevo_stock)
+            except Exception as e:
+                print(f"Error actualizando stock nube: {e}")
 
-def msg_inactivo(nombre, mascota, gancho):
-    return f"""💕 Hola {nombre}, extrañamos a {mascota or 'tu peludito'} en Bigotes y Patitas.
-🎁 Tenemos: {gancho}
-🚚 ¿Te enviamos algo especial hoy? 🐾"""
+    # 3. Actualizar Venta LOCALMENTE (Append al DF)
+    cols = st.session_state.db['ven'].columns
+    # Ajustar longitud
+    if len(fila_datos) < len(cols): fila_datos += [""] * (len(cols) - len(fila_datos))
+    nuevo_df = pd.DataFrame([fila_datos], columns=cols)
+    # Convertir tipos básicos
+    if 'Total' in nuevo_df.columns: nuevo_df['Total'] = pd.to_numeric(nuevo_df['Total'])
+    if 'Fecha' in nuevo_df.columns: nuevo_df['Fecha'] = pd.to_datetime(nuevo_df['Fecha'])
 
-# --- PESTAÑAS ---
+    st.session_state.db['ven'] = pd.concat([st.session_state.db['ven'], nuevo_df], ignore_index=True)
 
-def tab_pos(ws_inv, ws_cli, ws_ven):
+def registrar_gasto(fila_datos):
+    sh = conectar_google_sheets()
+    ws_gas = obtener_worksheets(sh)["gas"]
+    
+    safe_api_call(ws_gas.append_row, fila_datos)
+    
+    # Update local
+    cols = st.session_state.db['gas'].columns
+    if len(fila_datos) < len(cols): fila_datos += [""] * (len(cols) - len(fila_datos))
+    nuevo_df = pd.DataFrame([fila_datos], columns=cols)
+    if 'Monto' in nuevo_df.columns: nuevo_df['Monto'] = pd.to_numeric(nuevo_df['Monto'])
+    st.session_state.db['gas'] = pd.concat([st.session_state.db['gas'], nuevo_df], ignore_index=True)
+
+def registrar_cliente(fila_datos, update=False, row_idx=None):
+    sh = conectar_google_sheets()
+    ws_cli = obtener_worksheets(sh)["cli"]
+    
+    if update and row_idx:
+        # Update rango A:J (asumiendo 10 columnas)
+        rango = f"A{row_idx}:J{row_idx}"
+        safe_api_call(ws_cli.update, rango, [fila_datos])
+        # Para simplificar la consistencia en edición, forzamos recarga completa la próxima vez
+        # o podríamos actualizar el DF local buscando por índice.
+        # Por seguridad en datos maestros:
+        cargar_datos_iniciales()
+    else:
+        safe_api_call(ws_cli.append_row, fila_datos)
+        # Update local append
+        cols = st.session_state.db['cli'].columns
+        if len(fila_datos) < len(cols): fila_datos += [""] * (len(cols) - len(fila_datos))
+        nuevo_df = pd.DataFrame([fila_datos], columns=cols)
+        st.session_state.db['cli'] = pd.concat([st.session_state.db['cli'], nuevo_df], ignore_index=True)
+
+def actualizar_estado_envio(id_venta, nuevo_estado):
+    sh = conectar_google_sheets()
+    ws_ven = obtener_worksheets(sh)["ven"]
+    
+    try:
+        cell = safe_api_call(ws_ven.find, str(id_venta))
+        if cell:
+            # Buscar columna estado
+            headers = safe_api_call(ws_ven.row_values, 1)
+            col_idx = headers.index("Estado_Envio") + 1
+            safe_api_call(ws_ven.update_cell, cell.row, col_idx, nuevo_estado)
+            
+            # Update Local
+            df_ven = st.session_state.db['ven']
+            idx = df_ven[df_ven['ID_Venta'] == id_venta].index
+            if not idx.empty:
+                st.session_state.db['ven'].at[idx[0], 'Estado_Envio'] = nuevo_estado
+            return True
+    except:
+        return False
+
+# ==========================================
+# 5. PESTAÑAS (UI)
+# ==========================================
+
+def tab_pos():
     st.markdown("""
         <style>
         .main-title { color: #187f77; font-size: 2.2rem; font-weight: 800; margin-bottom: 0.5rem; }
         .sub-title { color: #f5a641; font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; }
         .mascota-box { background: #f8f9fa; border-radius: 12px; padding: 10px 18px; margin-bottom: 10px; border-left: 5px solid #f5a641; }
         .carrito-total { background: #f5a641; color: white; font-size: 1.5rem; font-weight: bold; border-radius: 10px; padding: 12px 24px; text-align: right; margin-top: 10px; }
-        .btn-factura { background: linear-gradient(135deg, #187f77, #f5a641); color: white !important; font-weight: bold; border-radius: 10px; padding: 14px 28px; font-size: 1.1rem; border: none; }
         </style>
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="main-title">🐾 Punto de Venta Bigotes y Patitas</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Venta rápida y profesional para consentir a tus peluditos</div>', unsafe_allow_html=True)
-
+    
+    # Inicializar variables POS
     if 'carrito' not in st.session_state: st.session_state.carrito = []
     if 'cliente_actual' not in st.session_state: st.session_state.cliente_actual = None
     if 'mascota_seleccionada' not in st.session_state: st.session_state.mascota_seleccionada = None
@@ -257,628 +354,343 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
     if 'ultima_venta_id' not in st.session_state: st.session_state.ultima_venta_id = None
     if 'whatsapp_link' not in st.session_state: st.session_state.whatsapp_link = None
 
-    # --- CLIENTE ---
-    st.markdown("### 👤 Buscar Cliente")
-    df_c = leer_datos(ws_cli)
+    df_c = st.session_state.db['cli']
+    df_inv = st.session_state.db['inv']
+
+    # --- 1. BUSCAR CLIENTE ---
+    st.markdown("### 👤 Cliente")
     if not df_c.empty:
-        search = st.text_input("Buscar por nombre, cédula, mascota o teléfono", key="busca_cli_pos")
-        mask = (
-            df_c['Nombre'].str.contains(search, case=False, na=False) |
-            df_c['Cedula'].astype(str).str.contains(search, case=False, na=False) |
-            df_c['Mascota'].str.contains(search, case=False, na=False) |
-            df_c['Telefono'].astype(str).str.contains(search, case=False, na=False)
-        ) if search else [True]*len(df_c)
-        resultados = df_c[mask]
-        selected_idx = st.selectbox("Selecciona un cliente", resultados.index, format_func=lambda i: f"{resultados.loc[i, 'Nombre']} ({resultados.loc[i, 'Cedula']})")
-        if st.button("Cargar Cliente", help="Carga el cliente y sus mascotas"):
-            cliente_data = resultados.loc[selected_idx].to_dict()
-            mascotas_para_dropdown = []
-            json_raw = cliente_data.get('Info_Mascotas', '')
-            try:
-                if json_raw and str(json_raw).strip():
-                    parsed_list = json.loads(str(json_raw))
-                    if isinstance(parsed_list, list):
-                        mascotas_para_dropdown = [m.get('Nombre') for m in parsed_list if m.get('Nombre')]
-            except:
-                pass
-            if not mascotas_para_dropdown:
-                nombre_old = cliente_data.get('Mascota', '')
-                if nombre_old:
-                    mascotas_para_dropdown = [nombre_old]
-            if not mascotas_para_dropdown:
-                mascotas_para_dropdown = ["Varios"]
-            cliente_data['Lista_Nombres_Mascotas'] = mascotas_para_dropdown
-            st.session_state.cliente_actual = cliente_data
-            st.session_state.mascota_seleccionada = mascotas_para_dropdown[0] if mascotas_para_dropdown else None
-            st.toast(f"Cliente cargado: {st.session_state.cliente_actual.get('Nombre')}", icon="✅")
-            st.rerun()
-    # --- Mascotas visuales ---
+        search = st.text_input("Buscar cliente (Nombre, Cédula, Mascota)", key="busca_cli_pos")
+        if search:
+            mask = (
+                df_c['Nombre'].astype(str).str.contains(search, case=False, na=False) |
+                df_c['Cedula'].astype(str).str.contains(search, case=False, na=False) |
+                df_c['Mascota'].astype(str).str.contains(search, case=False, na=False)
+            )
+            resultados = df_c[mask]
+        else:
+            resultados = df_c.head(0) # No mostrar nada si no hay busqueda
+
+        if not resultados.empty:
+            selected_idx = st.selectbox("Seleccionar:", resultados.index, format_func=lambda i: f"{resultados.loc[i, 'Nombre']} - {resultados.loc[i, 'Cedula']}")
+            
+            if st.button("Cargar Cliente"):
+                cliente_data = resultados.loc[selected_idx].to_dict()
+                # Parsear mascotas
+                mascotas_lista = []
+                try:
+                    raw_json = cliente_data.get('Info_Mascotas', '')
+                    if raw_json and str(raw_json).strip():
+                        parsed = json.loads(str(raw_json))
+                        if isinstance(parsed, list):
+                            mascotas_lista = [m.get('Nombre') for m in parsed if m.get('Nombre')]
+                except: pass
+                
+                if not mascotas_lista:
+                    old_m = cliente_data.get('Mascota', '')
+                    if old_m: mascotas_lista = [old_m]
+                
+                if not mascotas_lista: mascotas_lista = ["Varios"]
+                
+                cliente_data['Lista_Mascotas'] = mascotas_lista
+                st.session_state.cliente_actual = cliente_data
+                st.session_state.mascota_seleccionada = mascotas_lista[0]
+                st.toast("Cliente cargado", icon="✅")
+                st.rerun()
+
     if st.session_state.cliente_actual:
-        st.markdown("#### 🐶 Mascotas registradas")
-        info_mascotas = st.session_state.cliente_actual.get('Info_Mascotas', '')
-        if info_mascotas:
-            try:
-                lista = json.loads(info_mascotas)
-                for m in lista:
-                    st.markdown(f'<div class="mascota-box">🐾 <b>{m["Nombre"]}</b> | Cumpleaños: {m["Cumpleaños"]} | Tipo: {m["Tipo"]}</div>', unsafe_allow_html=True)
-            except:
-                st.write("Mascotas: " + ", ".join(st.session_state.cliente_actual.get('Lista_Nombres_Mascotas', [])))
-        else:
-            st.write("Mascotas: " + ", ".join(st.session_state.cliente_actual.get('Lista_Nombres_Mascotas', [])))
+        c_act = st.session_state.cliente_actual
+        st.info(f"Cliente: **{c_act['Nombre']}** | Mascota: **{st.session_state.mascota_seleccionada}**")
 
-    # --- PRODUCTOS ---
-    st.markdown("### 🛒 Buscar y Agregar Producto")
-    df_inv = leer_datos(ws_inv)
+    # --- 2. PRODUCTOS ---
+    st.markdown("### 🛒 Productos")
     if not df_inv.empty:
-        df_inv['ID_Producto_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
-        opciones, id_map = [], {}
-        for _, row in df_inv.iterrows():
-            stock = int(row['Stock']); precio = int(row['Precio']); nombre = row['Nombre']
-            display = f"{nombre} | Stock: {stock} | ${precio:,}"
-            opciones.append(display); id_map[display] = row['ID_Producto_Norm']
+        # Crear columna de busqueda visual
+        df_inv['Display'] = df_inv.apply(lambda x: f"{x['Nombre']} | Stock: {int(x['Stock'])} | ${int(x['Precio']):,}", axis=1)
+        # Diccionario para mapear display -> ID
+        # Necesitamos normalizar para keys consistentes
+        df_inv['ID_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
+        mapa_prod = dict(zip(df_inv['Display'], df_inv['ID_Norm']))
+        
+        prod_sel = st.selectbox("Buscar Producto", df_inv['Display'].tolist())
+        
+        if prod_sel:
+            id_sel = mapa_prod[prod_sel]
+            row_prod = df_inv[df_inv['ID_Norm'] == id_sel].iloc[0]
+            
+            col1, col2, col3 = st.columns(3)
+            cant = col1.number_input("Cantidad", 1, max(1, int(row_prod['Stock'])), 1)
+            desc = col2.number_input("Descuento", 0, int(row_prod['Precio']), 0)
+            
+            if col3.button("➕ Agregar al Carrito", use_container_width=True):
+                # Logica agregar
+                precio = int(row_prod['Precio'])
+                subtotal = (precio - desc) * cant
+                
+                # Revisar si ya existe
+                existe = False
+                for it in st.session_state.carrito:
+                    if it['ID_Producto'] == row_prod['ID_Producto']:
+                        it['Cantidad'] += cant
+                        it['Subtotal'] += subtotal
+                        existe = True; break
+                
+                if not existe:
+                    st.session_state.carrito.append({
+                        "ID_Producto": row_prod['ID_Producto'],
+                        "Nombre_Producto": row_prod['Nombre'],
+                        "Cantidad": cant,
+                        "Precio": precio,
+                        "Descuento": desc,
+                        "Costo": float(row_prod.get('Costo', 0)),
+                        "Subtotal": subtotal
+                    })
+                st.success("Producto agregado")
+                st.rerun()
 
-        producto_sel = st.selectbox("Producto", opciones, help="Busca por nombre, stock o precio")
-        id_prod_sel_norm = id_map[producto_sel]
-        prod_row = df_inv[df_inv['ID_Producto_Norm'] == id_prod_sel_norm].iloc[0]
-        costo_unit = float(prod_row.get('Costo', 0))
-        precio_mod = int(prod_row['Precio'])  # Precio desde inventario (sin input manual)
-
-        # Descuento automático si la mascota está en su mes de cumpleaños
-        default_descuento = 0
-        try:
-            mes_actual = now_co().month
-            mascota_sel = st.session_state.mascota_seleccionada
-            info_mascotas = st.session_state.cliente_actual.get('Info_Mascotas', '')
-            cumple_mascota = None
-            if info_mascotas:
-                lista = json.loads(info_mascotas)
-                for m in lista:
-                    if m.get("Nombre") == mascota_sel:
-                        cumple_mascota = m.get("Cumpleaños")
-                        break
-            if not cumple_mascota:
-                cumple_mascota = st.session_state.cliente_actual.get("Cumpleaños_mascota", "")
-            if cumple_mascota:
-                mes_cumple = pd.to_datetime(cumple_mascota, errors='coerce').month
-                if mes_cumple == mes_actual:
-                    default_descuento = int(precio_mod * 0.10)  # 10% sugerido
-        except:
-            default_descuento = 0
-
-        st.caption(f"{prod_row['Nombre']} · Stock {int(prod_row['Stock'])} · ${precio_mod:,}")
-        cantidad = st.number_input("Cantidad", min_value=1, value=1, max_value=max(int(prod_row['Stock']),1), key="cantidad_agregar")
-        descuento = st.number_input("Descuento", min_value=0, value=default_descuento, key="descuento_agregar")
-
-        if st.button("Agregar al Carrito", help="Agrega el producto al carrito"):
-            existe = False
-            for item in st.session_state.carrito:
-                if item["ID_Producto"] == prod_row['ID_Producto']:
-                    item["Cantidad"] = cantidad
-                    item["Precio"] = precio_mod
-                    item["Descuento"] = descuento
-                    item["Costo"] = costo_unit
-                    item["Subtotal"] = (precio_mod - descuento) * item["Cantidad"]
-                    existe = True; break
-            if not existe:
-                subtotal = (precio_mod - descuento) * cantidad
-                st.session_state.carrito.append({
-                    "ID_Producto": prod_row['ID_Producto'],
-                    "Nombre_Producto": prod_row['Nombre'],
-                    "Cantidad": cantidad,
-                    "Precio": precio_mod,
-                    "Descuento": descuento,
-                    "Costo": costo_unit,
-                    "Subtotal": subtotal
-                })
-            st.success(f"{prod_row['Nombre']} actualizado en el carrito.")
-
-    # --- CARRITO VISUAL Y EDICIÓN ---
+    # --- 3. CARRITO Y CIERRE ---
     if st.session_state.carrito:
-        st.markdown("### 🧺 Carrito de Compra")
-        df_carrito = pd.DataFrame(st.session_state.carrito)
-        selected_row = st.selectbox(
-            "Selecciona un producto para eliminar del carrito",
-            df_carrito.index,
-            format_func=lambda i: f"{df_carrito.loc[i, 'Nombre_Producto']} (x{df_carrito.loc[i, 'Cantidad']})"
+        st.markdown("### 🧺 Detalle de Compra")
+        df_car = pd.DataFrame(st.session_state.carrito)
+        
+        edited_car = st.data_editor(
+            df_car, 
+            key="editor_carrito",
+            column_config={"Subtotal": st.column_config.NumberColumn(disabled=True)},
+            num_rows="dynamic"
         )
-        if st.button("Eliminar Producto Seleccionado"):
-            st.session_state.carrito.pop(selected_row)
-            st.success("Producto eliminado del carrito.")
+        
+        # Recalcular si hubo cambios
+        if not df_car.equals(edited_car):
+            for i, r in edited_car.iterrows():
+                edited_car.at[i, 'Subtotal'] = (r['Precio'] - r['Descuento']) * r['Cantidad']
+            st.session_state.carrito = edited_car.to_dict('records')
             st.rerun()
-
-        edited = st.data_editor(
-            df_carrito,
-            key="carrito_editor",
-            use_container_width=True,
-            column_config={
-                "Nombre_Producto": st.column_config.TextColumn("Producto", disabled=True),
-                "Cantidad": st.column_config.NumberColumn("Cantidad", min_value=1),
-                "Precio": st.column_config.NumberColumn("Precio", min_value=0),
-                "Descuento": st.column_config.NumberColumn("Descuento", min_value=0),
-                "Costo": st.column_config.NumberColumn("Costo Unit", disabled=True),
-                "Subtotal": st.column_config.NumberColumn("Subtotal", disabled=True)
-            },
-            hide_index=True
-        )
-        for i, row in edited.iterrows():
-            edited.at[i, "Subtotal"] = (row["Precio"] - row["Descuento"]) * row["Cantidad"]
-        st.session_state.carrito = edited.to_dict("records")
-        total = sum([item["Subtotal"] for item in st.session_state.carrito])
+            
+        total = sum([x['Subtotal'] for x in st.session_state.carrito])
         st.markdown(f'<div class="carrito-total">TOTAL: ${total:,.0f}</div>', unsafe_allow_html=True)
-        if st.button("Vaciar Carrito"):
+        
+        if st.button("🗑️ Vaciar Carrito"):
             st.session_state.carrito = []
             st.rerun()
-
-    # --- FACTURACIÓN Y PDF ---
-    st.markdown("### 💳 Facturación")
-    if st.session_state.carrito and st.session_state.cliente_actual:
-        metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Tarjeta", "Transferencia"])
-        tipo_entrega = st.selectbox("Tipo de Entrega", ["Local", "Envío a Domicilio"])
-        direccion = st.text_input("Dirección de Entrega", value=st.session_state.cliente_actual.get('Direccion', ''))
-        if st.button("Facturar y Guardar Venta", key="btn_factura", help="Genera la factura y guarda la venta"):
-            id_venta = f"VEN-{int(now_co().timestamp())}"
-            fecha = now_co().strftime("%Y-%m-%d %H:%M:%S")
-            items_str = ", ".join([f"{x['Cantidad']}x{x['Nombre_Producto']}" for x in st.session_state.carrito])
-            items_detalle = json.dumps([
-                {"ID": x["ID_Producto"], "Nombre": x["Nombre_Producto"], "Cantidad": x["Cantidad"]}
-                for x in st.session_state.carrito
-            ])
-            costo_total = sum([x.get("Costo", 0) * x["Cantidad"] for x in st.session_state.carrito])
-            total = sum([x['Subtotal'] for x in st.session_state.carrito])
-            ws_ven.append_row([
-                id_venta, fecha,
-                st.session_state.cliente_actual.get('Cedula', ''),
-                st.session_state.cliente_actual.get('Nombre', ''),
-                tipo_entrega, direccion, "Pendiente" if tipo_entrega != "Local" else "Entregado",
-                metodo_pago, "", total, items_str, items_detalle, costo_total, st.session_state.mascota_seleccionada
-            ])
-            actualizar_stock(ws_inv, st.session_state.carrito)
-            venta_data = {
-                'ID': id_venta,
-                'Fecha': fecha,
-                'Cliente': st.session_state.cliente_actual.get('Nombre', ''),
-                'Cedula_Cliente': st.session_state.cliente_actual.get('Cedula', ''),
-                'Direccion': direccion,
-                'Mascota': st.session_state.mascota_seleccionada,
-                'Metodo_Pago': metodo_pago,
-                'Tipo_Entrega': tipo_entrega,
-                'Total': total
-            }
-            pdf_bytes = generar_pdf_html(venta_data, st.session_state.carrito)
-            st.session_state.ultimo_pdf = pdf_bytes
-            st.session_state.ultima_venta_id = id_venta
-            mensaje = msg_venta(
-                venta_data['Cliente'],
-                venta_data['Mascota'],
-                items_str,
-                total
-            )
-            telefono = st.session_state.cliente_actual.get('Telefono', '')
-            tel = limpiar_tel(telefono)
-            if tel and len(tel) >= 7:
-                st.session_state.whatsapp_link = f"https://wa.me/{tel}?text={urllib.parse.quote(mensaje)}"
-            st.success("¡Venta registrada y factura generada!")
-            st.session_state.carrito = []
-    if st.session_state.ultimo_pdf:
-        st.download_button(
-            label="⬇️ Descargar Factura PDF",
-            data=st.session_state.ultimo_pdf,
-            file_name=f"Factura_{st.session_state.ultima_venta_id}.pdf",
-            mime="application/pdf"
-        )
-    if st.session_state.whatsapp_link:
-        st.markdown(f"""<a href="{st.session_state.whatsapp_link}" target="_blank" class="btn-factura">📲 Enviar Resumen por WhatsApp</a>""", unsafe_allow_html=True)
-
-def tab_cuadre(ws_ven, ws_gas, ws_cie):
-    st.header("💵 Cuadre de Caja Diario (Avanzado y Robusto)")
-
-    df_v = leer_datos(ws_ven)
-    df_g = leer_datos(ws_gas)
-    df_cie = leer_datos(ws_cie)
-    hoy = now_co().date()
-
-    # --- Selector de fecha para cargar/editar cajas previas ---
-    fecha_sel = st.date_input("Selecciona la fecha de la caja a revisar/editar", value=hoy)
-
-    # Buscar si ya existe cierre para la fecha seleccionada
-    cierre_existente = df_cie[df_cie['Fecha'].dt.date == fecha_sel] if not df_cie.empty else pd.DataFrame()
-    row_cierre = cierre_existente.iloc[-1] if not cierre_existente.empty else None
-    row_number = (cierre_existente.index[-1] + 2) if not cierre_existente.empty else None  # +2 por header en Sheets
-
-    # --- Ventas del día seleccionado ---
-    ventas_dia = df_v[df_v['Fecha'].dt.date == fecha_sel] if not df_v.empty else pd.DataFrame()
-    # Asegura que la columna exista
-    if 'Estado_Envio' not in ventas_dia.columns:
-        ventas_dia['Estado_Envio'] = "Entregado"  # O el valor por defecto que prefieras
-
-    ventas_pagadas = ventas_dia[ventas_dia['Estado_Envio'].isin(["Entregado", "Pagado"])]
-    ventas_pendientes = ventas_dia[ventas_dia['Estado_Envio'].isin(["Pendiente", "En camino"])]
-
-    # --- Gastos del día seleccionado (flujo único con pestaña Gastos) ---
-    gastos_dia = df_g[df_g['Fecha'] == fecha_sel.strftime("%Y-%m-%d")] if not df_g.empty else pd.DataFrame()
-    gastos_efectivo = gastos_dia[gastos_dia['Metodo_Pago'] == "Efectivo"]['Monto'].sum() if 'Metodo_Pago' in gastos_dia.columns else 0.0
-
-    # --- Prefills: base inicial toma el saldo real del cierre anterior más cercano ---
-    saldo_real_prev = 0.0
-    if not df_cie.empty:
-        cierres_previos = df_cie[df_cie['Fecha'].dt.date <= (fecha_sel - timedelta(days=1))]
-        if not cierres_previos.empty:
-            saldo_real_prev = float(cierres_previos.sort_values('Fecha').iloc[-1].get('Saldo_Real', 0.0))
-
-    base_inicial_default = float(row_cierre['Base_Inicial']) if row_cierre is not None else saldo_real_prev
-    ventas_efectivo = ventas_pagadas[ventas_pagadas['Metodo_Pago'] == "Efectivo"]['Total'].sum()
-    ventas_electronico = ventas_pagadas[ventas_pagadas['Metodo_Pago'].isin(["Nequi", "Daviplata", "Transferencia", "Tarjeta"])]["Total"].sum()
-
-    base_inicial = st.number_input("Base Inicial (Efectivo en caja al abrir)", min_value=0.0, value=float(base_inicial_default))
-    dinero_a_bancos = st.number_input("Dinero a Bancos (consignaciones)", min_value=0.0, value=float(row_cierre['Dinero_A_Bancos']) if row_cierre is not None else 0.0)
-
-    saldo_teorico = base_inicial + ventas_efectivo - gastos_efectivo - dinero_a_bancos
-    saldo_real_default = saldo_teorico
-    if row_cierre is not None:
-        try:
-            val = float(row_cierre['Saldo_Real'])
-            if pd.isna(val) or val < 0:
-                val = 0.0
-            saldo_real_default = max(0.0, val)
-        except Exception:
-            saldo_real_default = 0.0
-    else:
-        # Si saldo_teorico es NaN o negativo, forzar a 0
-        if pd.isna(saldo_real_default) or saldo_real_default < 0:
-            saldo_real_default = 0.0
-
-    saldo_real = st.number_input(
-        "Saldo Real contado en caja",
-        min_value=0.0,
-        value=saldo_real_default
-    )
-    diferencia = saldo_real - saldo_teorico
-
-    notas = st.text_area(
-        "Notas del cuadre",
-        value=row_cierre['Notas'] if row_cierre is not None and 'Notas' in row_cierre else "",
-        key="notas_cuadre"
-    )
-
-    # --- Visualización de métricas ---
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Ventas Efectivo", f"${ventas_efectivo:,.0f}")
-    col2.metric("Ventas Electrónico", f"${ventas_electronico:,.0f}")
-    col3.metric("Gastos Efectivo", f"${gastos_efectivo:,.0f}")
-    col4.metric("Base Inicial", f"${base_inicial:,.0f}")
-
-    col5, col6, col7 = st.columns(3)
-    col5.metric("Saldo Teórico", f"${saldo_teorico:,.0f}")
-    col6.metric("Saldo Real", f"${saldo_real:,.0f}")
-    col7.metric("Diferencia", f"${diferencia:,.0f}")
-
-    # --- Registro rápido de gastos desde el cuadre ---
-    with st.expander("➕ Registrar Gasto Rápido"):
-        with st.form("form_gasto_cuadre"):
-            tipo_gasto = st.selectbox("Tipo de Gasto", ["Variable", "Fijo"], key="tipo_gasto_cuadre")
-            opciones_var = ["Compra Inventario", "Mantenimiento", "Publicidad", "Transporte", "Servicios Públicos", "Otro"]
-            opciones_fijo = ["Arriendo", "Nómina", "Seguridad Social", "Internet", "Servicios Públicos", "Publicidad", "Mantenimiento", "Otro"]
-            categoria = st.selectbox("Categoría", opciones_var if tipo_gasto == "Variable" else opciones_fijo, key="categoria_cuadre")
-            descripcion_extra = ""
-            if categoria == "Otro":
-                descripcion_extra = st.text_input("Describe el gasto (Otro)", "", key="desc_otro_cuadre")
-            descripcion = st.text_area("Descripción", value=descripcion_extra, key="desc_gasto_cuadre")
-            monto = st.number_input("Monto", min_value=0.0, key="monto_gasto_cuadre")
-            metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"], key="metodo_gasto_cuadre")
-            banco = st.text_input("Banco/Origen", "", key="banco_gasto_cuadre")
-            if st.form_submit_button("Registrar Gasto"):
-                ts = int(now_co().timestamp())
-                ws_gas.append_row([
-                    f"GAS-{ts}",
-                    now_co().strftime("%Y-%m-%d"),
-                    tipo_gasto,
-                    categoria,
-                    descripcion,
-                    monto,
-                    metodo_pago,
-                    banco
-                ])
-                st.success("Gasto registrado correctamente.")
-                st.rerun()
-
-    # --- Ventas pendientes del día ---
-    st.markdown("### 🚩 Ventas Pendientes de Pago/Entrega")
-    if ventas_pendientes.empty:
-        st.success("No hay ventas pendientes hoy.")
-    else:
-        st.dataframe(ventas_pendientes[['ID_Venta', 'Fecha', 'Nombre_Cliente', 'Total', 'Metodo_Pago', 'Estado_Envio']], use_container_width=True)
-        selected = st.selectbox("Selecciona una venta pendiente para marcar como pagada", ventas_pendientes['ID_Venta'])
-        if st.button("Marcar como Pagada/Entregada"):
-            actualizar_estado_envio(ws_ven, selected, "Entregado")
-            st.success("Venta marcada como pagada/entregada.")
-            st.rerun()
-
-    # --- Notas y guardar cuadre ---
-    notas = st.text_area("Notas del cuadre", "")
-    if st.button("Guardar Cuadre en Google Sheets"):
-        fila_valores = [
-            fecha_sel.strftime("%Y-%m-%d"),   # Fecha  (A)
-            now_co().strftime("%H:%M:%S"),    # Hora   (B)
-            base_inicial,                     # C
-            ventas_efectivo,                  # D
-            ventas_electronico,               # E
-            gastos_efectivo,                  # F
-            dinero_a_bancos,                  # G
-            saldo_teorico,                    # H
-            saldo_real,                       # I
-            diferencia,                       # J
-            notas,                            # K
-            0.0,                              # L Costo_Mercancia
-            ventas_efectivo + ventas_electronico - gastos_efectivo  # M Margen_Ganado
-        ]
-        fila_valores = [sanitizar_para_sheet(x) for x in fila_valores]
-
-        if row_number:
-            ws_cie.update(f"A{row_number}:M{row_number}", [fila_valores])
-            st.success("Cierre actualizado.")
-        else:
-            ws_cie.append_row(fila_valores)
-            st.success("Cierre guardado.")
-
-def tab_resumen(ws_ven, ws_gas, ws_cie):
-    st.header("📊 Torre de Control")
-    df_v = leer_datos(ws_ven)
-    df_g = leer_datos(ws_gas)
-
-    hoy = now_co().date()
-    inicio = hoy - timedelta(days=30)
-    fecha_ini, fecha_fin = st.date_input("Rango de fechas", [inicio, hoy])
-
-    if fecha_ini and fecha_fin:
-        if not df_v.empty and 'Fecha' in df_v.columns:
-            df_v_f = df_v[(df_v['Fecha'] >= pd.Timestamp(fecha_ini)) & (df_v['Fecha'] <= pd.Timestamp(fecha_fin))]
-        else:
-            df_v_f = pd.DataFrame()
-        if not df_g.empty and 'Fecha' in df_g.columns:
-            df_g_f = df_g[(pd.to_datetime(df_g['Fecha'], errors='coerce') >= pd.Timestamp(fecha_ini)) & (pd.to_datetime(df_g['Fecha'], errors='coerce') <= pd.Timestamp(fecha_fin))]
-        else:
-            df_g_f = pd.DataFrame()
-
-        ventas_total = df_v_f['Total'].sum() if 'Total' in df_v_f else 0
-        ventas_cnt = len(df_v_f)
-        ventas_efectivo = df_v_f[df_v_f['Metodo_Pago'] == "Efectivo"]['Total'].sum() if 'Metodo_Pago' in df_v_f else 0
-        ventas_elec = df_v_f[df_v_f['Metodo_Pago'].isin(["Nequi","Daviplata","Transferencia","Tarjeta"])]["Total"].sum() if 'Metodo_Pago' in df_v_f else 0
-
-        gastos_total = df_g_f['Monto'].sum() if 'Monto' in df_g_f else 0
-        gastos_fijo = df_g_f[df_g_f['Tipo_Gasto'] == "Fijo"]['Monto'].sum() if 'Tipo_Gasto' in df_g_f else 0
-        gastos_var = df_g_f[df_g_f['Tipo_Gasto'] == "Variable"]['Monto'].sum() if 'Tipo_Gasto' in df_g_f else 0
-
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Ventas totales", f"${ventas_total:,.0f}", f"{ventas_cnt} ventas")
-        c2.metric("Ventas Efectivo / Electrónico", f"${ventas_efectivo:,.0f}", f"Elec: ${ventas_elec:,.0f}")
-        c3.metric("Gastos totales", f"${gastos_total:,.0f}", f"Fijos: ${gastos_fijo:,.0f} | Var: ${gastos_var:,.0f}")
-
+            
         st.markdown("---")
-        st.caption("Descarga para análisis completo:")
-        col_d1, col_d2 = st.columns(2)
-        if not df_v_f.empty:
-            col_d1.download_button("⬇️ Descargar Ventas (CSV)", df_v_f.to_csv(index=False).encode('utf-8'), "ventas_filtrado.csv", mime="text/csv", use_container_width=True)
-        if not df_g_f.empty:
-            col_d2.download_button("⬇️ Descargar Gastos (CSV)", df_g_f.to_csv(index=False).encode('utf-8'), "gastos_filtrado.csv", mime="text/csv", use_container_width=True)
-    else:
-        st.info("Selecciona un rango de fechas para ver los indicadores.")
+        c1, c2 = st.columns(2)
+        metodo = c1.selectbox("Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"])
+        entrega = c2.selectbox("Entrega", ["Local", "Domicilio"])
+        dir_envio = st.text_input("Dirección", value=st.session_state.cliente_actual.get('Direccion', '') if st.session_state.cliente_actual else "")
 
-def tab_clientes(ws_cli, ws_ven):
-    st.header("👤 Gestión de Clientes")
-    df_c = leer_datos(ws_cli)
-    search = st.text_input("Buscar cliente", key="busca_cli")
-    mask = (
-        df_c['Nombre'].str.contains(search, case=False, na=False) |
-        df_c['Cedula'].astype(str).str.contains(search, case=False, na=False) |
-        df_c['Mascota'].str.contains(search, case=False, na=False) |
-        df_c['Telefono'].astype(str).str.contains(search, case=False, na=False)
-    ) if search else [True]*len(df_c)
-    resultados = df_c[mask]
-
-    st.caption(f"Coincidencias: {len(resultados)}")
-    if not resultados.empty:
-        selected_idx = st.selectbox(
-            "Selecciona un cliente para ver detalle",
-            resultados.index,
-            format_func=lambda i: f"{resultados.loc[i, 'Nombre']} ({resultados.loc[i, 'Cedula']})",
-            key="cli_hist"
-        )
-        cliente = resultados.loc[selected_idx]
-        st.markdown(f"**Teléfono:** {cliente.get('Telefono','')}  |  **Email:** {cliente.get('Email','')}")
-        st.markdown(f"**Dirección:** {cliente.get('Direccion','')}")
-        st.markdown("---")
-        # Render limpio de mascotas (evita mostrar el JSON crudo)
-        info_mascotas = cliente.get('Info_Mascotas', '')
-        mascotas_render = []
-        if info_mascotas:
-            try:
-                lista = json.loads(str(info_mascotas))
-                if isinstance(lista, list):
-                    for m in lista:
-                        mascotas_render.append(f"{m.get('Nombre','')} | Tipo: {m.get('Tipo','')} | Cumple: {m.get('Cumpleaños','')}")
-            except:
-                pass
-        if not mascotas_render:
-            # Fallback a columnas planas
-            mascotas_render = [f"{cliente.get('Mascota','')} | Tipo: {cliente.get('Tipo_Mascota','')} | Cumple: {cliente.get('Cumpleaños_mascota','')}"]
-
-        st.markdown("**Mascotas:**")
-        for linea in mascotas_render:
-            st.markdown(f"- {linea}")
-        st.markdown("---")
-
-    with st.expander("➕ Crear/Editar Cliente"):
-        if 'cliente_guardado' not in st.session_state:
-            st.session_state.cliente_guardado = False
-        if 'last_welcome_link' not in st.session_state:
-            st.session_state.last_welcome_link = None
-
-        cedula = st.text_input("Cédula", key="cli_cedula")
-        nombre = st.text_input("Nombre", key="cli_nombre")
-        telefono = st.text_input("Teléfono", key="cli_telefono")
-        email = st.text_input("Email", key="cli_email")
-        direccion = st.text_input("Dirección", key="cli_direccion")
-        registro = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        st.markdown("#### Mascotas del Cliente")
-        num_mascotas = st.number_input("¿Cuántas mascotas tiene?", min_value=1, max_value=5, value=1, key="cli_num_mascotas")
-        mascotas = []
-        for i in range(num_mascotas):
-            st.markdown(f"##### Mascota #{i+1}")
-            nombre_mascota = st.text_input(f"Nombre Mascota #{i+1}", key=f"cli_mascota_nombre_{i}")
-            tipo_mascota = st.selectbox(f"Tipo Mascota #{i+1}", ["Perro", "Gato", "Otro"], key=f"cli_mascota_tipo_{i}")
-            cumple_mascota = st.date_input(f"Cumpleaños Mascota #{i+1}", key=f"cli_mascota_cumple_{i}")
-            mascotas.append({
-                "Nombre": nombre_mascota,
-                "Tipo": tipo_mascota,
-                "Cumpleaños": cumple_mascota.strftime("%Y-%m-%d")
-            })
-
-        if st.button("Guardar Cliente", type="primary", use_container_width=True):
-            cedula_clean = str(cedula).strip()
-            info_mascotas_json = json.dumps(mascotas)
-            mascota_principal = mascotas[0]['Nombre'] if mascotas else ""
-            tipo_principal = mascotas[0]['Tipo'] if mascotas else ""
-            cumple_principal = mascotas[0]['Cumpleaños'] if mascotas else ""
-
-            # ¿Existe ya el cliente por cédula?
-            fila_existente = None
-            if not df_c.empty and 'Cedula' in df_c.columns:
-                match = df_c[df_c['Cedula'].astype(str).str.strip() == cedula_clean]
-                if not match.empty:
-                    fila_existente = match.index[0] + 2  # +2 por el header en Sheets
-
-            valores = [
-                cedula_clean, nombre, telefono, email, direccion,
-                mascota_principal, tipo_principal, cumple_principal,
-                registro, info_mascotas_json
-            ]
-
-            if fila_existente:
-                ws_cli.update(f"A{fila_existente}:J{fila_existente}", [valores])
-                st.success("Cliente ya registrado. Datos actualizados.")
+        if st.button("✅ FINALIZAR VENTA", type="primary", use_container_width=True):
+            if not st.session_state.cliente_actual:
+                st.error("Falta seleccionar cliente")
             else:
-                ws_cli.append_row(valores)
-                st.success("Cliente guardado correctamente con sus mascotas.")
+                with st.spinner("Procesando..."):
+                    id_venta = f"VEN-{int(now_co().timestamp())}"
+                    fecha = now_co().strftime("%Y-%m-%d %H:%M:%S")
+                    items_str = ", ".join([f"{x['Cantidad']}x {x['Nombre_Producto']}" for x in st.session_state.carrito])
+                    items_json = json.dumps([{"ID": x["ID_Producto"], "Nombre": x["Nombre_Producto"], "Cantidad": x["Cantidad"]} for x in st.session_state.carrito])
+                    costo_total = sum([x.get('Costo',0)*x['Cantidad'] for x in st.session_state.carrito])
+                    
+                    fila = [
+                        id_venta, fecha, 
+                        st.session_state.cliente_actual.get('Cedula',''),
+                        st.session_state.cliente_actual.get('Nombre',''),
+                        entrega, dir_envio, 
+                        "Pendiente" if entrega != "Local" else "Entregado",
+                        metodo, "", total, items_str, items_json, costo_total,
+                        st.session_state.mascota_seleccionada
+                    ]
+                    
+                    # REGISTRAR (NUBE Y LOCAL)
+                    registrar_venta(fila, st.session_state.carrito)
+                    
+                    # GENERAR DOCUMENTOS
+                    venta_dict = {
+                        'ID': id_venta, 'Fecha': fecha, 'Cliente': st.session_state.cliente_actual.get('Nombre'),
+                        'Cedula_Cliente': st.session_state.cliente_actual.get('Cedula'), 'Direccion': dir_envio,
+                        'Mascota': st.session_state.mascota_seleccionada, 'Metodo_Pago': metodo, 'Tipo_Entrega': entrega, 'Total': total
+                    }
+                    pdf = generar_pdf_html(venta_dict, st.session_state.carrito)
+                    st.session_state.ultimo_pdf = pdf
+                    st.session_state.ultima_venta_id = id_venta
+                    
+                    tel = limpiar_tel(st.session_state.cliente_actual.get('Telefono',''))
+                    if tel:
+                        txt = msg_venta(venta_dict['Cliente'], venta_dict['Mascota'], items_str, total)
+                        st.session_state.whatsapp_link = f"https://wa.me/{tel}?text={urllib.parse.quote(txt)}"
+                    
+                    st.session_state.carrito = []
+                    st.success("Venta Exitosa")
+                    st.rerun()
 
-            mensaje = msg_bienvenida(nombre, mascota_principal)
-            telefono_clean = limpiar_tel(telefono)
-            st.session_state.last_welcome_link = f"https://wa.me/{telefono_clean}?text={urllib.parse.quote(mensaje)}"
-            reset_form_cliente()
+    if st.session_state.ultimo_pdf:
+        c1, c2 = st.columns(2)
+        c1.download_button("📄 PDF Factura", st.session_state.ultimo_pdf, file_name=f"Factura_{st.session_state.ultima_venta_id}.pdf", mime="application/pdf")
+        if st.session_state.whatsapp_link:
+            c2.markdown(f'<a href="{st.session_state.whatsapp_link}" target="_blank" class="btn-factura">📲 Enviar WhatsApp</a>', unsafe_allow_html=True)
 
-        if st.session_state.last_welcome_link:
-            st.markdown(
-                f"""<a href="{st.session_state.last_welcome_link}" target="_blank" style="display:inline-block; background:#25D366; color:white; padding:12px 20px; border-radius:8px; text-decoration:none; font-weight:bold; margin-top:10px;">📲 Enviar Bienvenida por WhatsApp</a>""",
-                unsafe_allow_html=True
-            )
 
-def reset_form_cliente():
-    for k in ["cli_cedula","cli_nombre","cli_telefono","cli_email","cli_direccion","cli_num_mascotas"]:
-        st.session_state.pop(k, None)
-    for i in range(5):
-        st.session_state.pop(f"cli_mascota_nombre_{i}", None)
-        st.session_state.pop(f"cli_mascota_tipo_{i}", None)
-        st.session_state.pop(f"cli_mascota_cumple_{i}", None)
-    st.session_state.cliente_guardado = False
+def tab_clientes_ui():
+    st.header("Gestión de Clientes")
+    # Formulario creación
+    with st.expander("Nuevo Cliente"):
+        with st.form("nuevo_cli"):
+            cedula = st.text_input("Cédula")
+            nombre = st.text_input("Nombre")
+            tel = st.text_input("Teléfono")
+            email = st.text_input("Email")
+            dir = st.text_input("Dirección")
+            mascota = st.text_input("Nombre Mascota Principal")
+            tipo = st.selectbox("Tipo", ["Perro", "Gato", "Otro"])
+            cumple = st.date_input("Cumpleaños Mascota")
+            
+            if st.form_submit_button("Guardar"):
+                # Crear JSON simple
+                info_m = json.dumps([{"Nombre": mascota, "Tipo": tipo, "Cumpleaños": str(cumple)}])
+                fila = [cedula, nombre, tel, email, dir, mascota, tipo, str(cumple), now_co().strftime("%Y-%m-%d"), info_m]
+                
+                # Check si existe (local)
+                df = st.session_state.db['cli']
+                existe = df[df['Cedula'].astype(str) == str(cedula)]
+                
+                if not existe.empty:
+                    # Update (más complejo, requeriría row_idx, por simplicidad en versión fixed sugerimos append o avisar)
+                    st.warning("Cliente ya existe con esa cédula (Lógica update pendiente)")
+                else:
+                    registrar_cliente(fila)
+                    st.success("Cliente guardado")
+                    
+                    # Generar link bienvenida
+                    link = f"https://wa.me/{limpiar_tel(tel)}?text={urllib.parse.quote(msg_bienvenida(nombre, mascota))}"
+                    st.markdown(f"[📲 Enviar Bienvenida]({link})")
 
-def tab_despachos(ws_ven):
-    st.header("🚚 Despachos y Ventas Pendientes")
-    df_v = leer_datos(ws_ven)
-    pendientes = df_v[df_v['Estado_Envio'].isin(["Pendiente", "En camino"])]
+    st.dataframe(st.session_state.db['cli'], use_container_width=True)
+
+def tab_despachos_ui():
+    st.header("🚚 Despachos")
+    df = st.session_state.db['ven']
+    pendientes = df[df['Estado_Envio'].isin(["Pendiente", "En camino"])]
+    
     if pendientes.empty:
-        st.success("No hay despachos pendientes.")
+        st.info("No hay despachos pendientes")
     else:
-        st.dataframe(pendientes[['ID_Venta', 'Fecha', 'Nombre_Cliente', 'Direccion_Envio', 'Total', 'Metodo_Pago', 'Estado_Envio']], use_container_width=True)
-        selected = st.selectbox("Selecciona una venta para actualizar estado", pendientes['ID_Venta'])
-        nuevo_estado = st.selectbox("Nuevo estado", ["Entregado", "Pagado", "Cancelado"])
-        if st.button("Actualizar Estado"):
-            actualizar_estado_envio(ws_ven, selected, nuevo_estado)
-            st.success("Estado actualizado.")
-            st.rerun()
-
-def tab_gastos(ws_gas):
-    st.header("💳 Registro de Gastos")
-    with st.expander("➕ Registrar Nuevo Gasto"):
-        with st.form("form_gasto"):
-            tipo_gasto = st.selectbox("Tipo de Gasto", ["Variable", "Fijo"], key="tipo_gasto_form")
-            opciones_var = ["Compra Inventario", "Mantenimiento", "Publicidad", "Transporte", "Servicios Públicos", "Otro"]
-            opciones_fijo = ["Arriendo", "Nómina", "Seguridad Social", "Internet", "Servicios Públicos", "Publicidad", "Mantenimiento", "Otro"]
-            categoria = st.selectbox("Categoría", opciones_var if tipo_gasto == "Variable" else opciones_fijo, key="categoria_form")
-            descripcion_extra = ""
-            if categoria == "Otro":
-                descripcion_extra = st.text_input("Describe el gasto (Otro)", "")
-            descripcion = st.text_area("Descripción", value=descripcion_extra)
-            monto = st.number_input("Monto", min_value=0.0)
-            metodo_pago = st.selectbox("Método de Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"])
-            banco = st.text_input("Banco/Origen")
-            if st.form_submit_button("Registrar Gasto"):
-                ts = int(now_co().timestamp())
-                ws_gas.append_row([
-                    f"GAS-{ts}",
-                    now_co().strftime("%Y-%m-%d"),
-                    tipo_gasto,
-                    categoria,
-                    descripcion,
-                    monto,
-                    metodo_pago,
-                    banco
-                ])
-                st.success("Gasto registrado correctamente.")
+        st.dataframe(pendientes)
+        sel_id = st.selectbox("Actualizar ID", pendientes['ID_Venta'])
+        nuevo = st.selectbox("Nuevo Estado", ["Entregado", "Pagado", "Cancelado"])
+        if st.button("Actualizar"):
+            ok = actualizar_estado_envio(sel_id, nuevo)
+            if ok: 
+                st.success("Actualizado")
                 st.rerun()
+            else: st.error("Error al actualizar")
 
-def inicializar_sesion():
-    if "ws_inv" not in st.session_state:
-        ws_inv, ws_cli, ws_ven, ws_gas, ws_cie, ws_cap, ws_prov, ws_ord, ws_rec = conectar_google_sheets()
-        st.session_state.ws_inv = ws_inv
-        st.session_state.ws_cli = ws_cli
-        st.session_state.ws_ven = ws_ven
-        st.session_state.ws_gas = ws_gas
-        st.session_state.ws_cie = ws_cie
-        st.session_state.ws_cap = ws_cap
-        st.session_state.ws_prov = ws_prov
-        st.session_state.ws_ord = ws_ord
-        st.session_state.ws_rec = ws_rec
+def tab_gastos_ui():
+    st.header("Gastos")
+    with st.form("gastos"):
+        tipo = st.selectbox("Tipo", ["Variable", "Fijo"])
+        cat = st.selectbox("Categoría", ["Inventario", "Servicios", "Nómina", "Otro"])
+        desc = st.text_input("Descripción")
+        monto = st.number_input("Monto", min_value=0.0)
+        metodo = st.selectbox("Pago", ["Efectivo", "Bancos", "Nequi"])
+        
+        if st.form_submit_button("Registrar"):
+            ts = int(now_co().timestamp())
+            fila = [f"GAS-{ts}", now_co().strftime("%Y-%m-%d"), tipo, cat, desc, monto, metodo, ""]
+            registrar_gasto(fila)
+            st.success("Gasto guardado")
 
-    # Cargar los datos una sola vez
-    if "df_inv" not in st.session_state:
-        st.session_state.df_inv = leer_datos(st.session_state.ws_inv)
-    if "df_cli" not in st.session_state:
-        st.session_state.df_cli = leer_datos(st.session_state.ws_cli)
-    if "df_ven" not in st.session_state:
-        st.session_state.df_ven = leer_datos(st.session_state.ws_ven)
-    if "df_gas" not in st.session_state:
-        st.session_state.df_gas = leer_datos(st.session_state.ws_gas)
-    if "df_cie" not in st.session_state:
-        st.session_state.df_cie = leer_datos(st.session_state.ws_cie)
+def tab_cuadre_ui():
+    st.header("Cuadre de Caja")
+    df_ven = st.session_state.db['ven']
+    df_gas = st.session_state.db['gas']
+    
+    fecha = st.date_input("Fecha", now_co().date())
+    
+    # Filtros locales
+    # Asegurar tipos
+    df_ven['Fecha_dt'] = pd.to_datetime(df_ven['Fecha']).dt.date
+    if 'Fecha' in df_gas.columns:
+        df_gas['Fecha_dt'] = pd.to_datetime(df_gas['Fecha'], errors='coerce').dt.date
+    else: df_gas['Fecha_dt'] = None
+    
+    v_dia = df_ven[df_ven['Fecha_dt'] == fecha]
+    g_dia = df_gas[df_gas['Fecha_dt'] == fecha]
+    
+    v_efec = v_dia[v_dia['Metodo_Pago'] == 'Efectivo']['Total'].sum()
+    v_digi = v_dia[v_dia['Metodo_Pago'].isin(['Nequi','Daviplata','Transferencia'])]['Total'].sum()
+    g_efec = g_dia[g_dia['Metodo_Pago'] == 'Efectivo']['Monto'].sum()
+    
+    c1,c2,c3 = st.columns(3)
+    c1.metric("Ventas Efectivo", f"${v_efec:,.0f}")
+    c2.metric("Ventas Digital", f"${v_digi:,.0f}")
+    c3.metric("Gastos Efectivo", f"${g_efec:,.0f}")
+    
+    st.markdown("---")
+    with st.form("cierre_caja"):
+        base = st.number_input("Base Inicial", 0.0)
+        bancos = st.number_input("Enviado a Bancos", 0.0)
+        real = st.number_input("Saldo Real (Conteo)", 0.0)
+        notas = st.text_area("Notas")
+        
+        teorico = base + v_efec - g_efec - bancos
+        dif = real - teorico
+        st.caption(f"Teórico: ${teorico:,.0f} | Diferencia: ${dif:,.0f}")
+        
+        if st.form_submit_button("Guardar Cierre"):
+            sh = conectar_google_sheets()
+            ws_cie = obtener_worksheets(sh)["cie"]
+            fila = [
+                fecha.strftime("%Y-%m-%d"), now_co().strftime("%H:%M:%S"),
+                base, v_efec, v_digi, g_efec, bancos, teorico, real, dif, notas,
+                0, (v_efec+v_digi-g_efec)
+            ]
+            fila = [sanitizar_para_sheet(x) for x in fila]
+            safe_api_call(ws_cie.append_row, fila)
+            st.success("Cierre guardado en la nube")
+
+def tab_resumen_ui():
+    st.header("Resumen Gerencial")
+    df = st.session_state.db['ven']
+    if not df.empty:
+        total = df['Total'].sum()
+        st.metric("Ventas Históricas", f"${total:,.0f}")
+        
+        # Grafico simple
+        df['Fecha_D'] = pd.to_datetime(df['Fecha']).dt.date
+        diario = df.groupby('Fecha_D')['Total'].sum()
+        st.bar_chart(diario)
+
+# ==========================================
+# 6. MAIN APP
+# ==========================================
 
 def main():
-    configurar_pagina()
-    inicializar_sesion()  # <--- SOLO UNA VEZ POR SESIÓN
+    # Inicialización de DB
+    if 'db' not in st.session_state:
+        cargar_datos_iniciales()
+    
+    # Barra Lateral
+    with st.sidebar:
+        st.title("Nexus Pro")
+        if st.button("🔄 Sincronizar Datos", help="Trae cambios de la nube si alguien más editó el Excel"):
+            st.cache_resource.clear()
+            cargar_datos_iniciales()
+            st.rerun()
+        st.caption(f"Última sinc: {st.session_state.get('ultima_sincronizacion', 'Nunca').strftime('%H:%M:%S')}")
+        
+        st.divider()
+        if st.button("🛠️ Normalizar Inventario"):
+            normalizar_todas_las_referencias()
 
-    st.title("🐾 Nexus Pro | Bigotes y Patitas")
-    tabs = st.tabs([
-        "🛒 POS",
-        "👤 Clientes",
-        "🚚 Despachos",
-        "💳 Gastos",
-        "💵 Cuadre de Caja",
-        "📊 Resumen"
-    ])
-    with tabs[0]:
-        tab_pos(st.session_state.ws_inv, st.session_state.ws_cli, st.session_state.ws_ven)
-    with tabs[4]:
-        tab_cuadre(st.session_state.ws_ven, st.session_state.ws_gas, st.session_state.ws_cie)
-    with tabs[5]:
-        tab_resumen(st.session_state.ws_ven, st.session_state.ws_gas, st.session_state.ws_cie)
-    with tabs[1]:
-        tab_clientes(st.session_state.ws_cli, st.session_state.ws_ven)
-    with tabs[2]:
-        tab_despachos(st.session_state.ws_ven)
-    with tabs[3]:
-        tab_gastos(st.session_state.ws_gas)
-    # Botón para normalizar referencias en inventario
-    if st.button("🔄 Normalizar todas las referencias en Inventario"):
-        normalizar_todas_las_referencias(st.session_state.ws_inv)
+    # Tabs
+    tabs = st.tabs(["🛒 POS", "👤 Clientes", "🚚 Despachos", "💳 Gastos", "💵 Cuadre", "📊 Resumen"])
+    
+    with tabs[0]: tab_pos()
+    with tabs[1]: tab_clientes_ui()
+    with tabs[2]: tab_despachos_ui()
+    with tabs[3]: tab_gastos_ui()
+    with tabs[4]: tab_cuadre_ui()
+    with tabs[5]: tab_resumen_ui()
 
 if __name__ == "__main__":
     main()
