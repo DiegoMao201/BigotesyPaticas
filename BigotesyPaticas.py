@@ -453,7 +453,21 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
     dinero_a_bancos = st.number_input("Dinero a Bancos (consignaciones)", min_value=0.0, value=float(row_cierre['Dinero_A_Bancos']) if row_cierre is not None else 0.0)
 
     saldo_teorico = base_inicial + ventas_efectivo - gastos_efectivo - dinero_a_bancos
-    saldo_real = st.number_input("Saldo Real contado en caja", min_value=0.0, value=float(row_cierre['Saldo_Real']) if row_cierre is not None else saldo_teorico)
+    saldo_real_default = saldo_teorico
+    if row_cierre is not None:
+        try:
+            val = float(row_cierre['Saldo_Real'])
+            if pd.isna(val) or val < 0:
+                val = 0.0
+            saldo_real_default = max(0.0, val)
+        except Exception:
+            saldo_real_default = 0.0
+
+    saldo_real = st.number_input(
+        "Saldo Real contado en caja",
+        min_value=0.0,
+        value=saldo_real_default
+    )
     diferencia = saldo_real - saldo_teorico
 
     notas = st.text_area(
