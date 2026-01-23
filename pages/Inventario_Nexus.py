@@ -209,6 +209,13 @@ def cargar_datos_completos(sh):
     else:
         df_ven = pd.DataFrame(columns=cols_ven)
 
+    # Une inventario con proveedores por SKU interno
+    df_inv = pd.merge(df_inv, df_prov[['SKU_Interno', 'Nombre_Proveedor', 'Costo_Proveedor', 'Factor_Pack']], 
+                      left_on='ID_Producto', right_on='SKU_Interno', how='left')
+    df_inv['Nombre_Proveedor'] = df_inv['Nombre_Proveedor'].fillna('Sin Asignar')
+    df_inv['Costo_Proveedor'] = df_inv['Costo_Proveedor'].fillna(df_inv['Costo'])
+    df_inv['Factor_Pack'] = df_inv['Factor_Pack'].fillna(1)
+
     return {
         "df_inv": df_inv, "ws_inv": ws_inv,
         "df_ven": df_ven, "ws_ven": ws_ven,
@@ -736,9 +743,10 @@ def sugerencias_compra(df_inv, ventas_dict, dias_ventas=90, dias_stock=8, stock_
     df_inv['Stock_Objetivo'] = np.ceil(df_inv['Velocidad_Diaria'] * dias_stock + stock_seguridad)
     # Faltante: lo que falta para llegar al stock objetivo, redondeado hacia arriba
     df_inv['Faltante_Unidades'] = np.ceil(df_inv['Stock_Objetivo'] - df_inv['Stock']).clip(lower=0).astype(int)
-    # Si el producto está en 0 y se ha vendido, sugerir al menos 1
+    # Si el producto está en 0 y se ha vendido, sugerir al menos el stock objetivo
     df_inv.loc[(df_inv['Stock'] == 0) & (df_inv['Ventas_periodo'] > 0), 'Faltante_Unidades'] = df_inv.loc[(df_inv['Stock'] == 0) & (df_inv['Ventas_periodo'] > 0), 'Stock_Objetivo'].astype(int)
-    columnas = ['ID_Producto', 'ID_Producto_Norm', 'Nombre', 'Stock', 'Ventas_periodo', 'Velocidad_Diaria', 'Stock_Objetivo', 'Faltante_Unidades', 'Nombre_Proveedor']
+    columnas = ['ID_Producto', 'ID_Producto_Norm', 'SKU_Proveedor', 'Nombre', 'Stock', 'Precio', 'Costo', 'Categoria',
+                'Ventas_periodo', 'Velocidad_Diaria', 'Stock_Objetivo', 'Faltante_Unidades', 'Nombre_Proveedor', 'Costo_Proveedor', 'Factor_Pack']
     faltantes = [c for c in columnas if c not in df_inv.columns]
     if faltantes:
         st.error(f"Las siguientes columnas faltan en el DataFrame: {faltantes}")
