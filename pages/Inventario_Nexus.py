@@ -212,7 +212,7 @@ def analizar_ventas_inteligente(df_ven, df_inv):
 def procesar_inventario_power_logic(df_inv, df_prov, stats_ventas):
     """
     Fusiona datos y aplica lógica de reabastecimiento avanzada.
-    Evita el KeyError asegurando la existencia de columnas post-merge.
+    CORRECCIÓN: Usa numpy.where para evitar ValueError en Pandas recientes.
     """
     # 1. PREPARAR DATOS PROVEEDOR (Tomar el de menor costo si hay duplicados)
     if not df_prov.empty:
@@ -232,17 +232,24 @@ def procesar_inventario_power_logic(df_inv, df_prov, stats_ventas):
         master['Costo_Proveedor'] = None
         master['Factor_Pack'] = 1
 
-    # 2. LIMPIEZA POST-MERGE (Aquí corregimos el KeyError)
-    # Si la columna no se creó por falla en merge, la creamos
+    # 2. LIMPIEZA POST-MERGE (Aquí estaba el error)
     cols_check = ['Nombre_Proveedor', 'Costo_Proveedor', 'Factor_Pack']
     for col in cols_check:
         if col not in master.columns:
             master[col] = np.nan
 
-    # Rellenar valores nulos
+    # A. Nombre Proveedor
     master['Nombre_Proveedor'] = master['Nombre_Proveedor'].fillna('Generico / Sin Asignar')
-    master['Costo_Proveedor'] = master['Costo_Proveedor'].fillna(master['Costo']).replace(0, master['Costo'])
-    master['Factor_Pack'] = master['Factor_Pack'].fillna(1).replace(0, 1)
+
+    # B. Costo Proveedor (CORREGIDO CON NP.WHERE)
+    # Primero llenamos los NaNs con el Costo interno
+    master['Costo_Proveedor'] = master['Costo_Proveedor'].fillna(master['Costo'])
+    # Luego, si el costo sigue siendo 0 (o menor), forzamos usar el Costo interno
+    master['Costo_Proveedor'] = np.where(master['Costo_Proveedor'] <= 0, master['Costo'], master['Costo_Proveedor'])
+
+    # C. Factor Pack (CORREGIDO)
+    master['Factor_Pack'] = master['Factor_Pack'].fillna(1)
+    master['Factor_Pack'] = np.where(master['Factor_Pack'] <= 0, 1, master['Factor_Pack'])
 
     # 3. CÁLCULOS DE INTELIGENCIA DE NEGOCIO
     resultados = []
@@ -257,10 +264,9 @@ def procesar_inventario_power_logic(df_inv, df_prov, stats_ventas):
         v30 = data_vta['v30']
         
         # Velocidad Diaria (Ponderada: damos más peso a lo reciente)
-        # Si v30 es mayor proporcionalmente, usamos v30 para prevenir quiebre
         diario_90 = v90 / 90
         diario_30 = v30 / 30
-        velocidad_diaria = max(diario_90, diario_30) # Enfoque conservador: prefiere la velocidad más alta
+        velocidad_diaria = max(diario_90, diario_30) # Enfoque conservador
         
         # Días de Cobertura
         dias_cobertura = stock_actual / velocidad_diaria if velocidad_diaria > 0 else 999
@@ -276,14 +282,13 @@ def procesar_inventario_power_logic(df_inv, df_prov, stats_ventas):
             estado = "✅ OK"
             
         # LÓGICA DE SUGERENCIA DE COMPRA (SUPER PODEROSA)
-        # Definimos Target: Queremos tener stock para 45 días (Ciclo)
         dias_objetivo = 45 
-        stock_seguridad = velocidad_diaria * 5 # 5 días extra por si acaso
+        stock_seguridad = velocidad_diaria * 5 # 5 días extra de seguridad
         
         stock_ideal = (velocidad_diaria * dias_objetivo) + stock_seguridad
         faltante_unidades = max(0, stock_ideal - stock_actual)
         
-        # Ajuste a Pack (Si proveedor vende por cajas de 12, no pedir 13 unidades, pedir 24)
+        # Ajuste a Pack
         pack = row['Factor_Pack']
         if faltante_unidades > 0:
             cajas_sugeridas = np.ceil(faltante_unidades / pack)
