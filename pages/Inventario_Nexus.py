@@ -728,11 +728,11 @@ def ventas_por_producto(df_ven, df_inv):
     return ventas_dict
 
 def sugerencias_compra(df_inv, ventas_dict):
-    df_inv['Ventas_30d'] = df_inv['ID_Producto_Norm'].map(ventas_dict).fillna(0)
-    df_inv['Velocidad_Diaria'] = df_inv['Ventas_30d'] / 30
-    df_inv['Stock_Objetivo'] = (df_inv['Velocidad_Diaria'] * 30).round()
+    df_inv['Ventas_8d'] = df_inv['ID_Producto_Norm'].map(ventas_dict).fillna(0) * (8/30)  # Escala ventas a 8 días si tu dict es de 30 días
+    df_inv['Velocidad_Diaria'] = df_inv['Ventas_8d'] / 8
+    df_inv['Stock_Objetivo'] = (df_inv['Velocidad_Diaria'] * 8).round()
     df_inv['Faltante_Unidades'] = (df_inv['Stock_Objetivo'] - df_inv['Stock']).clip(lower=0)
-    return df_inv[['ID_Producto', 'Nombre', 'Stock', 'Ventas_30d', 'Velocidad_Diaria', 'Stock_Objetivo', 'Faltante_Unidades']]
+    return df_inv[['ID_Producto', 'Nombre', 'Stock', 'Ventas_8d', 'Velocidad_Diaria', 'Stock_Objetivo', 'Faltante_Unidades']]
 
 # ==========================================
 # 6. FUNCIONES DE ESCRITURA
