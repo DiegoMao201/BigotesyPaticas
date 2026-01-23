@@ -777,5 +777,11 @@ def normalizar_todas_las_referencias(ws_inv):
         ws_inv.update_cell(i+2, col_norm, val)
     st.success("¡Referencias normalizadas en la hoja Inventario!")
 
+@st.cache_data(ttl=60)  # o más, según tu necesidad
+def leer_datos_cached(ws):
+    raw = ws.get_all_values()
+    # ...procesamiento igual que leer_datos...
+    return df
+
 if __name__ == "__main__":
     main()

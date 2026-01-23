@@ -34,6 +34,36 @@ def conectar_google_sheets():
     ws_rec = sh.worksheet("Historial_Recepciones")
     return ws_inv, ws_cli, ws_ven, ws_gas, ws_cie, ws_cap, ws_prov, ws_ord, ws_rec
 
+@st.cache_data(ttl=60)  # o más, según tu necesidad
+def leer_datos_cached(ws):
+    raw = ws.get_all_values()
+    if not raw: 
+        return pd.DataFrame()
+    header = raw[0]
+
+    # Reemplaza encabezados vacíos y hace únicos los duplicados
+    seen = {}
+    clean_header = []
+    for i, h in enumerate(header):
+        if not h or h.strip() == "":
+            h = f"Col_{i+1}"
+        h = h.strip()
+        if h in seen:
+            seen[h] += 1
+            h = f"{h}_{seen[h]}"
+        else:
+            seen[h] = 0
+        clean_header.append(h)
+
+    df = pd.DataFrame(raw[1:], columns=clean_header)
+
+    for col in ['Precio', 'Stock', 'Costo', 'Monto', 'Total', 'Costo_Total', 'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 'Dinero_A_Bancos', 'Saldo_Teorico', 'Saldo_Real', 'Diferencia']:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    if 'Fecha' in df.columns:
+        df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+    return df
+
 def leer_datos(ws):
     try:
         raw = ws.get_all_values()
