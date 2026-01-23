@@ -519,6 +519,10 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
             saldo_real_default = max(0.0, val)
         except Exception:
             saldo_real_default = 0.0
+    else:
+        # Si saldo_teorico es NaN o negativo, forzar a 0
+        if pd.isna(saldo_real_default) or saldo_real_default < 0:
+            saldo_real_default = 0.0
 
     saldo_real = st.number_input(
         "Saldo Real contado en caja",
