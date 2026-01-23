@@ -738,7 +738,13 @@ def sugerencias_compra(df_inv, ventas_dict, dias_ventas=90, dias_stock=8, stock_
     df_inv['Faltante_Unidades'] = np.ceil(df_inv['Stock_Objetivo'] - df_inv['Stock']).clip(lower=0).astype(int)
     # Si el producto está en 0 y se ha vendido, sugerir al menos 1
     df_inv.loc[(df_inv['Stock'] == 0) & (df_inv['Ventas_periodo'] > 0), 'Faltante_Unidades'] = df_inv.loc[(df_inv['Stock'] == 0) & (df_inv['Ventas_periodo'] > 0), 'Stock_Objetivo'].astype(int)
-    return df_inv[['ID_Producto', 'ID_Producto_Norm', 'Nombre', 'Stock', 'Ventas_periodo', 'Velocidad_Diaria', 'Stock_Objetivo', 'Faltante_Unidades', 'Nombre_Proveedor']]
+    columnas = ['ID_Producto', 'ID_Producto_Norm', 'Nombre', 'Stock', 'Ventas_periodo', 'Velocidad_Diaria', 'Stock_Objetivo', 'Faltante_Unidades', 'Nombre_Proveedor']
+    faltantes = [c for c in columnas if c not in df_inv.columns]
+    if faltantes:
+        st.error(f"Las siguientes columnas faltan en el DataFrame: {faltantes}")
+        st.write("Columnas disponibles:", list(df_inv.columns))
+        return df_inv
+    return df_inv[columnas]
 
 # ==========================================
 # 6. FUNCIONES DE ESCRITURA
