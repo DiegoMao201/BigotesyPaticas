@@ -804,11 +804,3 @@ def actualizar_stock_gsheets(ws_inv, id_producto, unidades_sumar):
 
 if __name__ == "__main__":
     main()
-
-import streamlit as st
-
-@st.cache_data(ttl=60)  # o más, según tu necesidad
-def leer_datos_cached(ws):
-    raw = ws.get_all_values()
-    # ...procesamiento igual que leer_datos...
-    return df

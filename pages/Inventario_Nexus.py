@@ -577,94 +577,46 @@ def main():
 
     # --- TAB 2: COMPRAS ---
     with tabs[1]:
-        st.subheader("🛒 Gestión de Proveedores y Pedidos")
-        
-        provs = sorted(master_buy['Nombre_Proveedor'].unique().tolist())
-        sel_prov = st.selectbox("👉 Selecciona Proveedor:", provs)
-        
-        df_prov_active = master_buy[master_buy['Nombre_Proveedor'] == sel_prov].copy()
-        
-        with st.expander("➕ Agregar productos adicionales a esta orden"):
-            all_products = master_unico['Nombre'].unique().tolist()
-            add_prods = st.multiselect("Buscar en catálogo completo:", all_products)
-            
-            if add_prods:
-                manual_rows = master_buy[
-                    (master_buy['Nombre'].isin(add_prods)) & 
-                    ((master_buy['Nombre_Proveedor'] == sel_prov) | (master_buy['Nombre_Proveedor'] == 'Genérico'))
-                ].copy()
-                manual_rows = manual_rows.sort_values('Nombre_Proveedor').drop_duplicates(subset=['ID_Producto'], keep='first')
-                manual_rows['Cajas_Sugeridas'] = 1
-                df_editor_source = pd.concat([df_prov_active[df_prov_active['Cajas_Sugeridas']>0], manual_rows]).drop_duplicates(subset=['ID_Producto'])
-            else:
-                df_editor_source = df_prov_active[df_prov_active['Cajas_Sugeridas'] > 0]
+        st.subheader("🛒 Sugerencias de Compra Global (Todos los Productos)")
 
-        if df_editor_source.empty:
-            st.info(f"El sistema no sugiere pedidos automáticos para {sel_prov}. Agrega productos manualmente arriba.")
-            orden_final = pd.DataFrame()
-        else:
-            st.markdown("##### 📝 Confirmar Cantidades")
-            st.dataframe(
-                df_editor_source[['ID_Producto_Norm', 'Nombre', 'Stock', 'Cajas_Sugeridas', 'Factor_Pack', 'Costo_Proveedor']]
-                    .rename(columns={'ID_Producto_Norm': 'SKU'}),
-                use_container_width=True,
-                hide_index=True
-            )
+        # Filtrar solo productos con faltante > 0
+        df_sugerencias = master_buy[master_buy['Faltante_Unidades'] > 0].copy()
+        df_sugerencias = df_sugerencias.sort_values(['Nombre_Proveedor', 'Nombre'])
 
-            orden_final = st.data_editor(
-                df_editor_source[['ID_Producto', 'Nombre', 'Stock', 'Cajas_Sugeridas', 'Factor_Pack', 'Costo_Proveedor']],
-                column_config={
-                    "Cajas_Sugeridas": st.column_config.NumberColumn("Cajas", min_value=1, step=1),
-                    "Costo_Proveedor": st.column_config.NumberColumn("Costo Pack", format="$%.0f"),
-                    "ID_Producto": st.column_config.TextColumn("SKU", disabled=True),
-                    "Nombre": st.column_config.TextColumn("Producto", disabled=True, width="large"),
-                },
-                hide_index=True,
-                use_container_width=True,
-                key="editor_orden"
-            )
+        # Agrega columna para seleccionar productos
+        df_sugerencias['Seleccionar'] = False
 
-        if not orden_final.empty:
-            total_orden = (orden_final['Cajas_Sugeridas'] * orden_final['Factor_Pack'] * orden_final['Costo_Proveedor']).sum()
-            
-            st.markdown(f"""
-            <div class="total-box">
-                <span style="font-size:18px; color:#187f77;">Total Estimado Orden:</span> 
-                <span style="font-size:24px; font-weight:bold; color:#f5a641;">${total_orden:,.0f}</span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            c1, c2, c3 = st.columns(3)
-            email_prov = df_prov_active['Email'].iloc[0] if not df_prov_active.empty else ""
-            
-            with c1:
-                dest = st.text_input("Email Proveedor", value=email_prov)
-                if st.button("📧 Enviar Correo Oficial", use_container_width=True):
-                    ok, msg = enviar_correo(dest, sel_prov, orden_final)
-                    if ok:
-                        guardar_orden(data['ws_ord'], sel_prov, orden_final, total_orden)
-                        st.success("¡Pedido enviado y guardado!")
-                        time.sleep(2)
-                        st.rerun()
-                    else:
-                        st.error(f"Error: {msg}")
-            
-            with c2:
-                tel = st.text_input("WhatsApp (Solo números)", placeholder="57300...")
-                if st.button("📱 Generar Link WhatsApp", use_container_width=True):
-                    link = link_whatsapp(tel, sel_prov, orden_final)
-                    if link:
-                        guardar_orden(data['ws_ord'], sel_prov, orden_final, total_orden)
-                        st.markdown(f"<a href='{link}' target='_blank' style='display:block; text-align:center; background:#25D366; color:white; padding:10px; border-radius:5px; text-decoration:none;'>👉 Abrir WhatsApp</a>", unsafe_allow_html=True)
-            
-            with c3:
-                st.write("")
-                st.write("")
-                if st.button("💾 Guardar sin Enviar", use_container_width=True):
-                    guardar_orden(data['ws_ord'], sel_prov, orden_final, total_orden)
-                    st.success("Guardado en historial.")
-                    time.sleep(1)
-                    st.rerun()
+        # Editor para seleccionar productos
+        edited = st.data_editor(
+            df_sugerencias[['Seleccionar', 'ID_Producto_Norm', 'Nombre', 'Stock', 'Ventas_90d', 'Faltante_Unidades', 'Nombre_Proveedor', 'Costo_Proveedor']],
+            column_config={
+                "Seleccionar": st.column_config.CheckboxColumn("Seleccionar"),
+                "ID_Producto_Norm": st.column_config.TextColumn("SKU", disabled=True),
+                "Nombre": st.column_config.TextColumn("Producto", disabled=True, width="large"),
+                "Stock": st.column_config.NumberColumn("Stock", disabled=True),
+                "Ventas_90d": st.column_config.NumberColumn("Ventas 90d", disabled=True),
+                "Faltante_Unidades": st.column_config.NumberColumn("Faltante", disabled=True),
+                "Nombre_Proveedor": st.column_config.TextColumn("Proveedor", disabled=True),
+                "Costo_Proveedor": st.column_config.NumberColumn("Costo", format="$%.0f", disabled=True),
+            },
+            use_container_width=True,
+            hide_index=True,
+            key="editor_sugerencias"
+        )
+
+        # Filtra los seleccionados
+        seleccionados = edited[edited['Seleccionar']]
+
+        if not seleccionados.empty:
+            st.success(f"{len(seleccionados)} productos seleccionados para orden de compra.")
+            # Agrupa por proveedor y muestra botón para generar orden por proveedor
+            for prov, df_prov in seleccionados.groupby('Nombre_Proveedor'):
+                st.markdown(f"### Orden de compra para: {prov}")
+                st.dataframe(df_prov[['ID_Producto_Norm', 'Nombre', 'Faltante_Unidades', 'Costo_Proveedor']], use_container_width=True)
+                if st.button(f"Generar Orden para {prov}", key=f"orden_{prov}"):
+                    total = (df_prov['Faltante_Unidades'] * df_prov['Costo_Proveedor']).sum()
+                    guardar_orden(data['ws_ord'], prov, df_prov, total)
+                    st.success(f"Orden de compra generada para {prov}")
 
     # --- TAB 3: RECEPCIÓN ---
     with tabs[2]:
