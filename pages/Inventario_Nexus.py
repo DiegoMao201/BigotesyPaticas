@@ -586,8 +586,13 @@ def main():
     with tabs[1]:
         st.subheader("🛒 Sugerencias de Compra Global (Todos los Productos)")
 
-        # Filtrar solo productos con faltante > 0
-        df_sugerencias = master_buy[master_buy['Faltante_Unidades'] > 0].copy()
+        df_inv = data['df_inv']
+        df_prov = data['df_prov'] if 'df_prov' in data else pd.DataFrame()
+        ventas_dict = ventas_por_producto(data['df_ven'], df_inv, dias=15)
+        sugerencias = sugerencias_compra(df_inv, df_prov, ventas_dict, dias_ventas=15, dias_stock=8, stock_seguridad=1)
+
+        # Solo productos con faltante > 0
+        df_sugerencias = sugerencias[sugerencias['Faltante_Unidades'] > 0].copy()
         df_sugerencias = df_sugerencias.sort_values(['Nombre_Proveedor', 'Nombre'])
 
         # Agrega columna para seleccionar productos
@@ -595,13 +600,13 @@ def main():
 
         # Editor para seleccionar productos
         edited = st.data_editor(
-            df_sugerencias[['Seleccionar', 'ID_Producto_Norm', 'Nombre', 'Stock', 'Ventas_90d', 'Faltante_Unidades', 'Nombre_Proveedor', 'Costo_Proveedor']],
+            df_sugerencias[['Seleccionar', 'ID_Producto_Norm', 'Nombre', 'Stock', 'Ventas_periodo', 'Faltante_Unidades', 'Nombre_Proveedor', 'Costo_Proveedor']],
             column_config={
                 "Seleccionar": st.column_config.CheckboxColumn("Seleccionar"),
                 "ID_Producto_Norm": st.column_config.TextColumn("SKU", disabled=True),
                 "Nombre": st.column_config.TextColumn("Producto", disabled=True, width="large"),
                 "Stock": st.column_config.NumberColumn("Stock", disabled=True),
-                "Ventas_90d": st.column_config.NumberColumn("Ventas 90d", disabled=True),
+                "Ventas_periodo": st.column_config.NumberColumn("Ventas 15d", disabled=True),
                 "Faltante_Unidades": st.column_config.NumberColumn("Faltante", disabled=True),
                 "Nombre_Proveedor": st.column_config.TextColumn("Proveedor", disabled=True),
                 "Costo_Proveedor": st.column_config.NumberColumn("Costo", format="$%.0f", disabled=True),
@@ -706,15 +711,19 @@ def main():
             except:
                 st.error("No se pudo leer la hoja de Ajustes. Verifica que exista la hoja 'Historial_Ajustes' en Google Sheets.")
 
-def ventas_por_producto(df_ven, df_inv):
-    # Extrae ventas de los últimos 30 días
+def normalizar_id_producto(id_prod):
+    """Convierte cualquier ID_Producto a string, sin espacios, sin puntos, sin comas, sin ceros a la izquierda innecesarios."""
+    if pd.isna(id_prod): return ""
+    val = str(id_prod).strip().replace(".", "").replace(",", "")
+    val = val.lstrip("0")
+    return val.upper()
+
+def ventas_por_producto(df_ven, df_inv, dias=15):
     df_ven['Fecha'] = pd.to_datetime(df_ven['Fecha'], errors='coerce')
-    cutoff = datetime.now() - timedelta(days=30)
+    cutoff = datetime.now() - timedelta(days=dias)
     ven_recent = df_ven[df_ven['Fecha'] >= cutoff]
 
-    # Diccionario para sumar ventas por referencia normalizada
     ventas_dict = {}
-
     for _, row in ven_recent.iterrows():
         items_str = str(row.get('Items', ''))
         items_list = items_str.split(',')
@@ -727,14 +736,34 @@ def ventas_por_producto(df_ven, df_inv):
                 except:
                     qty = 1
                 nombre = nombre.strip()
-                # Buscar referencia normalizada en inventario
                 match = df_inv[df_inv['Nombre'].str.upper().str.strip() == nombre.upper().strip()]
                 if not match.empty:
                     ref_norm = match.iloc[0]['ID_Producto_Norm']
                     ventas_dict[ref_norm] = ventas_dict.get(ref_norm, 0) + qty
     return ventas_dict
 
-def sugerencias_compra(df_inv, ventas_dict, dias_ventas=90, dias_stock=8, stock_seguridad=1):
+def sugerencias_compra(df_inv, df_prov, ventas_dict, dias_ventas=15, dias_stock=8, stock_seguridad=1):
+    # Normaliza referencia en proveedores (solo en DataFrame, no en Google Sheets)
+    if not df_prov.empty:
+        df_prov = df_prov.copy()
+        df_prov['SKU_Interno_Norm'] = df_prov['SKU_Interno'].apply(normalizar_id_producto)
+        df_inv = df_inv.copy()
+        # Merge por referencia normalizada
+        df_inv = pd.merge(
+            df_inv,
+            df_prov[['SKU_Interno_Norm', 'Nombre_Proveedor', 'Costo_Proveedor', 'Factor_Pack']],
+            left_on='ID_Producto_Norm',
+            right_on='SKU_Interno_Norm',
+            how='left'
+        )
+        df_inv['Nombre_Proveedor'] = df_inv['Nombre_Proveedor'].fillna('Sin Asignar')
+        df_inv['Costo_Proveedor'] = df_inv['Costo_Proveedor'].fillna(df_inv['Costo'])
+        df_inv['Factor_Pack'] = df_inv['Factor_Pack'].fillna(1)
+    else:
+        df_inv['Nombre_Proveedor'] = 'Sin Asignar'
+        df_inv['Costo_Proveedor'] = df_inv['Costo']
+        df_inv['Factor_Pack'] = 1
+
     # Ventas en los últimos X días
     df_inv['Ventas_periodo'] = df_inv['ID_Producto_Norm'].map(ventas_dict).fillna(0)
     # Velocidad diaria
