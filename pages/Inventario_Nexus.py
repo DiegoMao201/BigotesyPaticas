@@ -604,6 +604,13 @@ def main():
             orden_final = pd.DataFrame()
         else:
             st.markdown("##### 📝 Confirmar Cantidades")
+            st.dataframe(
+                df_editor_source[['ID_Producto_Norm', 'Nombre', 'Stock', 'Cajas_Sugeridas', 'Factor_Pack', 'Costo_Proveedor']]
+                    .rename(columns={'ID_Producto_Norm': 'SKU'}),
+                use_container_width=True,
+                hide_index=True
+            )
+
             orden_final = st.data_editor(
                 df_editor_source[['ID_Producto', 'Nombre', 'Stock', 'Cajas_Sugeridas', 'Factor_Pack', 'Costo_Proveedor']],
                 column_config={
