@@ -136,12 +136,12 @@ def cargar_datos_completos(sh):
         for c in cols_prov:
             if c not in df_prov.columns: df_prov[c] = ""
 
-    # 3. Órdenes (Aquí estaba el error)
+    # 3. Órdenes
     if df_ord.empty:
         df_ord = pd.DataFrame(columns=cols_ord)
     else:
         for c in cols_ord:
-            if c not in df_ord.columns: df_ord[c] = "" # Rellena columnas faltantes
+            if c not in df_ord.columns: df_ord[c] = "" 
 
     # 4. Ventas
     if df_ven.empty:
@@ -312,7 +312,7 @@ def procesar_inventario_power_logic(df_inv, df_prov, stats_ventas):
 
         resultados.append({
             'ID_Producto': row['ID_Producto'],
-            'ID_Norm': id_norm,
+            'ID_Producto_Norm': id_norm,   # <--- CORRECCIÓN AQUÍ: Clave unificada
             'Nombre': row['Nombre'],
             'Categoria': row['Categoria'],
             'Stock': stock_actual,
@@ -421,7 +421,7 @@ def main():
         edited = st.data_editor(
             df_show[['ID_Producto_Norm', 'Nombre', 'Stock', 'Estado', 'Costo']],
             column_config={
-                "ID_Producto_Norm": st.column_config.TextColumn("SKU", disabled=True),
+                "ID_Producto_Norm": st.column_config.TextColumn("SKU (Norm)", disabled=True),
                 "Nombre": st.column_config.TextColumn("Producto", disabled=True),
                 "Stock": st.column_config.NumberColumn("Stock Real", step=1),
                 "Estado": st.column_config.TextColumn("Status", disabled=True),
@@ -486,22 +486,19 @@ def main():
                         link = link_whatsapp(prov, items_prov)
                         c_btn2.markdown(f"[📲 WhatsApp]({link})", unsafe_allow_html=True)
 
-    # --- TAB 3: RECEPCIÓN (Aquí estaba el error) ---
+    # --- TAB 3: RECEPCIÓN ---
     with tabs[2]:
         st.subheader("📦 Recepción de Mercancía")
         
-        # FIX: Verificar si df_ord tiene datos antes de filtrar
         if data['df_ord'].empty:
             st.info("📭 No hay historial de órdenes.")
         else:
-            # FIX: Filtrar de forma segura
             pendientes = data['df_ord'][data['df_ord']['Estado'] == 'Pendiente']
             
             if pendientes.empty:
                 st.write("✅ No hay órdenes pendientes por recibir.")
             else:
                 orden = st.selectbox("Seleccionar Orden", pendientes['ID_Orden'] + " - " + pendientes['Proveedor'])
-                # Lógica básica de recepción (expandible)
                 st.info(f"Orden seleccionada: {orden}. Sistema listo para el ingreso.")
 
     # --- TAB 4: DATA ---
