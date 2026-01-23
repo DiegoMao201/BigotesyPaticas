@@ -727,12 +727,18 @@ def ventas_por_producto(df_ven, df_inv):
                     ventas_dict[ref_norm] = ventas_dict.get(ref_norm, 0) + qty
     return ventas_dict
 
-def sugerencias_compra(df_inv, ventas_dict):
-    df_inv['Ventas_8d'] = df_inv['ID_Producto_Norm'].map(ventas_dict).fillna(0) * (8/30)  # Escala ventas a 8 días si tu dict es de 30 días
-    df_inv['Velocidad_Diaria'] = df_inv['Ventas_8d'] / 8
-    df_inv['Stock_Objetivo'] = (df_inv['Velocidad_Diaria'] * 8).round()
-    df_inv['Faltante_Unidades'] = (df_inv['Stock_Objetivo'] - df_inv['Stock']).clip(lower=0)
-    return df_inv[['ID_Producto', 'Nombre', 'Stock', 'Ventas_8d', 'Velocidad_Diaria', 'Stock_Objetivo', 'Faltante_Unidades']]
+def sugerencias_compra(df_inv, ventas_dict, dias_ventas=15, dias_stock=8, stock_seguridad=1):
+    # Ventas en los últimos X días
+    df_inv['Ventas_periodo'] = df_inv['ID_Producto_Norm'].map(ventas_dict).fillna(0)
+    # Velocidad diaria
+    df_inv['Velocidad_Diaria'] = df_inv['Ventas_periodo'] / dias_ventas
+    # Stock objetivo para 8 días + stock de seguridad
+    df_inv['Stock_Objetivo'] = np.ceil(df_inv['Velocidad_Diaria'] * dias_stock + stock_seguridad)
+    # Faltante: lo que falta para llegar al stock objetivo
+    df_inv['Faltante_Unidades'] = (df_inv['Stock_Objetivo'] - df_inv['Stock']).clip(lower=0).apply(np.ceil).astype(int)
+    # Si el producto está en 0 y se ha vendido, sugerir al menos 1
+    df_inv.loc[(df_inv['Stock'] == 0) & (df_inv['Ventas_periodo'] > 0), 'Faltante_Unidades'] = df_inv.loc[(df_inv['Stock'] == 0) & (df_inv['Ventas_periodo'] > 0), 'Stock_Objetivo'].astype(int)
+    return df_inv[['ID_Producto', 'ID_Producto_Norm', 'Nombre', 'Stock', 'Ventas_periodo', 'Velocidad_Diaria', 'Stock_Objetivo', 'Faltante_Unidades']]
 
 # ==========================================
 # 6. FUNCIONES DE ESCRITURA
