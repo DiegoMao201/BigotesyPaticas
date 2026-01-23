@@ -631,6 +631,11 @@ def tab_cuadre_ui():
         prev_cierre = df_cie[df_cie['Fecha_dt'] < fecha].sort_values('Fecha_dt', ascending=False)
         if not prev_cierre.empty:
             base_inicial = prev_cierre.iloc[0]['Saldo_Real']
+    # Forzar tipo float
+    try:
+        base_inicial = float(base_inicial)
+    except Exception:
+        base_inicial = 0.0
 
     # --- 2. Filtros locales ---
     df_ven['Fecha_dt'] = pd.to_datetime(df_ven['Fecha']).dt.date
