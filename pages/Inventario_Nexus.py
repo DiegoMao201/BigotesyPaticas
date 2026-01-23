@@ -409,6 +409,8 @@ def main():
     with st.spinner('🐾 Sincronizando sistema Nexus WMS...'):
         data = cargar_datos_completos(sh)
         master_unico, master_buy = procesar_inventario_avanzado(data['df_inv'], data['df_ven'], data['df_prov'])
+        ventas_dict = ventas_por_producto(data['df_ven'], data['df_inv'])
+        sugerencias = sugerencias_compra(data['df_inv'], ventas_dict)
 
     # HEADER
     st.title("🐾 Bigotes & Paticas | Nexus WMS")
@@ -737,6 +739,41 @@ def main():
                     st.info("No hay registros de ajustes manuales.")
             except:
                 st.error("No se pudo leer la hoja de Ajustes. Verifica que exista la hoja 'Historial_Ajustes' en Google Sheets.")
+
+def ventas_por_producto(df_ven, df_inv):
+    # Extrae ventas de los últimos 30 días
+    df_ven['Fecha'] = pd.to_datetime(df_ven['Fecha'], errors='coerce')
+    cutoff = datetime.now() - timedelta(days=30)
+    ven_recent = df_ven[df_ven['Fecha'] >= cutoff]
+
+    # Diccionario para sumar ventas por referencia normalizada
+    ventas_dict = {}
+
+    for _, row in ven_recent.iterrows():
+        items_str = str(row.get('Items', ''))
+        items_list = items_str.split(',')
+        for item in items_list:
+            item = item.strip()
+            if 'x' in item:
+                qty_str, nombre = item.split('x', 1)
+                try:
+                    qty = int(qty_str.strip())
+                except:
+                    qty = 1
+                nombre = nombre.strip()
+                # Buscar referencia normalizada en inventario
+                match = df_inv[df_inv['Nombre'].str.upper().str.strip() == nombre.upper().strip()]
+                if not match.empty:
+                    ref_norm = match.iloc[0]['ID_Producto_Norm']
+                    ventas_dict[ref_norm] = ventas_dict.get(ref_norm, 0) + qty
+    return ventas_dict
+
+def sugerencias_compra(df_inv, ventas_dict):
+    df_inv['Ventas_30d'] = df_inv['ID_Producto_Norm'].map(ventas_dict).fillna(0)
+    df_inv['Velocidad_Diaria'] = df_inv['Ventas_30d'] / 30
+    df_inv['Stock_Objetivo'] = (df_inv['Velocidad_Diaria'] * 30).round()
+    df_inv['Faltante_Unidades'] = (df_inv['Stock_Objetivo'] - df_inv['Stock']).clip(lower=0)
+    return df_inv[['ID_Producto', 'Nombre', 'Stock', 'Ventas_30d', 'Velocidad_Diaria', 'Stock_Objetivo', 'Faltante_Unidades']]
 
 # ==========================================
 # 6. FUNCIONES DE ESCRITURA
