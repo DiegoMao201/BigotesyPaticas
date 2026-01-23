@@ -12,6 +12,7 @@ from urllib.parse import quote
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from BigotesyPaticas import normalizar_id_producto
 
 # ==========================================
 # 1. CONFIGURACIÓN E INICIALIZACIÓN
@@ -175,6 +176,7 @@ def cargar_datos_completos(sh):
         df_inv['Costo'] = df_inv['Costo'].apply(clean_currency)
         df_inv['Precio'] = df_inv['Precio'].apply(clean_currency)
         df_inv['ID_Producto'] = df_inv['ID_Producto'].astype(str).str.strip()
+        df_inv['ID_Producto_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
         # Drop duplicates para la lógica, pero mantenemos referencia al WS
         df_inv.drop_duplicates(subset=['ID_Producto'], keep='first', inplace=True)
     else:
@@ -536,7 +538,7 @@ def main():
                                     str(row['ID_Producto']), 
                                     row['Nombre'], 
                                     int(row['Sistema']), 
-                                    int(row['Conteo_Físico']), 
+                                    int(row['Conteo_Fisico']), 
                                     int(row['Diferencia']), 
                                     tipo, 
                                     "Admin"
@@ -747,27 +749,33 @@ def guardar_orden(ws_ord, proveedor, df_orden, total):
     ws_ord.append_row(fila)
 
 def actualizar_stock_gsheets(ws_inv, id_producto, unidades_sumar):
-    try:
-        id_producto_norm = normalizar_id_producto(id_producto)
-        # Busca todas las filas y compara el ID normalizado
-        all_rows = ws_inv.get_all_values()
-        for idx, row in enumerate(all_rows):
-            if idx == 0: continue  # Saltar encabezado
-            if normalizar_id_producto(row[0]) == id_producto_norm:
-                col_stock = 4
-                val_act = ws_inv.cell(idx+1, col_stock).value
-                nuevo = float(val_act if val_act else 0) + unidades_sumar
-                ws_inv.update_cell(idx+1, col_stock, nuevo)
-                break
-    except Exception as e:
-        print(f"Error stock: {e}")
+    id_producto_norm = normalizar_id_producto(id_producto)
+    all_rows = ws_inv.get_all_values()
+    for idx, row in enumerate(all_rows):
+        if idx == 0: continue  # Saltar encabezado
+        if normalizar_id_producto(row[0]) == id_producto_norm:
+            col_stock = 4  # Verifica que esta columna sea la correcta para tu hoja
+            val_act = ws_inv.cell(idx+1, col_stock).value
+            nuevo = float(val_act if val_act else 0) + unidades_sumar
+            ws_inv.update_cell(idx+1, col_stock, nuevo)
+            break
 
-def normalizar_id_producto(id_prod):
-    if pd.isna(id_prod):
-        return ""
-    s = str(id_prod).strip()
-    s = s.replace(" ", "").replace(",", "").replace(".", "")
-    return s.upper()
+def normalizar_todas_las_referencias(ws_inv):
+    import pandas as pd
+    df = pd.DataFrame(ws_inv.get_all_records())
+    if 'ID_Producto' not in df.columns:
+        st.error("No se encontró la columna ID_Producto en Inventario.")
+        return
+    df['ID_Producto_Norm'] = df['ID_Producto'].apply(normalizar_id_producto)
+    headers = ws_inv.row_values(1)
+    if 'ID_Producto_Norm' not in headers:
+        ws_inv.update_cell(1, len(headers)+1, 'ID_Producto_Norm')
+        col_norm = len(headers)+1
+    else:
+        col_norm = headers.index('ID_Producto_Norm') + 1
+    for i, val in enumerate(df['ID_Producto_Norm']):
+        ws_inv.update_cell(i+2, col_norm, val)
+    st.success("¡Referencias normalizadas en la hoja Inventario!")
 
 if __name__ == "__main__":
     main()

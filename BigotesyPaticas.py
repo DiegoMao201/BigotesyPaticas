@@ -133,16 +133,40 @@ def actualizar_stock(ws_inv, carrito):
                         ws_inv.update_cell(cell.row, df_inv.columns.get_loc('Stock')+1, int(stock_actual) - int(cantidad))
                     break
         else:
-            st.warning(f"Producto con ID {item['ID_Producto']} no encontrado en inventario. No se actualizó el stock.")
+            # Si el producto no existe, puedes registrar un error o agregarlo
+            print(f"Producto no encontrado en inventario: {item['ID_Producto']}")
 
 def normalizar_id_producto(id_prod):
     """Convierte cualquier ID_Producto a string, sin espacios, sin puntos, sin comas, sin ceros a la izquierda innecesarios."""
+    import pandas as pd
     if pd.isna(id_prod):
         return ""
-    s = str(id_prod).strip()
-    # Elimina espacios, puntos, comas, y ceros a la izquierda solo si es numérico puro
+    s = str(id_prod).strip().upper()
     s = s.replace(" ", "").replace(",", "").replace(".", "")
-    return s.upper()
+    # Eliminar ceros a la izquierda solo si es numérico
+    if s.isdigit():
+        s = str(int(s))
+    # Eliminar sufijos decimales tipo .00
+    if s.endswith("00") and s[:-2].isdigit():
+        s = s[:-2]
+    return s
+
+def normalizar_todas_las_referencias(ws_inv):
+    import pandas as pd
+    df = leer_datos(ws_inv)
+    if 'ID_Producto' not in df.columns:
+        st.error("No se encontró la columna ID_Producto en Inventario.")
+        return
+    df['ID_Producto_Norm'] = df['ID_Producto'].apply(normalizar_id_producto)
+    headers = ws_inv.row_values(1)
+    if 'ID_Producto_Norm' not in headers:
+        ws_inv.update_cell(1, len(headers)+1, 'ID_Producto_Norm')
+        col_norm = len(headers)+1
+    else:
+        col_norm = headers.index('ID_Producto_Norm') + 1
+    for i, val in enumerate(df['ID_Producto_Norm']):
+        ws_inv.update_cell(i+2, col_norm, val)
+    st.success("¡Referencias normalizadas en la hoja Inventario!")
 
 def limpiar_tel(tel):
     t = str(tel).replace(" ", "").replace("+", "").replace("-", "").replace("(", "").replace(")", "").strip()
@@ -253,8 +277,7 @@ def tab_pos(ws_inv, ws_cli, ws_ven):
     st.markdown("### 🛒 Buscar y Agregar Producto")
     df_inv = leer_datos(ws_inv)
     if not df_inv.empty:
-        if 'ID_Producto_Norm' not in df_inv.columns:
-            df_inv['ID_Producto_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
+        df_inv['ID_Producto_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
         opciones, id_map = [], {}
         for _, row in df_inv.iterrows():
             stock = int(row['Stock']); precio = int(row['Precio']); nombre = row['Nombre']
@@ -431,6 +454,10 @@ def tab_cuadre(ws_ven, ws_gas, ws_cie):
 
     # --- Ventas del día seleccionado ---
     ventas_dia = df_v[df_v['Fecha'].dt.date == fecha_sel] if not df_v.empty else pd.DataFrame()
+    # Asegura que la columna exista
+    if 'Estado_Envio' not in ventas_dia.columns:
+        ventas_dia['Estado_Envio'] = "Entregado"  # O el valor por defecto que prefieras
+
     ventas_pagadas = ventas_dia[ventas_dia['Estado_Envio'].isin(["Entregado", "Pagado"])]
     ventas_pendientes = ventas_dia[ventas_dia['Estado_Envio'].isin(["Pendiente", "En camino"])]
 
@@ -786,7 +813,9 @@ def main():
         tab_despachos(ws_ven)
     with tabs[3]:
         tab_gastos(ws_gas)
-    # ...agrega aquí tus otras pestañas como tab_gastos, etc...
+    # Botón para normalizar referencias en inventario
+    if st.button("🔄 Normalizar todas las referencias en Inventario"):
+        normalizar_todas_las_referencias(ws_inv)
 
 if __name__ == "__main__":
     main()

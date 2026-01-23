@@ -6,6 +6,7 @@ import numpy as np
 import time
 from datetime import datetime
 import math
+from BigotesyPaticas import normalizar_id_producto
 
 # ==========================================
 # 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME)
@@ -188,23 +189,16 @@ def conectar_sheets():
 
 @st.cache_data(ttl=60)
 def cargar_cerebro(_ws_inv, _ws_map):
-    # 1. Cargar Inventario Interno
     try:
         d_inv = _ws_inv.get_all_records()
         df_inv = pd.DataFrame(d_inv)
-        
-        # Columnas clave
         cols = df_inv.columns
         col_id = next((c for c in cols if 'ID' in c or 'SKU' in c), 'ID_Producto')
         col_nm = next((c for c in cols if 'Nombre' in c), 'Nombre')
-
-        # Crear lista visual
         df_inv['Display'] = df_inv[col_id].astype(str) + " | " + df_inv[col_nm].astype(str)
         lista_prods = sorted(df_inv['Display'].unique().tolist())
         lista_prods.insert(0, "NUEVO (Crear Producto)")
-        
-        # Diccionario para búsqueda rápida
-        dict_prods = pd.Series(df_inv['Display'].values, index=df_inv[col_id].apply(normalizar_str)).to_dict()
+        dict_prods = pd.Series(df_inv['Display'].values, index=df_inv[col_id].apply(normalizar_id_producto)).to_dict()
     except:
         lista_prods, dict_prods = ["NUEVO (Crear Producto)"], {}
 
@@ -361,7 +355,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             idx_nombre = 1; idx_stock = 2; idx_costo = 3; idx_precio = 4
 
         # Mapa de filas para actualizaciones rápidas {ID_PRODUCTO: NUM_FILA}
-        mapa_filas = {normalizar_str(r[idx_id]): i+1 for i, r in enumerate(inv_data)}
+        mapa_filas = {normalizar_id_producto(r[idx_id]): i+1 for i, r in enumerate(inv_data)}
 
         new_mappings = []
         updates = []
@@ -437,6 +431,11 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 if idx_costo < len(new_row): new_row[idx_costo] = sanitizar_para_sheet(costo_neto_final)
                 if idx_precio < len(new_row): new_row[idx_precio] = sanitizar_para_sheet(precio_sugerido_redondeado)
                 
+                # Normalizar ID Producto
+                if 'ID_Producto_Norm' in header:
+                    idx_norm = header.index('ID_Producto_Norm')
+                    new_row[idx_norm] = normalizar_id_producto(final_internal_id)
+                
                 appends.append(new_row)
                 logs.append(f"✨ CREADO: {row['Descripcion']} | Precio: ${precio_sugerido_redondeado:,.0f} (IVA {iva_seleccionado}%)")
                 
@@ -444,7 +443,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 mapa_filas[normalizar_str(final_internal_id)] = len(inv_data) + len(appends)
             
             else:
-                sku_norm = normalizar_str(final_internal_id)
+                sku_norm = normalizar_id_producto(final_internal_id)
                 if sku_norm in mapa_filas:
                     fila = mapa_filas[sku_norm]
                     row_actual = inv_data[fila-1]
@@ -786,13 +785,6 @@ def main():
                 else:
                     st.error("Error guardando datos.")
                     for l in logs: st.error(l)
-
-def normalizar_id_producto(id_prod):
-    if pd.isna(id_prod):
-        return ""
-    s = str(id_prod).strip()
-    s = s.replace(" ", "").replace(",", "").replace(".", "")
-    return s.upper()
 
 def actualizar_stock_gsheets(ws_inv, id_producto, unidades_sumar):
     try:
