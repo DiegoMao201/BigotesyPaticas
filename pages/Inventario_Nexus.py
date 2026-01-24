@@ -281,24 +281,33 @@ def crear_orden_compra(proveedor, items_df):
     """Escribe la orden en Google Sheets y actualiza el estado local."""
     data = st.session_state['data_store']
     ws_ord = data['ws_Historial_Ordenes']
-    
+
+    # Solo usar columnas que existan
+    posibles = ['ID_Producto', 'Nombre', 'Sugerencia_Cajas', 'Unidades_Pedir', 'Costo_Proveedor']
+    cols = [c for c in posibles if c in items_df.columns]
+    detalles = items_df[cols].to_dict('records')
+    # Si no existe Unidades_Pedir pero sí Sugerencia_Cajas, usar Sugerencia_Cajas como unidades
+    total = 0
+    if 'Inversion_Est' in items_df.columns:
+        total = items_df['Inversion_Est'].sum()
+    elif 'Sugerencia_Cajas' in items_df.columns:
+        total = items_df['Sugerencia_Cajas'].sum()
+    elif 'Unidades_Pedir' in items_df.columns:
+        total = items_df['Unidades_Pedir'].sum()
+
     id_orden = f"ORD-{uuid.uuid4().hex[:6].upper()}"
     fecha = str(date.today())
-    detalles = items_df[['ID_Producto', 'Nombre', 'Sugerencia_Cajas', 'Unidades_Pedir', 'Costo_Proveedor']].to_dict('records')
-    total = items_df['Inversion_Est'].sum()
-    
-    # Row para Google Sheets
-    # Cols: ID_Orden, Proveedor, Fecha_Orden, Items_JSON, Total_Dinero, Estado
+
     row = [id_orden, proveedor, fecha, json.dumps(detalles), total, "Pendiente"]
-    
+
     # 1. Escribir en Google (Safe)
     safe_google_op(ws_ord.append_row, row)
-    
-    # 2. Actualizar memoria local (Para que se vea reflejado sin recargar todo)
+
+    # 2. Actualizar memoria local
     new_df_row = pd.DataFrame([row], columns=data['df_Historial_Ordenes'].columns)
     data['df_Historial_Ordenes'] = pd.concat([data['df_Historial_Ordenes'], new_df_row], ignore_index=True)
-    st.session_state['data_store'] = data # Guardar cambios en sesión
-    
+    st.session_state['data_store'] = data
+
     return id_orden
 
 def procesar_recepcion(id_orden, items_json):
