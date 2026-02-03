@@ -3,9 +3,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-# ...existing code...
-INVERSION_INICIAL = 40000000  # 40 millones de pesos, ajusta si es necesario
-# ...existing code...
 # --- CONFIGURACIÓN ---
 
 st.set_page_config(
@@ -137,7 +134,9 @@ def main():
         st.markdown("#### Detalle de Ventas")
         st.dataframe(df_ven_f[['Fecha','Nombre_Cliente','Total','Costo_Total']], use_container_width=True)
         st.markdown("#### Detalle de Gastos")
-        st.dataframe(df_gas_f[['Fecha','Categoria','Descripcion','Monto','Tipo']], use_container_width=True)
+        # Mostrar solo columnas que existan
+        cols_gastos = [c for c in ['Fecha','Categoria','Descripcion','Monto','Tipo'] if c in df_gas_f.columns]
+        st.dataframe(df_gas_f[cols_gastos], use_container_width=True)
 
     # --- TAB 2: VENTAS Y GASTOS ---
     with tabs[1]:
