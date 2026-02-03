@@ -40,8 +40,12 @@ def calcular_kpis(df_ven, df_gas):
 
 # --- PUNTO DE EQUILIBRIO ---
 def calcular_punto_equilibrio(df_ven, df_gas):
-    # Gastos fijos: promedio mensual de gastos fijos
-    gastos_fijos = df_gas[df_gas['Tipo'] == 'Fijo']['Monto'].sum()
+    # Buscar columna 'Tipo' ignorando mayúsculas y espacios
+    tipo_col = next((c for c in df_gas.columns if c.strip().lower() == 'tipo'), None)
+    if tipo_col:
+        gastos_fijos = df_gas[df_gas[tipo_col] == 'Fijo']['Monto'].sum()
+    else:
+        gastos_fijos = 0
     # Margen de contribución: margen promedio sobre ventas
     total_ventas = df_ven['Total'].sum()
     costo_ventas = df_ven['Costo_Total'].sum() if 'Costo_Total' in df_ven.columns else 0
