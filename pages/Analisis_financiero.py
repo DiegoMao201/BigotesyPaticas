@@ -87,8 +87,13 @@ def main():
     max_date = max(df_ven['Fecha'].max(), df_gas['Fecha'].max())
     desde = st.sidebar.date_input("Desde", min_date)
     hasta = st.sidebar.date_input("Hasta", max_date)
-    df_ven_f = filtrar_por_fecha(df_ven, 'Fecha', desde, hasta)
-    df_gas_f = filtrar_por_fecha(df_gas, 'Fecha', desde, hasta)
+
+    # Convertir a datetime para evitar TypeError
+    desde_dt = pd.to_datetime(desde)
+    hasta_dt = pd.to_datetime(hasta) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+
+    df_ven_f = filtrar_por_fecha(df_ven, 'Fecha', desde_dt, hasta_dt)
+    df_gas_f = filtrar_por_fecha(df_gas, 'Fecha', desde_dt, hasta_dt)
 
     tabs = st.tabs(["📊 KPIs & Resumen", "📅 Ventas y Gastos", "⚖️ Punto de Equilibrio", "🚀 Proyección 6-12 Meses"])
 
