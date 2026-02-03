@@ -177,10 +177,10 @@ def main():
         proy12 = proyeccion_financiera(df_ven_f, df_gas_f, meses=12)
         st.subheader("Próximos 6 meses")
         st.dataframe(proy6, use_container_width=True)
-        st.line_chart(proy6.set_index("Mes")[["Saldo_Acumulado"]])
+        st.line_chart(proy6.set_index("Mes")[["Saldo Acumulado"]])
         st.subheader("Próximos 12 meses")
         st.dataframe(proy12, use_container_width=True)
-        st.line_chart(proy12.set_index("Mes")[["Saldo_Acumulado"]])
+        st.line_chart(proy12.set_index("Mes")[["Saldo Acumulado"]])
 
 if __name__ == "__main__":
     main()
