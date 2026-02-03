@@ -33,10 +33,20 @@ def filtrar_por_fecha(df, col='Fecha', desde=None, hasta=None):
 def calcular_kpis(df_ven, df_gas):
     total_ventas = df_ven['Total'].sum()
     total_gastos = df_gas['Monto'].sum()
+    # Diferenciar gastos fijos y variables
+    tipo_col = next((c for c in df_gas.columns if c.strip().lower() == 'tipo'), None)
+    if tipo_col:
+        gastos_fijos = df_gas[df_gas[tipo_col] == 'Fijo']['Monto'].sum()
+        gastos_variables = df_gas[df_gas[tipo_col] == 'Variable']['Monto'].sum()
+    else:
+        gastos_fijos = gastos_variables = 0
     costo_ventas = df_ven['Costo_Total'].sum() if 'Costo_Total' in df_ven.columns else 0
     margen = total_ventas - costo_ventas
     margen_pct = (margen / total_ventas * 100) if total_ventas > 0 else 0
-    return total_ventas, margen, margen_pct, total_gastos
+    utilidad_neta = margen - total_gastos
+    saldo_actual = INVERSION_INICIAL + utilidad_neta
+    roi = (utilidad_neta / INVERSION_INICIAL * 100) if INVERSION_INICIAL > 0 else 0
+    return total_ventas, margen, margen_pct, total_gastos, gastos_fijos, gastos_variables, utilidad_neta, saldo_actual, roi
 
 # --- PUNTO DE EQUILIBRIO ---
 def calcular_punto_equilibrio(df_ven, df_gas):
@@ -63,20 +73,29 @@ def proyeccion_financiera(df_ven, df_gas, meses=12):
     df_ven['Mes'] = pd.to_datetime(df_ven['Fecha']).dt.to_period('M')
     df_gas['Mes'] = pd.to_datetime(df_gas['Fecha']).dt.to_period('M')
     ventas_mensuales = df_ven.groupby('Mes')['Total'].sum().mean()
-    gastos_mensuales = df_gas.groupby('Mes')['Monto'].sum().mean()
     costo_ventas_mensual = df_ven.groupby('Mes')['Costo_Total'].sum().mean() if 'Costo_Total' in df_ven.columns else 0
+    tipo_col = next((c for c in df_gas.columns if c.strip().lower() == 'tipo'), None)
+    if tipo_col:
+        gastos_fijos_mensual = df_gas[df_gas[tipo_col] == 'Fijo'].groupby('Mes')['Monto'].sum().mean()
+        gastos_variables_mensual = df_gas[df_gas[tipo_col] == 'Variable'].groupby('Mes')['Monto'].sum().mean()
+        gastos_mensuales = gastos_fijos_mensual + gastos_variables_mensual
+    else:
+        gastos_fijos_mensual = gastos_variables_mensual = gastos_mensuales = df_gas.groupby('Mes')['Monto'].sum().mean()
     margen_mensual = ventas_mensuales - costo_ventas_mensual
-
+    saldo = INVERSION_INICIAL
     proy = []
-    saldo = 0
     for m in range(1, meses+1):
-        saldo += margen_mensual - gastos_mensuales
+        utilidad_neta = margen_mensual - gastos_mensuales
+        saldo += utilidad_neta
         proy.append({
             "Mes": f"{m}",
             "Ventas": ventas_mensuales,
-            "Gastos": gastos_mensuales,
+            "Gastos Fijos": gastos_fijos_mensual,
+            "Gastos Variables": gastos_variables_mensual,
             "Margen": margen_mensual,
-            "Saldo_Acumulado": saldo
+            "Utilidad Neta": utilidad_neta,
+            "Saldo Acumulado": saldo,
+            "ROI (%)": (saldo - INVERSION_INICIAL) / INVERSION_INICIAL * 100
         })
     return pd.DataFrame(proy)
 
@@ -91,11 +110,8 @@ def main():
     max_date = max(df_ven['Fecha'].max(), df_gas['Fecha'].max())
     desde = st.sidebar.date_input("Desde", min_date)
     hasta = st.sidebar.date_input("Hasta", max_date)
-
-    # Convertir a datetime para evitar TypeError
     desde_dt = pd.to_datetime(desde)
     hasta_dt = pd.to_datetime(hasta) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
-
     df_ven_f = filtrar_por_fecha(df_ven, 'Fecha', desde_dt, hasta_dt)
     df_gas_f = filtrar_por_fecha(df_gas, 'Fecha', desde_dt, hasta_dt)
 
@@ -104,17 +120,20 @@ def main():
     # --- TAB 1: KPIs ---
     with tabs[0]:
         st.header("KPIs Generales")
-        total_ventas, margen, margen_pct, total_gastos = calcular_kpis(df_ven_f, df_gas_f)
-        c1, c2, c3, c4 = st.columns(4)
+        total_ventas, margen, margen_pct, total_gastos, gastos_fijos, gastos_variables, utilidad_neta, saldo_actual, roi = calcular_kpis(df_ven_f, df_gas_f)
+        c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("Ventas", f"${total_ventas:,.0f}")
         c2.metric("Margen Ganado", f"${margen:,.0f}", f"{margen_pct:.1f}%")
-        c3.metric("Gastos", f"${total_gastos:,.0f}")
-        c4.metric("Utilidad Neta", f"${(margen-total_gastos):,.0f}")
+        c3.metric("Gastos Fijos", f"${gastos_fijos:,.0f}")
+        c4.metric("Gastos Variables", f"${gastos_variables:,.0f}")
+        c5.metric("Utilidad Neta", f"${utilidad_neta:,.0f}")
+        st.metric("Saldo Acumulado (con inversión)", f"${saldo_actual:,.0f}")
+        st.metric("ROI", f"{roi:.2f}%")
 
         st.markdown("#### Detalle de Ventas")
         st.dataframe(df_ven_f[['Fecha','Nombre_Cliente','Total','Costo_Total']], use_container_width=True)
         st.markdown("#### Detalle de Gastos")
-        st.dataframe(df_gas_f[['Fecha','Categoria','Descripcion','Monto']], use_container_width=True)
+        st.dataframe(df_gas_f[['Fecha','Categoria','Descripcion','Monto','Tipo']], use_container_width=True)
 
     # --- TAB 2: VENTAS Y GASTOS ---
     with tabs[1]:
