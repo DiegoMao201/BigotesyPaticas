@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
+INVERSION_INICIAL = 40000000  # 40 millones de pesos, ajusta si es necesario
+
 # --- CONFIGURACIÓN ---
 
 st.set_page_config(
