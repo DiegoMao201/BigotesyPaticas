@@ -578,9 +578,11 @@ def main():
                     "Producto": "", 
                     "Cantidad": 1, 
                     "Costo_Total_Item": 0.0,
-                    "IVA_Porc": 0
+                    "IVA_Porc": 0,
+                    "Factor_Pack": 1.0,
+                    "SKU_Interno_Seleccionado": ""
                 }])
-                
+
                 edited_manual = st.data_editor(
                     df_template,
                     num_rows="dynamic",
@@ -588,7 +590,9 @@ def main():
                         "Producto": st.column_config.SelectboxColumn("Producto", options=st.session_state.lst_prods_cache, width="large"),
                         "Cantidad": st.column_config.NumberColumn("Cant.", min_value=1),
                         "Costo_Total_Item": st.column_config.NumberColumn("Costo Total Línea ($)", min_value=0.0),
-                        "IVA_Porc": st.column_config.SelectboxColumn("IVA %", options=[0, 5, 19], required=True)
+                        "IVA_Porc": st.column_config.SelectboxColumn("IVA %", options=[0, 5, 19], required=True),
+                        "Factor_Pack": st.column_config.NumberColumn("Factor", min_value=1.0, help="Unidades por caja"),
+                        "SKU_Interno_Seleccionado": st.column_config.SelectboxColumn("📌 Tu Inventario", options=st.session_state.lst_prods_cache, required=False, width="large"),
                     },
                     use_container_width=True
                 )
@@ -597,210 +601,57 @@ def main():
                     if not prov_man or not folio_man:
                         st.error("Falta Proveedor o Factura.")
                     else:
+                        # Prepara los datos igual que el paso 2 hacía antes
                         items_std = []
                         total_manual = 0.0
-                        
+
                         for i, row in edited_manual.iterrows():
                             if row["Producto"]:
                                 c_tot = float(row["Costo_Total_Item"])
                                 qty = float(row["Cantidad"])
                                 iva_p = int(row["IVA_Porc"])
-                                
-                                # Calcular Costo Base Unitario (Antes de IVA) para estandarizar con XML
-                                # Costo Total = (Base + IVA) * Cantidad
-                                # Base_Unit = (Total / Cantidad) / (1 + IVA%)
+                                factor = float(row.get("Factor_Pack", 1.0))
+                                sku_interno = row.get("SKU_Interno_Seleccionado", row["Producto"])
+
                                 c_unit_con_iva = c_tot / qty if qty > 0 else 0
-                                c_base_unit = c_unit_con_iva / (1 + (iva_p/100.0))
-                                
                                 total_manual += c_tot
-                                
+
                                 items_std.append({
                                     'SKU_Proveedor': "S/C",
                                     'Descripcion': row["Producto"].split(" | ")[1] if " | " in row["Producto"] else row["Producto"],
                                     'Cantidad': qty,
-                                    'Costo_Base_Unitario': c_base_unit,
-                                    'IVA_Manual': iva_p # Dato extra para prellenar
+                                    'Costo_Base_Unitario': c_unit_con_iva,
+                                    'IVA_Manual': iva_p,
+                                    'Factor_Pack': factor,
+                                    'SKU_Interno_Seleccionado': sku_interno
                                 })
-                        
+
                         if items_std:
-                            st.session_state.xml_data = {
+                            meta_xml = {
                                 'Proveedor': prov_man, 'ID_Proveedor': nit_man, 'Folio': folio_man,
                                 'Total': total_manual, 'Items': items_std
                             }
-                            st.session_state.lst_prods = st.session_state.lst_prods_cache
-                            st.session_state.dct_prods = st.session_state.dct_prods_cache
-                            st.session_state.memoria = st.session_state.memoria_cache
-                            st.session_state.origen_datos = "MANUAL"
-                            st.session_state.step = 2
-                            st.rerun()
+                            info_pago = {
+                                "Origen": st.selectbox("Cuenta de Egreso", ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Efectivo", "Caja General", "Crédito Proveedor (CxP)"], key="origen_pago_manual"),
+                                "Transporte": st.session_state.get("c_transporte", 0.0),
+                                "Descuento": st.session_state.get("c_descuento", 0.0)
+                            }
+                            ok, logs = procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, pd.DataFrame(items_std), meta_xml, info_pago)
+                            if ok:
+                                st.success("¡Compra registrada y conectada con inventario y gastos!")
+                                st.balloons()
+                                with st.expander("Ver detalles de la operación"):
+                                    for l in logs:
+                                        st.text(l)
+                            else:
+                                st.error("Error guardando datos.")
+                                for l in logs: st.error(l)
 
             c1, c2 = st.columns(2)
             c_transporte = c1.number_input("Costo Transporte ($)", min_value=0.0, value=0.0, help="Costo total de transporte para la factura", key="transporte_tab_manual")
             c_descuento = c2.number_input("Descuento Total ($)", min_value=0.0, value=0.0, help="Descuento total aplicado por el proveedor", key="descuento_tab_manual")
             st.session_state.c_transporte = c_transporte
             st.session_state.c_descuento = c_descuento
-
-    # --- PASO 2: VERIFICACIÓN Y ASIGNACIÓN DE IVA ---
-    elif st.session_state.step == 2:
-        d = st.session_state.xml_data
-        mem = st.session_state.memoria
-        dct = st.session_state.dct_prods
-        origen = st.session_state.origen_datos
-        
-        # Tarjetas KPIs
-        st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-card">
-                    <div class="metric-label">PROVEEDOR</div>
-                    <div class="metric-value">{d['Proveedor'][:15]}</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">FACTURA</div>
-                    <div class="metric-value">{d['Folio']}</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">TOTAL A PAGAR</div>
-                    <div class="metric-value">${d['Total']:,.0f}</div>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Preparar datos para el Editor
-        nit_clean = normalizar_str(d['ID_Proveedor'])
-        rows_edit = []
-        matches = 0
-        
-        for it in d['Items']:
-            sku_prov = it['SKU_Proveedor']
-            key = f"{nit_clean}_{normalizar_str(sku_prov)}"
-            
-            # Valores por defecto
-            sel_def = "NUEVO (Crear Producto)"
-            fac_def = 1.0
-            iva_def = 0 # Por defecto exento
-            
-            # Si viene manual, usamos lo que puso el usuario
-            if origen == "MANUAL":
-                iva_def = it.get('IVA_Manual', 0)
-                # Buscar nombre en lista
-                for p in st.session_state.lst_prods:
-                    if it['Descripcion'] in p:
-                        sel_def = p; break
-            
-            # Si viene de XML, usamos MEMORIA
-            else:
-                if key in mem:
-                    # Encontramos este producto de este proveedor antes
-                    sku_int = mem[key]['SKU_Interno']
-                    if sku_int in dct:
-                        sel_def = dct[sku_int]
-                        fac_def = mem[key]['Factor']
-                        iva_def = mem[key]['IVA_Aprendido'] # <--- AQUÍ RECUPERA EL IVA
-                        matches += 1
-            
-            rows_edit.append({
-                "SKU_Proveedor": sku_prov,
-                "Descripcion": it['Descripcion'],
-                "SKU_Interno_Seleccionado": sel_def,
-                "Factor_Pack": fac_def,
-                "IVA_Porcentaje": iva_def, # Columna clave para tu lógica
-                "Cantidad_XML": it['Cantidad'],
-                "Cantidad_Recibida": it['Cantidad'],
-                "Costo_Base_Unitario": it['Costo_Base_Unitario']
-            })
-        
-        if origen == "XML":
-            if matches > 0: st.success(f"🧠 {matches} productos identificados con su IVA histórico.")
-            else: st.info("ℹ️ Asigna los productos e IVAs. El sistema aprenderá para la próxima.")
-
-        # EDITOR PRINCIPAL
-        st.markdown("### 🕵️ Verificación de Productos e Impuestos")
-        st.caption("Ajusta el IVA (0, 5, 19). El sistema calculará el Costo Neto y aplicará el margen del 15%.")
-        
-        df_show = pd.DataFrame(rows_edit)
-        
-        edited = st.data_editor(
-            df_show,
-            column_config={
-                "SKU_Proveedor": st.column_config.TextColumn("Ref. Prov", disabled=True, width="small"),
-                "Descripcion": st.column_config.TextColumn("Producto Factura", disabled=True, width="medium"),
-                "SKU_Interno_Seleccionado": st.column_config.SelectboxColumn("📌 Tu Inventario", options=st.session_state.lst_prods, required=True, width="large"),
-                "Factor_Pack": st.column_config.NumberColumn("Factor", min_value=1.0, help="Unidades por caja"),
-                "IVA_Porcentaje": st.column_config.SelectboxColumn("IVA %", options=[0, 5, 19], required=True, help="Selecciona el IVA para calcular el costo real"),
-                "Cantidad_XML": st.column_config.NumberColumn("Cant. Fac", disabled=True),
-                "Cantidad_Recibida": st.column_config.NumberColumn("✅ Recibido"),
-                "Costo_Base_Unitario": st.column_config.NumberColumn("Costo Base", format="$%d", disabled=True, help="Precio antes de IVA")
-            },
-            use_container_width=True,
-            hide_index=True,
-            height=400
-        )
-        
-        st.markdown("---")
-        
-        # SECCIÓN DE PAGO (FINANZAS)
-        with st.container(border=True):
-            st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>💰</span> Origen del Pago", unsafe_allow_html=True)
-            col_b, col_msg = st.columns([1, 2])
-            origen_pago = col_b.selectbox(
-                "Cuenta de Egreso", 
-                ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Efectivo", "Caja General", "Crédito Proveedor (CxP)"]
-            )
-            col_msg.info("El total se registrará automáticamente en el módulo de Gastos > Costo de Venta.")
-
-        # BOTONES FINALES
-        colA, colB = st.columns([1, 4])
-        if colA.button("🔙 Volver"):
-            st.session_state.step = 1
-            st.rerun()
-        
-        if colB.button("🚀 PROCESAR ENTRADA", type="primary", use_container_width=True):
-            with st.status("⚙️ Aplicando lógica de negocio...", expanded=True):
-                st.write("Calculando Costos Netos (Base + IVA)...")
-                st.write("Aplicando margen del 15% (Costo / 0.85)...")
-                st.write("Aprendiendo preferencias de IVA...")
-                
-                info_pago = {"Origen": origen_pago, "Transporte": st.session_state.get("c_transporte", 0.0), "Descuento": st.session_state.get("c_descuento", 0.0)}
-                
-                # LLAMADA A GUARDADO
-                ok, logs = procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, edited, d, info_pago)
-                
-                if ok:
-                    st.write("✅ Inventario Actualizado")
-                    st.write("✅ Precios Recalculados")
-                    st.write("✅ Gasto Insertado")
-                    time.sleep(1)
-                    st.balloons()
-                    st.success("¡Recepción Completada!")
-                    
-                    with st.expander("📄 Ver Detalles de la Operación"):
-                        for l in logs:
-                            if "SUBIÓ" in l: st.warning(l)
-                            elif "Gasto" in l: st.info(l)
-                            else: st.text(l)
-                    
-                    if st.button("Nueva Factura"):
-                        st.session_state.step = 1
-                        st.rerun()
-                else:
-                    st.error("Error guardando datos.")
-                    for l in logs: st.error(l)
-
-def actualizar_stock_gsheets(ws_inv, id_producto, unidades_sumar):
-    try:
-        id_producto_norm = normalizar_id_producto(id_producto)
-        # Busca todas las filas y compara el ID normalizado
-        all_rows = ws_inv.get_all_values()
-        for idx, row in enumerate(all_rows):
-            if idx == 0: continue  # Saltar encabezado
-            if normalizar_id_producto(row[0]) == id_producto_norm:
-                col_stock = 4
-                val_act = ws_inv.cell(idx+1, col_stock).value
-                nuevo = float(val_act if val_act else 0) + unidades_sumar
-                ws_inv.update_cell(idx+1, col_stock, nuevo)
-                break
-    except Exception as e:
-        print(f"Error stock: {e}")
 
 if __name__ == "__main__":
     main()
