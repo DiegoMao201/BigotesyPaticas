@@ -240,8 +240,8 @@ def calcular_master_df():
     dias_objetivo = {'A': 45, 'B': 30, 'C': 15}
     lead_time_dias = 5 # Tiempo que tarda el proveedor en entregar
     
-    master['Dias_Seg'] = master['Clase_ABC'].map(dias_seguridad).fillna(7)
-    master['Dias_Obj'] = master['Clase_ABC'].map(dias_objetivo).fillna(30)
+    master['Dias_Seg'] = pd.to_numeric(master['Dias_Seg'], errors='coerce').fillna(7)
+    master['Dias_Obj'] = pd.to_numeric(master['Dias_Obj'], errors='coerce').fillna(30)
     
     stock_seguridad = master['Velocidad_Diaria'] * master['Dias_Seg']
     punto_reorden = (master['Velocidad_Diaria'] * lead_time_dias) + stock_seguridad
