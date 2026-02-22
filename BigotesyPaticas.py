@@ -438,6 +438,7 @@ def tab_pos():
                 if not existe:
                     st.session_state.carrito.append({
                         "ID_Producto": row_prod['ID_Producto'],
+                        "ID_Producto_Norm": row_prod['ID_Norm'],  # <-- Agrega este campo
                         "Nombre_Producto": row_prod['Nombre'],
                         "Cantidad": cant,
                         "Precio": precio,
@@ -488,7 +489,14 @@ def tab_pos():
                     id_venta = f"VEN-{int(now_co().timestamp())}"
                     fecha = now_co().strftime("%Y-%m-%d %H:%M:%S")
                     items_str = ", ".join([f"{x['Cantidad']}x {x['Nombre_Producto']}" for x in st.session_state.carrito])
-                    items_json = json.dumps([{"ID": x["ID_Producto"], "Nombre": x["Nombre_Producto"], "Cantidad": x["Cantidad"]} for x in st.session_state.carrito])
+                    items_json = json.dumps([
+                        {
+                            "ID": x["ID_Producto"],
+                            "ID_Producto_Norm": x["ID_Producto_Norm"],  # <-- Agrega aquí
+                            "Nombre": x["Nombre_Producto"],
+                            "Cantidad": x["Cantidad"]
+                        } for x in st.session_state.carrito
+                    ])
                     costo_total = sum([x.get('Costo',0)*x['Cantidad'] for x in st.session_state.carrito])
                     
                     fila = [
