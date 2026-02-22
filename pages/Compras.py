@@ -549,24 +549,7 @@ def main():
                     if not data:
                         st.error("❌ El XML no pudo ser leído. Verifica que sea una factura DIAN válida o consulta soporte.")
                         st.stop()
-                    
-                    # Cargar Memoria
-                    lst_prods, dct_prods, memoria = cargar_cerebro(ws_inv, ws_map)
-                    
-                    st.session_state.xml_data = data
-                    st.session_state.lst_prods = lst_prods
-                    st.session_state.dct_prods = dct_prods
-                    st.session_state.memoria = memoria
-                    st.session_state.origen_datos = "XML"
-                    st.session_state.step = 2
-                    st.rerun()
-
-            c1, c2 = st.columns(2)
-            c_transporte = c1.number_input("Costo Transporte ($)", min_value=0.0, value=0.0, help="Costo total de transporte para la factura", key="transporte_tab_xml")
-            c_descuento = c2.number_input("Descuento Total ($)", min_value=0.0, value=0.0, help="Descuento total aplicado por el proveedor", key="descuento_tab_xml")
-            st.session_state.c_transporte = c_transporte
-            st.session_state.c_descuento = c_descuento
-
+        
         # OPCIÓN B: MANUAL
         with tab_manual:
             with st.form("form_manual_header"):
