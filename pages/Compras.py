@@ -549,7 +549,9 @@ def main():
                     if not data:
                         st.error("❌ El XML no pudo ser leído. Verifica que sea una factura DIAN válida o consulta soporte.")
                         st.stop()
-        
+                st.session_state.xml_data = data
+                st.rerun()
+
         # OPCIÓN B: MANUAL
         with tab_manual:
             with st.form("form_manual_header"):
