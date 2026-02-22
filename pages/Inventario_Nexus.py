@@ -506,20 +506,25 @@ def descargar_excel_conteo(df, nombre_archivo="Conteo_Fisico.xlsx"):
     stock_format = workbook.add_format({'border': 1, 'font_size': 11, 'align': 'center', 'bg_color': '#f5a641', 'bold': True})
     conteo_format = workbook.add_format({'border': 1, 'font_size': 12, 'align': 'center', 'bg_color': '#f8f9fa', 'bold': True})
 
-    # --- Encabezados ---
-    headers = ["#", "ID Producto", "Nombre Producto", "Categoría", "Stock Sistema", "Conteo Físico", "Diferencia", "Observaciones"]
-    worksheet.write_row(0, 0, headers, header_format)
+    # --- Título y branding ---
+    worksheet.merge_range('A1:H1', 'CONTEO FÍSICO DE INVENTARIO - BIGOTES Y PATITAS', header_format)
+    worksheet.write('A2', 'Fecha de generación:', cell_format)
+    worksheet.write('B2', datetime.now().strftime('%Y-%m-%d %H:%M'), cell_format)
 
-    # --- Datos ---
+    # --- Encabezados en fila 3 ---
+    headers = ["#", "ID Producto", "Nombre Producto", "Categoría", "Stock Sistema", "Conteo Físico", "Diferencia", "Observaciones"]
+    worksheet.write_row(2, 0, headers, header_format)
+
+    # --- Datos desde fila 4 ---
     for idx, row in df.iterrows():
-        worksheet.write(idx+1, 0, idx+1, cell_format)  # Número consecutivo
-        worksheet.write(idx+1, 1, row['ID_Producto'], cell_format)
-        worksheet.write(idx+1, 2, row['Nombre'], cell_format)
-        worksheet.write(idx+1, 3, row.get('Categoria', ''), cell_format)
-        worksheet.write(idx+1, 4, row['Stock'], stock_format)
-        worksheet.write(idx+1, 5, "", conteo_format)  # Para que escriban el conteo físico
-        worksheet.write_formula(idx+1, 6, f"=F{idx+2}-E{idx+2}", conteo_format)  # Diferencia
-        worksheet.write(idx+1, 7, "", cell_format)  # Observaciones
+        worksheet.write(idx+3, 0, idx+1, cell_format)  # Número consecutivo
+        worksheet.write(idx+3, 1, row['ID_Producto'], cell_format)
+        worksheet.write(idx+3, 2, row['Nombre'], cell_format)
+        worksheet.write(idx+3, 3, row.get('Categoria', ''), cell_format)
+        worksheet.write(idx+3, 4, row['Stock'], stock_format)
+        worksheet.write(idx+3, 5, "", conteo_format)  # Para que escriban el conteo físico
+        worksheet.write_formula(idx+3, 6, f"=F{idx+4}-E{idx+4}", conteo_format)  # Diferencia
+        worksheet.write(idx+3, 7, "", cell_format)  # Observaciones
 
     # --- Ajuste de columnas ---
     worksheet.set_column('A:A', 5)
@@ -530,11 +535,6 @@ def descargar_excel_conteo(df, nombre_archivo="Conteo_Fisico.xlsx"):
     worksheet.set_column('F:F', 14)
     worksheet.set_column('G:G', 14)
     worksheet.set_column('H:H', 24)
-
-    # --- Título y branding ---
-    worksheet.merge_range('A1:H1', 'CONTEO FÍSICO DE INVENTARIO - BIGOTES Y PATITAS', header_format)
-    worksheet.write('A2', 'Fecha de generación:', cell_format)
-    worksheet.write('B2', datetime.now().strftime('%Y-%m-%d %H:%M'), cell_format)
 
     workbook.close()
     output.seek(0)
