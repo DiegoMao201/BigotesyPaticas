@@ -518,16 +518,47 @@ def main():
 
         st.markdown("### 1. Asignar al Inventario Interno")
         
-        # Preparar Dataframe para el Editor de Revisión
-        df_revision = pd.DataFrame(st.session_state.invoice_items)
+        # --- LÓGICA DE MEMORIA (CEREBRO) ---
+        df_revision_data = []
         
-        # Columnas dinámicas que el usuario llenará
-        df_revision["📌 Producto_Interno"] = "NUEVO (Crear Producto)"
-        df_revision["IVA_%"] = 0
-        df_revision["Factor_Pack"] = 1.0
-        df_revision["Categoría"] = "Sin Categoría"
-        
-        # (Opcional) Aquí podrías cruzar con `st.session_state.memoria_cache` para auto-completar el IVA y el Producto Interno si ya lo conoce.
+        for item in st.session_state.invoice_items:
+            # 1. Armar la clave de memoria idéntica a como se guarda: NIT_SKU
+            nit_prov_norm = normalizar_str(meta['ID_Proveedor'])
+            sku_prov_norm = normalizar_str(item.get('SKU_Proveedor', 'S/C'))
+            clave_memoria = f"{nit_prov_norm}_{sku_prov_norm}"
+            
+            # 2. Valores por defecto
+            prod_interno_val = "NUEVO (Crear Producto)"
+            iva_val = 0
+            factor_val = 1.0
+            
+            # 3. Buscar en el cerebro si ya lo conocemos
+            if clave_memoria in st.session_state.memoria_cache:
+                recuerdo = st.session_state.memoria_cache[clave_memoria]
+                sku_interno_recordado = recuerdo['SKU_Interno']
+                
+                # Buscar cómo se llama en la lista desplegable actual de inventario
+                match = next((p for p in st.session_state.lst_prods_cache if p.startswith(sku_interno_recordado + " |")), None)
+                
+                if match:
+                    prod_interno_val = match
+                
+                iva_val = recuerdo['IVA_Aprendido']
+                factor_val = recuerdo['Factor']
+
+            # 4. Construir la fila
+            df_revision_data.append({
+                "SKU_Proveedor": item.get('SKU_Proveedor', 'S/C'),
+                "Descripcion": item.get('Descripcion', ''),
+                "Cantidad": item.get('Cantidad', 1),
+                "Costo_Base_Unitario": item.get('Costo_Base_Unitario', 0.0),
+                "📌 Producto_Interno": prod_interno_val,
+                "IVA_%": iva_val,
+                "Factor_Pack": factor_val,
+                "Categoría": "Sin Categoría"
+            })
+
+        df_revision = pd.DataFrame(df_revision_data)
         
         edited_revision = st.data_editor(
             df_revision,
@@ -548,7 +579,6 @@ def main():
         st.markdown("---")
         st.markdown("### 2. Liquidación y Pago")
         
-        # Formulario final para guardado (Fuera de un st.form para que procese correctamente)
         c1, c2, c3 = st.columns(3)
         c_transporte = c1.number_input("Costo Transporte ($)", min_value=0.0, value=0.0)
         c_descuento = c2.number_input("Descuento Total ($)", min_value=0.0, value=0.0)
@@ -557,7 +587,6 @@ def main():
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("✅ Confirmar y Guardar en Base de Datos", type="primary", use_container_width=True):
             
-            # Preparar el dataframe exacto que espera `procesar_guardado`
             df_to_save = edited_revision.copy()
             df_to_save = df_to_save.rename(columns={
                 "📌 Producto_Interno": "SKU_Interno_Seleccionado",
@@ -580,9 +609,14 @@ def main():
                 with st.expander("Ver bitácora de operaciones"):
                     for l in logs: st.text(l)
                 
-                # Resetear el flujo después de 3 segundos o con un botón
+                # Resetear la sesión
+                st.session_state.invoice_meta = {}
+                st.session_state.invoice_items = []
+                
                 if st.button("Volver al Inicio"):
                     st.session_state.step = 1
+                    # Limpiamos el cache para que vuelva a leer la hoja fresca la próxima vez
+                    st.cache_data.clear() 
                     st.rerun()
             else:
                 st.error("Error guardando datos.")
