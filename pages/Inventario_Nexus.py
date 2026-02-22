@@ -166,7 +166,8 @@ def analizar_ventas(df_ven, df_inv):
             if str(row.get('Items_Detalle', '')).startswith('['):
                 detalles = json.loads(row['Items_Detalle'])
                 for d in detalles:
-                    id_norm = normalizar_id_producto(d.get('ID_Producto', ''))
+                    # Usa ID_Producto_Norm si existe, si no usa ID
+                    id_norm = normalizar_id_producto(d.get('ID_Producto_Norm', d.get('ID', '')))
                     qty = float(d.get('Cantidad', 1))
                     fecha = row['Fecha']
                     if id_norm not in stats: stats[id_norm] = {'v90': 0, 'v30': 0}
