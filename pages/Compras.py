@@ -430,12 +430,22 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 if idx_stock < len(new_row): new_row[idx_stock] = sanitizar_para_sheet(cant_total_unidades)
                 if idx_costo < len(new_row): new_row[idx_costo] = sanitizar_para_sheet(costo_neto_final)
                 if idx_precio < len(new_row): new_row[idx_precio] = sanitizar_para_sheet(precio_sugerido_redondeado)
-                
+
                 # Normalizar ID Producto
                 if 'ID_Producto_Norm' in header:
                     idx_norm = header.index('ID_Producto_Norm')
                     new_row[idx_norm] = normalizar_id_producto(final_internal_id)
-                
+
+                # === NUEVO: Guardar Categoria e Iva si existen en el header ===
+                if 'Categoria' in header:
+                    idx_cat = header.index('Categoria')
+                    # Puedes pedir la categoría en el formulario manual, aquí ejemplo con "Sin Categoría"
+                    categoria = row.get('Categoria', 'Sin Categoría')
+                    new_row[idx_cat] = categoria
+                if 'Iva' in header:
+                    idx_iva = header.index('Iva')
+                    new_row[idx_iva] = iva_seleccionado
+
                 appends.append(new_row)
                 logs.append(f"✨ CREADO: {row['Descripcion']} | Precio: ${precio_sugerido_redondeado:,.0f} (IVA {iva_seleccionado}%)")
                 
@@ -580,7 +590,8 @@ def main():
                     "Costo_Total_Item": 0.0,
                     "IVA_Porc": 0,
                     "Factor_Pack": 1.0,
-                    "SKU_Interno_Seleccionado": ""
+                    "SKU_Interno_Seleccionado": "",
+                    "Categoria": "Sin Categoría"  # <-- NUEVO
                 }])
 
                 edited_manual = st.data_editor(
@@ -593,6 +604,7 @@ def main():
                         "IVA_Porc": st.column_config.SelectboxColumn("IVA %", options=[0, 5, 19], required=True),
                         "Factor_Pack": st.column_config.NumberColumn("Factor", min_value=1.0, help="Unidades por caja"),
                         "SKU_Interno_Seleccionado": st.column_config.SelectboxColumn("📌 Tu Inventario", options=st.session_state.lst_prods_cache, required=False, width="large"),
+                        "Categoria": st.column_config.TextColumn("Categoría", required=False),  # <-- NUEVO
                     },
                     use_container_width=True
                 )
