@@ -226,7 +226,7 @@ def calcular_master_df():
     # === CLASIFICACIÓN ABC (Ley de Pareto) ===
     master['Ingresos_Proyectados_90d'] = master['v90'] * master['Precio']
     total_ingresos = master['Ingresos_Proyectados_90d'].sum()
-    
+
     if total_ingresos > 0:
         master = master.sort_values('Ingresos_Proyectados_90d', ascending=False)
         master['Cum_Rev_Pct'] = master['Ingresos_Proyectados_90d'].cumsum() / total_ingresos
@@ -235,11 +235,16 @@ def calcular_master_df():
         master['Clase_ABC'] = 'C'
 
     # === LÓGICA DE COMPRAS DINÁMICA ===
-    # Productos A (Alta rotación) necesitan más stock de seguridad. Productos C (Baja) necesitan menos.
     dias_seguridad = {'A': 15, 'B': 7, 'C': 3}
     dias_objetivo = {'A': 45, 'B': 30, 'C': 15}
     lead_time_dias = 5 # Tiempo que tarda el proveedor en entregar
     
+    # Asignar Dias_Seg y Dias_Obj según Clase_ABC si no existen
+    if 'Dias_Seg' not in master.columns:
+        master['Dias_Seg'] = master['Clase_ABC'].map(dias_seguridad).fillna(7)
+    if 'Dias_Obj' not in master.columns:
+        master['Dias_Obj'] = master['Clase_ABC'].map(dias_objetivo).fillna(30)
+
     master['Dias_Seg'] = pd.to_numeric(master['Dias_Seg'], errors='coerce').fillna(7)
     master['Dias_Obj'] = pd.to_numeric(master['Dias_Obj'], errors='coerce').fillna(30)
     
