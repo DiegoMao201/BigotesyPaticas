@@ -8,6 +8,7 @@ import time
 import io
 from datetime import datetime, timedelta, date
 from urllib.parse import quote
+import xlsxwriter
 
 # ==========================================
 # 0. CONFIGURACIÓN E INICIALIZACIÓN
@@ -386,7 +387,17 @@ def main():
             df_view = df_view[df_view['Nombre'].str.contains(txt_search, case=False) | df_view['ID_Producto_Norm'].str.contains(txt_search, case=False)]
         if est_filter != "Todos":
             df_view = df_view[df_view['Estado'] == est_filter]
-        
+
+        # --- NUEVO: Botón para descargar Excel de conteo físico ---
+        st.markdown("### 📋 Descargar Formato de Conteo Físico")
+        conteo_excel = descargar_excel_conteo(df_view[['ID_Producto', 'Nombre', 'Categoria', 'Stock']].reset_index(drop=True))
+        st.download_button(
+            label="⬇️ Descargar Excel de Conteo Físico",
+            data=conteo_excel,
+            file_name="Conteo_Fisico_BigotesyPatitas.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
         st.dataframe(
             df_view[['ID_Producto', 'Nombre', 'Categoria', 'Clase_ABC', 'Stock', 'Estado', 'Velocidad_Diaria', 'Margen_%', 'Costo', 'Precio']],
             column_config={
@@ -480,6 +491,52 @@ def main():
                 st.dataframe(resumen_gastos, hide_index=True)
             else:
                 st.info("Aún no hay gastos registrados en la pestaña de Gastos.")
+
+def descargar_excel_conteo(df, nombre_archivo="Conteo_Fisico.xlsx"):
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet("Conteo Físico")
+
+    # --- Formatos ---
+    header_format = workbook.add_format({
+        'bold': True, 'font_color': '#FFFFFF', 'bg_color': '#187f77',
+        'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 12
+    })
+    cell_format = workbook.add_format({'border': 1, 'font_size': 11, 'align': 'left'})
+    stock_format = workbook.add_format({'border': 1, 'font_size': 11, 'align': 'center', 'bg_color': '#f5a641', 'bold': True})
+    conteo_format = workbook.add_format({'border': 1, 'font_size': 12, 'align': 'center', 'bg_color': '#f8f9fa', 'bold': True})
+
+    # --- Encabezados ---
+    headers = ["ID_Producto", "Nombre", "Categoría", "Stock Sistema", "Conteo Físico", "Diferencia", "Observaciones"]
+    worksheet.write_row(0, 0, headers, header_format)
+
+    # --- Datos ---
+    for idx, row in df.iterrows():
+        worksheet.write(idx+1, 0, row['ID_Producto'], cell_format)
+        worksheet.write(idx+1, 1, row['Nombre'], cell_format)
+        worksheet.write(idx+1, 2, row.get('Categoria', ''), cell_format)
+        worksheet.write(idx+1, 3, row['Stock'], stock_format)
+        worksheet.write(idx+1, 4, "", conteo_format)  # Para que escriban el conteo físico
+        worksheet.write_formula(idx+1, 5, f"=E{idx+2}-D{idx+2}", conteo_format)  # Diferencia
+        worksheet.write(idx+1, 6, "", cell_format)  # Observaciones
+
+    # --- Ajuste de columnas ---
+    worksheet.set_column('A:A', 18)
+    worksheet.set_column('B:B', 38)
+    worksheet.set_column('C:C', 18)
+    worksheet.set_column('D:D', 14)
+    worksheet.set_column('E:E', 14)
+    worksheet.set_column('F:F', 14)
+    worksheet.set_column('G:G', 24)
+
+    # --- Título y branding ---
+    worksheet.merge_range('A1:G1', 'CONTEO FÍSICO DE INVENTARIO - BIGOTES Y PATITAS', header_format)
+    worksheet.write('A2', 'Fecha de generación:', cell_format)
+    worksheet.write('B2', datetime.now().strftime('%Y-%m-%d %H:%M'), cell_format)
+
+    workbook.close()
+    output.seek(0)
+    return output
 
 if __name__ == "__main__":
     main()
