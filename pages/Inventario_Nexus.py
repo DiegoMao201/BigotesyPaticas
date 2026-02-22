@@ -507,30 +507,32 @@ def descargar_excel_conteo(df, nombre_archivo="Conteo_Fisico.xlsx"):
     conteo_format = workbook.add_format({'border': 1, 'font_size': 12, 'align': 'center', 'bg_color': '#f8f9fa', 'bold': True})
 
     # --- Encabezados ---
-    headers = ["ID_Producto", "Nombre", "Categoría", "Stock Sistema", "Conteo Físico", "Diferencia", "Observaciones"]
+    headers = ["#", "ID Producto", "Nombre Producto", "Categoría", "Stock Sistema", "Conteo Físico", "Diferencia", "Observaciones"]
     worksheet.write_row(0, 0, headers, header_format)
 
     # --- Datos ---
     for idx, row in df.iterrows():
-        worksheet.write(idx+1, 0, row['ID_Producto'], cell_format)
-        worksheet.write(idx+1, 1, row['Nombre'], cell_format)
-        worksheet.write(idx+1, 2, row.get('Categoria', ''), cell_format)
-        worksheet.write(idx+1, 3, row['Stock'], stock_format)
-        worksheet.write(idx+1, 4, "", conteo_format)  # Para que escriban el conteo físico
-        worksheet.write_formula(idx+1, 5, f"=E{idx+2}-D{idx+2}", conteo_format)  # Diferencia
-        worksheet.write(idx+1, 6, "", cell_format)  # Observaciones
+        worksheet.write(idx+1, 0, idx+1, cell_format)  # Número consecutivo
+        worksheet.write(idx+1, 1, row['ID_Producto'], cell_format)
+        worksheet.write(idx+1, 2, row['Nombre'], cell_format)
+        worksheet.write(idx+1, 3, row.get('Categoria', ''), cell_format)
+        worksheet.write(idx+1, 4, row['Stock'], stock_format)
+        worksheet.write(idx+1, 5, "", conteo_format)  # Para que escriban el conteo físico
+        worksheet.write_formula(idx+1, 6, f"=F{idx+2}-E{idx+2}", conteo_format)  # Diferencia
+        worksheet.write(idx+1, 7, "", cell_format)  # Observaciones
 
     # --- Ajuste de columnas ---
-    worksheet.set_column('A:A', 18)
-    worksheet.set_column('B:B', 38)
-    worksheet.set_column('C:C', 18)
-    worksheet.set_column('D:D', 14)
+    worksheet.set_column('A:A', 5)
+    worksheet.set_column('B:B', 18)
+    worksheet.set_column('C:C', 38)
+    worksheet.set_column('D:D', 18)
     worksheet.set_column('E:E', 14)
     worksheet.set_column('F:F', 14)
-    worksheet.set_column('G:G', 24)
+    worksheet.set_column('G:G', 14)
+    worksheet.set_column('H:H', 24)
 
     # --- Título y branding ---
-    worksheet.merge_range('A1:G1', 'CONTEO FÍSICO DE INVENTARIO - BIGOTES Y PATITAS', header_format)
+    worksheet.merge_range('A1:H1', 'CONTEO FÍSICO DE INVENTARIO - BIGOTES Y PATITAS', header_format)
     worksheet.write('A2', 'Fecha de generación:', cell_format)
     worksheet.write('B2', datetime.now().strftime('%Y-%m-%d %H:%M'), cell_format)
 
