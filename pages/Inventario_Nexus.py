@@ -158,9 +158,10 @@ def analizar_ventas(df_ven, df_inv):
     
     stats = {}
     mapa_nombre_id = dict(zip(df_inv['Nombre'].str.strip().str.upper(), df_inv['ID_Producto_Norm']))
+    mapa_id_nombre = dict(zip(df_inv['ID_Producto_Norm'], df_inv['Nombre'].str.strip().str.upper()))
 
     for _, row in ven_recent.iterrows():
-        # Lógica robusta: Intenta usar Items_Detalle si es un JSON estructurado, si no, usa el string 'Items'
+        # Usar Items_Detalle si es JSON válido
         try:
             if str(row.get('Items_Detalle', '')).startswith('['):
                 detalles = json.loads(row['Items_Detalle'])
@@ -172,8 +173,9 @@ def analizar_ventas(df_ven, df_inv):
                     stats[id_norm]['v90'] += qty
                     if fecha >= cutoff_30: stats[id_norm]['v30'] += qty
                 continue
-        except: pass # Falla silenciosa si no es JSON, pasa al parseo tradicional
+        except: pass
 
+        # Si falla, usar Items por nombre
         items_str = str(row.get('Items', ''))
         lista = items_str.split(',')
         for item in lista:
@@ -185,8 +187,10 @@ def analizar_ventas(df_ven, df_inv):
                 if parts[0].strip().isdigit():
                     qty = int(parts[0].strip())
                     nombre = parts[1].strip()
-            
+            # Buscar por nombre o por ID
             id_norm = mapa_nombre_id.get(nombre.upper())
+            if not id_norm and nombre.isdigit():
+                id_norm = normalizar_id_producto(nombre)
             if id_norm:
                 if id_norm not in stats: stats[id_norm] = {'v90': 0, 'v30': 0}
                 stats[id_norm]['v90'] += qty
@@ -216,7 +220,9 @@ def calcular_master_df():
     # Métricas Base
     master['v90'] = master['ID_Producto_Norm'].map(lambda x: stats.get(x, {}).get('v90', 0))
     master['v30'] = master['ID_Producto_Norm'].map(lambda x: stats.get(x, {}).get('v30', 0))
-    master['Velocidad_Diaria'] = np.maximum(master['v90']/90, master['v30']/30)
+    # Ajusta velocidad mínima si hay ventas en 30 días
+    master['Velocidad_Diaria'] = np.where(master['v30'] > 0, master['v30']/30, master['v90']/90)
+    master['Velocidad_Diaria'] = np.where(master['Velocidad_Diaria'] < 0.033, 0.033, master['Velocidad_Diaria'])
     master['Dias_Cobertura'] = np.where(master['Velocidad_Diaria'] > 0, master['Stock'] / master['Velocidad_Diaria'], 999)
     
     # === FINANZAS Y MÁRGENES ===
