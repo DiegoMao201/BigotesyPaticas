@@ -541,7 +541,7 @@ def main():
         # OPCIÓN A: XML
         with tab_xml:
             st.info("Arrastra tu Factura XML de la DIAN para autocompletar.")
-            uploaded = st.file_uploader("", type=['xml'], key="xml_upl")
+            uploaded = st.file_uploader("📂 Sube tu Factura XML DIAN aquí", type=['xml'], key="xml_upl")
             
             if uploaded:
                 with st.spinner("🤖 Analizando XML y Consultando Memoria..."):
