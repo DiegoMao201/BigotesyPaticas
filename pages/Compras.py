@@ -546,7 +546,9 @@ def main():
             if uploaded:
                 with st.spinner("🤖 Analizando XML y Consultando Memoria..."):
                     data = parsear_xml_colombia(uploaded)
-                    if not data: st.stop()
+                    if not data:
+                        st.error("❌ El XML no pudo ser leído. Verifica que sea una factura DIAN válida o consulta soporte.")
+                        st.stop()
                     
                     # Cargar Memoria
                     lst_prods, dct_prods, memoria = cargar_cerebro(ws_inv, ws_map)
