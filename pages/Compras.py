@@ -328,7 +328,8 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             if es_producto_nuevo:
                 new_row = [""] * len(header)
                 new_row[0] = final_internal_id 
-                if idx_nombre < len(new_row): new_row[idx_nombre] = row['Descripcion']
+                # AQUÍ USAMOS EL NUEVO NOMBRE EDITADO (O LA DESCRIPCIÓN ORIGINAL SI LO DEJARON IGUAL)
+                if idx_nombre < len(new_row): new_row[idx_nombre] = row.get('Nombre_Inventario', row['Descripcion'])
                 if idx_stock < len(new_row): new_row[idx_stock] = sanitizar_para_sheet(cant_total_unidades)
                 if idx_costo < len(new_row): new_row[idx_costo] = sanitizar_para_sheet(costo_neto_final)
                 if idx_precio < len(new_row): new_row[idx_precio] = sanitizar_para_sheet(precio_sugerido_redondeado)
@@ -345,7 +346,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                     new_row[idx_iva] = iva_seleccionado
 
                 appends.append(new_row)
-                logs.append(f"✨ CREADO: {row['Descripcion']} | Precio: ${precio_sugerido_redondeado:,.0f} (IVA {iva_seleccionado}%)")
+                logs.append(f"✨ CREADO: {row.get('Nombre_Inventario', row['Descripcion'])} | Precio: ${precio_sugerido_redondeado:,.0f} (IVA {iva_seleccionado}%)")
                 mapa_filas[normalizar_str(final_internal_id)] = len(inv_data) + len(appends)
             else:
                 sku_norm = normalizar_id_producto(final_internal_id)
@@ -546,10 +547,11 @@ def main():
                 iva_val = recuerdo['IVA_Aprendido']
                 factor_val = recuerdo['Factor']
 
-            # 4. Construir la fila
+            # 4. Construir la fila (SE AGREGA LA COLUMNA Nombre_Inventario EDITABLE)
             df_revision_data.append({
                 "SKU_Proveedor": item.get('SKU_Proveedor', 'S/C'),
                 "Descripcion": item.get('Descripcion', ''),
+                "Nombre_Inventario": item.get('Descripcion', ''), # <--- COLUMNA PARA EDITAR EL NOMBRE NUEVO
                 "Cantidad": item.get('Cantidad', 1),
                 "Costo_Base_Unitario": item.get('Costo_Base_Unitario', 0.0),
                 "📌 Producto_Interno": prod_interno_val,
@@ -566,7 +568,8 @@ def main():
             hide_index=True,
             column_config={
                 "SKU_Proveedor": st.column_config.TextColumn("SKU Prov.", disabled=True),
-                "Descripcion": st.column_config.TextColumn("Descripción Original", disabled=True),
+                "Descripcion": st.column_config.TextColumn("Desc. Factura", disabled=True),
+                "Nombre_Inventario": st.column_config.TextColumn("✍️ Nombre a Crear (Editable)", disabled=False, width="medium"),
                 "Cantidad": st.column_config.NumberColumn("Cant.", disabled=True),
                 "Costo_Base_Unitario": st.column_config.NumberColumn("Costo Unit. Base", format="$%f", disabled=True),
                 "📌 Producto_Interno": st.column_config.SelectboxColumn("📌 Asociar a:", options=st.session_state.lst_prods_cache, width="large", required=True),
