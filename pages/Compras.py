@@ -419,6 +419,17 @@ def main():
         st.session_state.dct_prods_cache = d
         st.session_state.memoria_cache = m
 
+    # Obtener categorías únicas desde la hoja de inventario
+    categorias = []
+    try:
+        df_inv = pd.DataFrame(ws_inv.get_all_records())
+        if 'Categoria' in df_inv.columns:
+            categorias = sorted([c for c in df_inv['Categoria'].dropna().unique() if c and c.strip()])
+        if not categorias:
+            categorias = ["Sin Categoría"]
+    except:
+        categorias = ["Sin Categoría"]
+
     # ==========================================
     # PASO 1: CARGA DE DATOS (XML O MANUAL)
     # ==========================================
@@ -575,7 +586,8 @@ def main():
                 "📌 Producto_Interno": st.column_config.SelectboxColumn("📌 Asociar a:", options=st.session_state.lst_prods_cache, width="large", required=True),
                 "IVA_%": st.column_config.SelectboxColumn("IVA %", options=[0, 5, 19], required=True),
                 "Factor_Pack": st.column_config.NumberColumn("Factor/Caja", min_value=1.0),
-                "Categoría": st.column_config.TextColumn("Categoría")
+                # Cambia a SelectboxColumn con las categorías del inventario
+                "Categoría": st.column_config.SelectboxColumn("Categoría", options=categorias, required=True)
             }
         )
 
