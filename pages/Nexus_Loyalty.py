@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import gspread
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, timedelta, date
 from urllib.parse import quote
+import unicodedata
 
 # ==========================================
 # 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME)
@@ -115,6 +116,147 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
+# 2.B UTILIDADES ROBUSTAS (ANTI-ERRORES)
+# ==========================================
+
+def _norm_col(s: str) -> str:
+    s = "" if s is None else str(s)
+    s = s.strip().lower()
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+    s = s.replace(" ", "_")
+    return s
+
+def _find_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
+    """Encuentra columna aunque tenga tildes/espacios/cambios menores."""
+    if df is None or df.empty:
+        return None
+    norm_map = {_norm_col(c): c for c in df.columns}
+    for cand in candidates:
+        key = _norm_col(cand)
+        if key in norm_map:
+            return norm_map[key]
+    # fallback: contains
+    for cand in candidates:
+        key = _norm_col(cand)
+        for k, orig in norm_map.items():
+            if key in k:
+                return orig
+    return None
+
+def _safe_to_datetime(s: pd.Series) -> pd.Series:
+    return pd.to_datetime(s, errors="coerce")
+
+def _safe_to_num(s: pd.Series) -> pd.Series:
+    return pd.to_numeric(s, errors="coerce").fillna(0.0)
+
+def _clean_tel_basic(tel: str) -> str:
+    t = "" if tel is None else str(tel)
+    t = t.replace(" ", "").replace("+", "").replace("-", "").replace(".", "").replace("(", "").replace(")", "").strip()
+    if len(t) == 10 and not t.startswith("57"):
+        t = "57" + t
+    return t
+
+# ==========================================
+# 2.C INTEGRACIÓN CON EL FLUJO DE LA APP (SESSION_STATE.DB)
+# ==========================================
+
+def cargar_datos_loyalty():
+    """
+    Prioridad:
+    1) Usa st.session_state.db (flujo principal: [`cargar_datos_iniciales`](BigotesyPaticas/BigotesyPaticas.py))
+    2) Fallback: conectar_crm() (como estaba)
+    """
+    if "db" in st.session_state and isinstance(st.session_state.db, dict):
+        df_cli = st.session_state.db.get("cli", pd.DataFrame()).copy()
+        df_ven = st.session_state.db.get("ven", pd.DataFrame()).copy()
+        if not df_cli.empty:
+            return df_cli, df_ven, "OK (Session DB)"
+
+    # fallback a la lógica existente
+    ws_cli, ws_ven = conectar_crm()
+    if not ws_cli:
+        return pd.DataFrame(), pd.DataFrame(), "Sin conexión CRM"
+    master, df_ven, status = procesar_inteligencia(ws_cli, ws_ven)
+    return master, df_ven, status
+
+# ==========================================
+# 2.D CALENDARIO DE CAMPAÑAS (FECHAS ESPECIALES)
+# ==========================================
+
+def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
+    """weekday: lunes=0 ... domingo=6"""
+    d = date(year, month, 1)
+    shift = (weekday - d.weekday()) % 7
+    d = d + timedelta(days=shift + 7 * (n - 1))
+    return d
+
+def _third_sunday_of_june(year: int) -> date:
+    return _nth_weekday(year, 6, 6, 3)
+
+def _second_sunday_of_may(year: int) -> date:
+    return _nth_weekday(year, 5, 6, 2)
+
+def calendario_campanas(year: int | None = None) -> pd.DataFrame:
+    y = year or datetime.now().year
+    rows = [
+        {"Evento": "Día de la Mujer", "Fecha": date(y, 3, 8), "Tag": "MUJER"},
+        {"Evento": "Día de la Madre (CO)", "Fecha": _second_sunday_of_may(y), "Tag": "MADRE"},
+        {"Evento": "Día del Padre (CO)", "Fecha": _third_sunday_of_june(y), "Tag": "PADRE"},
+        {"Evento": "Amor y Amistad (CO)", "Fecha": date(y, 9, 20), "Tag": "AYAM"},
+        {"Evento": "Halloween", "Fecha": date(y, 10, 31), "Tag": "HALLOWEEN"},
+        {"Evento": "Black Friday (referencia)", "Fecha": date(y, 11, 29), "Tag": "BF"},
+        {"Evento": "Navidad", "Fecha": date(y, 12, 24), "Tag": "NAVIDAD"},
+        {"Evento": "Fin de Año", "Fecha": date(y, 12, 31), "Tag": "FIN_ANO"},
+    ]
+    df = pd.DataFrame(rows)
+    df["Fecha"] = pd.to_datetime(df["Fecha"])
+    return df.sort_values("Fecha")
+
+def plantilla_evento(tag: str) -> str:
+    # Templates cortos, claros, “bonitos” y accionables
+    base = {
+        "MUJER": "Hola {Nombre} 🐾\nHoy celebramos el *Día de la Mujer* 🌷\nQueremos consentirte a ti y a {Mascota}.\n🎁 Promo: {Promo}\n¿Te lo separamos para hoy?",
+        "MADRE": "Hola {Nombre} 🐾\nFeliz *Día de la Madre* 🌼\n{Mascota} también quiere celebrarte.\n🎁 Promo: {Promo}\n¿Te lo llevamos a domicilio o pasas por la tienda?",
+        "PADRE": "Hola {Nombre} 🐾\nFeliz *Día del Padre* 🧔‍♂️\nArma el plan con {Mascota}.\n🎁 Promo: {Promo}\n¿Te comparto opciones recomendadas?",
+        "AYAM": "Hola {Nombre} 🐾\nEn *Amor y Amistad* celebramos la lealtad 💛\n🎁 Promo: {Promo}\n¿Te lo dejamos listo para hoy?",
+        "HALLOWEEN": "Hola {Nombre} 🐾\n🎃 Halloween llegó y {Mascota} merece premio.\n🎁 Promo: {Promo}\n¿Quieres snacks o juguete?",
+        "BF": "Hola {Nombre} 🐾\n🔥 Black Friday en Bigotes y Patitas.\n🎁 Promo: {Promo}\n¿Te aparto lo de {Mascota} antes de que se agote?",
+        "NAVIDAD": "Hola {Nombre} 🐾\n🎄 Navidad con {Mascota} es mejor.\n🎁 Promo: {Promo}\n¿Te armamos un combo regalo?",
+        "FIN_ANO": "Hola {Nombre} 🐾\n✨ Cerramos el año consintiendo a {Mascota}.\n🎁 Promo: {Promo}\n¿Te ayudo a elegir lo ideal?",
+    }
+    return base.get(tag, "Hola {Nombre} 🐾\n🎁 Promo: {Promo}\n¿Te lo separamos?")
+
+def construir_links_campana(master: pd.DataFrame, template: str, promo: str) -> pd.DataFrame:
+    tel_col = _find_col(master, ["Telefono", "Teléfono", "Celular", "Movil"])
+    nom_col = _find_col(master, ["Nombre", "Nombre_Cliente"])
+    mas_col = _find_col(master, ["Mascota", "Nombre Mascota Principal", "Mascota_Principal"])
+
+    out = master.copy()
+    if nom_col is None: out["__Nombre"] = "Cliente"
+    else: out["__Nombre"] = out[nom_col].fillna("Cliente").astype(str)
+
+    if mas_col is None: out["__Mascota"] = "tu peludito"
+    else: out["__Mascota"] = out[mas_col].fillna("tu peludito").astype(str)
+
+    if tel_col is None:
+        out["__Telefono"] = ""
+    else:
+        out["__Telefono"] = out[tel_col].apply(_clean_tel_basic)
+
+    def _render(row):
+        msg = template.format(Nombre=row["__Nombre"], Mascota=row["__Mascota"], Promo=promo)
+        return msg
+
+    out["Mensaje"] = out.apply(_render, axis=1)
+    out["Link"] = out["__Telefono"].apply(lambda t: f"https://wa.me/{t}?text={quote('')}" if not t else f"https://wa.me/{t}?text={quote('')}")
+    # Usar tu helper existente si quieres: [`link_whatsapp`](BigotesyPaticas/pages/Nexus_Loyalty.py)
+    out["Link"] = out.apply(lambda r: link_whatsapp(r["__Telefono"], r["Mensaje"]) if r["__Telefono"] else None, axis=1)
+
+    return out[["__Nombre", "__Mascota", "__Telefono", "Mensaje", "Link"]].rename(
+        columns={"__Nombre": "Nombre", "__Mascota": "Mascota", "__Telefono": "Telefono"}
+    )
+
+# ==========================================
 # 2. CONEXIÓN Y PROCESAMIENTO
 # ==========================================
 
@@ -147,93 +289,91 @@ def limpiar_columnas(df):
     return df
 
 def procesar_inteligencia(ws_cli, ws_ven):
-    # 1. Cargar Datos
+    # 1) Cargar Datos
     data_cli = ws_cli.get_all_records() if ws_cli else []
     data_ven = ws_ven.get_all_records() if ws_ven else []
-    
+
     df_cli = pd.DataFrame(data_cli)
     df_ven = pd.DataFrame(data_ven)
-    
+
     df_cli = limpiar_columnas(df_cli)
     df_ven = limpiar_columnas(df_ven)
-    
+
     if df_cli.empty:
         return pd.DataFrame(), pd.DataFrame(), "Sin clientes"
-    
-    # 2. Normalización de Clientes
-    if 'Cedula' not in df_cli.columns: df_cli['Cedula'] = ''
-    df_cli['Cedula'] = df_cli['Cedula'].astype(str).str.replace(r'\.0$', '', regex=True)
-    
-    # Asegurar nombre de columna Mascota
-    if 'Mascota' not in df_cli.columns: 
-        df_cli['Mascota'] = 'Tu Peludito'
 
-    # 3. Procesamiento de Ventas (Calculo de RFM básico)
-    if df_ven.empty or 'Fecha' not in df_ven.columns or 'Cedula_Cliente' not in df_ven.columns:
-        df_cli['Estado'] = "⚪ Nuevo"
-        df_cli['Dias_Sin_Compra'] = 999
-        df_cli['Ultima_Compra_Dt'] = pd.NaT
-        df_cli['Ultimo_Producto'] = "N/A"
+    # 2) Normalización (robusta)
+    col_ced = _find_col(df_cli, ["Cedula", "Cédula", "Cedula_Cliente"])
+    if col_ced is None:
+        df_cli["Cedula"] = ""
+        col_ced = "Cedula"
+    df_cli[col_ced] = df_cli[col_ced].astype(str).str.replace(r"\.0$", "", regex=True)
+
+    col_nom = _find_col(df_cli, ["Nombre", "Nombre_Cliente"])
+    if col_nom is None:
+        df_cli["Nombre"] = "Cliente"
+        col_nom = "Nombre"
+
+    col_masc = _find_col(df_cli, ["Mascota", "Nombre Mascota Principal", "Mascota_Principal"])
+    if col_masc is None:
+        df_cli["Mascota"] = "Tu Peludito"
+        col_masc = "Mascota"
+
+    # 3) Ventas / RFM básico (robusto)
+    col_fecha_v = _find_col(df_ven, ["Fecha"])
+    col_total_v = _find_col(df_ven, ["Total", "Monto", "Valor"])
+    col_ced_v = _find_col(df_ven, ["Cedula_Cliente", "Cedula", "Cédula"])
+
+    if df_ven.empty or col_fecha_v is None or col_total_v is None or col_ced_v is None:
+        df_cli["Estado"] = "⚪ Nuevo"
+        df_cli["Dias_Sin_Compra"] = 999
+        df_cli["Ultima_Compra_Dt"] = pd.NaT
+        df_cli["Ultimo_Producto"] = "N/A"
     else:
-        df_ven['Cedula_Cliente'] = df_ven['Cedula_Cliente'].astype(str).str.replace(r'\.0$', '', regex=True)
-        df_ven['Fecha'] = pd.to_datetime(df_ven['Fecha'], errors='coerce')
-        
-        resumen_ventas = df_ven.groupby('Cedula_Cliente').agg({
-            'Fecha': 'max',
-            'Total': 'sum',
-            'Items': 'last'
+        df_ven[col_ced_v] = df_ven[col_ced_v].astype(str).str.replace(r"\.0$", "", regex=True)
+        df_ven[col_fecha_v] = _safe_to_datetime(df_ven[col_fecha_v])
+        df_ven[col_total_v] = _safe_to_num(df_ven[col_total_v])
+
+        col_items = _find_col(df_ven, ["Items", "Items_Detalle"])
+        if col_items is None:
+            df_ven["Items"] = ""
+            col_items = "Items"
+
+        resumen_ventas = df_ven.groupby(col_ced_v).agg({
+            col_fecha_v: "max",
+            col_total_v: "sum",
+            col_items: "last"
         }).reset_index()
-        
-        resumen_ventas.columns = ['Cedula', 'Ultima_Compra_Dt', 'Total_Gastado', 'Ultimo_Producto']
-        
-        # Merge y Lógica de Negocio
-        df_cli = pd.merge(df_cli, resumen_ventas, on='Cedula', how='left')
-        
+
+        resumen_ventas.columns = ["Cedula", "Ultima_Compra_Dt", "Total_Gastado", "Ultimo_Producto"]
+
+        df_cli = pd.merge(df_cli, resumen_ventas, left_on=col_ced, right_on="Cedula", how="left")
         hoy = pd.Timestamp.now()
-        df_cli['Dias_Sin_Compra'] = (hoy - df_cli['Ultima_Compra_Dt']).dt.days.fillna(999)
-        
+        df_cli["Dias_Sin_Compra"] = (hoy - pd.to_datetime(df_cli["Ultima_Compra_Dt"], errors="coerce")).dt.days.fillna(999)
+
         def clasificar(dias):
             if dias <= 30: return "🟢 Activo"
-            elif 31 <= dias <= 60: return "🟡 Recompra (Alerta)"
-            elif 61 <= dias <= 90: return "🟠 Riesgo"
-            elif dias > 90 and dias != 999: return "🔴 Perdido"
-            else: return "⚪ Nuevo"
-            
-        df_cli['Estado'] = df_cli['Dias_Sin_Compra'].apply(clasificar)
-    
-    # 4. DETECCIÓN DE CUMPLEAÑOS (CORREGIDO PARA TU FORMATO)
-    # Nombre exacto de la columna según tu foto: 'Cumpleaños_mascota'
-    col_nac = 'Cumpleaños_mascota'
-    
-    df_cli['Es_Cumple_Mes'] = False
-    df_cli['Es_Cumple_Hoy'] = False
-    
-    if col_nac in df_cli.columns:
-        # A) Convertimos a string y limpiamos
+            if 31 <= dias <= 60: return "🟡 Recompra (Alerta)"
+            if 61 <= dias <= 90: return "🟠 Riesgo"
+            if dias > 90 and dias != 999: return "🔴 Perdido"
+            return "⚪ Nuevo"
+
+        df_cli["Estado"] = df_cli["Dias_Sin_Compra"].apply(clasificar)
+
+    # 4) Cumpleaños mascota (columna flexible)
+    df_cli["Es_Cumple_Mes"] = False
+    df_cli["Es_Cumple_Hoy"] = False
+
+    col_nac = _find_col(df_cli, ["Cumpleaños_mascota", "Cumpleanos_mascota", "Cumpleaños Mascota", "Cumpleanos Mascota"])
+    if col_nac:
         df_cli[col_nac] = df_cli[col_nac].astype(str).str.strip()
-        
-        # B) Convertimos a FECHA
-        # Como tu foto muestra '2023-12-07' (Año-Mes-Dia), Pandas lo detecta mejor sin 'dayfirst=True'
-        # errors='coerce' transformará fechas inválidas o vacías en NaT (Not a Time)
-        df_cli['Fecha_Nac_DT'] = pd.to_datetime(df_cli[col_nac], errors='coerce')
-        
+        df_cli["Fecha_Nac_DT"] = pd.to_datetime(df_cli[col_nac], errors="coerce")
         hoy_dt = datetime.now()
-        
-        # C) Lógica de Comparación
-        # Extraemos el MES y el DÍA de la fecha de nacimiento de la mascota
-        df_cli['Mes_Nac'] = df_cli['Fecha_Nac_DT'].dt.month
-        df_cli['Dia_Nac'] = df_cli['Fecha_Nac_DT'].dt.day
-        
-        # Validamos dónde hay fechas reales (no vacías)
-        mask_valid = df_cli['Fecha_Nac_DT'].notna()
-        
-        # LÓGICA DE MES: ¿El mes de nacimiento es igual al mes actual?
-        df_cli.loc[mask_valid, 'Es_Cumple_Mes'] = df_cli.loc[mask_valid, 'Mes_Nac'] == hoy_dt.month
-        
-        # LÓGICA DE HOY: ¿El mes es igual AL ACTUAL Y el día es igual AL ACTUAL?
-        df_cli.loc[mask_valid, 'Es_Cumple_Hoy'] = (
-            (df_cli.loc[mask_valid, 'Mes_Nac'] == hoy_dt.month) & 
-            (df_cli.loc[mask_valid, 'Dia_Nac'] == hoy_dt.day)
+        mask_valid = df_cli["Fecha_Nac_DT"].notna()
+        df_cli.loc[mask_valid, "Es_Cumple_Mes"] = df_cli.loc[mask_valid, "Fecha_Nac_DT"].dt.month == hoy_dt.month
+        df_cli.loc[mask_valid, "Es_Cumple_Hoy"] = (
+            (df_cli.loc[mask_valid, "Fecha_Nac_DT"].dt.month == hoy_dt.month) &
+            (df_cli.loc[mask_valid, "Fecha_Nac_DT"].dt.day == hoy_dt.day)
         )
 
     return df_cli, df_ven, "OK"
@@ -274,18 +414,14 @@ def main():
         st.success(f"📅 Hoy es: {hoy_str}")
         st.info(f"🎂 Mes de: **{mes_actual_nombre}**")
 
-    # Carga de datos
-    ws_cli, ws_ven = conectar_crm()
-    if not ws_cli: return
-    
-    with st.spinner('Conectando con la base de datos de peluditos...'):
-        master, df_ven, status = procesar_inteligencia(ws_cli, ws_ven)
+    # Carga de datos (conectado al flujo de la app)
+    master, df_ven, status = cargar_datos_loyalty()
 
     if master.empty:
-        st.warning("⚠️ No se encontraron datos en la hoja de Clientes.")
+        st.warning("⚠️ No se encontraron datos de clientes (cli). Sincroniza en la app principal.")
         return
 
-    # --- KPI HEADER ---
+    # --- KPI HEADER (igual que tienes) ---
     st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>📊</span> Tablero de Control", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
     
@@ -309,7 +445,7 @@ def main():
         "🎂 Cumpleaños", 
         "🔄 Smart Rebuy", 
         "💁‍♀️ Servicios (Ángela)", 
-        "📢 Campañas Auto", 
+        "📅 Campañas (Fechas especiales)",
         "🚑 Recuperación"
     ])
 
@@ -450,39 +586,58 @@ def main():
                 st.write(f"💕 **{nom} & {mascota}**: [Enviar Saludo]({link})")
 
     # ==========================================
-    # TAB 4: CAMPAÑAS AUTO
+    # TAB 4: CAMPAÑAS (NUEVO CENTRO)
     # ==========================================
     with tabs[3]:
-        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>📢</span> Creador de Campañas", unsafe_allow_html=True)
-        col_c1, col_c2 = st.columns([1, 2])
-        
-        with col_c1:
-            motivo = st.text_input("Motivo de la campaña", placeholder="Ej: Llegaron juguetes nuevos")
-            if not motivo: motivo = "contarte novedades increíbles"
-            filtro_camp = st.selectbox("Destinatarios", ["Todos mis Clientes", "Solo Activos (VIP)", "Clientes Inactivos"])
-        
-        target = master
-        if 'Estado' in master.columns:
-            if filtro_camp == "Solo Activos (VIP)":
-                target = master[master['Estado'] == "🟢 Activo"]
-            elif filtro_camp == "Clientes Inactivos":
-                target = master[master['Estado'].isin(["🟠 Riesgo", "🔴 Perdido"])]
+        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>📅</span> Campañas activas (calendario + segmentación)", unsafe_allow_html=True)
 
-        with col_c2:
-            st.info(f"✨ Mensaje sobre: **'{motivo}'** para {len(target)} personas.")
-        
+        cal = calendario_campanas()
+        hoy = pd.Timestamp.now().normalize()
+        proximas = cal[(cal["Fecha"] >= hoy) & (cal["Fecha"] <= hoy + pd.Timedelta(days=120))].copy()
+
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            st.markdown("**Próximas fechas (120 días):**")
+            st.dataframe(proximas, use_container_width=True, hide_index=True)
+
+        with c2:
+            evento_sel = st.selectbox(
+                "Elegir evento",
+                options=proximas["Evento"].tolist() if not proximas.empty else cal["Evento"].tolist()
+            )
+            tag_sel = cal[cal["Evento"] == evento_sel]["Tag"].iloc[0]
+            promo = st.text_input("Promo / Gancho", value="10% OFF + Domicilio gratis (hoy)", help="Corto, claro, con urgencia suave.")
+            template = st.text_area("Mensaje (editable)", value=plantilla_evento(tag_sel), height=160)
+
         st.markdown("---")
-        with st.expander("Ver lista de envío de campaña"):
-            for idx, row in target.iterrows():
-                nom = row.get('Nombre', 'Amigo')
-                mascota = row.get('Mascota', 'tu peludito')
-                tel = row.get('Telefono', '')
-                
-                msg_auto = f"¡Hola {nom}! 🐾 Esperamos que {mascota} esté súper bien. 🌟 Pasamos por aquí desde Bigotes y Patitas para {motivo}. 😍✨ Recuerda que amamos consentir a {mascota}. ¡Cualquier duda estamos a un ladrido de distancia! 🐕❤️"
-                
-                link = link_whatsapp(tel, msg_auto)
-                if link:
-                    st.markdown(f"💌 **{nom}**: [Enviar Campaña]({link})")
+        st.markdown("**Segmentación (a quién se le envía):**")
+        seg = st.selectbox("Segmento", ["Todos", "🟢 Activo", "🟡 Recompra (Alerta)", "🟠 Riesgo", "🔴 Perdido", "⚪ Nuevo"])
+        df_target = master.copy()
+        if seg != "Todos" and "Estado" in df_target.columns:
+            df_target = df_target[df_target["Estado"] == seg].copy()
+
+        st.caption(f"Destinatarios: {len(df_target)}")
+
+        if len(df_target) == 0:
+            st.info("No hay destinatarios para ese segmento.")
+        else:
+            out = construir_links_campana(df_target, template=template, promo=promo)
+            st.dataframe(out, use_container_width=True, hide_index=True)
+
+            # export
+            csv = out.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "⬇️ Descargar lista (CSV) con mensajes y links",
+                data=csv,
+                file_name=f"campana_{tag_sel}_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+
+            st.markdown("##### Links listos para enviar:")
+            for _, r in out.head(25).iterrows():
+                if r["Link"]:
+                    st.markdown(f"- **{r['Nombre']}** ({r['Mascota']}) → [WhatsApp]({r['Link']})")
 
     # ==========================================
     # TAB 5: RECUPERACIÓN
