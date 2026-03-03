@@ -481,6 +481,44 @@ def construir_campana_cumple(master: pd.DataFrame, days_before: int = 8, days_af
     df = df.sort_values(["Cumple_Diff_Dias", "Nombre"], ascending=[False, True])
     return df
 
+# ...existing code...
+
+def _extraer_producto_bonito(ultimo_producto: str) -> str:
+    """
+    Normaliza el último producto para que el mensaje sea corto y entendible.
+    Soporta strings vacíos / None y formatos con comas o "2x ...".
+    """
+    if ultimo_producto is None:
+        return "su alimento"
+    s = str(ultimo_producto).strip()
+    if not s:
+        return "su alimento"
+
+    s = s.split(",")[0].strip()
+
+    low = s.lower()
+    if "x " in low:
+        head = low.split("x ", 1)[0].strip()
+        if head.isdigit():
+            s = s.split("x ", 1)[1].strip()
+
+    if "(" in s:
+        s = s.split("(", 1)[0].strip()
+
+    return s[:48] if len(s) > 48 else s
+
+def msg_recompra_20(nombre: str, mascota: str, producto: str, dias: int) -> str:
+    producto = _extraer_producto_bonito(producto)
+    mascota = (mascota or "tu peludito").strip()
+    nombre = (nombre or "Cliente").strip()
+
+    return (
+        f"Hola {nombre}.\n"
+        f"¿{mascota} necesita más de *{producto}*? 🥣\n\n"
+        f"Han pasado {int(dias)} días desde la última compra y queremos ayudarte a que no se quede sin su comida.\n"
+        f"Si me confirmas, te lo dejamos listo (o lo enviamos a domicilio)."
+    )
+
 def msg_cumple_5pct(nombre: str, mascota: str, estado: str) -> str:
     return (
         f"Hola {nombre} 🐾\n"
