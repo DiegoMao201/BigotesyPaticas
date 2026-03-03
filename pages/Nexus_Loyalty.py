@@ -507,24 +507,20 @@ def _extraer_producto_bonito(ultimo_producto: str) -> str:
 
     return s[:48] if len(s) > 48 else s
 
-def msg_recompra_20(nombre: str, mascota: str, producto: str, dias: int) -> str:
+def msg_recompra(nombre: str, mascota: str, producto: str) -> str:
+    """
+    Mensaje estándar para la sección 'Plato Vacío' (30-60 días).
+    Mantener este nombre evita NameError porque el UI ya lo llama.
+    """
     producto = _extraer_producto_bonito(producto)
     mascota = (mascota or "tu peludito").strip()
     nombre = (nombre or "Cliente").strip()
 
     return (
         f"Hola {nombre}.\n"
-        f"¿{mascota} necesita más de *{producto}*? 🥣\n\n"
-        f"Han pasado {int(dias)} días desde la última compra y queremos ayudarte a que no se quede sin su comida.\n"
-        f"Si me confirmas, te lo dejamos listo (o lo enviamos a domicilio)."
-    )
-
-def msg_cumple_5pct(nombre: str, mascota: str, estado: str) -> str:
-    return (
-        f"Hola {nombre} 🐾\n"
-        f"Cumpleaños de {mascota}: *{estado}* 🎂\n\n"
-        f"🎁 *Regalo de Cumpleaños:* 5% OFF en *snacks y concentrados*.\n"
-        f"¿Te separo lo de {mascota} para hoy?"
+        f"¿Cómo va {mascota}? 🐾\n\n"
+        f"Te escribo para ayudarte: ¿necesitas más de *{producto}*?\n"
+        f"Si me confirmas, te lo dejamos listo hoy (y si quieres, lo enviamos a domicilio)."
     )
 
 # ==========================================
