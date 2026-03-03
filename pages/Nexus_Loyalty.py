@@ -160,17 +160,157 @@ def _clean_tel_basic(tel: str) -> str:
 # 2.C INTEGRACIÓN CON EL FLUJO DE LA APP (SESSION_STATE.DB)
 # ==========================================
 
+def _preparar_fuente_cli_ven(df_cli: pd.DataFrame, df_ven: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Normaliza columnas mínimas para evitar master vacío o sin campos críticos."""
+    df_cli = df_cli.copy() if df_cli is not None else pd.DataFrame()
+    df_ven = df_ven.copy() if df_ven is not None else pd.DataFrame()
+
+    df_cli = limpiar_columnas(df_cli)
+    df_ven = limpiar_columnas(df_ven)
+
+    # Asegurar columnas clave (aunque vengan con otros nombres)
+    # Clientes
+    col_nom = _find_col(df_cli, ["Nombre", "Nombre_Cliente"])
+    if col_nom and col_nom != "Nombre":
+        df_cli = df_cli.rename(columns={col_nom: "Nombre"})
+    if "Nombre" not in df_cli.columns:
+        df_cli["Nombre"] = ""
+
+    col_masc = _find_col(df_cli, ["Mascota", "Mascota_Principal", "Nombre Mascota Principal"])
+    if col_masc and col_masc != "Mascota":
+        df_cli = df_cli.rename(columns={col_masc: "Mascota"})
+    if "Mascota" not in df_cli.columns:
+        df_cli["Mascota"] = ""
+
+    col_tel = _find_col(df_cli, ["Telefono", "Teléfono", "Celular", "Movil"])
+    if col_tel and col_tel != "Telefono":
+        df_cli = df_cli.rename(columns={col_tel: "Telefono"})
+    if "Telefono" not in df_cli.columns:
+        df_cli["Telefono"] = ""
+
+    col_email = _find_col(df_cli, ["Email", "Correo", "Correo_Electronico"])
+    if col_email and col_email != "Email":
+        df_cli = df_cli.rename(columns={col_email: "Email"})
+    if "Email" not in df_cli.columns:
+        df_cli["Email"] = ""
+
+    col_ced = _find_col(df_cli, ["Cedula", "Cédula", "Cedula_Cliente", "Documento"])
+    if col_ced and col_ced != "Cedula":
+        df_cli = df_cli.rename(columns={col_ced: "Cedula"})
+    if "Cedula" not in df_cli.columns:
+        df_cli["Cedula"] = ""
+
+    df_cli["Cedula"] = df_cli["Cedula"].astype(str).str.replace(r"\.0$", "", regex=True).str.strip()
+    df_cli["Nombre"] = df_cli["Nombre"].fillna("").astype(str).str.strip()
+    df_cli["Mascota"] = df_cli["Mascota"].fillna("").astype(str).str.strip()
+    df_cli["Telefono"] = df_cli["Telefono"].fillna("").astype(str).str.strip()
+
+    # Ventas
+    col_fecha_v = _find_col(df_ven, ["Fecha"])
+    if col_fecha_v and col_fecha_v != "Fecha":
+        df_ven = df_ven.rename(columns={col_fecha_v: "Fecha"})
+    if "Fecha" not in df_ven.columns:
+        df_ven["Fecha"] = pd.NaT
+    df_ven["Fecha"] = pd.to_datetime(df_ven["Fecha"], errors="coerce")
+
+    col_total_v = _find_col(df_ven, ["Total", "Monto", "Valor"])
+    if col_total_v and col_total_v != "Total":
+        df_ven = df_ven.rename(columns={col_total_v: "Total"})
+    if "Total" not in df_ven.columns:
+        df_ven["Total"] = 0.0
+    df_ven["Total"] = pd.to_numeric(df_ven["Total"], errors="coerce").fillna(0.0)
+
+    col_ced_v = _find_col(df_ven, ["Cedula_Cliente", "Cedula", "Cédula", "Documento"])
+    if col_ced_v and col_ced_v != "Cedula_Cliente":
+        df_ven = df_ven.rename(columns={col_ced_v: "Cedula_Cliente"})
+    if "Cedula_Cliente" not in df_ven.columns:
+        df_ven["Cedula_Cliente"] = ""
+    df_ven["Cedula_Cliente"] = df_ven["Cedula_Cliente"].astype(str).str.replace(r"\.0$", "", regex=True).str.strip()
+
+    col_items = _find_col(df_ven, ["Items", "Items_Detalle"])
+    if col_items and col_items != "Items":
+        df_ven = df_ven.rename(columns={col_items: "Items"})
+    if "Items" not in df_ven.columns:
+        df_ven["Items"] = ""
+
+    return df_cli, df_ven
+
+def procesar_inteligencia_df(df_cli: pd.DataFrame, df_ven: pd.DataFrame):
+    """
+    MISMA SALIDA que `procesar_inteligencia(ws_cli, ws_ven)` pero usando DataFrames
+    provenientes de `st.session_state.db` (flujo oficial de la app).
+    """
+    df_cli, df_ven = _preparar_fuente_cli_ven(df_cli, df_ven)
+
+    if df_cli.empty:
+        return pd.DataFrame(), df_ven, "Sin clientes"
+
+    # --- Ventas / RFM básico ---
+    if df_ven.empty or df_ven["Fecha"].isna().all():
+        df_cli["Estado"] = "⚪ Nuevo"
+        df_cli["Dias_Sin_Compra"] = 999
+        df_cli["Ultima_Compra_Dt"] = pd.NaT
+        df_cli["Total_Gastado"] = 0.0
+        df_cli["Ultimo_Producto"] = "N/A"
+    else:
+        resumen = (
+            df_ven.groupby("Cedula_Cliente", as_index=False)
+            .agg(Ultima_Compra_Dt=("Fecha", "max"), Total_Gastado=("Total", "sum"), Ultimo_Producto=("Items", "last"))
+        )
+
+        df_cli = df_cli.merge(resumen, left_on="Cedula", right_on="Cedula_Cliente", how="left")
+        hoy = pd.Timestamp.now()
+        df_cli["Dias_Sin_Compra"] = (hoy - pd.to_datetime(df_cli["Ultima_Compra_Dt"], errors="coerce")).dt.days.fillna(999).astype(int)
+
+        def clasificar(dias: int) -> str:
+            if dias <= 30: return "🟢 Activo"
+            if 31 <= dias <= 60: return "🟡 Recompra (Alerta)"
+            if 61 <= dias <= 90: return "🟠 Riesgo"
+            if dias > 90 and dias != 999: return "🔴 Perdido"
+            return "⚪ Nuevo"
+
+        df_cli["Estado"] = df_cli["Dias_Sin_Compra"].apply(clasificar)
+
+        # limpiar columna extra si quedó del merge
+        if "Cedula_Cliente" in df_cli.columns:
+            df_cli = df_cli.drop(columns=["Cedula_Cliente"])
+
+    # --- Cumpleaños mascota robusto (None / YYYY-MM-DD) ---
+    df_cli["Es_Cumple_Mes"] = False
+    df_cli["Es_Cumple_Hoy"] = False
+    df_cli["Cumple_Mascota_DT"] = pd.NaT
+
+    col_nac = _find_col(df_cli, ["Cumpleaños_mascota", "Cumpleanos_mascota", "Cumpleaños Mascota", "Cumpleanos Mascota"])
+    if col_nac:
+        if "Cumpleaños_mascota" not in df_cli.columns:
+            df_cli["Cumpleaños_mascota"] = df_cli[col_nac]
+        df_cli["Cumple_Mascota_DT"] = pd.to_datetime(df_cli[col_nac], errors="coerce")
+
+        hoy_dt = datetime.now()
+        mask_valid = df_cli["Cumple_Mascota_DT"].notna()
+        df_cli.loc[mask_valid, "Es_Cumple_Mes"] = df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.month == hoy_dt.month
+        df_cli.loc[mask_valid, "Es_Cumple_Hoy"] = (
+            (df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.month == hoy_dt.month) &
+            (df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.day == hoy_dt.day)
+        )
+    else:
+        if "Cumpleaños_mascota" not in df_cli.columns:
+            df_cli["Cumpleaños_mascota"] = None
+
+    return df_cli, df_ven, "OK (Session DB)"
+
 def cargar_datos_loyalty():
     """
-    Prioridad:
-    1) Usa st.session_state.db (flujo principal: [`cargar_datos_iniciales`](BigotesyPaticas/BigotesyPaticas.py))
-    2) Fallback: conectar_crm() (como estaba)
+    Flujo correcto:
+    1) SI existe `st.session_state.db` (cargado por [`cargar_datos_iniciales`](BigotesyPaticas/BigotesyPaticas.py)),
+       procesar ahí mismo (NO devolver crudo).
+    2) Fallback: Google Sheets directo (como respaldo).
     """
     if "db" in st.session_state and isinstance(st.session_state.db, dict):
-        df_cli = st.session_state.db.get("cli", pd.DataFrame()).copy()
-        df_ven = st.session_state.db.get("ven", pd.DataFrame()).copy()
-        if not df_cli.empty:
-            return df_cli, df_ven, "OK (Session DB)"
+        df_cli_raw = st.session_state.db.get("cli", pd.DataFrame())
+        df_ven_raw = st.session_state.db.get("ven", pd.DataFrame())
+        master, df_ven, status = procesar_inteligencia_df(df_cli_raw, df_ven_raw)
+        return master, df_ven, status
 
     # fallback a la lógica existente
     ws_cli, ws_ven = conectar_crm()
@@ -654,7 +794,7 @@ def main():
             st.markdown("##### 🚀 Click para enviar Recordatorio Bonito:")
             for idx, row in df_rebuy.iterrows():
                 nom = row.get('Nombre', 'Cliente')
-                mascota = row.get('Mascota', 'tu peludito')
+                mascota = row.get('Mascota', 'tu mascota')
                 prod = str(row.get('Ultimo_Producto', 'su alimento')).split('(')[0]
                 tel = row.get('Telefono', '')
                 
