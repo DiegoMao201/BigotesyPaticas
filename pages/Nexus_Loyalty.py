@@ -257,6 +257,99 @@ def construir_links_campana(master: pd.DataFrame, template: str, promo: str) -> 
     )
 
 # ==========================================
+# 2.E MOTOR CUMPLEAÑOS (VENTANA -8 / +8 DÍAS)
+# ==========================================
+
+def _nearest_bday_occurrence(bday_dt: pd.Timestamp, today: pd.Timestamp) -> tuple[pd.Timestamp, int]:
+    """
+    Retorna (fecha_ocurrencia_mas_cercana, diff_dias)
+    diff_dias = (ocurrencia - today).days  -> negativo: ya pasó, positivo: falta
+    Maneja cruces de año (dic/ene). Soporta NaT.
+    """
+    bday_dt = pd.to_datetime(bday_dt, errors="coerce")
+    if pd.isna(bday_dt):
+        return pd.NaT, 10**9
+
+    m = int(bday_dt.month)
+    d = int(bday_dt.day)
+    y = int(today.year)
+
+    candidates: list[pd.Timestamp] = []
+    for yy in (y - 1, y, y + 1):
+        try:
+            candidates.append(pd.Timestamp(date(yy, m, d)))
+        except Exception:
+            continue
+
+    if not candidates:
+        return pd.NaT, 10**9
+
+    today0 = today.normalize()
+    best = min(((c, int((c - today0).days)) for c in candidates), key=lambda x: abs(x[1]))
+    return best[0], best[1]
+
+def construir_campana_cumple(master: pd.DataFrame, days_before: int = 8, days_after: int = 8) -> pd.DataFrame:
+    """
+    Filtra clientes con Cumple_Mascota_DT dentro de ventana [-days_after, +days_before]
+    alrededor de HOY (por día/mes, cruzando año si aplica).
+    Requiere/crea columnas: Nombre, Mascota, Telefono, Cumple_Mascota_DT.
+    """
+    if master is None or master.empty:
+        return pd.DataFrame()
+
+    df = master.copy()
+
+    # asegurar columnas base para no reventar UI
+    for c, default in [("Nombre", "Cliente"), ("Mascota", "tu peludito"), ("Telefono", "")]:
+        if c not in df.columns:
+            df[c] = default
+        df[c] = df[c].fillna(default).astype(str)
+
+    if "Cumple_Mascota_DT" not in df.columns:
+        # si tu hoja trae Cumpleaños_mascota, intenta parsearla
+        if "Cumpleaños_mascota" in df.columns:
+            df["Cumple_Mascota_DT"] = pd.to_datetime(df["Cumpleaños_mascota"], errors="coerce")
+        else:
+            df["Cumple_Mascota_DT"] = pd.NaT
+    else:
+        df["Cumple_Mascota_DT"] = pd.to_datetime(df["Cumple_Mascota_DT"], errors="coerce")
+
+    hoy = pd.Timestamp.now().normalize()
+
+    occ_list = []
+    diff_list = []
+    for v in df["Cumple_Mascota_DT"]:
+        occ, diff = _nearest_bday_occurrence(v, hoy)
+        occ_list.append(occ)
+        diff_list.append(diff)
+
+    df["Cumple_Ocurrencia"] = occ_list
+    df["Cumple_Diff_Dias"] = diff_list
+
+    df = df[(df["Cumple_Diff_Dias"] >= -int(days_after)) & (df["Cumple_Diff_Dias"] <= int(days_before))].copy()
+
+    def _estado(diff: int) -> str:
+        if diff == 0:
+            return "🎂 Hoy"
+        if diff > 0:
+            return f"⏳ Faltan {diff} días"
+        return f"✅ Pasó hace {abs(diff)} días"
+
+    df["Estado_Cumple"] = df["Cumple_Diff_Dias"].apply(lambda x: _estado(int(x)) if pd.notna(x) else "N/D")
+
+    # orden: primero los que vienen pronto, luego los recientes
+    df = df.sort_values(["Cumple_Diff_Dias", "Nombre"], ascending=[False, True])
+    return df
+
+def msg_cumple_5pct(nombre: str, mascota: str, estado: str) -> str:
+    return (
+        f"Hola {nombre} 🐾\n"
+        f"Cumpleaños de {mascota}: *{estado}* 🎂\n\n"
+        f"🎁 *Regalo de Cumpleaños:* 5% OFF en *snacks y concentrados*.\n"
+        f"¿Te separo lo de {mascota} para hoy?"
+    )
+
+# ==========================================
 # 2. CONEXIÓN Y PROCESAMIENTO
 # ==========================================
 
