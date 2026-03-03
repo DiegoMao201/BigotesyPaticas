@@ -599,8 +599,46 @@ def main():
     # TAB 2: RECOMPRA INTELIGENTE
     # ==========================================
     with tabs[1]:
+        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>🥣</span> Smart Rebuy (Recompras automáticas)", unsafe_allow_html=True)
+
+        # --- NUEVO: Recompra rápida 20 días ---
+        st.markdown("##### Recompra rápida (20 días sin compra)")
+        cth1, cth2 = st.columns([1, 2])
+        with cth1:
+            umbral = st.slider("Umbral (días sin compra)", min_value=10, max_value=45, value=20, step=1)
+        with cth2:
+            st.caption("Mensaje pensado para activar volumen: corto, directo, con el nombre del peludito y el último alimento.")
+
+        if "Dias_Sin_Compra" in master.columns:
+            df_fast = master[(master["Dias_Sin_Compra"] >= umbral) & (master["Dias_Sin_Compra"] <= umbral + 10)].copy()
+        else:
+            df_fast = pd.DataFrame()
+
+        if df_fast.empty:
+            st.success("No hay clientes en la ventana de recompra rápida.")
+        else:
+            cols = [c for c in ["Nombre", "Mascota", "Telefono", "Ultimo_Producto", "Dias_Sin_Compra"] if c in df_fast.columns]
+            st.dataframe(df_fast[cols], use_container_width=True, hide_index=True)
+
+            st.markdown("##### Envío 1 a 1 (WhatsApp listo):")
+            for _, row in df_fast.head(60).iterrows():
+                nom = row.get("Nombre", "Cliente")
+                mascota = row.get("Mascota", "tu peludito")
+                tel = row.get("Telefono", "")
+                prod = row.get("Ultimo_Producto", "su alimento")
+                dias = int(row.get("Dias_Sin_Compra", umbral))
+
+                msg = msg_recompra_20(nom, mascota, prod, dias)
+                link = link_whatsapp(tel, msg)
+
+                if link:
+                    st.markdown(f"- **{mascota}** (Dueño: {nom}) → [WhatsApp Recompra]({link})")
+
+        st.divider()
+
+        # --- EXISTENTE: Alerta 30-60 días (mantener lo tuyo) ---
         st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>🥣</span> Alerta: Plato Vacío (30-60 días)", unsafe_allow_html=True)
-        
+
         if 'Estado' in master.columns:
             df_rebuy = master[master['Estado'] == "🟡 Recompra (Alerta)"].copy()
         else:
