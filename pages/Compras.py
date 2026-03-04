@@ -127,6 +127,69 @@ def _ensure_headers(ws, required_cols: list[str]) -> list[str]:
 
     return ws.row_values(1) if changed else headers
 
+def _build_inv_indexes(ws_inv):
+    """
+    Índices para Inventario (Sheets) usados por compras XML/manual.
+    Retorna: headers, idx_uid, idx_id, idx_norm, idx_stock, idx_costo, idx_precio, idx_nombre, uid_to_row, norm_to_row, norm_to_uid
+    """
+    headers = _ensure_headers(
+        ws_inv,
+        ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Nombre", "Stock", "Costo", "Precio"]
+    )
+
+    data = ws_inv.get_all_values() or []
+    if not data:
+        idx_uid = headers.index("Producto_UID")
+        idx_id = headers.index("ID_Producto")
+        idx_norm = headers.index("ID_Producto_Norm")
+        idx_nombre = headers.index("Nombre")
+        idx_stock = headers.index("Stock")
+        idx_costo = headers.index("Costo")
+        idx_precio = headers.index("Precio")
+        return (headers, idx_uid, idx_id, idx_norm, idx_stock, idx_costo, idx_precio, idx_nombre, {}, {}, {})
+
+    headers = data[0]
+
+    # Reasegurar por si la fila 1 está vacía en la hoja
+    if "Producto_UID" not in headers or "ID_Producto" not in headers or "ID_Producto_Norm" not in headers:
+        headers = _ensure_headers(
+            ws_inv,
+            ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Nombre", "Stock", "Costo", "Precio"]
+        )
+        data = ws_inv.get_all_values() or []
+        headers = data[0] if data else headers
+
+    idx_uid = headers.index("Producto_UID")
+    idx_id = headers.index("ID_Producto")
+    idx_norm = headers.index("ID_Producto_Norm")
+    idx_nombre = headers.index("Nombre") if "Nombre" in headers else None
+    idx_stock = headers.index("Stock") if "Stock" in headers else None
+    idx_costo = headers.index("Costo") if "Costo" in headers else None
+    idx_precio = headers.index("Precio") if "Precio" in headers else None
+
+    uid_to_row, norm_to_row, norm_to_uid = {}, {}, {}
+
+    for sheet_row, r in enumerate(data[1:], start=2):
+        uid = str(r[idx_uid]).strip() if idx_uid < len(r) else ""
+        pid = str(r[idx_id]).strip() if idx_id < len(r) else ""
+        norm = str(r[idx_norm]).strip() if idx_norm < len(r) else ""
+
+        if not norm and pid:
+            norm = normalizar_str(pid) # Fallback simple
+
+        if uid:
+            uid_to_row[uid] = sheet_row
+        if norm:
+            norm_to_row[norm] = sheet_row
+        if uid and norm:
+            norm_to_uid[norm] = uid
+
+    return (
+        headers,
+        idx_uid, idx_id, idx_norm, idx_stock, idx_costo, idx_precio, idx_nombre,
+        uid_to_row, norm_to_row, norm_to_uid
+    )
+
 @st.cache_resource(ttl=600)
 def conectar_sheets():
     try:
