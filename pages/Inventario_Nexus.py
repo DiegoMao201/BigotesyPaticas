@@ -448,7 +448,7 @@ def main():
         ultima = st.session_state.get("last_sync", datetime.min)
         st.info(f"Última sinc: {ultima.strftime('%H:%M:%S')}")
 
-        if st.button("🔄 Forzar Sincronización"):
+        if st.button("🔄 Forzar Sincronización", key="btn_sync_main"):
             st.cache_resource.clear()
             if "data_store" in st.session_state:
                 del st.session_state["data_store"]
@@ -783,7 +783,7 @@ def main():
         ultima = st.session_state.get("last_sync", datetime.min)
         st.info(f"Última sinc: {ultima.strftime('%H:%M:%S')}")
 
-        if st.button("🔄 Forzar Sincronización"):
+        if st.button("🔄 Forzar Sincronización", key="btn_sync_main"):
             st.cache_resource.clear()
             if "data_store" in st.session_state:
                 del st.session_state["data_store"]
