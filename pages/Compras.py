@@ -79,6 +79,38 @@ st.markdown(f"""
 # 2. UTILIDADES MATEMÁTICAS
 # ==========================================
 
+MARGEN_BRUTO_OBJ = 0.20  # 20%
+
+def precio_con_margen(costo_neto_unit: float, margen: float = MARGEN_BRUTO_OBJ) -> float:
+    """Margen bruto sobre precio: P = C / (1 - m)."""
+    try:
+        c = float(costo_neto_unit or 0.0)
+        m = float(margen or 0.0)
+        if c <= 0:
+            return 0.0
+        m = max(0.0, min(0.95, m))
+        return c / (1.0 - m)
+    except Exception:
+        return 0.0
+
+def _fmt_qty(x):
+    """Evita 1.0, 2.0 cuando son enteros."""
+    try:
+        f = float(x)
+        return int(f) if f.is_integer() else f
+    except Exception:
+        return x
+
+def _get_meta_safe():
+    """Meta robusto (evita KeyError en step 2)."""
+    meta = st.session_state.get("invoice_meta") or {}
+    return {
+        "Proveedor": meta.get("Proveedor", "").strip(),
+        "ID_Proveedor": meta.get("ID_Proveedor", "").strip(),
+        "Folio": meta.get("Folio", "").strip(),
+        "Total": float(meta.get("Total", 0.0) or 0.0),
+    }
+
 def normalizar_str(valor):
     if pd.isna(valor) or valor == "": return ""
     return str(valor).strip().upper()
@@ -402,14 +434,26 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             pr_item_trans = (pr_trans / total_items) if total_items else 0.0
             pr_item_desc = (pr_desc / total_items) if total_items else 0.0
 
-            # costo unitario real por unidad (no por pack)
+            # costo unitario real por unidad (no por pack) + IVA
             costo_base_unit = (costo_base_xml + pr_item_trans - pr_item_desc) / factor
             iva_unit = costo_base_unit * (iva_pct / 100.0)
             costo_neto_unit = costo_base_unit + iva_unit
 
             unidades = cant_pack * factor
 
-            # ---- Resolver SKU interno + Producto_UID ----
+            # ✅ PRECIO: si el usuario no envió Precio_Sugerido, calcularlo aquí (con IVA y margen 20%)
+            precio_editado = row.get("Precio_Sugerido", None)
+            try:
+                precio_editado = float(precio_editado) if precio_editado not in (None, "", "None") else 0.0
+            except Exception:
+                precio_editado = 0.0
+
+            if precio_editado and precio_editado > 0:
+                precio_final = precio_editado
+            else:
+                precio_final = redondear_centena(precio_con_margen(costo_neto_unit, MARGEN_BRUTO_OBJ))
+
+            # ---- Inventario: update por UID/Norm; append si no existe ----
             es_nuevo = ("NUEVO" in sel.upper()) or (sel == "") or (sel.upper().startswith("NUEVO"))
             if es_nuevo:
                 sku_interno = sku_prov if sku_prov and sku_prov != "S/C" else f"N-{int(time.time())}"
@@ -452,7 +496,6 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             if fila is None:
                 # Crear nuevo en inventario
                 new_row = [""] * len(inv_headers)
-                # set básicos
                 new_row[idx_id] = sku_interno
                 new_row[idx_uid] = producto_uid
                 new_row[idx_norm] = sku_norm
@@ -465,9 +508,9 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 if idx_costo is not None:
                     new_row[idx_costo] = str(costo_neto_unit)
 
-                # precio sugerido si tu flujo lo usa (no forzar si no existe)
-                if idx_precio is not None and "Precio_Sugerido" in row:
-                    new_row[idx_precio] = str(row.get("Precio_Sugerido", ""))
+                # ✅ Guardar precio calculado con IVA + margen 20%
+                if idx_precio is not None:
+                    new_row[idx_precio] = str(precio_final)
 
                 appends.append(new_row)
                 logs.append(f"✨ CREADO inventario: {sku_interno} | UID {producto_uid[:8]}... (+{unidades})")
@@ -488,6 +531,10 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                     updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_stock + 1), "values": [[nuevo_stock]]})
                 if idx_costo is not None:
                     updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_costo + 1), "values": [[costo_neto_unit]]})
+
+                # ✅ Actualizar precio (IVA + margen 20%) si hay columna Precio
+                if idx_precio is not None:
+                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_precio + 1), "values": [[precio_final]]})
 
                 # asegurar UID/Norm en esa fila (por si estaba incompleto)
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_uid + 1), "values": [[producto_uid]]})
@@ -645,21 +692,23 @@ def main():
     # ==========================================
     elif st.session_state.step == 2:
         st.markdown('<div class="sub-header">Revisión, Mapeo y Finanzas</div>', unsafe_allow_html=True)
-        
-        meta = st.session_state.invoice_meta
-        
-        # Mostrar resumen de cabecera
-        st.info(f"🏢 **Proveedor:** {meta['Proveedor']} | 📄 **Folio:** {meta['Folio']} | 💰 **Total Base:** ${meta['Total']:,.2f}")
-        
-        if st.button("⬅️ Cancelar y Volver"):
+
+        # ✅ meta robusto (NO KeyError)
+        meta = _get_meta_safe()
+        if not meta["Proveedor"] or not meta["Folio"]:
+            st.error("⚠️ No hay cabecera de compra válida (Proveedor/Folio). Vuelve a ingresar la compra.")
             st.session_state.step = 1
             st.rerun()
 
-        st.markdown("### 1. Asignar al Inventario Interno")
-        
+        st.info(
+            f"🏢 **Proveedor:** {meta.get('Proveedor','—')} | "
+            f"📄 **Folio:** {meta.get('Folio','—')} | "
+            f"💰 **Total Base:** ${float(meta.get('Total',0.0) or 0.0):,.2f}"
+        )
+
         # --- LÓGICA DE MEMORIA (CEREBRO) ---
         df_revision_data = []
-        
+
         for item in st.session_state.invoice_items:
             # 1. Armar la clave de memoria idéntica a como se guarda: NIT_SKU
             nit_prov_norm = normalizar_str(meta['ID_Proveedor'])
@@ -690,16 +739,17 @@ def main():
                 "SKU_Proveedor": item.get('SKU_Proveedor', 'S/C'),
                 "Descripcion": item.get('Descripcion', ''),
                 "Nombre_Inventario": item.get('Descripcion', ''), # <--- COLUMNA PARA EDITAR EL NOMBRE NUEVO
-                "Cantidad": item.get('Cantidad', 1),
-                "Costo_Base_Unitario": item.get('Costo_Base_Unitario', 0.0),
+                "Cantidad": int(qty) if float(qty).is_integer() else qty,  # evita 1.0
+                "Costo_Base_Unitario": base_unit,
                 "📌 Producto_Interno": prod_interno_val,
-                "IVA_%": iva_val,
+                "IVA_%": int(iva_val) if float(iva_val).is_integer() else iva_val,
                 "Factor_Pack": factor_val,
+                "Precio_Sugerido": float(precio_sug_est or 0.0),  # ✅ nuevo
                 "Categoría": "Sin Categoría"
             })
 
         df_revision = pd.DataFrame(df_revision_data)
-        
+
         edited_revision = st.data_editor(
             df_revision,
             use_container_width=True,
@@ -708,13 +758,10 @@ def main():
                 "SKU_Proveedor": st.column_config.TextColumn("SKU Prov.", disabled=True),
                 "Descripcion": st.column_config.TextColumn("Desc. Factura", disabled=True),
                 "Nombre_Inventario": st.column_config.TextColumn("✍️ Nombre a Crear (Editable)", disabled=False, width="medium"),
-                "Cantidad": st.column_config.NumberColumn("Cant.", disabled=True),
-                "Costo_Base_Unitario": st.column_config.NumberColumn("Costo Unit. Base", format="$%f", disabled=True),
-                "📌 Producto_Interno": st.column_config.SelectboxColumn("📌 Asociar a:", options=st.session_state.lst_prods_cache, width="large", required=True),
-                "IVA_%": st.column_config.SelectboxColumn("IVA %", options=[0, 5, 19], required=True),
-                "Factor_Pack": st.column_config.NumberColumn("Factor/Caja", min_value=1.0),
-                # Cambia a SelectboxColumn con las categorías del inventario
-                "Categoría": st.column_config.SelectboxColumn("Categoría", options=categorias, required=True)
+                "Cantidad": st.column_config.NumberColumn("Cant.", disabled=True, step=1, format="%.0f"),  # ✅ sin 1.0
+                "Costo_Base_Unitario": st.column_config.NumberColumn("Costo Unit. Base", format="$%.0f", disabled=True),
+                "Factor_Pack": st.column_config.NumberColumn("Factor/Caja", min_value=1.0, step=1.0, format="%.0f"),  # ✅
+                "Precio_Sugerido": st.column_config.NumberColumn("Precio Sugerido (20%)", format="$%.0f", min_value=0.0),  # ✅
             }
         )
 
