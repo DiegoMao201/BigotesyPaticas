@@ -144,7 +144,7 @@ def conectar_sheets():
             st.stop()
 
         # ✅ ya no falla: helper existe
-        _ensure_headers(ws_inv, ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Stock", "Costo", "Precio"])
+        _ensure_headers(ws_inv, ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Stock", "Costo", "Precio", "Nombre"])
 
         try: ws_map = sh.worksheet("Maestro_Proveedores")
         except:
