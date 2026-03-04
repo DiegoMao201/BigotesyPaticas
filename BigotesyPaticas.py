@@ -10,7 +10,7 @@ from io import BytesIO
 import pytz
 import numpy as np
 import time  # Necesario para manejar las esperas en el error 429
-import uuid  # <-- NUEVO
+import uuid  # <-- ya lo tienes, mantener
 
 # --- CONFIGURACIÓN DE ZONA HORARIA ---
 TZ_CO = pytz.timezone("America/Bogota")
