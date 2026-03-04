@@ -153,12 +153,20 @@ def limpiar_tel(tel):
     if len(t) == 10 and not t.startswith("57"): t = "57" + t
     return t
 
-def msg_venta(nombre, mascota, items_str, total):
-    return f"""🧾 Hola {nombre}, gracias por tu compra en Bigotes y Patitas.
-🐶 Mascota: {mascota or 'tu peludito'}
-🛍️ Items: {items_str}
-💰 Total: ${total:,.0f}
-🚚 Si necesitas algo más, avísanos. ¡Gracias! 🐾"""
+def msg_venta(nombre: str, mascota: str, items_str: str, total: float) -> str:
+    nombre = (nombre or "Cliente").strip()
+    mascota = (mascota or "tu peludito").strip()
+    items_str = (items_str or "").strip()
+
+    # Mensaje corto, amable, fidelizador (sin emojis)
+    return (
+        f"Hola {nombre}, gracias por tu compra en Bigotes y Patitas.\n"
+        f"Mascota: {mascota}\n"
+        f"Productos: {items_str}\n"
+        f"Total: ${total:,.0f}\n\n"
+        f"Si necesitas ayuda con recomendaciones o con la próxima compra, escríbenos y con gusto te ayudamos.\n"
+        f"Que {mascota} lo disfrute. Gracias por confiar en nosotros."
+    )
 
 def msg_bienvenida(nombre, mascota):
     return f"""🐾 ¡Hola {nombre}! Bienvenido/a a Bigotes y Patitas.
@@ -793,6 +801,10 @@ def tab_pos():
             fecha = now_co().strftime("%Y-%m-%d %H:%M:%S")
 
             items_str = ", ".join([f"{x['Cantidad']}x {x['Nombre_Producto']}" for x in st.session_state.carrito])
+
+            # total ya lo calculas más arriba; asegurar float
+            total_num = float(total or 0.0)
+
             items_json = json.dumps(
                 [
                     {
@@ -806,7 +818,9 @@ def tab_pos():
                 ]
             )
 
-            costo_total = sum([float(x.get("Costo", 0) or 0) * float(x.get("Cantidad", 0) or 0) for x in st.session_state.carrito])
+            costo_total = sum(
+                [float(x.get("Costo", 0) or 0) * float(x.get("Cantidad", 0) or 0) for x in st.session_state.carrito]
+            )
 
             fila = [
                 id_venta,
@@ -818,7 +832,7 @@ def tab_pos():
                 "Pendiente" if entrega != "Local" else "Entregado",
                 metodo,
                 "",
-                total,
+                total_num,
                 items_str,
                 items_json,
                 costo_total,
@@ -827,12 +841,57 @@ def tab_pos():
 
             registrar_venta(fila, st.session_state.carrito)
 
-            # ...existing code... (generar PDF, whatsapp, limpiar carrito, etc.)
-            st.session_state.carrito = []
-            st.success("Venta Exitosa")
-            st.rerun()
+            # ===== POST-VENTA: preparar WhatsApp (persistente) =====
+            tel_raw = _get_cliente_tel(st.session_state.cliente_actual)
+            tel = limpiar_tel(tel_raw) if tel_raw else ""
+            msg = msg_venta_fidelidad(
+                st.session_state.cliente_actual.get("Nombre", ""),
+                st.session_state.mascota_seleccionada,
+                items_str,
+                total_num,
+            )
+            st.session_state.ultima_venta_id = id_venta
+            st.session_state.whatsapp_link = (
+                f"https://wa.me/{tel}?text={urllib.parse.quote(msg)}" if tel else None
+            )
 
-    # ...existing code... (descarga PDF + whatsapp + Nueva Venta)
+            # limpiar carrito pero NO borrar whatsapp_link
+            st.session_state.carrito = []
+            st.success("Venta registrada. Acciones post-venta disponibles abajo.")
+
+    # ===== UI POST-VENTA (botón WhatsApp) =====
+    if st.session_state.get("ultima_venta_id"):
+        st.markdown("### Acciones post-venta")
+        link = st.session_state.get("whatsapp_link")
+
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            if link:
+                try:
+                    st.link_button("Enviar WhatsApp al cliente", link, type="primary")
+                except Exception:
+                    st.markdown(f"[Enviar WhatsApp al cliente]({link})")
+            else:
+                st.warning("No hay teléfono válido para WhatsApp en este cliente.")
+
+        with c2:
+            # Botón “Nueva venta” (opcional, para resetear post-venta cuando tú quieras)
+            if st.button("Nueva venta", key="pos_new_sale"):
+                st.session_state.ultima_venta_id = None
+                st.session_state.whatsapp_link = None
+                st.rerun()
+
+    # ...existing code... (descarga PDF/WhatsApp si ya tienes bloques)
+
+def _get_cliente_tel(cliente: dict) -> str:
+    """Obtiene teléfono de forma robusta desde el dict de cliente."""
+    if not cliente:
+        return ""
+    for k in ["Telefono", "Teléfono", "Celular", "Movil", "Móvil"]:
+        v = cliente.get(k, "")
+        if v and str(v).strip():
+            return str(v).strip()
+    return ""
 
 def tab_clientes_ui():
     st.header("Gestión de Clientes")
