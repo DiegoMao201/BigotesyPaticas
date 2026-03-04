@@ -9,7 +9,7 @@ import io
 from datetime import datetime, timedelta, date
 from urllib.parse import quote
 import xlsxwriter
-import unicodedata  # ✅ nuevo
+import unicodedata  # ya existe; mantener
 
 # ==========================================
 # 0. CONFIGURACIÓN E INICIALIZACIÓN
