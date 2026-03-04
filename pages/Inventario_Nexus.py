@@ -167,29 +167,29 @@ def cargar_datos_snapshot():
 
     # Limpieza Inventario
     df_inv = data_store["df_Inventario"]
-    if "Producto_UID" not in df_inv.columns:
-        df_inv["Producto_UID"] = ""
-    df_inv["Producto_UID"] = df_inv["Producto_UID"].fillna("").astype(str).str.strip()
+    df_prov = data_store.get("df_Maestro_Proveedores", pd.DataFrame())
 
+    # ---- Limpieza Inventario (ya lo tienes) ----
     df_inv['Stock'] = pd.to_numeric(df_inv['Stock'], errors='coerce').fillna(0)
     df_inv['Costo'] = df_inv['Costo'].apply(clean_currency)
     df_inv['Precio'] = df_inv['Precio'].apply(clean_currency)
     df_inv['ID_Producto_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
     df_inv['Categoria'] = df_inv['Categoria'].replace('', 'Sin Categoría').fillna('Sin Categoría')
 
-    # Limpieza Ventas & Gastos
-    data_store["df_Ventas"]['Fecha'] = pd.to_datetime(data_store["df_Ventas"]['Fecha'], errors='coerce')
-    data_store["df_Gastos"]['Fecha'] = pd.to_datetime(data_store["df_Gastos"]['Fecha'], errors='coerce')
-    data_store["df_Gastos"]['Monto'] = data_store["df_Gastos"]['Monto'].apply(clean_currency)
+    # ✅ NUEVO: Limpieza Maestro_Proveedores (evita Costo_Proveedor = 0 por texto/moneda)
+    if df_prov is not None and not df_prov.empty:
+        if "Costo_Proveedor" not in df_prov.columns:
+            df_prov["Costo_Proveedor"] = 0.0
+        df_prov["Costo_Proveedor"] = df_prov["Costo_Proveedor"].apply(clean_currency)
 
-    # Limpieza Proveedores
-    df_prov = data_store["df_Maestro_Proveedores"]
-    df_prov['Costo_Proveedor'] = df_prov['Costo_Proveedor'].apply(clean_currency)
-    df_prov['Factor_Pack'] = pd.to_numeric(df_prov['Factor_Pack'], errors='coerce').fillna(1)
-    df_prov['SKU_Interno_Norm'] = df_prov['SKU_Interno'].apply(normalizar_id_producto)
+        if "Factor_Pack" not in df_prov.columns:
+            df_prov["Factor_Pack"] = 1.0
+        df_prov["Factor_Pack"] = pd.to_numeric(df_prov["Factor_Pack"], errors="coerce").fillna(1.0)
+        df_prov["Factor_Pack"] = np.where(df_prov["Factor_Pack"] <= 0, 1.0, df_prov["Factor_Pack"])
 
-    st.session_state['data_store'] = data_store
-    st.session_state['last_sync'] = datetime.now()
+        data_store["df_Maestro_Proveedores"] = df_prov
+
+    data_store["df_Inventario"] = df_inv
     return data_store
 
 # ==========================================
@@ -349,24 +349,11 @@ def calcular_master_df():
 
     master["Factor_Pack"] = np.where(master["Factor_Pack"] <= 0, 1.0, master["Factor_Pack"])
 
-    # ✅ FIX: Margen SIEMPRE presente (sin ndarray.fillna)
-    precio = pd.to_numeric(master.get("Precio", 0.0), errors="coerce")
-    costo = pd.to_numeric(master.get("Costo", 0.0), errors="coerce")
+    # ✅ NUEVO: costo efectivo para inversión (si proveedor no tiene costo, usar costo inventario)
+    master["Costo_Efectivo"] = np.where(master["Costo_Proveedor"] > 0, master["Costo_Proveedor"], master["Costo"])
 
-    precio = pd.Series(precio, index=master.index).fillna(0.0)
-    costo = pd.Series(costo, index=master.index).fillna(0.0)
-
-    margen_abs = (precio - costo)
-    margen_pct = np.where(precio > 0, margen_abs / precio, 0.0)
-
-    master["Margen_$"] = pd.Series(margen_abs, index=master.index).fillna(0.0)
-    master["Margen_%"] = pd.Series(margen_pct, index=master.index).fillna(0.0)
-
-    # ✅ Asegurar Clase_ABC si no existe (evita KeyError en Estado/UI)
-    if "Valor_Ventas_90d" not in master.columns:
-        master["Valor_Ventas_90d"] = master["v90"] * master["Precio"]
-    if "Clase_ABC" not in master.columns:
-        master["Clase_ABC"] = _calc_clase_abc(master)
+    # ✅ Cambiar inversión a costo efectivo (antes usaba Costo_Proveedor)
+    master["Inversion_Est"] = master["Unidades_Pedir"] * master["Costo_Efectivo"]
 
     # --- Lógica de ARRANQUE/ROTACION, Velocidad_Diaria, Requiere_Compra, etc. ---
     master["Modo_Demanda"] = np.where((master["v30"] <= 1) & (master["v90"] <= 1) & (master["v90"] > 0), "ARRANQUE", "ROTACION")
@@ -422,7 +409,7 @@ def calcular_master_df():
 
     master["Sugerencia_Cajas"] = np.ceil(master["Faltante"] / master["Factor_Pack_Efectivo"])
     master["Unidades_Pedir"] = master["Sugerencia_Cajas"] * master["Factor_Pack_Efectivo"]
-    master["Inversion_Est"] = master["Unidades_Pedir"] * master["Costo_Proveedor"]
+    master["Inversion_Est"] = master["Unidades_Pedir"] * master["Costo_Efectivo"]
 
     # === ALERTAS DE ESTADO ===
     # ✅ blindaje por si algún flujo dejó columnas faltantes
