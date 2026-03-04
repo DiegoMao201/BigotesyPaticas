@@ -232,9 +232,17 @@ def calcular_master_df():
     master['v30'] = master['ID_Producto_Norm'].map(lambda x: stats.get(x, {}).get('v30', 0))
     # Ajusta velocidad mínima si hay ventas en 30 días
     master['Velocidad_Diaria'] = np.where(master['v30'] > 0, master['v30']/30, master['v90']/90)
-    master['Velocidad_Diaria'] = np.where(master['Velocidad_Diaria'] < 0.033, 0.033, master['Velocidad_Diaria'])
-    master['Dias_Cobertura'] = np.where(master['Velocidad_Diaria'] > 0, master['Stock'] / master['Velocidad_Diaria'], 999)
-    
+    master['Velocidad_Diaria'] = pd.to_numeric(master["Velocidad_Diaria"], errors="coerce").fillna(0.0)
+
+    # (quita el piso artificial 0.033 para no inflar compras de productos sin rotación)
+    # master['Velocidad_Diaria'] = np.where(master['Velocidad_Diaria'] < 0.033, 0.033, master['Velocidad_Diaria'])
+
+    master["Dias_Cobertura"] = np.where(
+        master["Velocidad_Diaria"] > 0,
+        master["Stock"] / master["Velocidad_Diaria"],
+        999,
+    )
+
     # === FINANZAS Y MÁRGENES ===
     master['Margen_$'] = master['Precio'] - master['Costo']
     master['Margen_%'] = np.where(master['Precio'] > 0, (master['Margen_$'] / master['Precio']), 0)
@@ -251,28 +259,32 @@ def calcular_master_df():
         master['Clase_ABC'] = 'C'
 
     # === LÓGICA DE COMPRAS DINÁMICA ===
-    dias_seguridad = {'A': 15, 'B': 7, 'C': 3}
-    dias_objetivo = {'A': 45, 'B': 30, 'C': 15}
-    lead_time_dias = 5 # Tiempo que tarda el proveedor en entregar
-    
-    # Asignar Dias_Seg y Dias_Obj según Clase_ABC si no existen
-    if 'Dias_Seg' not in master.columns:
-        master['Dias_Seg'] = master['Clase_ABC'].map(dias_seguridad).fillna(7)
-    if 'Dias_Obj' not in master.columns:
-        master['Dias_Obj'] = master['Clase_ABC'].map(dias_objetivo).fillna(30)
+    DIAS_OBJETIVO = 8          # <-- pedido: no quedarse sin nada en 8 días
+    DIAS_SEGURIDAD = 1         # colchón pequeño (capital bajo)
+    LEAD_TIME_DIAS = 5         # si tu proveedor demora menos, bájalo (ej: 2-3)
 
-    master['Dias_Seg'] = pd.to_numeric(master['Dias_Seg'], errors='coerce').fillna(7)
-    master['Dias_Obj'] = pd.to_numeric(master['Dias_Obj'], errors='coerce').fillna(30)
-    
-    stock_seguridad = master['Velocidad_Diaria'] * master['Dias_Seg']
-    punto_reorden = (master['Velocidad_Diaria'] * lead_time_dias) + stock_seguridad
-    stock_maximo = (master['Velocidad_Diaria'] * master['Dias_Obj']) + stock_seguridad
-    
-    master['Requiere_Compra'] = master['Stock'] <= punto_reorden
-    master['Faltante'] = np.where(master['Requiere_Compra'], np.maximum(0, stock_maximo - master['Stock']), 0)
-    master['Sugerencia_Cajas'] = np.ceil(master['Faltante'] / master['Factor_Pack'])
-    master['Unidades_Pedir'] = master['Sugerencia_Cajas'] * master['Factor_Pack']
-    master['Inversion_Est'] = master['Unidades_Pedir'] * master['Costo_Proveedor']
+    # Factor pack seguro
+    master["Factor_Pack"] = pd.to_numeric(master.get("Factor_Pack", 1), errors="coerce").fillna(1.0)
+    master["Factor_Pack"] = np.where(master["Factor_Pack"] <= 0, 1.0, master["Factor_Pack"])
+
+    stock_seguridad = master["Velocidad_Diaria"] * DIAS_SEGURIDAD
+    punto_reorden = (master["Velocidad_Diaria"] * LEAD_TIME_DIAS) + stock_seguridad
+    stock_objetivo = (master["Velocidad_Diaria"] * DIAS_OBJETIVO) + stock_seguridad
+
+    # ✅ Solo comprar si hay rotación (>0)
+    master["Requiere_Compra"] = (master["Velocidad_Diaria"] > 0) & (master["Stock"] <= punto_reorden)
+
+    master["Faltante"] = np.where(
+        master["Requiere_Compra"],
+        np.maximum(0, stock_objetivo - master["Stock"]),
+        0,
+    )
+
+    master["Sugerencia_Cajas"] = np.ceil(master["Faltante"] / master["Factor_Pack"])
+    master["Unidades_Pedir"] = master["Sugerencia_Cajas"] * master["Factor_Pack"]
+
+    # Costo proveedor ya lo manejas arriba; mantener
+    master["Inversion_Est"] = master["Unidades_Pedir"] * master["Costo_Proveedor"]
 
     # === ALERTAS DE ESTADO ===
     conditions = [
