@@ -500,18 +500,40 @@ def tab_pos():
     # --- 2. PRODUCTOS ---
     st.markdown("### 🛒 Productos")
     if not df_inv.empty:
-        # Crear columna de busqueda visual
-        df_inv['Display'] = df_inv.apply(lambda x: f"{x['Nombre']} | Stock: {int(x['Stock'])} | ${int(x['Precio']):,}", axis=1)
-        # Diccionario para mapear display -> ID
-        # Necesitamos normalizar para keys consistentes
-        df_inv['ID_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
-        mapa_prod = dict(zip(df_inv['Display'], df_inv['ID_Norm']))
-        
+        # Asegurar columnas (por si aún no sincronizaste después de reparar)
+        if "Producto_UID" not in df_inv.columns:
+            df_inv["Producto_UID"] = ""
+        if "ID_Producto_Norm" not in df_inv.columns:
+            df_inv["ID_Producto_Norm"] = df_inv["ID_Producto"].apply(normalizar_id_producto)
+
+        df_inv["Producto_UID"] = df_inv["Producto_UID"].fillna("").astype(str).str.strip()
+
+        # Display humano, pero la llave real será UID
+        df_inv['Display'] = df_inv.apply(
+            lambda x: f"{x['Nombre']} | ID: {x['ID_Producto']} | Stock: {int(float(x['Stock'] or 0))} | ${int(float(x['Precio'] or 0)):,}",
+            axis=1
+        )
+
+        # map Display -> UID (robusto)
+        mapa_prod = dict(zip(df_inv['Display'], df_inv['Producto_UID']))
+
         prod_sel = st.selectbox("Buscar Producto", df_inv['Display'].tolist())
-        
         if prod_sel:
-            id_sel = mapa_prod[prod_sel]
-            row_prod = df_inv[df_inv["ID_Norm"] == id_sel].iloc[0]
+            uid_sel = str(mapa_prod.get(prod_sel, "")).strip()
+
+            # Buscar fila por UID; fallback por ID_Producto_Norm si algo viejo quedó sin UID
+            row_prod = None
+            if uid_sel:
+                m = df_inv[df_inv["Producto_UID"].astype(str).str.strip() == uid_sel]
+                if not m.empty:
+                    row_prod = m.iloc[0]
+
+            if row_prod is None:
+                # fallback (no ideal, pero evita bloqueo si falta UID en alguna fila)
+                df_inv["ID_Norm"] = df_inv["ID_Producto"].apply(normalizar_id_producto)
+                id_sel = df_inv.loc[df_inv["Display"] == prod_sel, "ID_Norm"].iloc[0]
+                row_prod = df_inv[df_inv["ID_Norm"] == id_sel].iloc[0]
+
             producto_uid = str(row_prod.get("Producto_UID", "")).strip()
 
             # --- 3. CARRITO Y CIERRE ---
