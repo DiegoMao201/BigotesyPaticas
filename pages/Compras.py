@@ -710,41 +710,55 @@ def main():
         df_revision_data = []
 
         for item in st.session_state.invoice_items:
+            # ✅ FIX: definir qty SIEMPRE (manual + XML)
+            qty = float(item.get("Cantidad", 1) or 1)
+
             # 1. Armar la clave de memoria idéntica a como se guarda: NIT_SKU
             nit_prov_norm = normalizar_str(meta['ID_Proveedor'])
             sku_prov_norm = normalizar_str(item.get('SKU_Proveedor', 'S/C'))
             clave_memoria = f"{nit_prov_norm}_{sku_prov_norm}"
-            
+
             # 2. Valores por defecto
             prod_interno_val = "NUEVO (Crear Producto)"
             iva_val = 0
             factor_val = 1.0
-            
+
             # 3. Buscar en el cerebro si ya lo conocemos
             if clave_memoria in st.session_state.memoria_cache:
                 recuerdo = st.session_state.memoria_cache[clave_memoria]
-                sku_interno_recordado = recuerdo['SKU_Interno']
-                
-                # Buscar cómo se llama en la lista desplegable actual de inventario
+                sku_interno_recordado = recuerdo.get('SKU_Interno', "")
+
                 match = next((p for p in st.session_state.lst_prods_cache if p.startswith(sku_interno_recordado + " |")), None)
-                
                 if match:
                     prod_interno_val = match
-                
-                iva_val = recuerdo['IVA_Aprendido']
-                factor_val = recuerdo['Factor']
 
-            # 4. Construir la fila (SE AGREGA LA COLUMNA Nombre_Inventario EDITABLE)
+                iva_val = recuerdo.get('IVA_Aprendido', 0)
+                factor_val = recuerdo.get('Factor', 1.0)
+
+            # ✅ costo base unitario siempre existe en items_std / XML
+            base_unit = float(item.get("Costo_Base_Unitario", 0.0) or 0.0)
+
+            # (tu cálculo de precio sugerido con IVA + margen 20% puede quedarse aquí)
+            factor_val = float(factor_val or 1.0)
+            if factor_val <= 0:
+                factor_val = 1.0
+            iva_val = float(iva_val or 0.0)
+
+            costo_base_unit_est = base_unit / factor_val
+            costo_neto_unit_est = costo_base_unit_est * (1.0 + (iva_val / 100.0))
+            precio_sug_est = redondear_centena(precio_con_margen(costo_neto_unit_est, MARGEN_BRUTO_OBJ))
+
+            # 4. Construir la fila
             df_revision_data.append({
                 "SKU_Proveedor": item.get('SKU_Proveedor', 'S/C'),
                 "Descripcion": item.get('Descripcion', ''),
-                "Nombre_Inventario": item.get('Descripcion', ''), # <--- COLUMNA PARA EDITAR EL NOMBRE NUEVO
-                "Cantidad": int(qty) if float(qty).is_integer() else qty,  # evita 1.0
+                "Nombre_Inventario": item.get('Descripcion', ''),
+                "Cantidad": _fmt_qty(qty),  # ✅ evita 1.0 y elimina el uso de qty sin definir
                 "Costo_Base_Unitario": base_unit,
                 "📌 Producto_Interno": prod_interno_val,
                 "IVA_%": int(iva_val) if float(iva_val).is_integer() else iva_val,
                 "Factor_Pack": factor_val,
-                "Precio_Sugerido": float(precio_sug_est or 0.0),  # ✅ nuevo
+                "Precio_Sugerido": float(precio_sug_est or 0.0),
                 "Categoría": "Sin Categoría"
             })
 
