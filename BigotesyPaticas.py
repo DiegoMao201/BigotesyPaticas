@@ -558,16 +558,51 @@ def tab_pos():
     precio_base = float(row_prod.get("Precio", 0) or 0)
     costo_base = float(row_prod.get("Costo", 0) or 0)
 
+    # =========================
+    # FIX: Reset de inputs por producto
+    # =========================
+    # Si no hay UID, usamos el id_norm como fallback estable
+    producto_key = producto_uid if producto_uid else f"NORM:{id_norm}"
+
+    if st.session_state.get("pos_last_producto_key") != producto_key:
+        st.session_state["pos_last_producto_key"] = producto_key
+        st.session_state["pos_cant"] = 1.0
+        st.session_state["pos_precio"] = float(precio_base or 0.0)
+        st.session_state["pos_desc"] = 0.0
+
+    # =========================
+    # UI: Tarjeta ejecutiva del producto seleccionado
+    # =========================
+    st.markdown(
+        f"""
+<div style="background:#ffffff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:14px 16px;margin:8px 0 14px 0;box-shadow:0 6px 18px rgba(0,0,0,0.05);">
+  <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+    <div>
+      <div style="font-weight:900;color:#187f77;font-size:1.05rem;line-height:1.15;">{nombre}</div>
+      <div style="color:#64748b;font-size:0.85rem;margin-top:4px;">ID: <b>{id_prod}</b></div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:0.85rem;color:#64748b;">Stock</div>
+      <div style="font-weight:900;font-size:1.25rem;">{int(stock_disp):,}</div>
+    </div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
     cA, cB, cC, cD = st.columns([1, 1, 1, 1])
     with cA:
-        cant = st.number_input("Cantidad", min_value=1.0, value=1.0, step=1.0, key="pos_cant")
+        cant = st.number_input("Cantidad", min_value=1.0, step=1.0, key="pos_cant")
     with cB:
-        precio = st.number_input("Precio unit.", min_value=0.0, value=float(precio_base), step=100.0, key="pos_precio")
+        precio = st.number_input("Precio unit.", min_value=0.0, step=100.0, key="pos_precio")
     with cC:
-        descuento = st.number_input("Descuento unit.", min_value=0.0, value=0.0, step=100.0, key="pos_desc")
+        descuento = st.number_input("Descuento unit.", min_value=0.0, step=100.0, key="pos_desc")
     with cD:
-        st.caption("Stock")
-        st.write(f"{stock_disp:,.0f}")
+        # Vista rápida de totales de línea (profesional)
+        subtotal_linea = (float(precio or 0) - float(descuento or 0)) * float(cant or 0)
+        st.caption("Subtotal línea")
+        st.write(f"${subtotal_linea:,.0f}")
 
     if st.button("➕ Agregar al carrito", type="primary", key="pos_add"):
         # si ya existe en carrito por UID (o por ID_norm), sumar cantidad
