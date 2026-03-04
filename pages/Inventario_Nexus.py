@@ -210,9 +210,9 @@ def analizar_ventas(df_ven, df_inv):
 def calcular_master_df():
     data = st.session_state['data_store']
     df_inv, df_prov, df_ven = data['df_Inventario'], data['df_Maestro_Proveedores'], data['df_Ventas']
-    
+
     stats = analizar_ventas(df_ven, df_inv)
-    
+
     if not df_prov.empty:
         df_prov_clean = df_prov.sort_values('Costo_Proveedor').drop_duplicates('SKU_Interno_Norm')
         master = pd.merge(df_inv, df_prov_clean[['SKU_Interno_Norm', 'Nombre_Proveedor', 'Costo_Proveedor', 'Factor_Pack']], 
@@ -227,15 +227,38 @@ def calcular_master_df():
     master['Costo_Proveedor'] = np.where(master['Costo_Proveedor'].isna() | (master['Costo_Proveedor'] <= 0), master['Costo'], master['Costo_Proveedor'])
     master['Factor_Pack'] = np.where(master['Factor_Pack'].isna() | (master['Factor_Pack'] <= 0), 1, master['Factor_Pack'])
 
+    # --- Normalizar numéricos críticos ---
+    master["Stock"] = pd.to_numeric(master.get("Stock", 0), errors="coerce").fillna(0.0)
+    master["Costo_Proveedor"] = pd.to_numeric(master.get("Costo_Proveedor", master.get("Costo", 0)), errors="coerce").fillna(0.0)
+    master["Factor_Pack"] = pd.to_numeric(master.get("Factor_Pack", 1), errors="coerce").fillna(1.0)
+    master["Factor_Pack"] = np.where(master["Factor_Pack"] <= 0, 1.0, master["Factor_Pack"])
+
     # Métricas Base
     master['v90'] = master['ID_Producto_Norm'].map(lambda x: stats.get(x, {}).get('v90', 0))
     master['v30'] = master['ID_Producto_Norm'].map(lambda x: stats.get(x, {}).get('v30', 0))
-    # Ajusta velocidad mínima si hay ventas en 30 días
-    master['Velocidad_Diaria'] = np.where(master['v30'] > 0, master['v30']/30, master['v90']/90)
-    master['Velocidad_Diaria'] = pd.to_numeric(master["Velocidad_Diaria"], errors="coerce").fillna(0.0)
+    master["v90"] = pd.to_numeric(master["v90"], errors="coerce").fillna(0.0)
+    master["v30"] = pd.to_numeric(master["v30"], errors="coerce").fillna(0.0)
 
-    # (quita el piso artificial 0.033 para no inflar compras de productos sin rotación)
-    # master['Velocidad_Diaria'] = np.where(master['Velocidad_Diaria'] < 0.033, 0.033, master['Velocidad_Diaria'])
+    # ==========================
+    # ROTACIÓN "REAL" + ARRANQUE
+    # ==========================
+    # Caso típico que te estaba dañando: 1 venta hoy => no asumir patrón
+    # Arranque = muy poca evidencia (<=1 unidad en 30d y <=1 unidad en 90d)
+    master["Modo_Demanda"] = np.where((master["v30"] <= 1) & (master["v90"] <= 1) & (master["v90"] > 0), "ARRANQUE", "ROTACION")
+
+    # Velocidad diaria (solo para ROTACION)
+    vel_30 = master["v30"] / 30.0
+    vel_90 = master["v90"] / 90.0
+
+    # Suavizado: mezcla 30/90 para estacionalidad (evita picos por días raros)
+    vel_blend = (0.65 * vel_90) + (0.35 * vel_30)
+
+    # Confianza por cantidad vendida (si hay poca data, baja la velocidad efectiva)
+    # conf in [0,1] (con 0-6 unidades en 90 días va subiendo lineal)
+    conf = np.clip(master["v90"] / 6.0, 0.0, 1.0)
+
+    master["Velocidad_Diaria"] = np.where(master["Modo_Demanda"] == "ROTACION", vel_blend * conf, 0.0)
+    master["Velocidad_Diaria"] = pd.to_numeric(master["Velocidad_Diaria"], errors="coerce").fillna(0.0)
 
     master["Dias_Cobertura"] = np.where(
         master["Velocidad_Diaria"] > 0,
@@ -243,47 +266,37 @@ def calcular_master_df():
         999,
     )
 
-    # === FINANZAS Y MÁRGENES ===
-    master['Margen_$'] = master['Precio'] - master['Costo']
-    master['Margen_%'] = np.where(master['Precio'] > 0, (master['Margen_$'] / master['Precio']), 0)
+    # ==========================
+    # LÓGICA DE COMPRAS (8 días)
+    # ==========================
+    DIAS_OBJETIVO = 8
+    DIAS_SEGURIDAD = 1
+    LEAD_TIME_DIAS = 5
 
-    # === CLASIFICACIÓN ABC (Ley de Pareto) ===
-    master['Ingresos_Proyectados_90d'] = master['v90'] * master['Precio']
-    total_ingresos = master['Ingresos_Proyectados_90d'].sum()
+    # Mínimo vital: si el producto YA tuvo ventas alguna vez, asegurar 1 unidad (pero no comprar cajas por eso)
+    master["Min_Unidades"] = np.where(master["v90"] > 0, 1.0, 0.0)
 
-    if total_ingresos > 0:
-        master = master.sort_values('Ingresos_Proyectados_90d', ascending=False)
-        master['Cum_Rev_Pct'] = master['Ingresos_Proyectados_90d'].cumsum() / total_ingresos
-        master['Clase_ABC'] = pd.cut(master['Cum_Rev_Pct'], bins=[-1, 0.8, 0.95, 2], labels=['A', 'B', 'C'])
-    else:
-        master['Clase_ABC'] = 'C'
+    # ROTACION: objetivo por velocidad (8 días + colchón)
+    stock_seg = master["Velocidad_Diaria"] * DIAS_SEGURIDAD
+    punto_reorden = (master["Velocidad_Diaria"] * LEAD_TIME_DIAS) + stock_seg
+    stock_obj = (master["Velocidad_Diaria"] * DIAS_OBJETIVO) + stock_seg
 
-    # === LÓGICA DE COMPRAS DINÁMICA ===
-    DIAS_OBJETIVO = 8          # <-- pedido: no quedarse sin nada en 8 días
-    DIAS_SEGURIDAD = 1         # colchón pequeño (capital bajo)
-    LEAD_TIME_DIAS = 5         # si tu proveedor demora menos, bájalo (ej: 2-3)
+    # ARRANQUE: no proyectar, solo mínimo 1 unidad
+    # y usar factor pack efectivo = 1 para no inflar a 5/10 por caja cuando solo quieres “no quedarte en cero”
+    master["Factor_Pack_Efectivo"] = np.where(master["Modo_Demanda"] == "ARRANQUE", 1.0, master["Factor_Pack"])
 
-    # Factor pack seguro
-    master["Factor_Pack"] = pd.to_numeric(master.get("Factor_Pack", 1), errors="coerce").fillna(1.0)
-    master["Factor_Pack"] = np.where(master["Factor_Pack"] <= 0, 1.0, master["Factor_Pack"])
+    req_rot = (master["Modo_Demanda"] == "ROTACION") & (master["Velocidad_Diaria"] > 0) & (master["Stock"] <= punto_reorden)
+    req_arr = (master["Modo_Demanda"] == "ARRANQUE") & (master["Stock"] < master["Min_Unidades"])
 
-    stock_seguridad = master["Velocidad_Diaria"] * DIAS_SEGURIDAD
-    punto_reorden = (master["Velocidad_Diaria"] * LEAD_TIME_DIAS) + stock_seguridad
-    stock_objetivo = (master["Velocidad_Diaria"] * DIAS_OBJETIVO) + stock_seguridad
+    master["Requiere_Compra"] = req_rot | req_arr
 
-    # ✅ Solo comprar si hay rotación (>0)
-    master["Requiere_Compra"] = (master["Velocidad_Diaria"] > 0) & (master["Stock"] <= punto_reorden)
+    faltante_rot = np.maximum(0.0, np.maximum(stock_obj, master["Min_Unidades"]) - master["Stock"])
+    faltante_arr = np.maximum(0.0, master["Min_Unidades"] - master["Stock"])
 
-    master["Faltante"] = np.where(
-        master["Requiere_Compra"],
-        np.maximum(0, stock_objetivo - master["Stock"]),
-        0,
-    )
+    master["Faltante"] = np.where(req_rot, faltante_rot, np.where(req_arr, faltante_arr, 0.0))
 
-    master["Sugerencia_Cajas"] = np.ceil(master["Faltante"] / master["Factor_Pack"])
-    master["Unidades_Pedir"] = master["Sugerencia_Cajas"] * master["Factor_Pack"]
-
-    # Costo proveedor ya lo manejas arriba; mantener
+    master["Sugerencia_Cajas"] = np.ceil(master["Faltante"] / master["Factor_Pack_Efectivo"])
+    master["Unidades_Pedir"] = master["Sugerencia_Cajas"] * master["Factor_Pack_Efectivo"]
     master["Inversion_Est"] = master["Unidades_Pedir"] * master["Costo_Proveedor"]
 
     # === ALERTAS DE ESTADO ===
@@ -461,7 +474,7 @@ def main():
     # === TAB 2: COMPRAS INTELIGENTES ===
     with tabs[1]:
         st.markdown("### Algoritmo de Sugerencia de Reabastecimiento")
-        st.info("💡 **¿Cómo funciona?** El sistema asegura stock para **45 días** de los productos Clase A, **30 días** para los B, y **15 días** para los C, basándose en la velocidad de venta de los últimos 90 días y teniendo en cuenta los empaques del proveedor.")
+        st.info("💡 **¿Cómo funciona?** El sistema sugiere compras para cubrir **8 días** según rotación (30/90 días). Si un producto apenas tiene 1 venta aislada, entra en modo **ARRANQUE** y solo asegura **mínimo 1 unidad** sin inflar por cajas.")
         
         df_buy = master_df[master_df['Unidades_Pedir'] > 0].copy()
         if df_buy.empty:
