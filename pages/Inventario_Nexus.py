@@ -9,6 +9,7 @@ import io
 from datetime import datetime, timedelta, date
 from urllib.parse import quote
 import xlsxwriter
+import unicodedata  # ✅ nuevo
 
 # ==========================================
 # 0. CONFIGURACIÓN E INICIALIZACIÓN
@@ -231,38 +232,90 @@ def _calc_clase_abc(master: pd.DataFrame) -> pd.Series:
     return out
 
 def calcular_master_df():
-    data = st.session_state['data_store']
-    df_inv, df_prov, df_ven = data['df_Inventario'], data['df_Maestro_Proveedores'], data['df_Ventas']
+    data = st.session_state["data_store"]
+    df_inv = data.get("df_Inventario", pd.DataFrame()).copy()
+    df_prov = data.get("df_Maestro_Proveedores", pd.DataFrame()).copy()
+    df_ven = data.get("df_Ventas", pd.DataFrame()).copy()
 
+    # ✅ Inventario robusto (nombres alternos + columnas mínimas)
+    col_cat = _find_col(df_inv, ["Categoria", "Categoría"])
+    if col_cat is not None:
+        df_inv = df_inv.rename(columns={col_cat: "Categoria"})
+
+    df_inv = _ensure_cols(
+        df_inv,
+        {
+            "ID_Producto": "",
+            "Nombre": "",
+            "Categoria": "Sin Categoría",
+            "Stock": 0.0,
+            "Costo": 0.0,
+            "Precio": 0.0,
+            "Producto_UID": "",
+            "ID_Producto_Norm": "",
+        },
+    )
+
+    if (df_inv["ID_Producto_Norm"].astype(str).str.strip() == "").any():
+        df_inv["ID_Producto_Norm"] = df_inv["ID_Producto"].apply(normalizar_id_producto)
+
+    # ✅ Proveedores robusto (SKU_Interno_Norm siempre)
+    df_prov = _ensure_cols(
+        df_prov,
+        {
+            "SKU_Interno": "",
+            "Factor_Pack": 1.0,
+            "Costo_Proveedor": 0.0,
+            "Nombre_Proveedor": "Sin Asignar",
+        },
+    )
+    if "SKU_Interno_Norm" not in df_prov.columns:
+        df_prov["SKU_Interno_Norm"] = df_prov["SKU_Interno"].apply(normalizar_id_producto)
+    else:
+        df_prov["SKU_Interno_Norm"] = df_prov["SKU_Interno_Norm"].apply(normalizar_id_producto)
+
+    # Motor ventas -> stats
     stats = analizar_ventas(df_ven, df_inv)
 
+    # Merge proveedor
     if not df_prov.empty:
-        df_prov_clean = df_prov.sort_values('Costo_Proveedor').drop_duplicates('SKU_Interno_Norm')
-        master = pd.merge(df_inv, df_prov_clean[['SKU_Interno_Norm', 'Nombre_Proveedor', 'Costo_Proveedor', 'Factor_Pack']], 
-                          left_on='ID_Producto_Norm', right_on='SKU_Interno_Norm', how='left')
+        df_prov_clean = (
+            df_prov.sort_values("Costo_Proveedor", na_position="last")
+            .drop_duplicates("SKU_Interno_Norm")
+            .copy()
+        )
+        master = pd.merge(
+            df_inv,
+            df_prov_clean[["SKU_Interno_Norm", "Nombre_Proveedor", "Costo_Proveedor", "Factor_Pack"]],
+            left_on="ID_Producto_Norm",
+            right_on="SKU_Interno_Norm",
+            how="left",
+        )
     else:
         master = df_inv.copy()
-        master['Nombre_Proveedor'] = 'Generico'
-        master['Costo_Proveedor'] = master['Costo']
-        master['Factor_Pack'] = 1
+        master["Nombre_Proveedor"] = "Sin Asignar"
+        master["Costo_Proveedor"] = master["Costo"]
+        master["Factor_Pack"] = 1.0
 
-    master['Nombre_Proveedor'] = master['Nombre_Proveedor'].fillna('Sin Asignar')
-    master['Costo_Proveedor'] = np.where(master['Costo_Proveedor'].isna() | (master['Costo_Proveedor'] <= 0), master['Costo'], master['Costo_Proveedor'])
-    master['Factor_Pack'] = np.where(master['Factor_Pack'].isna() | (master['Factor_Pack'] <= 0), 1, master['Factor_Pack'])
+    master["Nombre_Proveedor"] = master["Nombre_Proveedor"].fillna("Sin Asignar")
 
-    # --- Normalizar numéricos críticos ---
-    master["Stock"] = pd.to_numeric(master.get("Stock", 0), errors="coerce").fillna(0.0)
-    master["Costo"] = pd.to_numeric(master.get("Costo", 0), errors="coerce").fillna(0.0)
-    master["Precio"] = pd.to_numeric(master.get("Precio", 0), errors="coerce").fillna(0.0)
+    # ✅ FIX definitivo: v90/v30 siempre Series (NO master.get(...,0).fillna())
+    master["v90"] = master["ID_Producto_Norm"].map(lambda x: stats.get(x, {}).get("v90", 0.0)).fillna(0.0)
+    master["v30"] = master["ID_Producto_Norm"].map(lambda x: stats.get(x, {}).get("v30", 0.0)).fillna(0.0)
+    master["v90"] = pd.to_numeric(master["v90"], errors="coerce").fillna(0.0)
+    master["v30"] = pd.to_numeric(master["v30"], errors="coerce").fillna(0.0)
 
-    # Métricas Base (ya las tienes)
-    master["v90"] = pd.to_numeric(master.get("v90", 0), errors="coerce").fillna(0.0)
-    master["v30"] = pd.to_numeric(master.get("v30", 0), errors="coerce").fillna(0.0)
+    # Numéricos base
+    for c in ["Stock", "Costo", "Precio", "Costo_Proveedor", "Factor_Pack"]:
+        if c not in master.columns:
+            master[c] = 0.0
+        master[c] = pd.to_numeric(master[c], errors="coerce").fillna(0.0)
 
-    # ✅ ABC SIEMPRE presente (por valor real 90d)
+    master["Factor_Pack"] = np.where(master["Factor_Pack"] <= 0, 1.0, master["Factor_Pack"])
+
+    # ✅ Asegurar Clase_ABC si no existe (evita KeyError en Estado/UI)
     if "Valor_Ventas_90d" not in master.columns:
         master["Valor_Ventas_90d"] = master["v90"] * master["Precio"]
-
     if "Clase_ABC" not in master.columns:
         master["Clase_ABC"] = _calc_clase_abc(master)
 
@@ -433,8 +486,17 @@ def main():
         st.markdown("---")
         st.subheader("🎯 Filtros Globales")
         
-        if 'data_store' in st.session_state:
-            categorias = st.session_state['data_store']['df_Inventario']['Categoria'].unique().tolist()
+        if "data_store" in st.session_state:
+            df_inv = st.session_state["data_store"].get("df_Inventario", pd.DataFrame())
+            col_cat = _find_col(df_inv, ["Categoria", "Categoría"])
+            if col_cat is not None:
+                categorias = (
+                    df_inv[col_cat].fillna("Sin Categoría").astype(str).str.strip().replace("", "Sin Categoría").unique().tolist()
+                )
+                categorias = sorted(categorias)
+            else:
+                categorias = ["Sin Categoría"]
+
             cat_filter = st.multiselect("Filtrar por Categoría", categorias, default=[])
             abc_filter = st.multiselect("Clasificación ABC", ['A', 'B', 'C'], default=[])
 
