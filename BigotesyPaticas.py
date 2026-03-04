@@ -295,80 +295,89 @@ def asegurar_ids_inventario_nube():
 # ==========================================
 
 def registrar_venta(fila_datos, carrito):
-    """Escribe en Sheet y actualiza Session State localmente"""
+    """Escribe venta y descuenta stock de forma confiable por Producto_UID."""
     sh = conectar_google_sheets()
     ws_ven = obtener_worksheets(sh)["ven"]
     ws_inv = obtener_worksheets(sh)["inv"]
 
-    # 1. Escribir Venta en la Nube (con retry)
+    # 1) Escribir venta
     safe_api_call(ws_ven.append_row, fila_datos)
 
-    # 2. Actualizar Stock (prioridad: Producto_UID)
+    # 2) Preparar inventario local
     df_inv = st.session_state.db["inv"].copy()
-
-    # Normalizaciones mínimas
-    if "ID_Producto_Norm" not in df_inv.columns and "ID_Producto" in df_inv.columns:
-        df_inv["ID_Producto_Norm"] = df_inv["ID_Producto"].apply(normalizar_id_producto)
     if "Producto_UID" not in df_inv.columns:
         df_inv["Producto_UID"] = ""
+    if "ID_Producto_Norm" not in df_inv.columns and "ID_Producto" in df_inv.columns:
+        df_inv["ID_Producto_Norm"] = df_inv["ID_Producto"].apply(normalizar_id_producto)
 
-    # Headers nube (para ubicar columnas)
-    headers = safe_api_call(ws_inv.row_values, 1) or []
-    if "Stock" not in headers:
-        st.error("No existe columna 'Stock' en Inventario (nube).")
-        return
-    col_stock = headers.index("Stock") + 1
+    df_inv["Producto_UID"] = df_inv["Producto_UID"].fillna("").astype(str).str.strip()
+    df_inv["ID_Producto_Norm"] = df_inv["ID_Producto_Norm"].fillna("").astype(str).str.strip()
 
-    # Opcional: usar Producto_UID si existe en nube
-    col_uid = (headers.index("Producto_UID") + 1) if "Producto_UID" in headers else None
+    # 3) Index nube (sin ws.find)
+    headers, rows, col_stock, col_uid, col_norm, uid_to_row, norm_to_row = _build_inventory_index(ws_inv)
+
+    # 4) Acumular deltas por fila (por si se repite un producto en carrito)
+    deltas_by_row = {}  # row -> total_delta (negativo)
+    local_updates = []  # (idx_df, new_stock)
 
     for item in carrito:
-        cant = float(item.get("Cantidad", 0) or 0)
+        cant = _to_float(item.get("Cantidad", 0), 0.0)
         if cant <= 0:
             continue
 
         uid = str(item.get("Producto_UID", "")).strip()
-        id_norm = str(item.get("ID_Producto_Norm", "")).strip() or normalizar_id_producto(item.get("ID_Producto", ""))
+        id_norm = str(item.get("ID_Producto_Norm", "")).strip()
+        if not id_norm:
+            id_norm = normalizar_id_producto(item.get("ID_Producto", ""))
 
-        match = pd.DataFrame()
+        sheet_row = None
         if uid:
-            match = df_inv[df_inv["Producto_UID"].astype(str).str.strip() == uid]
-        if match.empty and id_norm:
-            match = df_inv[df_inv["ID_Producto_Norm"].astype(str).str.strip() == id_norm]
+            sheet_row = uid_to_row.get(uid)
+        if sheet_row is None and id_norm:
+            sheet_row = norm_to_row.get(id_norm)
 
-        if match.empty:
+        if sheet_row is None:
+            # no descontar a ciegas: si no se encuentra, se omite (y se debe corregir el inventario)
             continue
 
-        idx = match.index[0]
-        stock_actual = float(match.iloc[0].get("Stock", 0) or 0)
-        nuevo_stock = stock_actual - cant
+        deltas_by_row[sheet_row] = deltas_by_row.get(sheet_row, 0.0) - cant
 
-        # Actualizar LOCAL
-        st.session_state.db["inv"].at[idx, "Stock"] = nuevo_stock
+        # update local por UID preferido
+        m = pd.DataFrame()
+        if uid:
+            m = df_inv[df_inv["Producto_UID"] == uid]
+        if m.empty and id_norm:
+            m = df_inv[df_inv["ID_Producto_Norm"] == id_norm]
+        if not m.empty:
+            idx = m.index[0]
+            stock_actual_local = _to_float(df_inv.at[idx, "Stock"], 0.0)
+            df_inv.at[idx, "Stock"] = stock_actual_local - cant
 
-        # Actualizar NUBE (find por UID si existe; fallback a ID_Producto original)
-        try:
-            cell = None
-            if uid:
-                cell = safe_api_call(ws_inv.find, uid)
-            if (cell is None) and ("ID_Producto" in match.columns):
-                id_original = str(match.iloc[0]["ID_Producto"])
-                cell = safe_api_call(ws_inv.find, id_original)
+    # 5) Batch update nube (calcular stock actual desde snapshot rows)
+    updates = []
+    # map fila->stock actual desde rows
+    for sheet_row, delta in deltas_by_row.items():
+        r = rows[sheet_row - 2]  # rows empieza en fila 2
+        stock_actual = _to_float(r[col_stock] if col_stock < len(r) else 0.0, 0.0)
+        nuevo_stock = stock_actual + delta
+        cell_a1 = gspread.utils.rowcol_to_a1(sheet_row, col_stock + 1)
+        updates.append({"range": cell_a1, "values": [[nuevo_stock]]})
 
-            if cell:
-                safe_api_call(ws_inv.update_cell, cell.row, col_stock, nuevo_stock)
-        except Exception as e:
-            print(f"Error actualizando stock nube: {e}")
+    if updates:
+        safe_api_call(ws_inv.batch_update, updates)
 
-    # 3. Actualizar Venta LOCALMENTE
+    # 6) Persistir inventario local
+    st.session_state.db["inv"] = df_inv
+
+    # 7) Actualizar Venta LOCAL (lo tuyo)
     cols = st.session_state.db["ven"].columns
     if len(fila_datos) < len(cols):
         fila_datos += [""] * (len(cols) - len(fila_datos))
     nuevo_df = pd.DataFrame([fila_datos], columns=cols)
     if "Total" in nuevo_df.columns:
-        nuevo_df["Total"] = pd.to_numeric(nuevo_df["Total"])
+        nuevo_df["Total"] = pd.to_numeric(nuevo_df["Total"], errors="coerce")
     if "Fecha" in nuevo_df.columns:
-        nuevo_df["Fecha"] = pd.to_datetime(nuevo_df["Fecha"])
+        nuevo_df["Fecha"] = pd.to_datetime(nuevo_df["Fecha"], errors="coerce")
     st.session_state.db["ven"] = pd.concat([st.session_state.db["ven"], nuevo_df], ignore_index=True)
 
 def registrar_gasto(fila_datos):
@@ -497,143 +506,201 @@ def tab_pos():
         c_act = st.session_state.cliente_actual
         st.info(f"Cliente: **{c_act['Nombre']}** | Mascota: **{st.session_state.mascota_seleccionada}**")
 
-    # --- 2. PRODUCTOS ---
+    # --- 2. PRODUCTOS (SELECCIÓN + AGREGAR) ---
     st.markdown("### 🛒 Productos")
-    if not df_inv.empty:
-        # Asegurar columnas (por si aún no sincronizaste después de reparar)
-        if "Producto_UID" not in df_inv.columns:
-            df_inv["Producto_UID"] = ""
-        if "ID_Producto_Norm" not in df_inv.columns:
-            df_inv["ID_Producto_Norm"] = df_inv["ID_Producto"].apply(normalizar_id_producto)
 
-        df_inv["Producto_UID"] = df_inv["Producto_UID"].fillna("").astype(str).str.strip()
+    if df_inv is None or df_inv.empty:
+        st.info("No hay productos en inventario.")
+        return
 
-        # Display humano, pero la llave real será UID
-        df_inv['Display'] = df_inv.apply(
-            lambda x: f"{x['Nombre']} | ID: {x['ID_Producto']} | Stock: {int(float(x['Stock'] or 0))} | ${int(float(x['Precio'] or 0)):,}",
-            axis=1
-        )
+    # Asegurar columnas claves
+    if "Producto_UID" not in df_inv.columns:
+        df_inv["Producto_UID"] = ""
+    if "ID_Producto_Norm" not in df_inv.columns:
+        df_inv["ID_Producto_Norm"] = df_inv["ID_Producto"].apply(normalizar_id_producto)
 
-        # map Display -> UID (robusto)
-        mapa_prod = dict(zip(df_inv['Display'], df_inv['Producto_UID']))
+    df_inv["Producto_UID"] = df_inv["Producto_UID"].fillna("").astype(str).str.strip()
 
-        prod_sel = st.selectbox("Buscar Producto", df_inv['Display'].tolist())
-        if prod_sel:
-            uid_sel = str(mapa_prod.get(prod_sel, "")).strip()
+    # Display humano
+    df_inv["Display"] = df_inv.apply(
+        lambda x: f"{x.get('Nombre','')} | ID: {x.get('ID_Producto','')} | Stock: {int(float(x.get('Stock',0) or 0))} | ${int(float(x.get('Precio',0) or 0)):,}",
+        axis=1,
+    )
+    mapa_display_a_uid = dict(zip(df_inv["Display"], df_inv["Producto_UID"]))
 
-            # Buscar fila por UID; fallback por ID_Producto_Norm si algo viejo quedó sin UID
-            row_prod = None
-            if uid_sel:
-                m = df_inv[df_inv["Producto_UID"].astype(str).str.strip() == uid_sel]
-                if not m.empty:
-                    row_prod = m.iloc[0]
+    prod_sel = st.selectbox("Buscar Producto", df_inv["Display"].tolist(), key="pos_prod_sel")
 
-            if row_prod is None:
-                # fallback (no ideal, pero evita bloqueo si falta UID en alguna fila)
-                df_inv["ID_Norm"] = df_inv["ID_Producto"].apply(normalizar_id_producto)
-                id_sel = df_inv.loc[df_inv["Display"] == prod_sel, "ID_Norm"].iloc[0]
-                row_prod = df_inv[df_inv["ID_Norm"] == id_sel].iloc[0]
+    # Resolver producto seleccionado (por UID preferido)
+    uid_sel = str(mapa_display_a_uid.get(prod_sel, "")).strip()
+    row_prod = None
+    if uid_sel:
+        m = df_inv[df_inv["Producto_UID"].astype(str).str.strip() == uid_sel]
+        if not m.empty:
+            row_prod = m.iloc[0]
 
-            producto_uid = str(row_prod.get("Producto_UID", "")).strip()
+    # Fallback si falta UID en alguna fila (no ideal, pero evita bloquear POS)
+    if row_prod is None:
+        df_inv["__ID_Norm"] = df_inv["ID_Producto"].apply(normalizar_id_producto)
+        id_sel = df_inv.loc[df_inv["Display"] == prod_sel, "__ID_Norm"].iloc[0]
+        mm = df_inv[df_inv["__ID_Norm"] == id_sel]
+        if not mm.empty:
+            row_prod = mm.iloc[0]
 
-            # --- 3. CARRITO Y CIERRE ---
-            if st.session_state.carrito:
-                st.markdown("### 🧺 Detalle de Compra")
-                df_car = pd.DataFrame(st.session_state.carrito)
-                
-                edited_car = st.data_editor(
-                    df_car, 
-                    key="editor_carrito",
-                    column_config={"Subtotal": st.column_config.NumberColumn(disabled=True)},
-                    num_rows="dynamic"
-                )
-                
-                # Recalcular si hubo cambios
-                if not df_car.equals(edited_car):
-                    for i, r in edited_car.iterrows():
-                        edited_car.at[i, 'Subtotal'] = (r['Precio'] - r['Descuento']) * r['Cantidad']
-                    st.session_state.carrito = edited_car.to_dict('records')
-                    st.rerun()
-                    
-                total = sum([x['Subtotal'] for x in st.session_state.carrito])
-                st.markdown(f'<div class="carrito-total">TOTAL: ${total:,.0f}</div>', unsafe_allow_html=True)
-                
-                if st.button("🗑️ Vaciar Carrito"):
-                    st.session_state.carrito = []
-                    st.rerun()
-                    
-                st.markdown("---")
-                c1, c2 = st.columns(2)
-                metodo = c1.selectbox("Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"])
-                entrega = c2.selectbox("Entrega", ["Local", "Domicilio"])
-                dir_envio = st.text_input("Dirección", value=st.session_state.cliente_actual.get('Direccion', '') if st.session_state.cliente_actual else "")
+    if row_prod is None:
+        st.error("No pude resolver el producto seleccionado.")
+        return
 
-                if st.button("✅ FINALIZAR VENTA", type="primary", use_container_width=True):
-                    if not st.session_state.cliente_actual:
-                        st.error("Falta seleccionar cliente")
-                    else:
-                        with st.spinner("Procesando..."):
-                            id_venta = f"VEN-{int(now_co().timestamp())}"
-                            fecha = now_co().strftime("%Y-%m-%d %H:%M:%S")
-                            items_str = ", ".join([f"{x['Cantidad']}x {x['Nombre_Producto']}" for x in st.session_state.carrito])
-                            items_json = json.dumps([
-                                {
-                                    "Producto_UID": x.get("Producto_UID", ""),          # <-- NUEVO
-                                    "ID": x["ID_Producto"],
-                                    "ID_Producto_Norm": x["ID_Producto_Norm"],
-                                    "Nombre": x["Nombre_Producto"],
-                                    "Cantidad": x["Cantidad"]
-                                } for x in st.session_state.carrito
-                            ])
-                            costo_total = sum([x.get('Costo',0)*x['Cantidad'] for x in st.session_state.carrito])
-                            
-                            fila = [
-                                id_venta, fecha, 
-                                st.session_state.cliente_actual.get('Cedula',''),
-                                st.session_state.cliente_actual.get('Nombre',''),
-                                entrega, dir_envio, 
-                                "Pendiente" if entrega != "Local" else "Entregado",
-                                metodo, "", total, items_str, items_json, costo_total,
-                                st.session_state.mascota_seleccionada
-                            ]
-                            
-                            # REGISTRAR (NUBE Y LOCAL)
-                            registrar_venta(fila, st.session_state.carrito)
-                            
-                            # GENERAR DOCUMENTOS
-                            venta_dict = {
-                                'ID': id_venta, 'Fecha': fecha, 'Cliente': st.session_state.cliente_actual.get('Nombre'),
-                                'Cedula_Cliente': st.session_state.cliente_actual.get('Cedula'), 'Direccion': dir_envio,
-                                'Mascota': st.session_state.mascota_seleccionada, 'Metodo_Pago': metodo, 'Tipo_Entrega': entrega, 'Total': total
-                            }
-                            pdf = generar_pdf_html(venta_dict, st.session_state.carrito)
-                            st.session_state.ultimo_pdf = pdf
-                            st.session_state.ultima_venta_id = id_venta
-                            
-                            tel = limpiar_tel(st.session_state.cliente_actual.get('Telefono',''))
-                            if tel:
-                                txt = msg_venta(venta_dict['Cliente'], venta_dict['Mascota'], items_str, total)
-                                st.session_state.whatsapp_link = f"https://wa.me/{tel}?text={urllib.parse.quote(txt)}"
-                            
-                            st.session_state.carrito = []
-                            st.success("Venta Exitosa")
-                            st.rerun()
+    producto_uid = str(row_prod.get("Producto_UID", "")).strip()
+    id_prod = str(row_prod.get("ID_Producto", "")).strip()
+    id_norm = str(row_prod.get("ID_Producto_Norm", normalizar_id_producto(id_prod))).strip()
+    nombre = str(row_prod.get("Nombre", "")).strip()
+    stock_disp = float(row_prod.get("Stock", 0) or 0)
+    precio_base = float(row_prod.get("Precio", 0) or 0)
+    costo_base = float(row_prod.get("Costo", 0) or 0)
 
-    if st.session_state.ultimo_pdf:
-        c1, c2 = st.columns(2)
-        c1.download_button("📄 PDF Factura", st.session_state.ultimo_pdf, file_name=f"Factura_{st.session_state.ultima_venta_id}.pdf", mime="application/pdf")
-        if st.session_state.whatsapp_link:
-            c2.markdown(f'<a href="{st.session_state.whatsapp_link}" target="_blank" class="btn-factura">📲 Enviar WhatsApp</a>', unsafe_allow_html=True)
+    cA, cB, cC, cD = st.columns([1, 1, 1, 1])
+    with cA:
+        cant = st.number_input("Cantidad", min_value=1.0, value=1.0, step=1.0, key="pos_cant")
+    with cB:
+        precio = st.number_input("Precio unit.", min_value=0.0, value=float(precio_base), step=100.0, key="pos_precio")
+    with cC:
+        descuento = st.number_input("Descuento unit.", min_value=0.0, value=0.0, step=100.0, key="pos_desc")
+    with cD:
+        st.caption("Stock")
+        st.write(f"{stock_disp:,.0f}")
 
-    # Botón para limpiar todo y empezar una nueva venta
-    if st.button("🆕 Nueva Venta", help="Iniciar una venta desde cero"):
-        st.session_state.carrito = []
-        st.session_state.cliente_actual = None
-        st.session_state.mascota_seleccionada = None
-        st.session_state.ultimo_pdf = None
-        st.session_state.ultima_venta_id = None
-        st.session_state.whatsapp_link = None
+    if st.button("➕ Agregar al carrito", type="primary", key="pos_add"):
+        # si ya existe en carrito por UID (o por ID_norm), sumar cantidad
+        existe = False
+        for it in st.session_state.carrito:
+            if (producto_uid and str(it.get("Producto_UID", "")).strip() == producto_uid) or (
+                (not producto_uid) and str(it.get("ID_Producto_Norm", "")).strip() == id_norm
+            ):
+                it["Cantidad"] = float(it.get("Cantidad", 0) or 0) + float(cant)
+                it["Precio"] = float(precio)
+                it["Descuento"] = float(descuento)
+                it["Subtotal"] = (float(it["Precio"]) - float(it["Descuento"])) * float(it["Cantidad"])
+                existe = True
+                break
+
+        if not existe:
+            st.session_state.carrito.append(
+                {
+                    "Producto_UID": producto_uid,
+                    "ID_Producto": id_prod,
+                    "ID_Producto_Norm": id_norm,
+                    "Nombre_Producto": nombre,
+                    "Cantidad": float(cant),
+                    "Precio": float(precio),
+                    "Descuento": float(descuento),
+                    "Costo": float(costo_base),
+                    "Subtotal": (float(precio) - float(descuento)) * float(cant),
+                }
+            )
         st.rerun()
+
+    # --- 3. CARRITO (FUERA del bloque de selección) ---
+    st.markdown("### 🧺 Detalle de Compra")
+
+    if not st.session_state.carrito:
+        st.info("Carrito vacío. Agrega productos para continuar.")
+        return
+
+    df_car = pd.DataFrame(st.session_state.carrito)
+
+    edited_car = st.data_editor(
+        df_car,
+        key="editor_carrito",
+        num_rows="fixed",
+        hide_index=True,
+        column_config={
+            "Subtotal": st.column_config.NumberColumn("Subtotal", format="$%.0f", disabled=True),
+            "Precio": st.column_config.NumberColumn("Precio", format="$%.0f"),
+            "Descuento": st.column_config.NumberColumn("Desc.", format="$%.0f"),
+            "Costo": st.column_config.NumberColumn("Costo", format="$%.0f"),
+        },
+    )
+
+    # Recalcular subtotales siempre que cambie editor
+    if not df_car.equals(edited_car):
+        for i, r in edited_car.iterrows():
+            p = float(r.get("Precio", 0) or 0)
+            d = float(r.get("Descuento", 0) or 0)
+            q = float(r.get("Cantidad", 0) or 0)
+            edited_car.at[i, "Subtotal"] = (p - d) * q
+        st.session_state.carrito = edited_car.to_dict("records")
+        st.rerun()
+
+    total = float(pd.to_numeric(edited_car["Subtotal"], errors="coerce").fillna(0).sum())
+    st.markdown(f"**TOTAL:** ${total:,.0f}")
+
+    cV1, cV2 = st.columns(2)
+    with cV1:
+        if st.button("🗑️ Vaciar Carrito", key="pos_clear"):
+            st.session_state.carrito = []
+            st.rerun()
+
+    # --- 4. PAGO + FINALIZAR (FUERA del bloque del carrito) ---
+    st.markdown("---")
+    c1, c2 = st.columns(2)
+    metodo = c1.selectbox("Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"], key="pos_metodo")
+    entrega = c2.selectbox("Entrega", ["Local", "Domicilio"], key="pos_entrega")
+    dir_envio = st.text_input(
+        "Dirección",
+        value=st.session_state.cliente_actual.get("Direccion", "") if st.session_state.cliente_actual else "",
+        key="pos_dir",
+    )
+
+    if st.button("✅ FINALIZAR VENTA", type="primary", width="stretch", key="pos_fin"):
+        if not st.session_state.cliente_actual:
+            st.error("Falta seleccionar cliente")
+            return
+
+        with st.spinner("Procesando..."):
+            id_venta = f"VEN-{int(now_co().timestamp())}"
+            fecha = now_co().strftime("%Y-%m-%d %H:%M:%S")
+
+            items_str = ", ".join([f"{x['Cantidad']}x {x['Nombre_Producto']}" for x in st.session_state.carrito])
+            items_json = json.dumps(
+                [
+                    {
+                        "Producto_UID": x.get("Producto_UID", ""),
+                        "ID": x.get("ID_Producto", ""),
+                        "ID_Producto_Norm": x.get("ID_Producto_Norm", ""),
+                        "Nombre": x.get("Nombre_Producto", ""),
+                        "Cantidad": x.get("Cantidad", 0),
+                    }
+                    for x in st.session_state.carrito
+                ]
+            )
+
+            costo_total = sum([float(x.get("Costo", 0) or 0) * float(x.get("Cantidad", 0) or 0) for x in st.session_state.carrito])
+
+            fila = [
+                id_venta,
+                fecha,
+                st.session_state.cliente_actual.get("Cedula", ""),
+                st.session_state.cliente_actual.get("Nombre", ""),
+                entrega,
+                dir_envio,
+                "Pendiente" if entrega != "Local" else "Entregado",
+                metodo,
+                "",
+                total,
+                items_str,
+                items_json,
+                costo_total,
+                st.session_state.mascota_seleccionada,
+            ]
+
+            registrar_venta(fila, st.session_state.carrito)
+
+            # ...existing code... (generar PDF, whatsapp, limpiar carrito, etc.)
+            st.session_state.carrito = []
+            st.success("Venta Exitosa")
+            st.rerun()
+
+    # ...existing code... (descarga PDF + whatsapp + Nueva Venta)
 
 def tab_clientes_ui():
     st.header("Gestión de Clientes")

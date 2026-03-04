@@ -179,11 +179,13 @@ def cargar_cerebro(_ws_inv, _ws_map):
             iva_guardado = r.get('Ultimo_IVA')
             iva_val = int(float(iva_guardado)) if iva_guardado in [0, 5, 19, "0", "5", "19", 0.0, 5.0, 19.0] else 0
             memoria[k] = {
-                'SKU_Interno': normalizar_str(r.get('SKU_Interno')),
-                'Factor': float(r.get('Factor_Pack', 1)) if r.get('Factor_Pack') else 1.0,
-                'IVA_Aprendido': iva_val
+                "SKU_Interno": normalizar_str(r.get("SKU_Interno")),
+                "Producto_UID": str(r.get("Producto_UID", "")).strip(),   # ✅ NUEVO
+                "Factor": float(r.get("Factor_Pack", 1)) if r.get("Factor_Pack") else 1.0,
+                "IVA_Aprendido": iva_val
             }
-    except: pass
+    except:
+        pass
 
     return lista_prods, dict_prods, memoria
 
@@ -355,6 +357,14 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 fila = uid_to_row.get(producto_uid)
             if fila is None and sku_norm:
                 fila = norm_to_row.get(sku_norm)
+
+            # ✅ FIX: si existe la fila pero no hay UID aún, crear uno y curar la fila
+            if fila is not None and (not producto_uid):
+                producto_uid = uuid.uuid4().hex  # UID nuevo
+                # importante: también lo guardamos en el mapping proveedor si aplica (más abajo ya se upsertea)
+                updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_uid + 1), "values": [[producto_uid]]})
+                updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_norm + 1), "values": [[sku_norm]]})
+                logs.append(f"🧱 CURADO: {sku_interno} ahora tiene UID {producto_uid[:8]}...")
 
             if fila is None:
                 # Crear nuevo en inventario
