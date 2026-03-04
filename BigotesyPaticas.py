@@ -158,7 +158,6 @@ def msg_venta(nombre: str, mascota: str, items_str: str, total: float) -> str:
     mascota = (mascota or "tu peludito").strip()
     items_str = (items_str or "").strip()
 
-    # Mensaje corto, amable, fidelizador (sin emojis)
     return (
         f"Hola {nombre}, gracias por tu compra en Bigotes y Patitas.\n"
         f"Mascota: {mascota}\n"
@@ -167,6 +166,10 @@ def msg_venta(nombre: str, mascota: str, items_str: str, total: float) -> str:
         f"Si necesitas ayuda con recomendaciones o con la próxima compra, escríbenos y con gusto te ayudamos.\n"
         f"Que {mascota} lo disfrute. Gracias por confiar en nosotros."
     )
+
+# ✅ Alias para evitar NameError (el POS llama msg_venta_fidelidad)
+def msg_venta_fidelidad(nombre: str, mascota: str, items_str: str, total: float) -> str:
+    return msg_venta(nombre, mascota, items_str, total)
 
 def msg_bienvenida(nombre, mascota):
     return f"""🐾 ¡Hola {nombre}! Bienvenido/a a Bigotes y Patitas.
