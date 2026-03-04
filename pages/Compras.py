@@ -110,20 +110,40 @@ def redondear_centena(valor):
 # 3. CONEXIÓN A GOOGLE SHEETS
 # ==========================================
 
+def _ensure_headers(ws, required_cols: list[str]) -> list[str]:
+    """
+    Asegura que existan columnas en la fila 1 (headers) de una worksheet.
+    Retorna la lista final de headers.
+    """
+    headers = ws.row_values(1) or []
+    headers = [h.strip() for h in headers]
+
+    changed = False
+    for col in required_cols:
+        if col not in headers:
+            headers.append(col)
+            ws.update_cell(1, len(headers), col)
+            changed = True
+
+    return ws.row_values(1) if changed else headers
+
 @st.cache_resource(ttl=600)
 def conectar_sheets():
     try:
         if "google_service_account" not in st.secrets:
             st.error("❌ Falta configuración en secrets.toml")
             st.stop()
-        
+
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
         sh = gc.open_by_url(st.secrets["SHEET_URL"])
-        
-        try: ws_inv = sh.worksheet("Inventario")
-        except: st.error("Falta hoja 'Inventario'"); st.stop()
 
-        # Asegurar headers mínimos Inventario (robusto)
+        try:
+            ws_inv = sh.worksheet("Inventario")
+        except:
+            st.error("Falta hoja 'Inventario'")
+            st.stop()
+
+        # ✅ ya no falla: helper existe
         _ensure_headers(ws_inv, ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Stock", "Costo", "Precio"])
 
         try: ws_map = sh.worksheet("Maestro_Proveedores")
