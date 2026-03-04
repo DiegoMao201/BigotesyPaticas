@@ -153,21 +153,34 @@ def limpiar_tel(tel):
     if len(t) == 10 and not t.startswith("57"): t = "57" + t
     return t
 
+def _wa_resumir_items(items_str: str, max_len: int = 180) -> str:
+    s = (items_str or "").strip()
+    if not s:
+        return "—"
+    s = " ".join(s.split())
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 1].rstrip() + "…"
+
 def msg_venta(nombre: str, mascota: str, items_str: str, total: float) -> str:
+    """
+    Mensaje post-venta WhatsApp (bonito, corto, con emojis) compatible con WhatsApp Web/App.
+    """
     nombre = (nombre or "Cliente").strip()
     mascota = (mascota or "tu peludito").strip()
-    items_str = (items_str or "").strip()
+    items_pretty = _wa_resumir_items(items_str, max_len=180)
 
     return (
-        f"Hola {nombre}, gracias por tu compra en Bigotes y Patitas.\n"
-        f"Mascota: {mascota}\n"
-        f"Productos: {items_str}\n"
-        f"Total: ${total:,.0f}\n\n"
-        f"Si necesitas ayuda con recomendaciones o con la próxima compra, escríbenos y con gusto te ayudamos.\n"
-        f"Que {mascota} lo disfrute. Gracias por confiar en nosotros."
+        f"Hola *{nombre}* 🐾\n\n"
+        f"¡Gracias por tu compra en *Bigotes y Patitas*! 💚\n"
+        f"Hoy consentimos a *{mascota}* ✨\n\n"
+        f"🛍️ *Productos:* {items_pretty}\n"
+        f"💳 *Total:* ${total:,.0f}\n\n"
+        f"Si quieres, te ayudo con recomendaciones según la edad y el tamaño de {mascota} 🐶🐱\n"
+        f"¡Aquí estamos para ustedes! 🤝"
     )
 
-# ✅ Alias para evitar NameError (el POS llama msg_venta_fidelidad)
+# Mantener alias para que el POS nunca reviente si llama este nombre
 def msg_venta_fidelidad(nombre: str, mascota: str, items_str: str, total: float) -> str:
     return msg_venta(nombre, mascota, items_str, total)
 
