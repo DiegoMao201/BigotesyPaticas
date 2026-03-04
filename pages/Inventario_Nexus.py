@@ -11,6 +11,31 @@ from urllib.parse import quote
 import xlsxwriter
 import unicodedata  # ya existe; mantener
 
+def _norm_col(s: str) -> str:
+    """Normaliza nombre de columna para comparación flexible."""
+    s = "" if s is None else str(s)
+    s = s.strip().lower()
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+    s = s.replace(" ", "").replace("_", "")
+    return s
+
+def _find_col(df, candidates):
+    """Busca columna en df que coincida con alguna de las opciones (soporta tildes, espacios, etc)."""
+    if df is None or df.empty:
+        return None
+    norm_map = {_norm_col(c): c for c in df.columns}
+    for cand in candidates:
+        key = _norm_col(cand)
+        if key in norm_map:
+            return norm_map[key]
+    # fallback: contains
+    for cand in candidates:
+        key = _norm_col(cand)
+        for k, orig in norm_map.items():
+            if key in k:
+                return orig
+    return None
+
 # ==========================================
 # 0. CONFIGURACIÓN E INICIALIZACIÓN
 # ==========================================
