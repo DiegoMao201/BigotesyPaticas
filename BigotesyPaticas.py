@@ -10,7 +10,7 @@ from io import BytesIO
 import pytz
 import numpy as np
 import time  # Necesario para manejar las esperas en el error 429
-import uuid  # <-- ya lo tienes, mantener
+import uuid  # ya lo tienes; mantener
 
 # --- CONFIGURACIÓN DE ZONA HORARIA ---
 TZ_CO = pytz.timezone("America/Bogota")
@@ -219,6 +219,76 @@ def normalizar_todas_las_referencias():
     rango = f"{gspread.utils.rowcol_to_a1(2, col_idx)}:{gspread.utils.rowcol_to_a1(len(valores_lista)+1, col_idx)}"
     safe_api_call(ws_inv.update, rango, valores_lista)
     st.success("Referencias normalizadas en la Nube. Recarga los datos.")
+
+# ==============================
+# NUEVO: Reparación robusta UID
+# ==============================
+
+def _ensure_sheet_columns(ws, required_cols):
+    """Asegura columnas en fila 1. Retorna headers finales."""
+    headers = safe_api_call(ws.row_values, 1) or []
+    changed = False
+    for c in required_cols:
+        if c not in headers:
+            headers.append(c)
+            safe_api_call(ws.update_cell, 1, len(headers), c)
+            changed = True
+    if changed:
+        headers = safe_api_call(ws.row_values, 1) or headers
+    return headers
+
+
+def asegurar_ids_inventario_nube():
+    """
+    One-shot: crea/llena Producto_UID e ID_Producto_Norm en Inventario (nube + session_state.db['inv']).
+    Debe estar DEFINIDA a nivel módulo (sin indentación) para que main() la pueda llamar.
+    """
+    if "db" not in st.session_state or "inv" not in st.session_state.db:
+        st.error("Primero debes usar '🔄 Sincronizar Datos' para cargar Inventario en memoria.")
+        return
+
+    df = st.session_state.db["inv"].copy()
+    if df.empty:
+        st.warning("Inventario está vacío en memoria. Sincroniza y reintenta.")
+        return
+
+    if "ID_Producto" not in df.columns:
+        st.error("Inventario no tiene columna 'ID_Producto'.")
+        return
+
+    # 1) Asegurar columnas locales
+    if "ID_Producto_Norm" not in df.columns:
+        df["ID_Producto_Norm"] = df["ID_Producto"].apply(normalizar_id_producto)
+
+    if "Producto_UID" not in df.columns:
+        df["Producto_UID"] = ""
+
+    # 2) Generar UIDs faltantes
+    uid_ser = df["Producto_UID"].fillna("").astype(str).str.strip()
+    mask_missing = uid_ser.eq("")
+    if mask_missing.any():
+        df.loc[mask_missing, "Producto_UID"] = [uuid.uuid4().hex for _ in range(int(mask_missing.sum()))]
+
+    # 3) Subir a Google Sheets
+    sh = conectar_google_sheets()
+    ws_inv = obtener_worksheets(sh)["inv"]
+
+    headers = _ensure_sheet_columns(ws_inv, ["Producto_UID", "ID_Producto_Norm"])
+    col_uid = headers.index("Producto_UID") + 1
+    col_norm = headers.index("ID_Producto_Norm") + 1
+
+    uid_vals = [[str(x)] for x in df["Producto_UID"].astype(str).tolist()]
+    norm_vals = [[str(x)] for x in df["ID_Producto_Norm"].astype(str).tolist()]
+
+    rango_uid = f"{gspread.utils.rowcol_to_a1(2, col_uid)}:{gspread.utils.rowcol_to_a1(len(uid_vals)+1, col_uid)}"
+    rango_norm = f"{gspread.utils.rowcol_to_a1(2, col_norm)}:{gspread.utils.rowcol_to_a1(len(norm_vals)+1, col_norm)}"
+
+    safe_api_call(ws_inv.update, rango_uid, uid_vals)
+    safe_api_call(ws_inv.update, rango_norm, norm_vals)
+
+    # 4) Persistir en memoria
+    st.session_state.db["inv"] = df
+    st.success("✅ Reparación lista: Producto_UID + ID_Producto_Norm actualizados en Inventario (nube y memoria).")
 
 # ==========================================
 # 4. FUNCIONES DE ESCRITURA (OPTIMIZADAS)
