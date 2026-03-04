@@ -413,63 +413,20 @@ def calcular_master_df():
     # ✅ Inversión estimada: aquí sí, porque ya existe Unidades_Pedir
     master["Inversion_Est"] = master["Unidades_Pedir"] * master["Costo_Efectivo"]
 
-    # --- Lógica de ARRANQUE/ROTACION, Velocidad_Diaria, Requiere_Compra, etc. ---
-    master["Modo_Demanda"] = np.where((master["v30"] <= 1) & (master["v90"] <= 1) & (master["v90"] > 0), "ARRANQUE", "ROTACION")
-
-    # Velocidad diaria (solo para ROTACION)
-    vel_30 = master["v30"] / 30.0
-    vel_90 = master["v90"] / 90.0
-
-    # Suavizado: mezcla 30/90 para estacionalidad (evita picos por días raros)
-    vel_blend = (0.65 * vel_90) + (0.35 * vel_30)
-
-    # Confianza por cantidad vendida (si hay poca data, baja la velocidad efectiva)
-    # conf in [0,1] (con 0-6 unidades en 90 días va subiendo lineal)
-    conf = np.clip(master["v90"] / 6.0, 0.0, 1.0)
-
-    master["Velocidad_Diaria"] = np.where(master["Modo_Demanda"] == "ROTACION", vel_blend * conf, 0.0)
-    master["Velocidad_Diaria"] = pd.to_numeric(master["Velocidad_Diaria"], errors="coerce").fillna(0.0)
-
-    master["Dias_Cobertura"] = np.where(
-        master["Velocidad_Diaria"] > 0,
-        master["Stock"] / master["Velocidad_Diaria"],
-        999,
-    )
-
     # ==========================
-    # LÓGICA DE COMPRAS (8 días)
+    # ✅ BLINDAJE ABC (evita KeyError: Clase_ABC)
     # ==========================
-    DIAS_OBJETIVO = 8
-    DIAS_SEGURIDAD = 1
-    LEAD_TIME_DIAS = 5
+    if "Valor_Ventas_90d" not in master.columns:
+        # valor real de ventas 90d (si no hay precio, queda 0)
+        master["Valor_Ventas_90d"] = pd.to_numeric(master.get("v90", 0.0), errors="coerce").fillna(0.0) * pd.to_numeric(master.get("Precio", 0.0), errors="coerce").fillna(0.0)
 
-    # Mínimo vital: si el producto YA tuvo ventas alguna vez, asegurar 1 unidad (pero no comprar cajas por eso)
-    master["Min_Unidades"] = np.where(master["v90"] > 0, 1.0, 0.0)
+    if "Clase_ABC" not in master.columns:
+        try:
+            master["Clase_ABC"] = _calc_clase_abc(master)
+        except Exception:
+            master["Clase_ABC"] = "C"
 
-    # ROTACION: objetivo por velocidad (8 días + colchón)
-    stock_seg = master["Velocidad_Diaria"] * DIAS_SEGURIDAD
-    punto_reorden = (master["Velocidad_Diaria"] * LEAD_TIME_DIAS) + stock_seg
-    stock_obj = (master["Velocidad_Diaria"] * DIAS_OBJETIVO) + stock_seg
-
-    # ARRANQUE: no proyectar, solo mínimo 1 unidad
-    # y usar factor pack efectivo = 1 para no inflar a 5/10 por caja cuando solo quieres “no quedarte en cero”
-    master["Factor_Pack_Efectivo"] = np.where(master["Modo_Demanda"] == "ARRANQUE", 1.0, master["Factor_Pack"])
-
-    req_rot = (master["Modo_Demanda"] == "ROTACION") & (master["Velocidad_Diaria"] > 0) & (master["Stock"] <= punto_reorden)
-    req_arr = (master["Modo_Demanda"] == "ARRANQUE") & (master["Stock"] < master["Min_Unidades"])
-
-    master["Requiere_Compra"] = req_rot | req_arr
-
-    faltante_rot = np.maximum(0.0, np.maximum(stock_obj, master["Min_Unidades"]) - master["Stock"])
-    faltante_arr = np.maximum(0.0, master["Min_Unidades"] - master["Stock"])
-
-    master["Faltante"] = np.where(req_rot, faltante_rot, np.where(req_arr, faltante_arr, 0.0))
-
-    master["Sugerencia_Cajas"] = np.ceil(master["Faltante"] / master["Factor_Pack_Efectivo"])
-    master["Unidades_Pedir"] = master["Sugerencia_Cajas"] * master["Factor_Pack_Efectivo"]
-
-    # ✅ Inversión estimada: aquí sí, porque ya existe Unidades_Pedir
-    master["Inversion_Est"] = master["Unidades_Pedir"] * master["Costo_Efectivo"]
+    master["Clase_ABC"] = master["Clase_ABC"].fillna("C").astype(str)
 
     # === ALERTAS DE ESTADO ===
     # ✅ blindaje por si algún flujo dejó columnas faltantes
