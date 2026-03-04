@@ -11,6 +11,7 @@ import pytz
 import numpy as np
 import time  # Necesario para manejar las esperas en el error 429
 import uuid  # ya lo tienes; mantener
+import re  # ✅ nuevo
 
 # --- CONFIGURACIÓN DE ZONA HORARIA ---
 TZ_CO = pytz.timezone("America/Bogota")
@@ -162,25 +163,34 @@ def _wa_resumir_items(items_str: str, max_len: int = 180) -> str:
         return s
     return s[: max_len - 1].rstrip() + "…"
 
+def _wa_items_bullets(items_str: str, max_items: int = 10) -> str:
+    parts = [p.strip() for p in (items_str or "").split(",") if p.strip()]
+    # 1.0x -> 1x
+    parts = [re.sub(r"^(\d+)\.0x\s*", r"\1x ", p) for p in parts]
+    if len(parts) > max_items:
+        extra = len(parts) - max_items
+        parts = parts[:max_items] + [f"• y {extra} más…"]
+        return "\n".join([f"• {p}" if not p.startswith("•") else p for p in parts])
+    return "\n".join([f"• {p}" for p in parts]) if parts else "• —"
+
 def msg_venta(nombre: str, mascota: str, items_str: str, total: float) -> str:
     """
     Mensaje post-venta WhatsApp (bonito, corto, con emojis) compatible con WhatsApp Web/App.
     """
     nombre = (nombre or "Cliente").strip()
     mascota = (mascota or "tu peludito").strip()
-    items_pretty = _wa_resumir_items(items_str, max_len=180)
+    items_bullets = _wa_items_bullets(items_str)
 
     return (
-        f"Hola *{nombre}* 🐾\n\n"
+        f"Hola *{nombre}* 👋🐾\n\n"
         f"¡Gracias por tu compra en *Bigotes y Patitas*! 💚\n"
         f"Hoy consentimos a *{mascota}* ✨\n\n"
-        f"🛍️ *Productos:* {items_pretty}\n"
-        f"💳 *Total:* ${total:,.0f}\n\n"
-        f"Si quieres, te ayudo con recomendaciones según la edad y el tamaño de {mascota} 🐶🐱\n"
-        f"¡Aquí estamos para ustedes! 🤝"
+        f"🛍️ *Productos:*\n{items_bullets}\n\n"
+        f"💳 *Total:* ${float(total or 0):,.0f}\n\n"
+        f"Si quieres, te ayudo con recomendaciones para {mascota} (alimento, premios y porciones). 🐶🐱\n"
+        f"¡Gracias por confiar en nosotros! 🙌"
     )
 
-# Mantener alias para que el POS nunca reviente si llama este nombre
 def msg_venta_fidelidad(nombre: str, mascota: str, items_str: str, total: float) -> str:
     return msg_venta(nombre, mascota, items_str, total)
 
@@ -857,47 +867,35 @@ def tab_pos():
 
             registrar_venta(fila, st.session_state.carrito)
 
-            # ===== POST-VENTA: preparar WhatsApp (persistente) =====
+            # ===== POST-VENTA WhatsApp (SOLO 1 mensaje) =====
             tel_raw = _get_cliente_tel(st.session_state.cliente_actual)
-            tel = limpiar_tel(tel_raw) if tel_raw else ""
             msg = msg_venta_fidelidad(
                 st.session_state.cliente_actual.get("Nombre", ""),
                 st.session_state.mascota_seleccionada,
                 items_str,
                 total_num,
             )
-            st.session_state.ultima_venta_id = id_venta
-            st.session_state.whatsapp_link = (
-                f"https://wa.me/{tel}?text={urllib.parse.quote(msg)}" if tel else None
-            )
 
-            # limpiar carrito pero NO borrar whatsapp_link
+            st.session_state.ultima_venta_id = id_venta
+            link_app, link_web = build_whatsapp_links(tel_raw, msg)
+            st.session_state.whatsapp_link = link_app
+            st.session_state.whatsapp_link_web = link_web
+
             st.session_state.carrito = []
             st.success("Venta registrada. Acciones post-venta disponibles abajo.")
 
-    # ===== UI POST-VENTA (botón WhatsApp) =====
+    # ===== UI POST-VENTA =====
     if st.session_state.get("ultima_venta_id"):
         st.markdown("### Acciones post-venta")
-        link = st.session_state.get("whatsapp_link")
-
         c1, c2 = st.columns([1, 1])
         with c1:
-            if link:
-                try:
-                    st.link_button("Enviar WhatsApp al cliente", link, type="primary")
-                except Exception:
-                    st.markdown(f"[Enviar WhatsApp al cliente]({link})")
+            if st.session_state.get("whatsapp_link"):
+                st.link_button("📲 Enviar WhatsApp (Celular / App)", st.session_state["whatsapp_link"], type="primary")
             else:
                 st.warning("No hay teléfono válido para WhatsApp en este cliente.")
-
         with c2:
-            # Botón “Nueva venta” (opcional, para resetear post-venta cuando tú quieras)
-            if st.button("Nueva venta", key="pos_new_sale"):
-                st.session_state.ultima_venta_id = None
-                st.session_state.whatsapp_link = None
-                st.rerun()
-
-    # ...existing code... (descarga PDF/WhatsApp si ya tienes bloques)
+            if st.session_state.get("whatsapp_link_web"):
+                st.link_button("💻 Abrir WhatsApp Web (PC)", st.session_state["whatsapp_link_web"])
 
 def _get_cliente_tel(cliente: dict) -> str:
     """Obtiene teléfono de forma robusta desde el dict de cliente."""
@@ -908,6 +906,42 @@ def _get_cliente_tel(cliente: dict) -> str:
         if v and str(v).strip():
             return str(v).strip()
     return ""
+
+def build_whatsapp_links(telefono: str, mensaje: str) -> tuple[str | None, str | None]:
+    """Links estables para celular (wa.me) y PC (WhatsApp Web)."""
+    if not telefono:
+        return None, None
+    tel = limpiar_tel(telefono)
+    if not tel or len(tel) < 7:
+        return None, None
+    encoded = urllib.parse.quote(str(mensaje or ""), safe="")
+    return (
+        f"https://wa.me/{tel}?text={encoded}",
+        f"https://web.whatsapp.com/send?phone={tel}&text={encoded}",
+    )
+
+# ✅ DEFINICIÓN FINAL (única) DEL MENSAJE POST-VENTA
+# (si existían versiones anteriores, esta las sobre-escribe y elimina el “doble mensaje”)
+def msg_venta(nombre: str, mascota: str, items_str: str, total: float) -> str:
+    """
+    Mensaje post-venta WhatsApp (bonito, corto, con emojis) compatible con WhatsApp Web/App.
+    """
+    nombre = (nombre or "Cliente").strip()
+    mascota = (mascota or "tu peludito").strip()
+    items_bullets = _wa_items_bullets(items_str)
+
+    return (
+        f"Hola *{nombre}* 👋🐾\n\n"
+        f"¡Gracias por tu compra en *Bigotes y Patitas*! 💚\n"
+        f"Hoy consentimos a *{mascota}* ✨\n\n"
+        f"🛍️ *Productos:*\n{items_bullets}\n\n"
+        f"💳 *Total:* ${float(total or 0):,.0f}\n\n"
+        f"Si quieres, te ayudo con recomendaciones para {mascota} (alimento, premios y porciones). 🐶🐱\n"
+        f"¡Gracias por confiar en nosotros! 🙌"
+    )
+
+def msg_venta_fidelidad(nombre: str, mascota: str, items_str: str, total: float) -> str:
+    return msg_venta(nombre, mascota, items_str, total)
 
 def tab_clientes_ui():
     st.header("Gestión de Clientes")
