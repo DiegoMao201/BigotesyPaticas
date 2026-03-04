@@ -341,13 +341,21 @@ def calcular_master_df():
     master["v90"] = pd.to_numeric(master["v90"], errors="coerce").fillna(0.0)
     master["v30"] = pd.to_numeric(master["v30"], errors="coerce").fillna(0.0)
 
-    # Numéricos base
+    # Numéricos base (ya lo tienes o similar)
     for c in ["Stock", "Costo", "Precio", "Costo_Proveedor", "Factor_Pack"]:
         if c not in master.columns:
             master[c] = 0.0
         master[c] = pd.to_numeric(master[c], errors="coerce").fillna(0.0)
 
     master["Factor_Pack"] = np.where(master["Factor_Pack"] <= 0, 1.0, master["Factor_Pack"])
+
+    # ✅ FIX: Margen SIEMPRE presente (evita KeyError en KPIs y tablas)
+    # Margen_% como fracción (0.30 = 30%). Se multiplica por 100 solo al mostrar.
+    margen_abs = master["Precio"] - master["Costo"]
+    margen_pct = np.where(master["Precio"] > 0, margen_abs / master["Precio"], 0.0)
+
+    master["Margen_$"] = pd.to_numeric(margen_abs, errors="coerce").fillna(0.0)
+    master["Margen_%"] = pd.to_numeric(margen_pct, errors="coerce").fillna(0.0)
 
     # ✅ Asegurar Clase_ABC si no existe (evita KeyError en Estado/UI)
     if "Valor_Ventas_90d" not in master.columns:
@@ -551,9 +559,16 @@ def main():
     st.title("🐾 Panel Principal de Operaciones")
     
     c1, c2, c3, c4 = st.columns(4)
-    valor_inv = (master_df['Stock'] * master_df['Costo']).sum()
-    agotados = master_df[master_df['Stock'] <= 0].shape[0]
-    margen_promedio = master_df[master_df['Stock'] > 0]['Margen_%'].mean() * 100
+    valor_inv = (master_df["Stock"] * master_df["Costo"]).sum()
+
+    agotados = master_df[master_df["Stock"] <= 0].shape[0]
+
+    # ✅ FIX: KPI margen robusto si algo raro pasa
+    if "Margen_%" in master_df.columns:
+        margen_promedio = float(master_df.loc[master_df["Stock"] > 0, "Margen_%"].mean() or 0.0) * 100.0
+    else:
+        margen_promedio = 0.0
+
     df_gastos = st.session_state['data_store']['df_Gastos']
     gastos_mes = df_gastos[df_gastos['Fecha'].dt.month == datetime.now().month]['Monto'].sum() if not df_gastos.empty else 0
 
