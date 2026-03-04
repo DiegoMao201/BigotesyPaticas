@@ -580,13 +580,17 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             len(df_final), meta_xml['Total'], "Admin Nexus", "OK"
         ])
 
+        # ✅ FIX: fecha para registro de gasto (evita NameError)
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         try:
             descripcion_gasto = f"[PROV: {meta_xml['Proveedor']}] [REF: {meta_xml['Folio']}] - Compra Mercancía"
-            monto_total_gasto = meta_xml['Total'] + float(info_pago.get("Transporte", 0.0)) - float(info_pago.get("Descuento", 0.0))
+            monto_total_gasto = float(meta_xml.get('Total', 0.0) or 0.0) + float(info_pago.get("Transporte", 0.0)) - float(info_pago.get("Descuento", 0.0))
             ts = int(time.time())
+
             datos_gasto = [
                 f"GAS-{ts}", fecha, "Variable", "Compra Inventario", descripcion_gasto,
-                monto_total_gasto, info_pago['Origen'], info_pago['Origen'] 
+                monto_total_gasto, info_pago['Origen'], info_pago['Origen']
             ]
             ws_gas.append_row(datos_gasto)
             logs.append(f"💰 Gasto Registrado: ${monto_total_gasto:,.0f} desde {info_pago['Origen']}")
