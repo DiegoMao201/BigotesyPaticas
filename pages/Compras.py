@@ -272,6 +272,33 @@ def conectar_sheets():
 # 4. CEREBRO Y MEMORIA
 # ==========================================
 
+@st.cache_data(ttl=120)
+def cargar_proveedores(_ws_map) -> tuple[list[str], dict[str, str]]:
+    """
+    Retorna:
+      - lista_nombres (para selectbox)
+      - nombre_to_id (Nombre_Proveedor -> ID_Proveedor)
+    """
+    try:
+        recs = _ws_map.get_all_records()
+        if not recs:
+            return (["(Nuevo proveedor)"], {})
+        df = pd.DataFrame(recs)
+        if "Nombre_Proveedor" not in df.columns:
+            return (["(Nuevo proveedor)"], {})
+        df["Nombre_Proveedor"] = df["Nombre_Proveedor"].fillna("").astype(str).str.strip()
+        if "ID_Proveedor" in df.columns:
+            df["ID_Proveedor"] = df["ID_Proveedor"].fillna("").astype(str).str.strip()
+        df = df[df["Nombre_Proveedor"] != ""].drop_duplicates(subset=["Nombre_Proveedor"])
+        nombres = sorted(df["Nombre_Proveedor"].tolist())
+        nombres = ["(Nuevo proveedor)"] + nombres
+        nombre_to_id = {}
+        if "ID_Proveedor" in df.columns:
+            nombre_to_id = dict(zip(df["Nombre_Proveedor"], df["ID_Proveedor"]))
+        return (nombres, nombre_to_id)
+    except Exception:
+        return (["(Nuevo proveedor)"], {})
+
 @st.cache_data(ttl=60)
 def cargar_cerebro(_ws_inv, _ws_map):
     try:
