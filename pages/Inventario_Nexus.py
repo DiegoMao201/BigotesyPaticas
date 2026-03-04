@@ -349,13 +349,18 @@ def calcular_master_df():
 
     master["Factor_Pack"] = np.where(master["Factor_Pack"] <= 0, 1.0, master["Factor_Pack"])
 
-    # ✅ FIX: Margen SIEMPRE presente (evita KeyError en KPIs y tablas)
-    # Margen_% como fracción (0.30 = 30%). Se multiplica por 100 solo al mostrar.
-    margen_abs = master["Precio"] - master["Costo"]
-    margen_pct = np.where(master["Precio"] > 0, margen_abs / master["Precio"], 0.0)
+    # ✅ FIX: Margen SIEMPRE presente (sin ndarray.fillna)
+    precio = pd.to_numeric(master.get("Precio", 0.0), errors="coerce")
+    costo = pd.to_numeric(master.get("Costo", 0.0), errors="coerce")
 
-    master["Margen_$"] = pd.to_numeric(margen_abs, errors="coerce").fillna(0.0)
-    master["Margen_%"] = pd.to_numeric(margen_pct, errors="coerce").fillna(0.0)
+    precio = pd.Series(precio, index=master.index).fillna(0.0)
+    costo = pd.Series(costo, index=master.index).fillna(0.0)
+
+    margen_abs = (precio - costo)
+    margen_pct = np.where(precio > 0, margen_abs / precio, 0.0)
+
+    master["Margen_$"] = pd.Series(margen_abs, index=master.index).fillna(0.0)
+    master["Margen_%"] = pd.Series(margen_pct, index=master.index).fillna(0.0)
 
     # ✅ Asegurar Clase_ABC si no existe (evita KeyError en Estado/UI)
     if "Valor_Ventas_90d" not in master.columns:
