@@ -207,6 +207,29 @@ def analizar_ventas(df_ven, df_inv):
                 if row['Fecha'] >= cutoff_30: stats[id_norm]['v30'] += qty
     return stats
 
+def _calc_clase_abc(master: pd.DataFrame) -> pd.Series:
+    """
+    ABC por contribución de valor de ventas (90d).
+    A: hasta 80% acumulado, B: 80-95%, C: resto.
+    Si no hay valor de ventas, todo queda C.
+    """
+    df = master.copy()
+
+    if "Valor_Ventas_90d" not in df.columns:
+        df["Valor_Ventas_90d"] = 0.0
+
+    df["Valor_Ventas_90d"] = pd.to_numeric(df["Valor_Ventas_90d"], errors="coerce").fillna(0.0)
+    total = float(df["Valor_Ventas_90d"].sum())
+    if total <= 0:
+        return pd.Series(["C"] * len(df), index=df.index)
+
+    order = df["Valor_Ventas_90d"].sort_values(ascending=False).index
+    cum = (df.loc[order, "Valor_Ventas_90d"].cumsum() / total).values
+
+    clases = np.select([cum <= 0.80, cum <= 0.95], ["A", "B"], default="C")
+    out = pd.Series(index=order, data=clases).reindex(df.index).fillna("C")
+    return out
+
 def calcular_master_df():
     data = st.session_state['data_store']
     df_inv, df_prov, df_ven = data['df_Inventario'], data['df_Maestro_Proveedores'], data['df_Ventas']
@@ -229,21 +252,21 @@ def calcular_master_df():
 
     # --- Normalizar numéricos críticos ---
     master["Stock"] = pd.to_numeric(master.get("Stock", 0), errors="coerce").fillna(0.0)
-    master["Costo_Proveedor"] = pd.to_numeric(master.get("Costo_Proveedor", master.get("Costo", 0)), errors="coerce").fillna(0.0)
-    master["Factor_Pack"] = pd.to_numeric(master.get("Factor_Pack", 1), errors="coerce").fillna(1.0)
-    master["Factor_Pack"] = np.where(master["Factor_Pack"] <= 0, 1.0, master["Factor_Pack"])
+    master["Costo"] = pd.to_numeric(master.get("Costo", 0), errors="coerce").fillna(0.0)
+    master["Precio"] = pd.to_numeric(master.get("Precio", 0), errors="coerce").fillna(0.0)
 
-    # Métricas Base
-    master['v90'] = master['ID_Producto_Norm'].map(lambda x: stats.get(x, {}).get('v90', 0))
-    master['v30'] = master['ID_Producto_Norm'].map(lambda x: stats.get(x, {}).get('v30', 0))
-    master["v90"] = pd.to_numeric(master["v90"], errors="coerce").fillna(0.0)
-    master["v30"] = pd.to_numeric(master["v30"], errors="coerce").fillna(0.0)
+    # Métricas Base (ya las tienes)
+    master["v90"] = pd.to_numeric(master.get("v90", 0), errors="coerce").fillna(0.0)
+    master["v30"] = pd.to_numeric(master.get("v30", 0), errors="coerce").fillna(0.0)
 
-    # ==========================
-    # ROTACIÓN "REAL" + ARRANQUE
-    # ==========================
-    # Caso típico que te estaba dañando: 1 venta hoy => no asumir patrón
-    # Arranque = muy poca evidencia (<=1 unidad en 30d y <=1 unidad en 90d)
+    # ✅ ABC SIEMPRE presente (por valor real 90d)
+    if "Valor_Ventas_90d" not in master.columns:
+        master["Valor_Ventas_90d"] = master["v90"] * master["Precio"]
+
+    if "Clase_ABC" not in master.columns:
+        master["Clase_ABC"] = _calc_clase_abc(master)
+
+    # --- Lógica de ARRANQUE/ROTACION, Velocidad_Diaria, Requiere_Compra, etc. ---
     master["Modo_Demanda"] = np.where((master["v30"] <= 1) & (master["v90"] <= 1) & (master["v90"] > 0), "ARRANQUE", "ROTACION")
 
     # Velocidad diaria (solo para ROTACION)
@@ -300,14 +323,20 @@ def calcular_master_df():
     master["Inversion_Est"] = master["Unidades_Pedir"] * master["Costo_Proveedor"]
 
     # === ALERTAS DE ESTADO ===
+    # ✅ blindaje por si algún flujo dejó columnas faltantes
+    if "Requiere_Compra" not in master.columns:
+        master["Requiere_Compra"] = False
+    if "Dias_Cobertura" not in master.columns:
+        master["Dias_Cobertura"] = 999
+
     conditions = [
-        (master['Stock'] <= 0),
-        (master['Requiere_Compra'] == True) & (master['Clase_ABC'] == 'A'),
-        (master['Requiere_Compra'] == True),
-        (master['Dias_Cobertura'] > 120) & (master['Stock'] > 0)
+        (master["Stock"] <= 0),
+        (master["Requiere_Compra"] == True) & (master["Clase_ABC"] == "A"),
+        (master["Requiere_Compra"] == True),
+        (master["Dias_Cobertura"] > 120) & (master["Stock"] > 0),
     ]
     choices = ["💀 AGOTADO", "🚨 CRÍTICO (A)", "⚠️ Comprar", "🧊 Sobre-Stock"]
-    master['Estado'] = np.select(conditions, choices, default="✅ OK")
+    master["Estado"] = np.select(conditions, choices, default="✅ OK")
 
     return master
 
