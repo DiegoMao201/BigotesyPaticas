@@ -613,22 +613,38 @@ def main():
     # Conexión
     sh, ws_inv, ws_map, ws_hist, ws_gas = conectar_sheets()
 
-    # Cargar Cerebro (Inventario)
-    if 'lst_prods_cache' not in st.session_state:
+    # ✅ Botón para recargar catálogo (cuando alguien cambia Sheets)
+    cR1, cR2 = st.columns([1, 3])
+    if cR1.button("🔄 Recargar catálogo", help="Recarga Inventario/Proveedores/Memory"):
+        st.cache_data.clear()
+        for k in ["lst_prods_cache", "dct_prods_cache", "memoria_cache", "proveedores_cache", "prov_id_cache"]:
+            if k in st.session_state:
+                del st.session_state[k]
+        st.rerun()
+
+    # Cerebro (productos + memoria)
+    if "lst_prods_cache" not in st.session_state:
         l, d, m = cargar_cerebro(ws_inv, ws_map)
         st.session_state.lst_prods_cache = l
         st.session_state.dct_prods_cache = d
         st.session_state.memoria_cache = m
 
-    # Obtener categorías únicas desde la hoja de inventario
+    # ✅ Proveedores (para manual)
+    if "proveedores_cache" not in st.session_state:
+        provs, prov_to_id = cargar_proveedores(ws_map)
+        st.session_state.proveedores_cache = provs
+        st.session_state.prov_id_cache = prov_to_id
+
+    # ✅ Categorías reales desde Inventario
     categorias = []
     try:
         df_inv = pd.DataFrame(ws_inv.get_all_records())
-        if 'Categoria' in df_inv.columns:
-            categorias = sorted([c for c in df_inv['Categoria'].dropna().unique() if c and c.strip()])
-        if not categorias:
-            categorias = ["Sin Categoría"]
-    except:
+        col_cat = "Categoria" if "Categoria" in df_inv.columns else ("Categoría" if "Categoría" in df_inv.columns else None)
+        if col_cat:
+            categorias = sorted([c for c in df_inv[col_cat].fillna("").astype(str).unique().tolist() if c.strip()])
+    except Exception:
+        categorias = []
+    if not categorias:
         categorias = ["Sin Categoría"]
 
     # ==========================================
@@ -664,13 +680,25 @@ def main():
         with tab_manual:
             with st.form("form_manual_ingreso"):
                 c1, c2, c3 = st.columns(3)
-                prov_man = c1.text_input("Proveedor", placeholder="Ej: Italcol")
-                nit_man = c2.text_input("NIT / ID Proveedor", value="000")
+
+                prov_sel = c1.selectbox(
+                    "Proveedor",
+                    options=st.session_state.get("proveedores_cache", ["(Nuevo proveedor)"]),
+                )
+
+                prov_man = prov_sel
+                nit_default = st.session_state.get("prov_id_cache", {}).get(prov_sel, "") if prov_sel != "(Nuevo proveedor)" else ""
+
+                if prov_sel == "(Nuevo proveedor)":
+                    prov_man = c1.text_input("Nombre proveedor (nuevo)", placeholder="Ej: Italcol")
+
+                nit_man = c2.text_input("NIT / ID Proveedor", value=nit_default or "000")
+
                 folio_man = c3.text_input("No. Factura", placeholder="FAC-123")
-                
+
                 st.markdown("---")
                 st.write("📝 **Items de la Factura**")
-                
+
                 df_template = pd.DataFrame([{
                     "Descripción": "", "Cantidad": 1, "Costo_Total_Línea": 0.0
                 }])
@@ -799,11 +827,33 @@ def main():
                 "SKU_Proveedor": st.column_config.TextColumn("SKU Prov.", disabled=True),
                 "Descripcion": st.column_config.TextColumn("Desc. Factura", disabled=True),
                 "Nombre_Inventario": st.column_config.TextColumn("✍️ Nombre a Crear (Editable)", disabled=False, width="medium"),
+
+                # ✅ Asociar a inventario (lista real)
+                "📌 Producto_Interno": st.column_config.SelectboxColumn(
+                    "📌 Asociar a",
+                    options=st.session_state.lst_prods_cache,
+                    required=True,
+                ),
+
+                # ✅ IVA seleccionable
+                "IVA_%": st.column_config.SelectboxColumn(
+                    "IVA %",
+                    options=[0, 5, 19],
+                    required=True,
+                ),
+
+                # ✅ Categoría seleccionable
+                "Categoría": st.column_config.SelectboxColumn(
+                    "Categoría",
+                    options=categorias,
+                    required=True,
+                ),
+
                 "Cantidad": st.column_config.NumberColumn("Cant.", disabled=True, step=1, format="%.0f"),  # ✅ sin 1.0
                 "Costo_Base_Unitario": st.column_config.NumberColumn("Costo Unit. Base", format="$%.0f", disabled=True),
                 "Factor_Pack": st.column_config.NumberColumn("Factor/Caja", min_value=1.0, step=1.0, format="%.0f"),  # ✅
                 "Precio_Sugerido": st.column_config.NumberColumn("Precio Sugerido (20%)", format="$%.0f", min_value=0.0),  # ✅
-            }
+            },
         )
 
         st.markdown("---")
