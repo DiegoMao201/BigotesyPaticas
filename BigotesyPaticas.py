@@ -606,39 +606,82 @@ def tab_pos():
         st.info("Carrito vacío. Agrega productos para continuar.")
         return
 
-    df_car = pd.DataFrame(st.session_state.carrito)
+    df_car = pd.DataFrame(st.session_state.carrito).copy()
 
-    edited_car = st.data_editor(
-        df_car,
-        key="editor_carrito",
-        num_rows="fixed",
-        hide_index=True,
-        column_config={
-            "Subtotal": st.column_config.NumberColumn("Subtotal", format="$%.0f", disabled=True),
-            "Precio": st.column_config.NumberColumn("Precio", format="$%.0f"),
-            "Descuento": st.column_config.NumberColumn("Desc.", format="$%.0f"),
-            "Costo": st.column_config.NumberColumn("Costo", format="$%.0f"),
-        },
-    )
+    # Tipos numéricos (evita que el editor “no aplique” bien)
+    for c in ["Cantidad", "Precio", "Descuento", "Costo", "Subtotal"]:
+        if c in df_car.columns:
+            df_car[c] = pd.to_numeric(df_car[c], errors="coerce").fillna(0.0)
 
-    # Recalcular subtotales siempre que cambie editor
-    if not df_car.equals(edited_car):
-        for i, r in edited_car.iterrows():
-            p = float(r.get("Precio", 0) or 0)
-            d = float(r.get("Descuento", 0) or 0)
-            q = float(r.get("Cantidad", 0) or 0)
-            edited_car.at[i, "Subtotal"] = (p - d) * q
-        st.session_state.carrito = edited_car.to_dict("records")
-        st.rerun()
+    # Columna acción para eliminar (se ve al lado en la tabla)
+    if "🗑️ Eliminar" not in df_car.columns:
+        df_car.insert(0, "🗑️ Eliminar", False)
 
-    total = float(pd.to_numeric(edited_car["Subtotal"], errors="coerce").fillna(0).sum())
-    st.markdown(f"**TOTAL:** ${total:,.0f}")
+    # Subtotal siempre consistente
+    if "Subtotal" not in df_car.columns:
+        df_car["Subtotal"] = (df_car["Precio"] - df_car["Descuento"]) * df_car["Cantidad"]
 
-    cV1, cV2 = st.columns(2)
-    with cV1:
-        if st.button("🗑️ Vaciar Carrito", key="pos_clear"):
+    with st.form("pos_carrito_form", clear_on_submit=False):
+        edited_car = st.data_editor(
+            df_car,
+            key="editor_carrito",
+            num_rows="fixed",
+            hide_index=True,
+            column_config={
+                "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️", help="Marca para eliminar esta línea"),
+                "Producto_UID": st.column_config.TextColumn("Producto_UID", disabled=True, width="small"),
+                "ID_Producto": st.column_config.TextColumn("ID_Producto", disabled=True, width="small"),
+                "ID_Producto_Norm": st.column_config.TextColumn("ID_Producto_Norm", disabled=True, width="small"),
+                "Nombre_Producto": st.column_config.TextColumn("Producto", disabled=True, width="large"),
+                "Cantidad": st.column_config.NumberColumn("Cantidad", min_value=0.0, step=1.0),
+                "Precio": st.column_config.NumberColumn("Precio", format="$%.0f", step=100.0),
+                "Descuento": st.column_config.NumberColumn("Desc.", format="$%.0f", step=100.0),
+                "Costo": st.column_config.NumberColumn("Costo", format="$%.0f", step=100.0),
+                "Subtotal": st.column_config.NumberColumn("Subtotal", format="$%.0f", disabled=True),
+            },
+        )
+
+        cA, cB, cC = st.columns([1, 1, 2])
+        aplicar = cA.form_submit_button("💾 Aplicar cambios", type="primary")
+        vaciar = cB.form_submit_button("🗑️ Vaciar carrito")
+
+        if vaciar:
             st.session_state.carrito = []
             st.rerun()
+
+        if aplicar:
+            # 1) Eliminar marcados
+            if "🗑️ Eliminar" in edited_car.columns:
+                edited_car = edited_car[edited_car["🗑️ Eliminar"] != True].copy()
+
+            # 2) Recalcular subtotal SIEMPRE (aquí se arregla “no cambia el precio”)
+            for c in ["Cantidad", "Precio", "Descuento", "Costo"]:
+                if c in edited_car.columns:
+                    edited_car[c] = pd.to_numeric(edited_car[c], errors="coerce").fillna(0.0)
+
+            if not edited_car.empty:
+                edited_car["Subtotal"] = (edited_car["Precio"] - edited_car["Descuento"]) * edited_car["Cantidad"]
+
+            # 3) Guardar en session_state (sin columna de acción)
+            if "🗑️ Eliminar" in edited_car.columns:
+                edited_car = edited_car.drop(columns=["🗑️ Eliminar"])
+
+            st.session_state.carrito = edited_car.to_dict("records")
+            st.rerun()
+
+    # Total (fuera del form)
+    if st.session_state.carrito:
+        df_total = pd.DataFrame(st.session_state.carrito)
+        for c in ["Cantidad", "Precio", "Descuento", "Subtotal"]:
+            if c in df_total.columns:
+                df_total[c] = pd.to_numeric(df_total[c], errors="coerce").fillna(0.0)
+        if "Subtotal" not in df_total.columns and {"Precio", "Descuento", "Cantidad"}.issubset(df_total.columns):
+            df_total["Subtotal"] = (df_total["Precio"] - df_total["Descuento"]) * df_total["Cantidad"]
+        total = float(df_total["Subtotal"].sum()) if "Subtotal" in df_total.columns else 0.0
+    else:
+        total = 0.0
+
+    st.markdown(f"**TOTAL:** ${total:,.0f}")
 
     # --- 4. PAGO + FINALIZAR (FUERA del bloque del carrito) ---
     st.markdown("---")
