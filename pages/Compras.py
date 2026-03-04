@@ -6,6 +6,7 @@ import numpy as np
 import time
 from datetime import datetime
 import math
+import uuid  # <-- NUEVO
 from BigotesyPaticas import normalizar_id_producto
 
 # ==========================================
@@ -114,11 +115,21 @@ def conectar_sheets():
         
         try: ws_inv = sh.worksheet("Inventario")
         except: st.error("Falta hoja 'Inventario'"); st.stop()
-        
+
+        # Asegurar headers mínimos Inventario (robusto)
+        _ensure_headers(ws_inv, ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Stock", "Costo", "Precio"])
+
         try: ws_map = sh.worksheet("Maestro_Proveedores")
-        except: 
-            ws_map = sh.add_worksheet("Maestro_Proveedores", 1000, 9)
-            ws_map.append_row(["ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Factor_Pack", "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Ultimo_IVA"])
+        except:
+            ws_map = sh.add_worksheet("Maestro_Proveedores", 1000, 10)
+            ws_map.append_row([
+                "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor",
+                "SKU_Interno", "Producto_UID", "Factor_Pack",
+                "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Ultimo_IVA"
+            ])
+
+        # Asegurar headers mínimos Maestro_Proveedores (por si ya existe vieja)
+        _ensure_headers(ws_map, ["Producto_UID", "SKU_Interno", "Factor_Pack", "Ultimo_IVA", "Costo_Proveedor"])
 
         try: ws_hist = sh.worksheet("Historial_Recepciones")
         except:
@@ -263,116 +274,160 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
     try:
         fecha = datetime.now().strftime("%Y-%m-%d")
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         inv_data = ws_inv.get_all_values()
         header = inv_data[0]
-        
+
+        # Asegurar columnas críticas en Inventario (nube)
+        if "Producto_UID" not in header:
+            ws_inv.update_cell(1, len(header) + 1, "Producto_UID")
+            inv_data = ws_inv.get_all_values()
+            header = inv_data[0]
+
+        if "ID_Producto_Norm" not in header:
+            ws_inv.update_cell(1, len(header) + 1, "ID_Producto_Norm")
+            inv_data = ws_inv.get_all_values()
+            header = inv_data[0]
+
+        idx_id = 0
+        idx_uid = header.index("Producto_UID")
+        idx_norm = header.index("ID_Producto_Norm")
+
         try:
-            idx_id = 0 
-            idx_nombre = next(i for i, c in enumerate(header) if 'Nombre' in c)
-            idx_stock = next(i for i, c in enumerate(header) if 'Stock' in c)
-            idx_costo = next(i for i, c in enumerate(header) if 'Costo' in c)
-            idx_precio = next(i for i, c in enumerate(header) if 'Precio' in c)
+            idx_nombre = next(i for i, c in enumerate(header) if "Nombre" in c)
+            idx_stock = next(i for i, c in enumerate(header) if "Stock" in c)
+            idx_costo = next(i for i, c in enumerate(header) if "Costo" in c)
+            idx_precio = next(i for i, c in enumerate(header) if "Precio" in c)
         except:
             idx_nombre = 1; idx_stock = 2; idx_costo = 3; idx_precio = 4
 
-        mapa_filas = {normalizar_id_producto(r[idx_id]): i+1 for i, r in enumerate(inv_data)}
+        # Construir mapas robustos de filas (NO incluir header)
+        mapa_uid_fila = {}
+        mapa_norm_fila = {}
+        for i, r in enumerate(inv_data[1:], start=2):  # fila real en Sheets
+            uid = str(r[idx_uid]).strip() if idx_uid < len(r) else ""
+            norm = normalizar_id_producto(r[idx_id]) if idx_id < len(r) else ""
+            if uid:
+                mapa_uid_fila[uid] = i
+            if norm:
+                mapa_norm_fila[norm] = i
+
+        # Para leer rápidamente UID por SKU interno
+        norm_to_uid = {}
+        for r in inv_data[1:]:
+            sku = str(r[idx_id]).strip() if idx_id < len(r) else ""
+            uid = str(r[idx_uid]).strip() if idx_uid < len(r) else ""
+            if sku and uid:
+                norm_to_uid[normalizar_id_producto(sku)] = uid
+
+        map_header = ws_map.row_values(1) or []
+        # asegurar columnas en ws_map
+        if "Producto_UID" not in map_header:
+            ws_map.update_cell(1, len(map_header) + 1, "Producto_UID")
+            map_header = ws_map.row_values(1) or map_header
 
         new_mappings = []
         updates = []
         appends = []
         logs = []
-        
+
         total_items_factura = len(df_final)
-        
+
         for index_row, row in df_final.iterrows():
-            sel = row['SKU_Interno_Seleccionado']
-            sku_prov_factura = str(row['SKU_Proveedor'])
-            
-            factor = float(row['Factor_Pack']) if row['Factor_Pack'] > 0 else 1.0
-            cant_recibida_xml = float(row['Cantidad_Recibida'])
-            iva_seleccionado = float(row['IVA_Porcentaje']) 
-            costo_base_xml = float(row['Costo_Base_Unitario'])
-            
-            # Prorratear transporte y descuento equitativamente entre los items para no inflar el unitario
+            sel = row["SKU_Interno_Seleccionado"]
+            sku_prov_factura = str(row["SKU_Proveedor"])
+
+            factor = float(row["Factor_Pack"]) if row["Factor_Pack"] > 0 else 1.0
+            cant_recibida_xml = float(row["Cantidad_Recibida"])
+            iva_seleccionado = float(row["IVA_Porcentaje"])
+            costo_base_xml = float(row["Costo_Base_Unitario"])
+
             prorrateo_transporte = (float(info_pago.get("Transporte", 0.0)) / total_items_factura) if total_items_factura > 0 else 0
             prorrateo_descuento = (float(info_pago.get("Descuento", 0.0)) / total_items_factura) if total_items_factura > 0 else 0
-            
-            costo_base_unitario_real = costo_base_xml + prorrateo_transporte - prorrateo_descuento
-            costo_base_unitario_real = costo_base_unitario_real / factor
-            
+
+            costo_base_unitario_real = (costo_base_xml + prorrateo_transporte - prorrateo_descuento) / factor
             iva_monto_unitario = costo_base_unitario_real * (iva_seleccionado / 100.0)
             costo_neto_final = costo_base_unitario_real + iva_monto_unitario
             cant_total_unidades = cant_recibida_xml * factor
-            
             precio_sugerido_calculado = costo_neto_final / 0.85
             precio_sugerido_redondeado = redondear_centena(precio_sugerido_calculado)
 
-            final_internal_id = ""
-            es_producto_nuevo = False
-            
-            if "NUEVO" in sel:
-                es_producto_nuevo = True
-                if sku_prov_factura and sku_prov_factura != "S/C": final_internal_id = sku_prov_factura
-                else: final_internal_id = f"N-{int(time.time())}-{index_row}"
+            # Resolver SKU interno (humano) y UID (robusto)
+            es_producto_nuevo = "NUEVO" in sel
+            if es_producto_nuevo:
+                final_internal_id = str(row.get("SKU_Proveedor")) if sku_prov_factura and sku_prov_factura != "S/C" else f"N-{int(time.time())}-{index_row}"
+                producto_uid = uuid.uuid4().hex
             else:
                 final_internal_id = sel.split(" | ")[0].strip()
-            
+                producto_uid = norm_to_uid.get(normalizar_id_producto(final_internal_id), "")
+
+            # Guardar/actualizar mapping proveedor->producto (CLAVE COMPUESTA)
             if sku_prov_factura != "S/C":
                 costo_pack = costo_neto_final * factor
-                new_mappings.append([
-                    str(meta_xml['ID_Proveedor']), str(meta_xml['Proveedor']), sku_prov_factura,
-                    final_internal_id, factor, fecha, "", costo_pack, iva_seleccionado 
-                ])
-            
+
+                # Construir row según header real de ws_map
+                row_map = [""] * len(map_header)
+                def _set(col, val):
+                    if col in map_header:
+                        row_map[map_header.index(col)] = val
+
+                _set("ID_Proveedor", str(meta_xml["ID_Proveedor"]))
+                _set("Nombre_Proveedor", str(meta_xml["Proveedor"]))
+                _set("SKU_Proveedor", sku_prov_factura)
+                _set("SKU_Interno", final_internal_id)
+                _set("Producto_UID", producto_uid)
+                _set("Factor_Pack", factor)
+                _set("Ultima_Actualizacion", fecha)
+                _set("Costo_Proveedor", costo_pack)
+                _set("Ultimo_IVA", iva_seleccionado)
+
+                new_mappings.append(row_map)
+
+            # Inventario: append si nuevo, update si existente (por UID si existe; fallback por Norm)
+            sku_norm = normalizar_id_producto(final_internal_id)
+
             if es_producto_nuevo:
                 new_row = [""] * len(header)
-                new_row[0] = final_internal_id 
-                # AQUÍ USAMOS EL NUEVO NOMBRE EDITADO (O LA DESCRIPCIÓN ORIGINAL SI LO DEJARON IGUAL)
-                if idx_nombre < len(new_row): new_row[idx_nombre] = row.get('Nombre_Inventario', row['Descripcion'])
+                if idx_id < len(new_row): new_row[idx_id] = final_internal_id
+                if idx_uid < len(new_row): new_row[idx_uid] = producto_uid
+                if idx_norm < len(new_row): new_row[idx_norm] = sku_norm
+                if idx_nombre < len(new_row): new_row[idx_nombre] = row.get("Nombre_Inventario", row["Descripcion"])
                 if idx_stock < len(new_row): new_row[idx_stock] = sanitizar_para_sheet(cant_total_unidades)
                 if idx_costo < len(new_row): new_row[idx_costo] = sanitizar_para_sheet(costo_neto_final)
                 if idx_precio < len(new_row): new_row[idx_precio] = sanitizar_para_sheet(precio_sugerido_redondeado)
 
-                if 'ID_Producto_Norm' in header:
-                    idx_norm = header.index('ID_Producto_Norm')
-                    new_row[idx_norm] = normalizar_id_producto(final_internal_id)
-
-                if 'Categoria' in header:
-                    idx_cat = header.index('Categoria')
-                    new_row[idx_cat] = row.get('Categoria', 'Sin Categoría')
-                if 'Iva' in header:
-                    idx_iva = header.index('Iva')
-                    new_row[idx_iva] = iva_seleccionado
-
                 appends.append(new_row)
-                logs.append(f"✨ CREADO: {row.get('Nombre_Inventario', row['Descripcion'])} | Precio: ${precio_sugerido_redondeado:,.0f} (IVA {iva_seleccionado}%)")
-                mapa_filas[normalizar_str(final_internal_id)] = len(inv_data) + len(appends)
+                logs.append(f"✨ CREADO: {final_internal_id} | UID {producto_uid[:8]}... | ${precio_sugerido_redondeado:,.0f}")
             else:
-                sku_norm = normalizar_id_producto(final_internal_id)
-                if sku_norm in mapa_filas:
-                    fila = mapa_filas[sku_norm]
-                    row_actual = inv_data[fila-1]
-                    
+                fila = None
+                if producto_uid and producto_uid in mapa_uid_fila:
+                    fila = mapa_uid_fila[producto_uid]
+                elif sku_norm in mapa_norm_fila:
+                    fila = mapa_norm_fila[sku_norm]
+
+                if fila:
+                    row_actual = inv_data[fila - 1]
                     try: stock_curr = clean_currency(row_actual[idx_stock])
                     except: stock_curr = 0.0
                     try: precio_curr = clean_currency(row_actual[idx_precio])
                     except: precio_curr = 0.0
-                    
+
                     new_stock = stock_curr + cant_total_unidades
-                    
-                    updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_stock+1), 'values': [[new_stock]]})
-                    updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_costo+1), 'values': [[costo_neto_final]]})
-                    
+                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_stock+1), "values": [[new_stock]]})
+                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_costo+1), "values": [[costo_neto_final]]})
+
                     if precio_sugerido_redondeado > precio_curr:
-                        updates.append({'range': gspread.utils.rowcol_to_a1(fila, idx_precio+1), 'values': [[precio_sugerido_redondeado]]})
-                        logs.append(f"📈 SUBIÓ PRECIO: {final_internal_id} a ${precio_sugerido_redondeado:,.0f} (Costo subió)")
+                        updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_precio+1), "values": [[precio_sugerido_redondeado]]})
+                        logs.append(f"📈 SUBIÓ PRECIO: {final_internal_id} → ${precio_sugerido_redondeado:,.0f}")
                     else:
                         logs.append(f"📦 STOCK: {final_internal_id} (+{cant_total_unidades}) - Precio mantenido")
 
-        if new_mappings: ws_map.append_rows(new_mappings)
-        if updates: ws_inv.batch_update(updates)
-        if appends: ws_inv.append_rows(appends)
+        if new_mappings:
+            ws_map.append_rows(new_mappings)
+        if updates:
+            ws_inv.batch_update(updates)
+        if appends:
+            ws_inv.append_rows(appends)
 
         ws_hist.append_row([
             timestamp, str(meta_xml['Folio']), str(meta_xml['Proveedor']),

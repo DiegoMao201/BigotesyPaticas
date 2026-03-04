@@ -104,7 +104,11 @@ def cargar_datos_snapshot():
     if not sh: return None
 
     schemas = {
-        "Inventario": ['ID_Producto', 'ID_Producto_Norm', 'SKU_Proveedor', 'Nombre', 'Stock', 'Precio', 'Costo', 'Categoria', 'Iva'],
+        "Inventario": [
+            "Producto_UID",  # <-- NUEVO (robusto)
+            "ID_Producto", "ID_Producto_Norm", "SKU_Proveedor", "Nombre", "Stock",
+            "Precio", "Costo", "Categoria", "Iva"
+        ],
         "Ventas": ['ID_Venta', 'Fecha', 'Cedula_Cliente', 'Nombre_Cliente', 'Tipo_Entrega', 'Direccion_Envio', 'Estado_Envio', 'Metodo_Pago', 'Banco_Destino', 'Total', 'Items', 'Items_Detalle', 'Costo_Total', 'Mascota'],
         "Gastos": ['ID_Gasto', 'Fecha', 'Tipo_Gasto', 'Categoria', 'Descripcion', 'Monto', 'Metodo_Pago', 'Banco_Origen'],
         "Maestro_Proveedores": ['ID_Proveedor', 'Nombre_Proveedor', 'SKU_Interno', 'Factor_Pack', 'Costo_Proveedor', 'Email'],
@@ -126,6 +130,10 @@ def cargar_datos_snapshot():
 
     # Limpieza Inventario
     df_inv = data_store["df_Inventario"]
+    if "Producto_UID" not in df_inv.columns:
+        df_inv["Producto_UID"] = ""
+    df_inv["Producto_UID"] = df_inv["Producto_UID"].fillna("").astype(str).str.strip()
+
     df_inv['Stock'] = pd.to_numeric(df_inv['Stock'], errors='coerce').fillna(0)
     df_inv['Costo'] = df_inv['Costo'].apply(clean_currency)
     df_inv['Precio'] = df_inv['Precio'].apply(clean_currency)
@@ -280,43 +288,71 @@ def calcular_master_df():
 
 # (Las funciones crear_orden_compra y procesar_recepcion se mantienen igual, usando las lógicas del script anterior)
 def crear_orden_compra(proveedor, items_df):
-    data = st.session_state['data_store']
-    ws_ord = data['ws_Historial_Ordenes']
-    detalles = items_df[['ID_Producto', 'Nombre', 'Sugerencia_Cajas', 'Unidades_Pedir', 'Costo_Proveedor']].to_dict('records')
-    total = items_df['Inversion_Est'].sum()
+    data = st.session_state["data_store"]
+    ws_ord = data["ws_Historial_Ordenes"]
+
+    # Guardar UID para recepción 100% confiable
+    cols = ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Nombre", "Sugerencia_Cajas", "Unidades_Pedir", "Costo_Proveedor"]
+    for c in cols:
+        if c not in items_df.columns:
+            items_df[c] = ""
+
+    detalles = items_df[cols].to_dict("records")
+    total = items_df["Inversion_Est"].sum()
     id_orden = f"ORD-{uuid.uuid4().hex[:6].upper()}"
     row = [id_orden, proveedor, str(date.today()), json.dumps(detalles), total, "Pendiente"]
     safe_google_op(ws_ord.append_row, row)
-    new_df_row = pd.DataFrame([row], columns=data['df_Historial_Ordenes'].columns)
-    data['df_Historial_Ordenes'] = pd.concat([data['df_Historial_Ordenes'], new_df_row], ignore_index=True)
-    st.session_state['data_store'] = data
+
+    new_df_row = pd.DataFrame([row], columns=data["df_Historial_Ordenes"].columns)
+    data["df_Historial_Ordenes"] = pd.concat([data["df_Historial_Ordenes"], new_df_row], ignore_index=True)
+    st.session_state["data_store"] = data
     return id_orden
 
 def procesar_recepcion(id_orden, items_json):
-    data = st.session_state['data_store']
-    ws_inv, ws_ord = data['ws_Inventario'], data['ws_Historial_Ordenes']
-    df_inv = data['df_Inventario']
+    data = st.session_state["data_store"]
+    ws_inv, ws_ord = data["ws_Inventario"], data["ws_Historial_Ordenes"]
+    df_inv = data["df_Inventario"]
     items = json.loads(items_json)
-    
+
     progreso = st.progress(0)
+
+    # ubicar columnas en DF local
+    if "Producto_UID" not in df_inv.columns:
+        df_inv["Producto_UID"] = ""
+    df_inv["Producto_UID"] = df_inv["Producto_UID"].fillna("").astype(str).str.strip()
+
     for i, item in enumerate(items):
-        prod_id = str(item['ID_Producto'])
-        cantidad = float(item['Unidades_Pedir'])
-        cell = safe_google_op(ws_inv.find, prod_id)
+        uid = str(item.get("Producto_UID", "")).strip()
+        prod_id = str(item.get("ID_Producto", "")).strip()
+        cantidad = float(item.get("Unidades_Pedir", 0) or 0)
+
+        cell = None
+        if uid:
+            cell = safe_google_op(ws_inv.find, uid)
+        if (cell is None) and prod_id:
+            cell = safe_google_op(ws_inv.find, prod_id)
+
         if cell:
-            col_stock = df_inv.columns.get_loc("Stock") + 1 
+            col_stock = df_inv.columns.get_loc("Stock") + 1
             current = float(safe_google_op(ws_inv.cell, cell.row, col_stock).value or 0)
             safe_google_op(ws_inv.update_cell, cell.row, col_stock, current + cantidad)
-            idx = df_inv[df_inv['ID_Producto'] == prod_id].index
-            if not idx.empty: df_inv.at[idx[0], 'Stock'] += cantidad
+
+            # Update local por UID preferido
+            if uid:
+                idx = df_inv[df_inv["Producto_UID"] == uid].index
+            else:
+                idx = df_inv[df_inv["ID_Producto"] == prod_id].index
+            if not idx.empty:
+                df_inv.at[idx[0], "Stock"] = float(df_inv.at[idx[0], "Stock"] or 0) + cantidad
+
         progreso.progress((i + 1) / len(items))
 
     cell_ord = safe_google_op(ws_ord.find, id_orden)
     if cell_ord:
-        col_est = data['df_Historial_Ordenes'].columns.get_loc("Estado") + 1
+        col_est = data["df_Historial_Ordenes"].columns.get_loc("Estado") + 1
         safe_google_op(ws_ord.update_cell, cell_ord.row, col_est, "Recibido")
-        idx_ord = data['df_Historial_Ordenes'][data['df_Historial_Ordenes']['ID_Orden'] == id_orden].index
-        if not idx_ord.empty: data['df_Historial_Ordenes'].at[idx_ord[0], 'Estado'] = "Recibido"
+        idx_ord = data["df_Historial_Ordenes"][data["df_Historial_Ordenes"]["ID_Orden"] == id_orden].index
+        if not idx_ord.empty: data["df_Historial_Ordenes"].at[idx_ord[0], "Estado"] = "Recibido"
 
     st.success("Ingresado con éxito al Sistema de Inventario.")
     time.sleep(1)
