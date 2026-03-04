@@ -36,6 +36,17 @@ def _find_col(df, candidates):
                 return orig
     return None
 
+def _ensure_cols(df: pd.DataFrame, defaults: dict) -> pd.DataFrame:
+    """
+    Asegura que el DataFrame tenga todas las columnas de defaults.
+    Si falta alguna, la agrega con el valor por defecto.
+    """
+    df = df.copy() if df is not None else pd.DataFrame()
+    for c, v in defaults.items():
+        if c not in df.columns:
+            df[c] = v
+    return df
+
 # ==========================================
 # 0. CONFIGURACIÓN E INICIALIZACIÓN
 # ==========================================
