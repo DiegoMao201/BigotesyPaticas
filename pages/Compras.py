@@ -110,7 +110,6 @@ def redondear_centena(valor):
 # 3. CONEXIÓN A GOOGLE SHEETS
 # ==========================================
 
-# ...existing code...
 def _ensure_headers(ws, required_cols: list[str]) -> list[str]:
     """
     Asegura que existan columnas en la fila 1 (headers) de una worksheet.
@@ -128,77 +127,51 @@ def _ensure_headers(ws, required_cols: list[str]) -> list[str]:
 
     return ws.row_values(1) if changed else headers
 
+@st.cache_resource(ttl=600)
+def conectar_sheets():
+    try:
+        if "google_service_account" not in st.secrets:
+            st.error("❌ Falta configuración en secrets.toml")
+            st.stop()
 
-# ✅ NUEVO: helper requerido por procesar_guardado (NO INDENTAR)
-def _build_inv_indexes(ws_inv):
-    """
-    Índices para Inventario (Sheets) usados por compras XML/manual.
-    Retorna:
-      headers,
-      idx_uid, idx_id, idx_norm, idx_stock, idx_costo, idx_precio, idx_nombre,
-      uid_to_row, norm_to_row, norm_to_uid
-    """
-    headers = _ensure_headers(
-        ws_inv,
-        ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Nombre", "Stock", "Costo", "Precio"],
-    )
+        gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
+        sh = gc.open_by_url(st.secrets["SHEET_URL"])
 
-    data = ws_inv.get_all_values() or []
-    if not data:
-        headers = headers or ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Nombre", "Stock", "Costo", "Precio"]
-        idx_uid = headers.index("Producto_UID")
-        idx_id = headers.index("ID_Producto")
-        idx_norm = headers.index("ID_Producto_Norm")
-        idx_nombre = headers.index("Nombre")
-        idx_stock = headers.index("Stock")
-        idx_costo = headers.index("Costo")
-        idx_precio = headers.index("Precio")
-        return (headers, idx_uid, idx_id, idx_norm, idx_stock, idx_costo, idx_precio, idx_nombre, {}, {}, {})
+        try:
+            ws_inv = sh.worksheet("Inventario")
+        except:
+            st.error("Falta hoja 'Inventario'")
+            st.stop()
 
-    headers = data[0]
+        # ✅ ya no falla: helper existe
+        _ensure_headers(ws_inv, ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Stock", "Costo", "Precio", "Nombre"])
 
-    # Asegurar que las columnas existan también en el header real
-    if "Producto_UID" not in headers or "ID_Producto" not in headers or "ID_Producto_Norm" not in headers:
-        headers = _ensure_headers(
-            ws_inv,
-            ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Nombre", "Stock", "Costo", "Precio"],
-        )
-        data = ws_inv.get_all_values() or []
-        headers = data[0] if data else headers
+        try: ws_map = sh.worksheet("Maestro_Proveedores")
+        except:
+            ws_map = sh.add_worksheet("Maestro_Proveedores", 1000, 10)
+            ws_map.append_row([
+                "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor",
+                "SKU_Interno", "Producto_UID", "Factor_Pack",
+                "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Ultimo_IVA"
+            ])
 
-    idx_uid = headers.index("Producto_UID")
-    idx_id = headers.index("ID_Producto")
-    idx_norm = headers.index("ID_Producto_Norm")
-    idx_nombre = headers.index("Nombre") if "Nombre" in headers else None
-    idx_stock = headers.index("Stock") if "Stock" in headers else None
-    idx_costo = headers.index("Costo") if "Costo" in headers else None
-    idx_precio = headers.index("Precio") if "Precio" in headers else None
+        # Asegurar headers mínimos Maestro_Proveedores (por si ya existe vieja)
+        _ensure_headers(ws_map, ["Producto_UID", "SKU_Interno", "Factor_Pack", "Ultimo_IVA", "Costo_Proveedor"])
 
-    uid_to_row = {}
-    norm_to_row = {}
-    norm_to_uid = {}
+        try: ws_hist = sh.worksheet("Historial_Recepciones")
+        except:
+            ws_hist = sh.add_worksheet("Historial_Recepciones", 1000, 7)
+            ws_hist.append_row(["Fecha", "Folio", "Proveedor", "Items", "Total", "Usuario", "Estado"])
+        
+        try: ws_gas = sh.worksheet("Gastos")
+        except:
+            ws_gas = sh.add_worksheet("Gastos", 1000, 8)
+            ws_gas.append_row(["ID_Gasto","Fecha","Tipo_Gasto","Categoria","Descripcion","Monto","Metodo_Pago","Banco_Origen"])
 
-    for sheet_row, r in enumerate(data[1:], start=2):
-        uid = str(r[idx_uid]).strip() if idx_uid < len(r) else ""
-        pid = str(r[idx_id]).strip() if idx_id < len(r) else ""
-        norm = str(r[idx_norm]).strip() if idx_norm < len(r) else ""
-
-        if not norm and pid:
-            norm = normalizar_id_producto(pid)
-
-        if uid:
-            uid_to_row[uid] = sheet_row
-        if norm:
-            norm_to_row[norm] = sheet_row
-        if uid and norm:
-            norm_to_uid[norm] = uid
-
-    return (
-        headers,
-        idx_uid, idx_id, idx_norm, idx_stock, idx_costo, idx_precio, idx_nombre,
-        uid_to_row, norm_to_row, norm_to_uid
-    )
-# ...existing code...
+        return sh, ws_inv, ws_map, ws_hist, ws_gas
+    except Exception as e:
+        st.error(f"Error Conexión Sheets: {e}")
+        st.stop()
 
 # ==========================================
 # 4. CEREBRO Y MEMORIA
