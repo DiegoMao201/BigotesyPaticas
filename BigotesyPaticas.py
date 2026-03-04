@@ -294,6 +294,60 @@ def asegurar_ids_inventario_nube():
 # 4. FUNCIONES DE ESCRITURA (OPTIMIZADAS)
 # ==========================================
 
+# ...existing code...
+
+def _to_float(x, default=0.0):
+    try:
+        if x is None:
+            return default
+        s = str(x).strip()
+        if s == "":
+            return default
+        return float(s.replace(",", ""))
+    except Exception:
+        return default
+
+def _build_inventory_index(ws_inv):
+    """
+    Index seguro del Inventario (nube) para descontar stock sin ws.find().
+    Retorna: headers, rows, col_stock, col_uid, col_norm, uid_to_row, norm_to_row
+    """
+    headers = safe_api_call(ws_inv.row_values, 1) or []
+
+    # Asegurar columnas críticas
+    if "Producto_UID" not in headers or "ID_Producto_Norm" not in headers:
+        headers = _ensure_sheet_columns(ws_inv, ["Producto_UID", "ID_Producto_Norm"])
+
+    all_vals = safe_api_call(ws_inv.get_all_values) or []
+    if not all_vals:
+        return [], [], None, None, None, {}, {}
+
+    headers = all_vals[0]
+    rows = all_vals[1:]
+
+    if "Stock" not in headers:
+        raise ValueError("Inventario nube no tiene columna 'Stock'.")
+
+    col_stock = headers.index("Stock")
+    col_uid = headers.index("Producto_UID") if "Producto_UID" in headers else None
+    col_norm = headers.index("ID_Producto_Norm") if "ID_Producto_Norm" in headers else None
+
+    uid_to_row = {}
+    norm_to_row = {}
+
+    for sheet_row, r in enumerate(rows, start=2):
+        if col_uid is not None and col_uid < len(r):
+            uid = str(r[col_uid]).strip()
+            if uid:
+                uid_to_row[uid] = sheet_row
+        if col_norm is not None and col_norm < len(r):
+            norm = str(r[col_norm]).strip()
+            if norm:
+                norm_to_row[norm] = sheet_row
+
+    return headers, rows, col_stock, col_uid, col_norm, uid_to_row, norm_to_row
+
+# ...existing code...
 def registrar_venta(fila_datos, carrito):
     """Escribe venta y descuenta stock de forma confiable por Producto_UID."""
     sh = conectar_google_sheets()
