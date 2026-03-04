@@ -289,14 +289,8 @@ def calcular_master_df() -> pd.DataFrame:
 
     # 5. VENTAS / ROTACIÓN
     stats = analizar_ventas(df_ven, master)
-
-    master["v90"] = master["ID_Producto_Norm"].map(
-        lambda x: stats.get(x, {}).get("v90", 0.0)
-    ).fillna(0.0)
-    master["v30"] = master["ID_Producto_Norm"].map(
-        lambda x: stats.get(x, {}).get("v30", 0.0)
-    ).fillna(0.0)
-    
+    master["v90"] = master["ID_Producto_Norm"].map(lambda x: stats.get(x, {}).get("v90", 0.0)).fillna(0.0)
+    master["v30"] = master["ID_Producto_Norm"].map(lambda x: stats.get(x, {}).get("v30", 0.0)).fillna(0.0)
     master["v90"] = pd.to_numeric(master["v90"], errors="coerce").fillna(0.0)
     master["v30"] = pd.to_numeric(master["v30"], errors="coerce").fillna(0.0)
 
@@ -308,11 +302,10 @@ def calcular_master_df() -> pd.DataFrame:
     )
 
     # 7. VELOCIDAD DIARIA
-    vel_30    = master["v30"] / 30.0
-    vel_90    = master["v90"] / 90.0
+    vel_30 = master["v30"] / 30.0
+    vel_90 = master["v90"] / 90.0
     vel_blend = (0.65 * vel_90) + (0.35 * vel_30)
-    conf      = np.clip(master["v90"] / 6.0, 0.0, 1.0)
-
+    conf = np.clip(master["v90"] / 6.0, 0.0, 1.0)
     master["Velocidad_Diaria"] = np.where(
         master["Modo_Demanda"] == "ROTACION",
         pd.Series(vel_blend * conf, index=master.index).fillna(0.0),
@@ -320,26 +313,17 @@ def calcular_master_df() -> pd.DataFrame:
     )
     master["Velocidad_Diaria"] = pd.to_numeric(master["Velocidad_Diaria"], errors="coerce").fillna(0.0)
 
-    master["Dias_Cobertura"] = np.where(
-        master["Velocidad_Diaria"] > 0,
-        master["Stock"] / master["Velocidad_Diaria"],
-        999.0,
-    )
-
     # 8. SUGERENCIA DE COMPRA
-    DIAS_OBJETIVO   = 8
-    DIAS_SEGURIDAD  = 1
-    LEAD_TIME_DIAS  = 5
+    DIAS_OBJETIVO = 8
+    DIAS_SEGURIDAD = 1
+    LEAD_TIME_DIAS = 5
 
     master["Min_Unidades"] = np.where(master["v90"] > 0, 1.0, 0.0)
-
-    stock_seg     = master["Velocidad_Diaria"] * DIAS_SEGURIDAD
+    stock_seg = master["Velocidad_Diaria"] * DIAS_SEGURIDAD
     punto_reorden = (master["Velocidad_Diaria"] * LEAD_TIME_DIAS) + stock_seg
-    stock_obj     = (master["Velocidad_Diaria"] * DIAS_OBJETIVO)  + stock_seg
+    stock_obj = (master["Velocidad_Diaria"] * DIAS_OBJETIVO) + stock_seg
 
-    master["Factor_Pack_Efectivo"] = np.where(
-        master["Modo_Demanda"] == "ARRANQUE", 1.0, master["Factor_Pack"]
-    )
+    master["Factor_Pack_Efectivo"] = np.where(master["Modo_Demanda"] == "ARRANQUE", 1.0, master["Factor_Pack"])
 
     req_rot = (
         (master["Modo_Demanda"] == "ROTACION") &
@@ -365,14 +349,20 @@ def calcular_master_df() -> pd.DataFrame:
     master["Unidades_Pedir"] = master["Sugerencia_Cajas"] * master["Factor_Pack_Efectivo"]
     master["Inversion_Est"] = master["Unidades_Pedir"] * master["Costo_Efectivo"]
 
-    # 9. MARGEN
-    precio_s = pd.Series(master["Precio"].values, index=master.index).fillna(0.0)
-    costo_s  = pd.Series(master["Costo"].values,  index=master.index).fillna(0.0)
-    margen_abs = precio_s - costo_s
-    margen_pct = np.where(precio_s > 0, margen_abs / precio_s, 0.0)
-
-    master["Margen_$"] = pd.Series(margen_abs.values, index=master.index).fillna(0.0)
-    master["Margen_%"] = pd.Series(margen_pct,        index=master.index).fillna(0.0)
+    # 9. Motivo de sugerencia
+    master["Motivo_Sugerencia"] = np.where(
+        master["Modo_Demanda"] == "SIN_VENTAS",
+        "No hay ventas en 90 días",
+        np.where(
+            master["Modo_Demanda"] == "ARRANQUE",
+            "Venta aislada: solo 1 unidad sugerida",
+            np.where(
+                master["Requiere_Compra"],
+                "Rotación detectada: sugerencia para 8 días",
+                "Stock suficiente para 8 días"
+            )
+        )
+    )
 
     # 10. ABC
     master["Valor_Ventas_90d"] = master["v90"] * master["Precio"]
@@ -654,20 +644,18 @@ def main():
 
         if df_buy.empty:
             st.success("🎉 ¡Niveles óptimos! No se sugieren compras ahora.")
+            # ✅ Mostrar motivos para los productos que no sugieren compra
+            df_no_buy = master_df[master_df["Unidades_Pedir"] == 0].copy()
+            if not df_no_buy.empty:
+                st.markdown("#### Motivo por el que no se sugiere compra:")
+                st.dataframe(df_no_buy[["Nombre", "Stock", "Modo_Demanda", "Motivo_Sugerencia"]], hide_index=True)
         else:
-            df_buy["Confirmar"] = True
-            df_buy = df_buy.sort_values(["Clase_ABC", "Nombre_Proveedor"])
-
-            edited_buy = st.data_editor(
+            # ...existing code...
+            st.dataframe(
                 df_buy[[
                     "Confirmar", "Nombre_Proveedor", "Clase_ABC", "Nombre",
-                    "Stock", "Sugerencia_Cajas", "Factor_Pack", "Inversion_Est",
+                    "Stock", "Sugerencia_Cajas", "Factor_Pack", "Inversion_Est", "Motivo_Sugerencia"
                 ]],
-                column_config={
-                    "Inversion_Est":    st.column_config.NumberColumn("Inversión $",      format="$%.0f", disabled=True),
-                    "Sugerencia_Cajas": st.column_config.NumberColumn("📦 Cajas a Pedir", step=1),
-                    "Stock":            st.column_config.NumberColumn("Stock Actual",      format="%.0f",  disabled=True),
-                },
                 use_container_width=True, hide_index=True,
             )
 
