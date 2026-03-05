@@ -17,6 +17,55 @@ except Exception:
         return str(x or "").strip().upper()
 
 # ==========================================
+# 3. FUNCIONES DE ACTUALIZACIÓN DE MAPEO PROVEEDORES
+# ==========================================
+
+def _upsert_maestro_proveedores(ws_map, meta_xml, sku_prov, sku_interno, producto_uid, factor, costo_prov, iva_pct):
+    """
+    Inserta o actualiza la relación entre SKU_Proveedor, SKU_Interno y Producto_UID en Maestro_Proveedores.
+    Si ya existe la fila (por SKU_Proveedor y SKU_Interno), actualiza los datos; si no, inserta una nueva.
+    """
+    try:
+        headers = _ensure_headers(ws_map, [
+            "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Producto_UID",
+            "Factor_Pack", "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Ultimo_IVA"
+        ])
+        recs = ws_map.get_all_records()
+        df = pd.DataFrame(recs)
+        # Normalizar columnas clave
+        for col in ["SKU_Proveedor", "SKU_Interno", "Producto_UID"]:
+            if col not in df.columns:
+                df[col] = ""
+        # Buscar si ya existe la fila
+        mask = (
+            (df["SKU_Proveedor"].astype(str).str.strip().str.upper() == str(sku_prov).strip().upper()) &
+            (df["SKU_Interno"].astype(str).str.strip().str.upper() == str(sku_interno).strip().upper())
+        )
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        id_prov = meta_xml.get("ID_Proveedor", "") if meta_xml else ""
+        nombre_prov = meta_xml.get("Nombre_Proveedor", "") if meta_xml else ""
+        email = meta_xml.get("Email_Proveedor", "") if meta_xml else ""
+        row_data = [
+            id_prov,
+            nombre_prov,
+            sku_prov,
+            sku_interno,
+            producto_uid,
+            factor,
+            now,
+            email,
+            costo_prov,
+            iva_pct
+        ]
+        if mask.any():
+            # Actualizar fila existente
+            idx = mask[mask].index[0]
+            ws_map.update(f'A{idx+2}:J{idx+2}', [row_data])
+        else:
+            # Insertar nueva fila
+            ws_map.append_row(row_data)
+    except Exception as e:
+        st.warning(f"Error actualizando Maestro_Proveedores: {e}")
 # 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME)
 # ==========================================
 
