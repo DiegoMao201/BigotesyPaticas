@@ -830,40 +830,39 @@ def main():
             iva_val = 0
             factor_val = 1.0
 
-            # --- Búsqueda robusta: 1) NIT+SKU, 2) solo SKU, 3) por nombre ---
             memoria = st.session_state.memoria_cache
             lst_prods = st.session_state.lst_prods_cache
             encontrado = False
 
-            # 1. Buscar por NIT+SKU
-            if clave_memoria in memoria:
-                recuerdo = memoria[clave_memoria]
-                sku_interno_recordado = recuerdo.get('SKU_Interno', "")
-                match = next((p for p in lst_prods if p.startswith(sku_interno_recordado + " |")), None)
-                if match:
-                    prod_interno_val = match
-                    iva_val = recuerdo.get('IVA_Aprendido', 0)
-                    factor_val = recuerdo.get('Factor', 1.0)
-                    encontrado = True
-
-            # 2. Si no se encontró, buscar por solo SKU_Proveedor (sin NIT)
-            if not encontrado and sku_prov_norm != "S/C":
-                posibles = [k for k in memoria.keys() if k.endswith(f"_{sku_prov_norm}")]
-                if posibles:
-                    recuerdo = memoria[posibles[0]]
+            # 1. Buscar por NIT+SKU ignorando espacios/mayúsculas
+            for k, recuerdo in memoria.items():
+                if k == clave_memoria:
                     sku_interno_recordado = recuerdo.get('SKU_Interno', "")
-                    match = next((p for p in lst_prods if p.startswith(sku_interno_recordado + " |")), None)
+                    match = next((p for p in lst_prods if normalizar_str(p.split(" | ",1)[0]) == normalizar_str(sku_interno_recordado)), None)
                     if match:
                         prod_interno_val = match
                         iva_val = recuerdo.get('IVA_Aprendido', 0)
                         factor_val = recuerdo.get('Factor', 1.0)
                         encontrado = True
+                        break
+
+            # 2. Si no se encontró, buscar por solo SKU_Proveedor (sin NIT)
+            if not encontrado and sku_prov_norm != "S/C":
+                for k, recuerdo in memoria.items():
+                    if k.endswith(f"_{sku_prov_norm}"):
+                        sku_interno_recordado = recuerdo.get('SKU_Interno', "")
+                        match = next((p for p in lst_prods if normalizar_str(p.split(" | ",1)[0]) == normalizar_str(sku_interno_recordado)), None)
+                        if match:
+                            prod_interno_val = match
+                            iva_val = recuerdo.get('IVA_Aprendido', 0)
+                            factor_val = recuerdo.get('Factor', 1.0)
+                            encontrado = True
+                            break
 
             # 3. Si aún no, buscar por nombre normalizado en inventario
             if not encontrado:
                 nombre_item = normalizar_str(item.get('Descripcion', ''))
                 for p in lst_prods:
-                    # p = "SKU | Nombre"
                     partes = p.split(" | ", 1)
                     if len(partes) > 1 and normalizar_str(partes[1]) == nombre_item:
                         prod_interno_val = p
