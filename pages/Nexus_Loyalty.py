@@ -733,8 +733,9 @@ def main():
     if "data_store" in st.session_state:
         df_inv = st.session_state["data_store"].get("df_Inventario", pd.DataFrame())
     if df_inv is not None and not df_inv.empty:
-        # Mapeo: UID, ID normalizado y ID a categoría
+        # Mapeo: UID, ID normalizado, ID original y nombre normalizado a categoría
         prod_to_cat = {}
+        nombres_concentrado = set()
         for _, row in df_inv.iterrows():
             cat = str(row.get("Categoria", "")).strip().upper()
             if not cat:
@@ -748,12 +749,16 @@ def main():
             # ID original
             if "ID_Producto" in row and str(row["ID_Producto"]).strip():
                 prod_to_cat[str(row["ID_Producto"]).strip().upper()] = cat
+            # Nombre normalizado (solo para concentrados)
+            if cat == "CONCENTRADO" and "Nombre" in row and str(row["Nombre"]).strip():
+                nombres_concentrado.add(_norm_col(row["Nombre"]))
     else:
         prod_to_cat = {}
+        nombres_concentrado = set()
 
     def es_concentrado(prod):
-        """Dado un string de producto vendido, busca si su UID, ID normalizado o ID está en el inventario y es CONCENTRADO."""
-        if not prod or not prod_to_cat:
+        """Detecta si el producto vendido es de la categoría CONCENTRADO por UID, ID, o coincidencia parcial de nombre."""
+        if not prod or (not prod_to_cat and not nombres_concentrado):
             return False
         # Probar como UID (lower)
         key_uid = str(prod).strip().lower()
@@ -767,6 +772,10 @@ def main():
         key_id = str(prod).strip().upper()
         if key_id in prod_to_cat and prod_to_cat[key_id] == "CONCENTRADO":
             return True
+        # Coincidencia parcial por nombre normalizado
+        for nombre_norm in nombres_concentrado:
+            if nombre_norm in key_norm or key_norm in nombre_norm:
+                return True
         return False
 
     if master.empty:
