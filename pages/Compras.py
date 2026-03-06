@@ -818,35 +818,57 @@ def main():
         df_revision_data = []
 
         for item in st.session_state.invoice_items:
-            # ✅ FIX: definir qty SIEMPRE (manual + XML)
             qty = float(item.get("Cantidad", 1) or 1)
 
-            # 1. Armar la clave de memoria idéntica a como se guarda: NIT_SKU
             nit_prov_norm = normalizar_str(meta['ID_Proveedor'])
             sku_prov_norm = normalizar_str(item.get('SKU_Proveedor', 'S/C'))
             clave_memoria = f"{nit_prov_norm}_{sku_prov_norm}"
 
-            # 2. Valores por defecto
             prod_interno_val = "NUEVO (Crear Producto)"
             iva_val = 0
             factor_val = 1.0
 
-            # 3. Buscar en el cerebro si ya lo conocemos
-            if clave_memoria in st.session_state.memoria_cache:
-                recuerdo = st.session_state.memoria_cache[clave_memoria]
-                sku_interno_recordado = recuerdo.get('SKU_Interno', "")
+            # --- Búsqueda robusta: 1) NIT+SKU, 2) solo SKU, 3) por nombre ---
+            memoria = st.session_state.memoria_cache
+            lst_prods = st.session_state.lst_prods_cache
+            encontrado = False
 
-                match = next((p for p in st.session_state.lst_prods_cache if p.startswith(sku_interno_recordado + " |")), None)
+            # 1. Buscar por NIT+SKU
+            if clave_memoria in memoria:
+                recuerdo = memoria[clave_memoria]
+                sku_interno_recordado = recuerdo.get('SKU_Interno', "")
+                match = next((p for p in lst_prods if p.startswith(sku_interno_recordado + " |")), None)
                 if match:
                     prod_interno_val = match
+                    iva_val = recuerdo.get('IVA_Aprendido', 0)
+                    factor_val = recuerdo.get('Factor', 1.0)
+                    encontrado = True
 
-                iva_val = recuerdo.get('IVA_Aprendido', 0)
-                factor_val = recuerdo.get('Factor', 1.0)
+            # 2. Si no se encontró, buscar por solo SKU_Proveedor (sin NIT)
+            if not encontrado and sku_prov_norm != "S/C":
+                posibles = [k for k in memoria.keys() if k.endswith(f"_{sku_prov_norm}")]
+                if posibles:
+                    recuerdo = memoria[posibles[0]]
+                    sku_interno_recordado = recuerdo.get('SKU_Interno', "")
+                    match = next((p for p in lst_prods if p.startswith(sku_interno_recordado + " |")), None)
+                    if match:
+                        prod_interno_val = match
+                        iva_val = recuerdo.get('IVA_Aprendido', 0)
+                        factor_val = recuerdo.get('Factor', 1.0)
+                        encontrado = True
 
-            # ✅ costo base unitario siempre existe en items_std / XML
+            # 3. Si aún no, buscar por nombre normalizado en inventario
+            if not encontrado:
+                nombre_item = normalizar_str(item.get('Descripcion', ''))
+                for p in lst_prods:
+                    # p = "SKU | Nombre"
+                    partes = p.split(" | ", 1)
+                    if len(partes) > 1 and normalizar_str(partes[1]) == nombre_item:
+                        prod_interno_val = p
+                        encontrado = True
+                        break
+
             base_unit = float(item.get("Costo_Base_Unitario", 0.0) or 0.0)
-
-            # (tu cálculo de precio sugerido con IVA + margen 20% puede quedarse aquí)
             factor_val = float(factor_val or 1.0)
             if factor_val <= 0:
                 factor_val = 1.0
@@ -856,12 +878,11 @@ def main():
             costo_neto_unit_est = costo_base_unit_est * (1.0 + (iva_val / 100.0))
             precio_sug_est = redondear_centena(precio_con_margen(costo_neto_unit_est, MARGEN_BRUTO_OBJ))
 
-            # 4. Construir la fila
             df_revision_data.append({
                 "SKU_Proveedor": item.get('SKU_Proveedor', 'S/C'),
                 "Descripcion": item.get('Descripcion', ''),
                 "Nombre_Inventario": item.get('Descripcion', ''),
-                "Cantidad": _fmt_qty(qty),  # ✅ evita 1.0 y elimina el uso de qty sin definir
+                "Cantidad": _fmt_qty(qty),
                 "Costo_Base_Unitario": base_unit,
                 "📌 Producto_Interno": prod_interno_val,
                 "IVA_%": int(iva_val) if float(iva_val).is_integer() else iva_val,
