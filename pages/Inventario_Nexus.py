@@ -301,8 +301,20 @@ def calcular_master_df() -> pd.DataFrame:
 
     # 5. VENTAS / ROTACIÓN
     stats = analizar_ventas(df_ven, master)
-    master["v90"] = master["ID_Producto_Norm"].map(lambda x: stats.get(x, {}).get("v90", 0.0)).fillna(0.0)
-    master["v30"] = master["ID_Producto_Norm"].map(lambda x: stats.get(x, {}).get("v30", 0.0)).fillna(0.0)
+    def buscar_ventas(row, key):
+        posibles = set()
+        if "Producto_UID" in row and str(row["Producto_UID"]).strip():
+            posibles.add(str(row["Producto_UID"]).strip())
+        if "ID_Producto_Norm" in row and str(row["ID_Producto_Norm"]).strip():
+            posibles.add(str(row["ID_Producto_Norm"]).strip())
+        if "ID_Producto" in row and str(row["ID_Producto"]).strip():
+            posibles.add(normalizar_id_producto(row["ID_Producto"]))
+        for k in posibles:
+            if k in stats and key in stats[k]:
+                return stats[k][key]
+        return 0.0
+    master["v90"] = master.apply(lambda row: buscar_ventas(row, "v90"), axis=1)
+    master["v30"] = master.apply(lambda row: buscar_ventas(row, "v30"), axis=1)
     master["v90"] = pd.to_numeric(master["v90"], errors="coerce").fillna(0.0)
     master["v30"] = pd.to_numeric(master["v30"], errors="coerce").fillna(0.0)
 
