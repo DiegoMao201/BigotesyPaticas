@@ -888,13 +888,13 @@ def main():
             st.dataframe(df_angela[[c for c in cols_angela if c in df_angela.columns]], use_container_width=True)
 
         st.markdown("##### 💌 Enviar Saludo:")
+        gancho = "Envío Gratis + una Sorpresa 🎁"  # Valor por defecto para evitar UnboundLocalError
         for idx, row in df_angela.iterrows():
             nom = row.get('Nombre', 'Vecino')
             mascota = row.get('Mascota', 'tu mascota')
             tel = row.get('Telefono', '')
-            
+            # Si quieres permitir personalización, podrías leer gancho de un input aquí
             msg_serv = f"¡Hola {nom}! 🌈 Hace tiempo no vemos la colita feliz de {mascota} y los extrañamos mucho en Bigotes y Patitas 🥺🐾. Soy Ángela 👋. Solo pasaba a saludarte y recordarte que aquí seguimos con el corazón abierto. ❤️ ¿Cómo han estado? ¡Nos encantaría saber de ustedes! {gancho if gancho else ''} ✨🚚"
-            
             link = link_whatsapp(tel, msg_serv)
             if link:
                 st.write(f"💕 **{nom} & {mascota}**: [Enviar Saludo]({link})")
