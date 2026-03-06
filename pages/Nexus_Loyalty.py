@@ -633,8 +633,20 @@ def link_whatsapp(telefono, mensaje):
 # ==========================================
 
 # =============================
-# FUNCIONES DE MENSAJES PROACTIVOS
+# UTILIDADES Y MENSAJES PROACTIVOS
 # =============================
+def _extraer_producto_bonito(ultimo_producto: str) -> str:
+    """
+    Limpia y deja bonito el nombre del producto para mensajes.
+    """
+    if not ultimo_producto:
+        return "su producto favorito"
+    prod = str(ultimo_producto).strip()
+    for sep in ["-", "(", ")", "/", "[", "]"]:
+        prod = prod.replace(sep, " ")
+    prod = " ".join(prod.split())
+    return prod.title()
+
 def msg_cumple_5pct(nombre: str, mascota: str, estado: str) -> str:
     """
     Mensaje de cumpleaños con incentivo de recompra (5% de descuento).
