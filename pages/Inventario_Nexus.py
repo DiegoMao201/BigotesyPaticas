@@ -518,31 +518,30 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
 
         def _sumar_items(df_sub):
             totales = {}
-            for items_str in df_sub[col_items].fillna("").astype(str):
+            # Detectar si existe Items_Detalle y usarlo si tiene datos
+            col_items_detalle = _find_col(df_sub, ["Items_Detalle"])
+            col_items = _find_col(df_sub, ["Items", "Productos"])
+            for idx, row in df_sub.iterrows():
                 try:
                     items = []
-                    # Si es lista JSON
-                    if items_str.strip().startswith("["):
-                        items = json.loads(items_str)
-                    # Si es string legacy: "IDx:2,IDy:1"
-                    elif ":" in items_str and "," in items_str:
+                    # Usar Items_Detalle si existe y tiene datos
+                    if col_items_detalle and isinstance(row[col_items_detalle], str) and row[col_items_detalle].strip().startswith("["):
+                        items = json.loads(row[col_items_detalle])
+                    # Si no, intentar parsear Items
+                    elif col_items and isinstance(row[col_items], str):
+                        items_str = row[col_items]
+                        # String tipo '1.0x Nombre, 2.0x Otro'
                         for part in items_str.split(","):
-                            if ":" in part:
-                                id_part, qty_part = part.split(":", 1)
-                                items.append({"ID": id_part.strip(), "Cantidad": float(qty_part.strip() or 1)})
-                    # Si es formato 'NOMBRE (xCANTIDAD)'
-                    elif items_str.strip().endswith(")") and "(x" in items_str:
-                        # Ejemplo: 'EXCELLENT STERILIZED CAT X 1 Kg (x1)'
-                        try:
-                            nombre, cantidad = items_str.rsplit("(x", 1)
-                            nombre = nombre.strip().replace("(", "").replace(")", "")
-                            cantidad = float(cantidad.replace(")", "").strip())
-                            items.append({"NOMBRE": nombre, "Cantidad": cantidad})
-                        except Exception:
-                            items.append({"NOMBRE": items_str.strip(), "Cantidad": 1})
-                    # Si es solo un ID o nombre
-                    elif items_str.strip():
-                        items.append({"ID": items_str.strip(), "Cantidad": 1})
+                            part = part.strip()
+                            if "x " in part:
+                                try:
+                                    cantidad, nombre = part.split("x ", 1)
+                                    cantidad = float(cantidad.strip().replace("x", ""))
+                                    items.append({"NOMBRE": nombre.strip(), "Cantidad": cantidad})
+                                except Exception:
+                                    items.append({"NOMBRE": part.strip(), "Cantidad": 1})
+                            elif part:
+                                items.append({"NOMBRE": part.strip(), "Cantidad": 1})
                     for it in items:
                         if not isinstance(it, dict):
                             continue
@@ -561,7 +560,7 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
                             posibles.add(normalizar_id_producto(it["ID"]).lower())
                         # Por nombre (nuevo)
                         if "NOMBRE" in it and str(it["NOMBRE"]).strip():
-                            posibles.add(str(it["NOMBRE"]).strip().lower())
+                            posibles.add(_norm_col(it["NOMBRE"]))
                         qty = 1.0
                         # Buscar campo de cantidad flexible
                         for qk in ["Cantidad", "cantidad", "qty", "unidades", "cant"]:
