@@ -325,6 +325,7 @@ def calcular_master_df() -> pd.DataFrame:
 
     master["Factor_Pack_Efectivo"] = np.where(master["Modo_Demanda"] == "ARRANQUE", 1.0, master["Factor_Pack"])
 
+
     req_rot = (
         (master["Modo_Demanda"] == "ROTACION") &
         (master["Velocidad_Diaria"] > 0) &
@@ -334,8 +335,9 @@ def calcular_master_df() -> pd.DataFrame:
         (master["Modo_Demanda"] == "ARRANQUE") &
         (master["Stock"] < master["Min_Unidades"])
     )
+    req_sin_stock = (master["v90"] > 0) & (master["Stock"] <= 0)
 
-    master["Requiere_Compra"] = req_rot | req_arr
+    master["Requiere_Compra"] = req_rot | req_arr | req_sin_stock
 
     faltante_rot = np.maximum(0.0, np.maximum(stock_obj, master["Min_Unidades"]) - master["Stock"])
     faltante_arr = np.maximum(0.0, master["Min_Unidades"] - master["Stock"])
