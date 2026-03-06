@@ -463,6 +463,19 @@ def crear_orden_compra(proveedor: str, items_df: pd.DataFrame) -> str:
 
 
 def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
+    # DIAGNÓSTICO TEMPORAL
+    try:
+        st.info(f"[DEBUG] Ventas recibidas: {0 if df_ven is None else len(df_ven)} filas")
+        if df_ven is not None and not df_ven.empty:
+            st.info(f"[DEBUG] Columnas ventas: {list(df_ven.columns)}")
+            col_items_dbg = _find_col(df_ven, ["Items", "Items_Detalle", "Productos"])
+            if col_items_dbg:
+                ejemplo = df_ven.iloc[0][col_items_dbg]
+                st.info(f"[DEBUG] Ejemplo campo items: {ejemplo}")
+            else:
+                st.warning("[DEBUG] No se encontró columna de items en ventas.")
+    except Exception as e:
+        st.warning(f"[DEBUG] Error diagnóstico ventas: {e}")
     stats = {}
 
     try:
