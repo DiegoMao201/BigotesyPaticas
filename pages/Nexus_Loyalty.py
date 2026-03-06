@@ -723,8 +723,46 @@ def main():
         st.success(f"📅 Hoy es: {hoy_str}")
         st.info(f"🎂 Mes de: **{mes_actual_nombre}**")
 
+
     # Carga de datos (conectado al flujo de la app)
     master, df_ven, status = cargar_datos_loyalty()
+
+    # --- MAPEO DE PRODUCTOS A CATEGORÍA (solo concentrados) ---
+    # Intentar obtener inventario desde session_state (como en Inventario_Nexus)
+    df_inv = None
+    if "data_store" in st.session_state:
+        df_inv = st.session_state["data_store"].get("df_Inventario", pd.DataFrame())
+    if df_inv is not None and not df_inv.empty:
+        # Mapeo robusto: nombre normalizado y ID normalizado a categoría
+        prod_to_cat = {}
+        for _, row in df_inv.iterrows():
+            cat = str(row.get("Categoria", "")).strip().upper()
+            if not cat:
+                continue
+            # Nombre normalizado
+            if "Nombre" in row and str(row["Nombre"]).strip():
+                prod_to_cat[_norm_col(row["Nombre"])] = cat
+            # ID normalizado
+            if "ID_Producto_Norm" in row and str(row["ID_Producto_Norm"]).strip():
+                prod_to_cat[str(row["ID_Producto_Norm"]).strip().lower()] = cat
+            # UID
+            if "Producto_UID" in row and str(row["Producto_UID"]).strip():
+                prod_to_cat[str(row["Producto_UID"]).strip().lower()] = cat
+    else:
+        prod_to_cat = {}
+
+    def es_concentrado(prod):
+        """Determina si el producto es de la categoría CONCENTRADOS."""
+        if not prod:
+            return False
+        key = _norm_col(prod)
+        cat = prod_to_cat.get(key)
+        if cat == "CONCENTRADOS":
+            return True
+        # Buscar por ID si parece un ID
+        if prod in prod_to_cat and prod_to_cat[prod] == "CONCENTRADOS":
+            return True
+        return False
 
     if master.empty:
         st.warning("⚠️ No se encontraron datos de clientes (cli). Sincroniza en la app principal.")
@@ -815,13 +853,17 @@ def main():
         with cth2:
             st.caption("Mensaje pensado para activar volumen: corto, directo, con el nombre del peludito y el último alimento.")
 
+
         if "Dias_Sin_Compra" in master.columns:
             df_fast = master[(master["Dias_Sin_Compra"] >= umbral) & (master["Dias_Sin_Compra"] <= umbral + 10)].copy()
+            # Filtrar solo clientes cuyo último producto es concentrado
+            if not df_fast.empty and "Ultimo_Producto" in df_fast.columns:
+                df_fast = df_fast[df_fast["Ultimo_Producto"].apply(es_concentrado)]
         else:
             df_fast = pd.DataFrame()
 
         if df_fast.empty:
-            st.success("No hay clientes en la ventana de recompra rápida.")
+            st.success("No hay clientes en la ventana de recompra rápida de concentrados.")
         else:
             cols = [c for c in ["Nombre", "Mascota", "Telefono", "Ultimo_Producto", "Dias_Sin_Compra"] if c in df_fast.columns]
             st.dataframe(df_fast[cols], use_container_width=True, hide_index=True)
@@ -847,11 +889,14 @@ def main():
 
         if 'Estado' in master.columns:
             df_rebuy = master[master['Estado'] == "🟡 Recompra (Alerta)"].copy()
+            # Filtrar solo clientes cuyo último producto es concentrado
+            if not df_rebuy.empty and "Ultimo_Producto" in df_rebuy.columns:
+                df_rebuy = df_rebuy[df_rebuy["Ultimo_Producto"].apply(es_concentrado)]
         else:
             df_rebuy = pd.DataFrame()
 
         if df_rebuy.empty:
-            st.success("✅ Todo al día. No hay alertas de recompra urgentes.")
+            st.success("✅ Todo al día. No hay alertas de recompra urgentes de concentrados.")
         else:
             cols_mostrar = ['Nombre', 'Mascota', 'Telefono', 'Ultimo_Producto', 'Dias_Sin_Compra']
             cols_existentes = [c for c in cols_mostrar if c in df_rebuy.columns]
@@ -961,13 +1006,16 @@ def main():
         
         if 'Estado' in master.columns:
             df_risk = master[master['Estado'].isin(["🟠 Riesgo", "🔴 Perdido"])].copy()
+            # Filtrar solo clientes cuyo último producto es concentrado
+            if not df_risk.empty and "Ultimo_Producto" in df_risk.columns:
+                df_risk = df_risk[df_risk["Ultimo_Producto"].apply(es_concentrado)]
         else:
             df_risk = pd.DataFrame()
         
         if df_risk.empty:
-            st.success("¡Excelente! No tienes clientes perdidos.")
+            st.success("¡Excelente! No tienes clientes perdidos de concentrados.")
         else:
-            st.write(f"Detectamos {len(df_risk)} clientes para recuperar.")
+            st.write(f"Detectamos {len(df_risk)} clientes para recuperar (concentrados).")
             gancho = st.text_input("Oferta Gancho:", "Envío Gratis + una Sorpresa 🎁")
             
             with st.expander("Ver lista de recuperación"):
