@@ -446,7 +446,7 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
         col_fecha = _find_col(df, ["Fecha"])
         if col_fecha is None:
             return stats
-        
+
         df["_fecha"] = pd.to_datetime(df[col_fecha], errors="coerce")
         df = df[df["_fecha"].notna()]
 
@@ -458,6 +458,21 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
         if col_items is None:
             return stats
 
+        # Construir todos los posibles identificadores para cada producto del inventario
+        prod_map = {}
+        for _, row in df_inv.iterrows():
+            keys = set()
+            # UID
+            if "Producto_UID" in row and str(row["Producto_UID"]).strip():
+                keys.add(str(row["Producto_UID"]).strip())
+            # Normalizado
+            if "ID_Producto_Norm" in row and str(row["ID_Producto_Norm"]).strip():
+                keys.add(str(row["ID_Producto_Norm"]).strip())
+            # Referencia original
+            if "ID_Producto" in row and str(row["ID_Producto"]).strip():
+                keys.add(normalizar_id_producto(row["ID_Producto"]))
+            prod_map[row["ID_Producto_Norm"]] = keys
+
         def _sumar_items(df_sub):
             totales = {}
             for items_str in df_sub[col_items].fillna("").astype(str):
@@ -466,11 +481,19 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
                     for it in items:
                         if not isinstance(it, dict):
                             continue
-                        uid = str(it.get("Producto_UID", it.get("ID_Producto_Norm", ""))).strip()
-                        if not uid:
-                            continue
+                        # Buscar por todos los posibles identificadores
+                        posibles = set()
+                        if "Producto_UID" in it and str(it["Producto_UID"]).strip():
+                            posibles.add(str(it["Producto_UID"]).strip())
+                        if "ID_Producto_Norm" in it and str(it["ID_Producto_Norm"]).strip():
+                            posibles.add(str(it["ID_Producto_Norm"]).strip())
+                        if "ID_Producto" in it and str(it["ID_Producto"]).strip():
+                            posibles.add(normalizar_id_producto(it["ID_Producto"]))
                         qty = float(it.get("Cantidad", 1) or 1)
-                        totales[uid] = totales.get(uid, 0.0) + qty
+                        # Sumar la venta a todos los productos del inventario que coincidan con alguno de los identificadores
+                        for prod_norm, keys in prod_map.items():
+                            if posibles & keys:
+                                totales[prod_norm] = totales.get(prod_norm, 0.0) + qty
                 except Exception:
                     pass
             return totales
