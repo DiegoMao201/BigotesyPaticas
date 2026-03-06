@@ -733,39 +733,40 @@ def main():
     if "data_store" in st.session_state:
         df_inv = st.session_state["data_store"].get("df_Inventario", pd.DataFrame())
     if df_inv is not None and not df_inv.empty:
-        # Mapeo robusto: nombre normalizado y ID normalizado a categoría
+        # Mapeo: UID, ID normalizado y ID a categoría
         prod_to_cat = {}
         for _, row in df_inv.iterrows():
             cat = str(row.get("Categoria", "")).strip().upper()
             if not cat:
                 continue
-            # Nombre normalizado
-            if "Nombre" in row and str(row["Nombre"]).strip():
-                prod_to_cat[_norm_col(row["Nombre"])] = cat
-            # ID normalizado
-            if "ID_Producto_Norm" in row and str(row["ID_Producto_Norm"]).strip():
-                prod_to_cat[str(row["ID_Producto_Norm"]).strip().lower()] = cat
             # UID
             if "Producto_UID" in row and str(row["Producto_UID"]).strip():
                 prod_to_cat[str(row["Producto_UID"]).strip().lower()] = cat
+            # ID normalizado
+            if "ID_Producto_Norm" in row and str(row["ID_Producto_Norm"]).strip():
+                prod_to_cat[str(row["ID_Producto_Norm"]).strip().lower()] = cat
+            # ID original
+            if "ID_Producto" in row and str(row["ID_Producto"]).strip():
+                prod_to_cat[str(row["ID_Producto"]).strip().upper()] = cat
     else:
         prod_to_cat = {}
 
     def es_concentrado(prod):
-        """Filtro robusto: detecta si el producto vendido es de la categoría CONCENTRADO aunque el nombre no sea idéntico."""
+        """Dado un string de producto vendido, busca si su UID, ID normalizado o ID está en el inventario y es CONCENTRADO."""
         if not prod or not prod_to_cat:
             return False
-        prod_norm = _norm_col(str(prod))
-        # Coincidencia exacta por nombre normalizado
-        if prod_norm in prod_to_cat and prod_to_cat[prod_norm] == "CONCENTRADO":
+        # Probar como UID (lower)
+        key_uid = str(prod).strip().lower()
+        if key_uid in prod_to_cat and prod_to_cat[key_uid] == "CONCENTRADO":
             return True
-        # Coincidencia exacta por ID
-        if prod in prod_to_cat and prod_to_cat[prod] == "CONCENTRADO":
+        # Probar como ID normalizado (lower)
+        key_norm = _norm_col(str(prod))
+        if key_norm in prod_to_cat and prod_to_cat[key_norm] == "CONCENTRADO":
             return True
-        # Coincidencia parcial: si el nombre del producto vendido contiene el nombre de algún producto de inventario de categoría CONCENTRADO
-        for inv_norm, cat in prod_to_cat.items():
-            if cat == "CONCENTRADO" and inv_norm in prod_norm:
-                return True
+        # Probar como ID original (upper)
+        key_id = str(prod).strip().upper()
+        if key_id in prod_to_cat and prod_to_cat[key_id] == "CONCENTRADO":
+            return True
         return False
 
     if master.empty:
