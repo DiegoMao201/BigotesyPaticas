@@ -163,7 +163,8 @@ def _get_meta_safe():
 
 def normalizar_str(valor):
     if pd.isna(valor) or valor == "": return ""
-    return str(valor).strip().upper()
+    # Eliminar espacios internos y convertir a mayúsculas
+    return str(valor).replace(" ","").strip().upper()
 
 def clean_currency(val):
     if isinstance(val, (int, float)): return float(val)
@@ -631,23 +632,23 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
         ])
 
         # ✅ FIX: fecha para registro de gasto (evita NameError)
-        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        try:
-            descripcion_gasto = f"[PROV: {meta_xml['Proveedor']}] [REF: {meta_xml['Folio']}] - Compra Mercancía"
-            monto_total_gasto = float(meta_xml.get('Total', 0.0) or 0.0) + float(info_pago.get("Transporte", 0.0)) - float(info_pago.get("Descuento", 0.0))
-            ts = int(time.time())
-
-            datos_gasto = [
-                f"GAS-{ts}", fecha, "Variable", "Compra Inventario", descripcion_gasto,
-                monto_total_gasto, info_pago['Origen'], info_pago['Origen']
-            ]
-            ws_gas.append_row(datos_gasto)
-            logs.append(f"💰 Gasto Registrado: ${monto_total_gasto:,.0f} desde {info_pago['Origen']}")
-        except Exception as ex_gas:
-            logs.append(f"⚠️ Alerta: No se registró en Gastos: {ex_gas}")
-
-        return True, logs
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        id_prov = normalizar_str(meta_xml.get("ID_Proveedor", "")) if meta_xml else ""
+        nombre_prov = meta_xml.get("Nombre_Proveedor") or meta_xml.get("Proveedor", "") if meta_xml else ""
+        nombre_prov = nombre_prov.strip()
+        email = meta_xml.get("Email_Proveedor", "") if meta_xml else ""
+        row_data = [
+            id_prov,
+            nombre_prov,
+            sku_prov,
+            sku_interno,
+            producto_uid,
+            factor,
+            now,
+            email,
+            costo_prov,
+            iva_pct
+        ]
 
     except Exception as e:
         return False, [f"Error del Sistema: {e}"]
