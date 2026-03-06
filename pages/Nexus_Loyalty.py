@@ -632,6 +632,68 @@ def link_whatsapp(telefono, mensaje):
 # 4. INTERFAZ PRINCIPAL
 # ==========================================
 
+# =============================
+# FUNCIONES DE MENSAJES PROACTIVOS
+# =============================
+def msg_cumple_5pct(nombre: str, mascota: str, estado: str) -> str:
+    """
+    Mensaje de cumpleaños con incentivo de recompra (5% de descuento).
+    """
+    nombre = (nombre or "Cliente").strip()
+    mascota = (mascota or "tu peludito").strip()
+    return (
+        f"¡Hola {nombre}! 🎉\n"
+        f"¡Hoy celebramos el cumpleaños de {mascota}! 🐾\n"
+        f"En Bigotes & Patitas queremos consentirlos con un 5% de descuento en su próxima compra.\n"
+        f"Solo responde este mensaje y te ayudamos a elegir lo mejor para {mascota}.\n"
+        f"¡Gracias por ser parte de nuestra familia! {estado if estado else ''}"
+    )
+
+def msg_recompra(nombre: str, mascota: str, producto: str) -> str:
+    """
+    Mensaje estándar para la sección 'Plato Vacío' (30-60 días).
+    """
+    producto = _extraer_producto_bonito(producto)
+    mascota = (mascota or "tu peludito").strip()
+    nombre = (nombre or "Cliente").strip()
+    return (
+        f"Hola {nombre}.\n"
+        f"¿Cómo va {mascota}? 🐾\n\n"
+        f"Te escribo para ayudarte: ¿necesitas más de *{producto}*?\n"
+        f"Si me confirmas, te lo dejamos listo hoy (y si quieres, lo enviamos a domicilio)."
+    )
+
+def msg_recompra_20(nombre: str, mascota: str, producto: str, dias: int) -> str:
+    """
+    Mensaje de recompra para clientes con más de 20 días sin comprar.
+    """
+    nombre = (nombre or "Cliente").strip()
+    mascota = (mascota or "tu peludito").strip()
+    producto = _extraer_producto_bonito(producto)
+    return (
+        f"¡Hola {nombre}! 👋\n"
+        f"¿Cómo va {mascota}?\n\n"
+        f"Hace {dias} días que no compras *{producto}* para {mascota}.\n"
+        f"¿Te gustaría que te ayudemos a reponerlo? ¡Tenemos promociones especiales para ti!\n"
+        f"Solo responde este mensaje y te asesoramos con mucho gusto."
+    )
+
+def msg_inactivo(nombre: str, mascota: str, gancho: str) -> str:
+    """
+    Mensaje para clientes inactivos, muy cálido y proactivo.
+    """
+    nombre = (nombre or "Cliente").strip()
+    mascota = (mascota or "tu peludito").strip()
+    return (
+        f"¡Hola {nombre}! 🌈 Hace tiempo no vemos la colita feliz de {mascota} y los extrañamos mucho en Bigotes y Patitas 🥺🐾.\n"
+        f"Soy Ángela 👋. Solo pasaba a saludarte y recordarte que aquí seguimos con el corazón abierto. ❤️\n"
+        f"¿Cómo han estado? ¡Nos encantaría saber de ustedes! {gancho if gancho else ''} ✨🚚"
+    )
+
+# ==========================================
+# 4. INTERFAZ PRINCIPAL
+# ==========================================
+
 def main():
     # Sidebar
     with st.sidebar:
