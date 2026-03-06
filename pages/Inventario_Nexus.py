@@ -304,11 +304,11 @@ def calcular_master_df() -> pd.DataFrame:
     def buscar_ventas(row, key):
         posibles = set()
         if "Producto_UID" in row and str(row["Producto_UID"]).strip():
-            posibles.add(str(row["Producto_UID"]).strip())
+            posibles.add(str(row["Producto_UID"]).strip().lower())
         if "ID_Producto_Norm" in row and str(row["ID_Producto_Norm"]).strip():
-            posibles.add(str(row["ID_Producto_Norm"]).strip())
+            posibles.add(str(row["ID_Producto_Norm"]).strip().lower())
         if "ID_Producto" in row and str(row["ID_Producto"]).strip():
-            posibles.add(normalizar_id_producto(row["ID_Producto"]))
+            posibles.add(normalizar_id_producto(row["ID_Producto"]).lower())
         for k in posibles:
             if k in stats and key in stats[k]:
                 return stats[k][key]
@@ -485,20 +485,22 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
         if col_items is None:
             return stats
 
-        # Construir todos los posibles identificadores para cada producto del inventario
+        # Construir todos los posibles identificadores normalizados para cada producto del inventario
         prod_map = {}
         for _, row in df_inv.iterrows():
             keys = set()
             # UID
             if "Producto_UID" in row and str(row["Producto_UID"]).strip():
-                keys.add(str(row["Producto_UID"]).strip())
+                keys.add(str(row["Producto_UID"]).strip().lower())
             # Normalizado
             if "ID_Producto_Norm" in row and str(row["ID_Producto_Norm"]).strip():
-                keys.add(str(row["ID_Producto_Norm"]).strip())
+                keys.add(str(row["ID_Producto_Norm"]).strip().lower())
             # Referencia original
             if "ID_Producto" in row and str(row["ID_Producto"]).strip():
-                keys.add(normalizar_id_producto(row["ID_Producto"]))
-            prod_map[row["ID_Producto_Norm"]] = keys
+                keys.add(normalizar_id_producto(row["ID_Producto"]).lower())
+            # Mapear todos los identificadores a la misma clave
+            for k in keys:
+                prod_map[k] = keys
 
 
         def _sumar_items(df_sub):
@@ -524,16 +526,16 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
                         posibles = set()
                         # UID
                         if "Producto_UID" in it and str(it["Producto_UID"]).strip():
-                            posibles.add(str(it["Producto_UID"]).strip())
+                            posibles.add(str(it["Producto_UID"]).strip().lower())
                         # Normalizado
                         if "ID_Producto_Norm" in it and str(it["ID_Producto_Norm"]).strip():
-                            posibles.add(str(it["ID_Producto_Norm"]).strip())
+                            posibles.add(str(it["ID_Producto_Norm"]).strip().lower())
                         # Referencia original
                         if "ID_Producto" in it and str(it["ID_Producto"]).strip():
-                            posibles.add(normalizar_id_producto(it["ID_Producto"]))
+                            posibles.add(normalizar_id_producto(it["ID_Producto"]).lower())
                         # Solo ID (ventas antiguas)
                         if "ID" in it and str(it["ID"]).strip():
-                            posibles.add(normalizar_id_producto(it["ID"]))
+                            posibles.add(normalizar_id_producto(it["ID"]).lower())
                         qty = 1.0
                         # Buscar campo de cantidad flexible
                         for qk in ["Cantidad", "cantidad", "qty", "unidades", "cant"]:
@@ -545,7 +547,7 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
                                     pass
                         for prod_norm, keys in prod_map.items():
                             if posibles & keys:
-                                totales[prod_norm] = totales.get(prod_norm, 0.0) + qty
+                                totales[list(keys)[0]] = totales.get(list(keys)[0], 0.0) + qty
                 except Exception:
                     pass
             return totales
