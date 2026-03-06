@@ -752,15 +752,15 @@ def main():
         prod_to_cat = {}
 
     def es_concentrado(prod):
-        """Determina si el producto es de la categoría CONCENTRADOS."""
+        """Determina si el producto es de la categoría CONCENTRADO (singular)."""
         if not prod:
             return False
         key = _norm_col(prod)
         cat = prod_to_cat.get(key)
-        if cat == "CONCENTRADOS":
+        if cat == "CONCENTRADO":
             return True
         # Buscar por ID si parece un ID
-        if prod in prod_to_cat and prod_to_cat[prod] == "CONCENTRADOS":
+        if prod in prod_to_cat and prod_to_cat[prod] == "CONCENTRADO":
             return True
         return False
 
