@@ -43,7 +43,8 @@ def _upsert_maestro_proveedores(ws_map, meta_xml, sku_prov, sku_interno, product
         )
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         id_prov = meta_xml.get("ID_Proveedor", "") if meta_xml else ""
-        nombre_prov = meta_xml.get("Nombre_Proveedor", "") if meta_xml else ""
+        # Usar 'Proveedor' si 'Nombre_Proveedor' no existe
+        nombre_prov = meta_xml.get("Nombre_Proveedor") or meta_xml.get("Proveedor", "") if meta_xml else ""
         email = meta_xml.get("Email_Proveedor", "") if meta_xml else ""
         row_data = [
             id_prov,
