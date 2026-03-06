@@ -686,7 +686,7 @@ def msg_recompra_20(nombre: str, mascota: str, producto: str, dias: int) -> str:
         f"¡Hola {nombre}! 👋\n"
         f"¿Cómo va {mascota}?\n\n"
         f"Hace {dias} días que no compras *{producto}* para {mascota}.\n"
-        f"¿Te gustaría que te ayudemos a reponerlo? ¡Tenemos promociones especiales para ti!\n"
+        f"¿Te gustaría que te ayudemos a reponerlo?\n"
         f"Solo responde este mensaje y te asesoramos con mucho gusto."
     )
 
