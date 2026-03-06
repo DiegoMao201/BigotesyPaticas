@@ -757,24 +757,6 @@ def main():
         prod_to_cat = {}
         nombres_concentrado = set()
 
-    # === DIAGNÓSTICO DE MAPEOS ===
-    st.markdown("---")
-    st.subheader("🛠 Diagnóstico de Mapeo de Productos (solo visible para admin)")
-    # Mostrar valores únicos de Ultimo_Producto
-    if "Ultimo_Producto" in master.columns:
-        ultimos = master["Ultimo_Producto"].dropna().unique().tolist()
-        st.markdown(f"**Valores únicos en 'Ultimo_Producto' (clientes):**")
-        st.write(ultimos)
-    else:
-        st.info("No hay columna 'Ultimo_Producto' en master.")
-
-    # Mostrar productos de inventario con categoría CONCENTRADO
-    if df_inv is not None and not df_inv.empty:
-        df_conc = df_inv[df_inv["Categoria"].astype(str).str.upper() == "CONCENTRADO"]
-        st.markdown(f"**Productos en inventario con categoría CONCENTRADO:**")
-        st.dataframe(df_conc[[c for c in ["ID_Producto", "ID_Producto_Norm", "Producto_UID", "Nombre"] if c in df_conc.columns]], use_container_width=True, hide_index=True)
-    else:
-        st.info("No hay inventario cargado o está vacío.")
 
     def es_concentrado(prod):
         """
