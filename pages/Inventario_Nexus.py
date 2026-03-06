@@ -287,6 +287,18 @@ def calcular_master_df() -> pd.DataFrame:
         master["Costo"],
     )
 
+    # Cálculo robusto de margen bruto
+    master["Margen_%"] = np.where(
+        master["Precio"] > 0,
+        (master["Precio"] - master["Costo_Efectivo"]) / master["Precio"],
+        0.0
+    )
+    master["Margen_$"] = np.where(
+        master["Precio"] > 0,
+        master["Precio"] - master["Costo_Efectivo"],
+        0.0
+    )
+
     # 5. VENTAS / ROTACIÓN
     stats = analizar_ventas(df_ven, master)
     master["v90"] = master["ID_Producto_Norm"].map(lambda x: stats.get(x, {}).get("v90", 0.0)).fillna(0.0)
@@ -443,13 +455,11 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
 
     try:
         if df_ven is None or df_ven.empty:
-            st.info("[LOG] No hay ventas registradas.")
             return stats
 
         df = df_ven.copy()
         col_fecha = _find_col(df, ["Fecha"])
         if col_fecha is None:
-            st.info("[LOG] No se encontró columna de fecha en ventas.")
             return stats
 
         df["_fecha"] = pd.to_datetime(df[col_fecha], errors="coerce")
@@ -459,11 +469,8 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
         df_90 = df[df["_fecha"] >= hoy - pd.Timedelta(days=90)]
         df_30 = df[df["_fecha"] >= hoy - pd.Timedelta(days=30)]
 
-        st.info(f"[LOG] Ventas totales: {len(df)} | Ventas últimos 90 días: {len(df_90)} | Ventas últimos 30 días: {len(df_30)}")
-
         col_items = _find_col(df, ["Items", "Items_Detalle", "Productos"])
         if col_items is None:
-            st.info("[LOG] No se encontró columna de items en ventas.")
             return stats
 
         # Construir todos los posibles identificadores para cada producto del inventario
@@ -480,7 +487,6 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
             if "ID_Producto" in row and str(row["ID_Producto"]).strip():
                 keys.add(normalizar_id_producto(row["ID_Producto"]))
             prod_map[row["ID_Producto_Norm"]] = keys
-        st.info(f"[LOG] Ejemplo de IDs de inventario: {list(prod_map.items())[:5]}")
 
 
         def _sumar_items(df_sub):
