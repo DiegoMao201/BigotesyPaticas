@@ -756,6 +756,8 @@ def main():
                     df_buy[col] = False
                 else:
                     df_buy[col] = ""
+        # Asegurar tipo booleano para Confirmar
+        df_buy["Confirmar"] = df_buy["Confirmar"].astype(bool)
 
         if df_buy.empty:
             st.success("🎉 ¡Niveles óptimos! No se sugieren compras ahora.")
@@ -765,9 +767,10 @@ def main():
                 st.markdown("#### Motivo por el que no se sugiere compra:")
                 st.dataframe(df_no_buy[["Nombre", "Stock", "Modo_Demanda", "Motivo_Sugerencia"]], hide_index=True)
         else:
-            st.dataframe(
+            edited_buy = st.data_editor(
                 df_buy[cols_requeridas],
                 use_container_width=True, hide_index=True,
+                column_config={"Confirmar": st.column_config.CheckboxColumn("Confirmar")}
             )
 
             seleccion = edited_buy[edited_buy["Confirmar"] == True]
@@ -787,7 +790,6 @@ def main():
                         st.success(f"✅ Orden {new_id} generada.")
                         time.sleep(1)
                         st.rerun()
-                    
                     msg_wa = f"Hola {prov}, pedido Bigotes & Patitas:\n"
                     for _, r in items_prov.iterrows():
                         msg_wa += f"- {int(r['Sugerencia_Cajas'])} cajas de {r['Nombre']}\n"
