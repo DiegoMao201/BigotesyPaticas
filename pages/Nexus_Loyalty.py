@@ -752,16 +752,20 @@ def main():
         prod_to_cat = {}
 
     def es_concentrado(prod):
-        """Determina si el producto es de la categoría CONCENTRADO (singular)."""
-        if not prod:
+        """Filtro robusto: detecta si el producto vendido es de la categoría CONCENTRADO aunque el nombre no sea idéntico."""
+        if not prod or not prod_to_cat:
             return False
-        key = _norm_col(prod)
-        cat = prod_to_cat.get(key)
-        if cat == "CONCENTRADO":
+        prod_norm = _norm_col(str(prod))
+        # Coincidencia exacta por nombre normalizado
+        if prod_norm in prod_to_cat and prod_to_cat[prod_norm] == "CONCENTRADO":
             return True
-        # Buscar por ID si parece un ID
+        # Coincidencia exacta por ID
         if prod in prod_to_cat and prod_to_cat[prod] == "CONCENTRADO":
             return True
+        # Coincidencia parcial: si el nombre del producto vendido contiene el nombre de algún producto de inventario de categoría CONCENTRADO
+        for inv_norm, cat in prod_to_cat.items():
+            if cat == "CONCENTRADO" and inv_norm in prod_norm:
+                return True
         return False
 
     if master.empty:
