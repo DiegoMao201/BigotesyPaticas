@@ -505,7 +505,19 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
             totales = {}
             for items_str in df_sub[col_items].fillna("").astype(str):
                 try:
-                    items = json.loads(items_str) if items_str.strip().startswith("[") else []
+                    items = []
+                    # Si es lista JSON
+                    if items_str.strip().startswith("["):
+                        items = json.loads(items_str)
+                    # Si es string legacy: "IDx:2,IDy:1"
+                    elif ":" in items_str and "," in items_str:
+                        for part in items_str.split(","):
+                            if ":" in part:
+                                id_part, qty_part = part.split(":", 1)
+                                items.append({"ID": id_part.strip(), "Cantidad": float(qty_part.strip() or 1)})
+                    # Si es solo un ID
+                    elif items_str.strip():
+                        items.append({"ID": items_str.strip(), "Cantidad": 1})
                     for it in items:
                         if not isinstance(it, dict):
                             continue
@@ -522,7 +534,15 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
                         # Solo ID (ventas antiguas)
                         if "ID" in it and str(it["ID"]).strip():
                             posibles.add(normalizar_id_producto(it["ID"]))
-                        qty = float(it.get("Cantidad", 1) or 1)
+                        qty = 1.0
+                        # Buscar campo de cantidad flexible
+                        for qk in ["Cantidad", "cantidad", "qty", "unidades", "cant"]:
+                            if qk in it:
+                                try:
+                                    qty = float(it[qk])
+                                    break
+                                except:
+                                    pass
                         for prod_norm, keys in prod_map.items():
                             if posibles & keys:
                                 totales[prod_norm] = totales.get(prod_norm, 0.0) + qty
