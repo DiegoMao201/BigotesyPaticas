@@ -369,17 +369,8 @@ def calcular_master_df() -> pd.DataFrame:
     master["Clase_ABC"] = _calc_clase_abc(master)
     master["Clase_ABC"] = master["Clase_ABC"].fillna("C").astype(str)
 
-    # 11. ESTADO
-    conditions = [
-        master["Stock"] <= 0,
-        (master["Requiere_Compra"]) & (master["Clase_ABC"] == "A"),
-        master["Requiere_Compra"],
-        (master["Dias_Cobertura"] > 120) & (master["Stock"] > 0),
-    ]
-    choices = ["💀 AGOTADO", "🚨 CRÍTICO (A)", "⚠️ Comprar", "🧊 Sobre-Stock"]
-    master["Estado"] = np.select(conditions, choices, default="✅ OK")
 
-    # 12. GARANTÍA FINAL
+    # 11. GARANTIZAR COLUMNAS CRÍTICAS ANTES DE USARLAS
     cols_garantizadas = {
         "ID_Producto": "", "Nombre": "", "Categoria": "Sin Categoría",
         "Clase_ABC": "C", "Stock": 0.0, "Estado": "✅ OK",
@@ -390,12 +381,23 @@ def calcular_master_df() -> pd.DataFrame:
         "Factor_Pack": 1.0, "Costo_Efectivo": 0.0,
         "Dias_Cobertura": 999.0, "Modo_Demanda": "SIN_VENTAS",
         "ID_Producto_Norm": "",
+        "Requiere_Compra": False
     }
     for col, default in cols_garantizadas.items():
         if col not in master.columns:
             master[col] = default
         master[col] = master[col].fillna(default) if isinstance(default, str) \
                       else pd.to_numeric(master[col], errors="coerce").fillna(default)
+
+    # 12. ESTADO (ahora seguro)
+    conditions = [
+        master["Stock"] <= 0,
+        (master["Requiere_Compra"]) & (master["Clase_ABC"] == "A"),
+        master["Requiere_Compra"],
+        (master["Dias_Cobertura"] > 120) & (master["Stock"] > 0),
+    ]
+    choices = ["💀 AGOTADO", "🚨 CRÍTICO (A)", "⚠️ Comprar", "🧊 Sobre-Stock"]
+    master["Estado"] = np.select(conditions, choices, default="✅ OK")
 
     return master
 
