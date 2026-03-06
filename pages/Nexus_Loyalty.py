@@ -777,25 +777,39 @@ def main():
         st.info("No hay inventario cargado o está vacío.")
 
     def es_concentrado(prod):
-        """Detecta si el producto vendido es de la categoría CONCENTRADO por UID, ID, o coincidencia parcial de nombre."""
+        """
+        Detecta si alguno de los productos vendidos (en una cadena separada por comas) es de la categoría CONCENTRADO
+        por UID, ID, o coincidencia parcial de nombre. Limpia cantidades y formatos.
+        """
         if not prod or (not prod_to_cat and not nombres_concentrado):
             return False
-        # Probar como UID (lower)
-        key_uid = str(prod).strip().lower()
-        if key_uid in prod_to_cat and prod_to_cat[key_uid] == "CONCENTRADO":
-            return True
-        # Probar como ID normalizado (lower)
-        key_norm = _norm_col(str(prod))
-        if key_norm in prod_to_cat and prod_to_cat[key_norm] == "CONCENTRADO":
-            return True
-        # Probar como ID original (upper)
-        key_id = str(prod).strip().upper()
-        if key_id in prod_to_cat and prod_to_cat[key_id] == "CONCENTRADO":
-            return True
-        # Coincidencia parcial por nombre normalizado
-        for nombre_norm in nombres_concentrado:
-            if nombre_norm in key_norm or key_norm in nombre_norm:
+        # Separar por coma y analizar cada producto individual
+        productos = [p.strip() for p in str(prod).split(",") if p.strip()]
+        for p in productos:
+            # Limpiar cantidades y formatos comunes
+            p_limpio = p
+            # Quitar cantidades tipo '1x', '2x', '1.0x', 'x1', '(x1)', etc.
+            import re
+            p_limpio = re.sub(r"^\d+(\.\d+)?x\s*", "", p_limpio, flags=re.IGNORECASE)  # 1x, 1.0x, 2x
+            p_limpio = re.sub(r"\(x?\d+\)", "", p_limpio, flags=re.IGNORECASE)  # (x1), (1)
+            p_limpio = re.sub(r"x\d+$", "", p_limpio, flags=re.IGNORECASE)  # x1 al final
+            p_limpio = p_limpio.strip()
+            # Probar como UID (lower)
+            key_uid = p_limpio.strip().lower()
+            if key_uid in prod_to_cat and prod_to_cat[key_uid] == "CONCENTRADO":
                 return True
+            # Probar como ID normalizado (lower)
+            key_norm = _norm_col(p_limpio)
+            if key_norm in prod_to_cat and prod_to_cat[key_norm] == "CONCENTRADO":
+                return True
+            # Probar como ID original (upper)
+            key_id = p_limpio.strip().upper()
+            if key_id in prod_to_cat and prod_to_cat[key_id] == "CONCENTRADO":
+                return True
+            # Coincidencia parcial por nombre normalizado
+            for nombre_norm in nombres_concentrado:
+                if nombre_norm in key_norm or key_norm in nombre_norm:
+                    return True
         return False
 
     if master.empty:
