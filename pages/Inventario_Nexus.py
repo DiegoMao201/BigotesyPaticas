@@ -530,7 +530,17 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
                             if ":" in part:
                                 id_part, qty_part = part.split(":", 1)
                                 items.append({"ID": id_part.strip(), "Cantidad": float(qty_part.strip() or 1)})
-                    # Si es solo un ID
+                    # Si es formato 'NOMBRE (xCANTIDAD)'
+                    elif items_str.strip().endswith(")") and "(x" in items_str:
+                        # Ejemplo: 'EXCELLENT STERILIZED CAT X 1 Kg (x1)'
+                        try:
+                            nombre, cantidad = items_str.rsplit("(x", 1)
+                            nombre = nombre.strip().replace("(", "").replace(")", "")
+                            cantidad = float(cantidad.replace(")", "").strip())
+                            items.append({"NOMBRE": nombre, "Cantidad": cantidad})
+                        except Exception:
+                            items.append({"NOMBRE": items_str.strip(), "Cantidad": 1})
+                    # Si es solo un ID o nombre
                     elif items_str.strip():
                         items.append({"ID": items_str.strip(), "Cantidad": 1})
                     for it in items:
@@ -549,6 +559,9 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
                         # Solo ID (ventas antiguas)
                         if "ID" in it and str(it["ID"]).strip():
                             posibles.add(normalizar_id_producto(it["ID"]).lower())
+                        # Por nombre (nuevo)
+                        if "NOMBRE" in it and str(it["NOMBRE"]).strip():
+                            posibles.add(str(it["NOMBRE"]).strip().lower())
                         qty = 1.0
                         # Buscar campo de cantidad flexible
                         for qk in ["Cantidad", "cantidad", "qty", "unidades", "cant"]:
