@@ -745,6 +745,12 @@ def main():
         )
 
         df_buy = master_df[master_df["Unidades_Pedir"] > 0].copy()
+        # Filtro global por proveedor
+        proveedores = sorted(df_buy["Nombre_Proveedor"].dropna().unique().tolist())
+        proveedor_sel = st.selectbox("Filtrar por proveedor", ["Todos"] + proveedores, index=0)
+        if proveedor_sel != "Todos":
+            df_buy = df_buy[df_buy["Nombre_Proveedor"] == proveedor_sel]
+
         # Garantizar columnas requeridas
         cols_requeridas = [
             "Confirmar", "Nombre_Proveedor", "Clase_ABC", "Nombre",
@@ -758,6 +764,18 @@ def main():
                     df_buy[col] = ""
         # Asegurar tipo booleano para Confirmar
         df_buy["Confirmar"] = df_buy["Confirmar"].astype(bool)
+
+        # Estado de selección masiva
+        if "select_all_buy" not in st.session_state:
+            st.session_state["select_all_buy"] = False
+
+        c_sel, c_desel = st.columns([1,1])
+        if c_sel.button("Seleccionar todos", key="btn_select_all_buy"):
+            df_buy["Confirmar"] = True
+            st.session_state["select_all_buy"] = True
+        if c_desel.button("Deseleccionar todos", key="btn_deselect_all_buy"):
+            df_buy["Confirmar"] = False
+            st.session_state["select_all_buy"] = False
 
         if df_buy.empty:
             st.success("🎉 ¡Niveles óptimos! No se sugieren compras ahora.")
