@@ -745,6 +745,17 @@ def main():
         )
 
         df_buy = master_df[master_df["Unidades_Pedir"] > 0].copy()
+        # Garantizar columnas requeridas
+        cols_requeridas = [
+            "Confirmar", "Nombre_Proveedor", "Clase_ABC", "Nombre",
+            "Stock", "Sugerencia_Cajas", "Factor_Pack", "Inversion_Est", "Motivo_Sugerencia"
+        ]
+        for col in cols_requeridas:
+            if col not in df_buy.columns:
+                if col == "Confirmar":
+                    df_buy[col] = False
+                else:
+                    df_buy[col] = ""
 
         if df_buy.empty:
             st.success("🎉 ¡Niveles óptimos! No se sugieren compras ahora.")
@@ -754,12 +765,8 @@ def main():
                 st.markdown("#### Motivo por el que no se sugiere compra:")
                 st.dataframe(df_no_buy[["Nombre", "Stock", "Modo_Demanda", "Motivo_Sugerencia"]], hide_index=True)
         else:
-            # ...existing code...
             st.dataframe(
-                df_buy[[
-                    "Confirmar", "Nombre_Proveedor", "Clase_ABC", "Nombre",
-                    "Stock", "Sugerencia_Cajas", "Factor_Pack", "Inversion_Est", "Motivo_Sugerencia"
-                ]],
+                df_buy[cols_requeridas],
                 use_container_width=True, hide_index=True,
             )
 
