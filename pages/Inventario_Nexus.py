@@ -473,6 +473,7 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
                 keys.add(normalizar_id_producto(row["ID_Producto"]))
             prod_map[row["ID_Producto_Norm"]] = keys
 
+
         def _sumar_items(df_sub):
             totales = {}
             for items_str in df_sub[col_items].fillna("").astype(str):
@@ -481,16 +482,20 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
                     for it in items:
                         if not isinstance(it, dict):
                             continue
-                        # Buscar por todos los posibles identificadores
                         posibles = set()
+                        # UID
                         if "Producto_UID" in it and str(it["Producto_UID"]).strip():
                             posibles.add(str(it["Producto_UID"]).strip())
+                        # Normalizado
                         if "ID_Producto_Norm" in it and str(it["ID_Producto_Norm"]).strip():
                             posibles.add(str(it["ID_Producto_Norm"]).strip())
+                        # Referencia original
                         if "ID_Producto" in it and str(it["ID_Producto"]).strip():
                             posibles.add(normalizar_id_producto(it["ID_Producto"]))
+                        # Solo ID (ventas antiguas)
+                        if "ID" in it and str(it["ID"]).strip():
+                            posibles.add(normalizar_id_producto(it["ID"]))
                         qty = float(it.get("Cantidad", 1) or 1)
-                        # Sumar la venta a todos los productos del inventario que coincidan con alguno de los identificadores
                         for prod_norm, keys in prod_map.items():
                             if posibles & keys:
                                 totales[prod_norm] = totales.get(prod_norm, 0.0) + qty
