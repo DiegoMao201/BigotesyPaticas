@@ -962,15 +962,19 @@ def main():
                 st.balloons()
                 with st.expander("Ver bitácora de operaciones"):
                     for l in logs: st.text(l)
-                
+
+                # Limpiar caché y recargar memoria para sugerencias inmediatas
+                st.cache_data.clear()
+                for k in ["lst_prods_cache", "dct_prods_cache", "memoria_cache", "proveedores_cache", "prov_id_cache"]:
+                    if k in st.session_state:
+                        del st.session_state[k]
+
                 # Resetear la sesión
                 st.session_state.invoice_meta = {}
                 st.session_state.invoice_items = []
-                
+
                 if st.button("Volver al Inicio"):
                     st.session_state.step = 1
-                    # Limpiamos el cache para que vuelva a leer la hoja fresca la próxima vez
-                    st.cache_data.clear() 
                     st.rerun()
             else:
                 st.error("Error guardando datos.")
