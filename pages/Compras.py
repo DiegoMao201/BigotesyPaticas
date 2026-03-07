@@ -26,47 +26,69 @@ def _upsert_maestro_proveedores(ws_map, meta_xml, sku_prov, sku_interno, product
     Si ya existe la fila (por SKU_Proveedor y SKU_Interno), actualiza los datos; si no, inserta una nueva.
     """
     try:
-        headers = _ensure_headers(ws_map, [
-            "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Producto_UID",
-            "Factor_Pack", "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Ultimo_IVA"
-        ])
+        ordered_headers = [
+            "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Factor_Pack",
+            "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Producto_UID", "Ultimo_IVA"
+        ]
+        headers = _ensure_sheet_schema(ws_map, ordered_headers)
         recs = ws_map.get_all_records()
         df = pd.DataFrame(recs)
-        # Normalizar columnas clave
-        for col in ["SKU_Proveedor", "SKU_Interno", "Producto_UID"]:
+        for col in ordered_headers:
             if col not in df.columns:
                 df[col] = ""
-        # Buscar si ya existe la fila
+
         mask = (
             (df["SKU_Proveedor"].astype(str).str.strip().str.upper() == str(sku_prov).strip().upper()) &
             (df["SKU_Interno"].astype(str).str.strip().str.upper() == str(sku_interno).strip().upper())
         )
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         id_prov = meta_xml.get("ID_Proveedor", "") if meta_xml else ""
-        # Usar 'Proveedor' si 'Nombre_Proveedor' no existe
         nombre_prov = meta_xml.get("Nombre_Proveedor") or meta_xml.get("Proveedor", "") if meta_xml else ""
         email = meta_xml.get("Email_Proveedor", "") if meta_xml else ""
-        row_data = [
-            id_prov,
-            nombre_prov,
-            sku_prov,
-            sku_interno,
-            producto_uid,
-            factor,
-            now,
-            email,
-            costo_prov,
-            iva_pct
-        ]
+        row_map = {
+            "ID_Proveedor": id_prov,
+            "Nombre_Proveedor": nombre_prov,
+            "SKU_Proveedor": sku_prov,
+            "SKU_Interno": sku_interno,
+            "Factor_Pack": factor,
+            "Ultima_Actualizacion": now,
+            "Email": email,
+            "Costo_Proveedor": costo_prov,
+            "Producto_UID": producto_uid,
+            "Ultimo_IVA": iva_pct,
+        }
+        row_data = [row_map.get(header, "") for header in headers]
+
         if mask.any():
-            # Actualizar fila existente
-            idx = mask[mask].index[0]
-            ws_map.update(f'A{idx+2}:J{idx+2}', [row_data])
+            idx = mask[mask].index[0] + 2
+            start_a1 = gspread.utils.rowcol_to_a1(idx, 1)
+            end_a1 = gspread.utils.rowcol_to_a1(idx, len(headers))
+            ws_map.update(f"{start_a1}:{end_a1}", [row_data])
         else:
-            # Insertar nueva fila
             ws_map.append_row(row_data)
     except Exception as e:
         st.warning(f"Error actualizando Maestro_Proveedores: {e}")
+
+def _registrar_gasto_compra(ws_gas, meta_xml, info_pago, total_compra):
+    headers = _ensure_sheet_schema(ws_gas, [
+        "ID_Gasto", "Fecha", "Tipo_Gasto", "Categoria", "Descripcion", "Monto", "Metodo_Pago", "Banco_Origen"
+    ])
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    gasto_id = f"GAS-{int(time.time())}"
+    proveedor = str(meta_xml.get("Proveedor", "")).strip()
+    folio = str(meta_xml.get("Folio", "")).strip()
+    descripcion = f"[PROV: {proveedor}] [REF: {folio}] - Compra Mercancía"
+    row_map = {
+        "ID_Gasto": gasto_id,
+        "Fecha": now,
+        "Tipo_Gasto": "Variable",
+        "Categoria": "Compra Inventario",
+        "Descripcion": descripcion,
+        "Monto": total_compra,
+        "Metodo_Pago": info_pago.get("Origen", ""),
+        "Banco_Origen": info_pago.get("Origen", ""),
+    }
+    ws_gas.append_row([row_map.get(header, "") for header in headers])
 # 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME)
 # ==========================================
 
@@ -210,6 +232,39 @@ def _ensure_headers(ws, required_cols: list[str]) -> list[str]:
 
     return ws.row_values(1) if changed else headers
 
+def _ensure_sheet_schema(ws, ordered_headers: list[str]) -> list[str]:
+    """
+    Asegura que la hoja tenga los encabezados requeridos en el orden indicado.
+    Si la hoja ya tiene datos con otro orden, reescribe la tabla preservando los valores por nombre de columna.
+    """
+    values = ws.get_all_values() or []
+    if not values:
+        ws.update("A1", [ordered_headers])
+        return ordered_headers
+
+    current_headers = [str(h).strip() for h in values[0]]
+    extras = [h for h in current_headers if h and h not in ordered_headers]
+    final_headers = ordered_headers + extras
+
+    if current_headers == final_headers:
+        return final_headers
+
+    if len(values) == 1:
+        ws.update("A1", [final_headers])
+        return final_headers
+
+    rewritten_rows = [final_headers]
+    for raw_row in values[1:]:
+        row_map = {
+            header: raw_row[idx] if idx < len(raw_row) else ""
+            for idx, header in enumerate(current_headers)
+        }
+        rewritten_rows.append([row_map.get(header, "") for header in final_headers])
+
+    ws.clear()
+    ws.update("A1", rewritten_rows)
+    return final_headers
+
 def _build_inv_indexes(ws_inv):
     """
     Índices para Inventario (Sheets) usados por compras XML/manual.
@@ -297,12 +352,14 @@ def conectar_sheets():
             ws_map = sh.add_worksheet("Maestro_Proveedores", 1000, 10)
             ws_map.append_row([
                 "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor",
-                "SKU_Interno", "Producto_UID", "Factor_Pack",
-                "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Ultimo_IVA"
+                "SKU_Interno", "Factor_Pack", "Ultima_Actualizacion",
+                "Email", "Costo_Proveedor", "Producto_UID", "Ultimo_IVA"
             ])
 
-        # Asegurar headers mínimos Maestro_Proveedores (por si ya existe vieja)
-        _ensure_headers(ws_map, ["Producto_UID", "SKU_Interno", "Factor_Pack", "Ultimo_IVA", "Costo_Proveedor"])
+        _ensure_sheet_schema(ws_map, [
+            "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Factor_Pack",
+            "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Producto_UID", "Ultimo_IVA"
+        ])
 
         try: ws_hist = sh.worksheet("Historial_Recepciones")
         except:
@@ -313,6 +370,10 @@ def conectar_sheets():
         except:
             ws_gas = sh.add_worksheet("Gastos", 1000, 8)
             ws_gas.append_row(["ID_Gasto","Fecha","Tipo_Gasto","Categoria","Descripcion","Monto","Metodo_Pago","Banco_Origen"])
+
+        _ensure_sheet_schema(ws_gas, [
+            "ID_Gasto", "Fecha", "Tipo_Gasto", "Categoria", "Descripcion", "Monto", "Metodo_Pago", "Banco_Origen"
+        ])
 
         return sh, ws_inv, ws_map, ws_hist, ws_gas
     except Exception as e:
@@ -473,64 +534,33 @@ def parsear_xml_colombia(archivo):
 # ==========================================
 
 def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_pago):
-        def registrar_gasto(ws_gas, meta_xml, info_pago, total):
-            # Formato: ID_Gasto, Fecha, Tipo_Gasto, Categoria, Descripcion, Monto, Metodo_Pago, Banco_Origen
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            id_gasto = f"GAS-{int(time.time())}"
-            proveedor = meta_xml.get("Proveedor", "")
-            folio = meta_xml.get("Folio", "")
-            descripcion = f"[PROV: {proveedor}] [REF: {folio}] - Compra Mercancía"
-            row_gasto = [
-                id_gasto,
-                now,
-                "Variable",
-                "Compra Inventario",
-                descripcion,
-                total,
-                info_pago.get("Origen", ""),
-                info_pago.get("Origen", "")
-            ]
-            ws_gas.append_row(row_gasto)
-    import pandas as pd
     logs = []
-    # Validación robusta de tipos y estructura
+
     if not isinstance(df_final, pd.DataFrame):
-        logs.append("Error: df_final no es un DataFrame.")
-        return False, logs
+        return False, ["Error: df_final no es un DataFrame."]
     if df_final.empty:
-        logs.append("Error: df_final está vacío.")
-        return False, logs
+        return False, ["Error: df_final está vacío."]
     if not isinstance(meta_xml, dict):
-        logs.append("Error: meta_xml no es un dict.")
-        return False, logs
+        return False, ["Error: meta_xml no es un dict."]
     if not isinstance(info_pago, dict):
-        logs.append("Error: info_pago no es un dict.")
-        return False, logs
+        return False, ["Error: info_pago no es un dict."]
+
     for campo in ["Origen", "Transporte", "Descuento"]:
         if campo not in info_pago:
-            logs.append(f"Error: Falta campo '{campo}' en info_pago.")
-            return False, logs
+            return False, [f"Error: Falta campo '{campo}' en info_pago."]
+
+    if "SKU_Interno_Seleccionado" not in df_final.columns:
+        return False, ["Falta columna SKU_Interno_Seleccionado en df_final (selección del usuario)."]
 
     try:
-        # 1) Indexes inventario nube
         (inv_headers, idx_uid, idx_id, idx_norm, idx_stock, idx_costo, idx_precio, idx_nombre,
          uid_to_row, norm_to_row, norm_to_uid) = _build_inv_indexes(ws_inv)
 
-        # 2) Validación: df_final debe tener la selección (tu UI ya lo crea)
-        if df_final is None or df_final.empty:
-            return False, ["No hay items para guardar."]
-
-        if "SKU_Interno_Seleccionado" not in df_final.columns:
-            return False, ["Falta columna SKU_Interno_Seleccionado en df_final (selección del usuario)."]
-
-        # 3) Prorrateo (transporte/descuento)
         total_items = len(df_final)
         pr_trans = float(info_pago.get("Transporte", 0.0) or 0.0)
         pr_desc = float(info_pago.get("Descuento", 0.0) or 0.0)
-
         updates = []
         appends = []
-        # logs ya definido arriba
 
         for _, row in df_final.iterrows():
             sel = str(row.get("SKU_Interno_Seleccionado", "")).strip()
@@ -543,31 +573,22 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             cant_pack = float(row.get("Cantidad_Recibida", 0) or 0)
             iva_pct = float(row.get("IVA_Porcentaje", 0) or 0)
             costo_base_xml = float(row.get("Costo_Base_Unitario", 0) or 0)
-
             pr_item_trans = (pr_trans / total_items) if total_items else 0.0
             pr_item_desc = (pr_desc / total_items) if total_items else 0.0
 
-            # costo unitario real por unidad (no por pack) + IVA
             costo_base_unit = (costo_base_xml + pr_item_trans - pr_item_desc) / factor
             iva_unit = costo_base_unit * (iva_pct / 100.0)
             costo_neto_unit = costo_base_unit + iva_unit
-
             unidades = cant_pack * factor
 
-            # ✅ PRECIO: si el usuario no envió Precio_Sugerido, calcularlo aquí (con IVA y margen 20%)
             precio_editado = row.get("Precio_Sugerido", None)
             try:
                 precio_editado = float(precio_editado) if precio_editado not in (None, "", "None") else 0.0
             except Exception:
                 precio_editado = 0.0
+            precio_final = precio_editado if precio_editado > 0 else redondear_centena(precio_con_margen(costo_neto_unit, MARGEN_BRUTO_OBJ))
 
-            if precio_editado and precio_editado > 0:
-                precio_final = precio_editado
-            else:
-                precio_final = redondear_centena(precio_con_margen(costo_neto_unit, MARGEN_BRUTO_OBJ))
-
-            # ---- Inventario: update por UID/Norm; append si no existe ----
-            es_nuevo = ("NUEVO" in sel.upper()) or (sel == "") or (sel.upper().startswith("NUEVO"))
+            es_nuevo = ("NUEVO" in sel.upper()) or (sel == "") or sel.upper().startswith("NUEVO")
             if es_nuevo:
                 sku_interno = sku_prov if sku_prov and sku_prov != "S/C" else f"N-{int(time.time())}"
                 producto_uid = uuid.uuid4().hex
@@ -577,7 +598,6 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
 
             sku_norm = normalizar_id_producto(sku_interno)
 
-            # ---- Upsert Maestro_Proveedores (si hay SKU proveedor) ----
             if sku_prov and sku_prov != "S/C":
                 costo_prov_pack = costo_neto_unit * factor
                 _upsert_maestro_proveedores(
@@ -591,104 +611,70 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                     iva_pct=iva_pct,
                 )
 
-            # ---- Inventario: update por UID si existe; si no, por Norm; si no existe, append ----
-            fila = None
-            if producto_uid:
-                fila = uid_to_row.get(producto_uid)
+            fila = uid_to_row.get(producto_uid) if producto_uid else None
             if fila is None and sku_norm:
                 fila = norm_to_row.get(sku_norm)
 
-            # ✅ FIX: si existe la fila pero no hay UID aún, crear uno y curar la fila
-            if fila is not None and (not producto_uid):
-                producto_uid = uuid.uuid4().hex  # UID nuevo
-                # importante: también lo guardamos en el mapping proveedor si aplica (más abajo ya se upsertea)
+            if fila is not None and not producto_uid:
+                producto_uid = uuid.uuid4().hex
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_uid + 1), "values": [[producto_uid]]})
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_norm + 1), "values": [[sku_norm]]})
-                logs.append(f"🧱 CURADO: {sku_interno} ahora tiene UID {producto_uid[:8]}...")
+                logs.append(f"CURADO inventario: {sku_interno} ahora tiene UID {producto_uid[:8]}...")
 
             if fila is None:
-                # Crear nuevo en inventario
                 new_row = [""] * len(inv_headers)
                 new_row[idx_id] = sku_interno
                 new_row[idx_uid] = producto_uid
                 new_row[idx_norm] = sku_norm
 
                 if idx_nombre is not None:
-                    new_row[idx_nombre] = str(row.get("Nombre_Inventario", row.get("Descripcion", "")).strip())
-
+                    new_row[idx_nombre] = str(row.get("Nombre_Inventario", row.get("Descripcion", ""))).strip()
                 if idx_stock is not None:
                     new_row[idx_stock] = str(unidades)
                 if idx_costo is not None:
                     new_row[idx_costo] = str(costo_neto_unit)
-
-                # ✅ Guardar precio calculado con IVA + margen 20%
                 if idx_precio is not None:
                     new_row[idx_precio] = str(precio_final)
 
                 appends.append(new_row)
-                logs.append(f"✨ CREADO inventario: {sku_interno} | UID {producto_uid[:8]}... (+{unidades})")
+                logs.append(f"CREADO inventario: {sku_interno} | UID {producto_uid[:8]}... (+{unidades})")
             else:
-                # Update stock/costo en fila existente
-                # leer stock actual de la nube (robusto)
                 stock_actual = 0.0
                 if idx_stock is not None:
                     try:
-                        v = ws_inv.cell(fila, idx_stock + 1).value
-                        stock_actual = float(str(v).replace(",", "").strip() or 0)
+                        valor_stock = ws_inv.cell(fila, idx_stock + 1).value
+                        stock_actual = float(str(valor_stock).replace(",", "").strip() or 0)
                     except Exception:
                         stock_actual = 0.0
 
                 nuevo_stock = stock_actual + unidades
-
                 if idx_stock is not None:
                     updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_stock + 1), "values": [[nuevo_stock]]})
                 if idx_costo is not None:
                     updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_costo + 1), "values": [[costo_neto_unit]]})
-
-                # ✅ Actualizar precio (IVA + margen 20%) si hay columna Precio
                 if idx_precio is not None:
                     updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_precio + 1), "values": [[precio_final]]})
-
-                # asegurar UID/Norm en esa fila (por si estaba incompleto)
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_uid + 1), "values": [[producto_uid]]})
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_norm + 1), "values": [[sku_norm]]})
-
-                logs.append(f"📦 ACTUALIZADO: {sku_interno} | UID {producto_uid[:8]}... Stock {stock_actual}→{nuevo_stock}")
+                logs.append(f"ACTUALIZADO inventario: {sku_interno} | UID {producto_uid[:8]}... Stock {stock_actual}->{nuevo_stock}")
 
         if updates:
             ws_inv.batch_update(updates)
         if appends:
             ws_inv.append_rows(appends)
 
-        # Guardar historial
+        total_compra = clean_currency(meta_xml.get("Total", 0))
         ws_hist.append_row([
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"), str(meta_xml['Folio']), str(meta_xml['Proveedor']),
-            len(df_final), meta_xml['Total'], "Admin Nexus", "OK"
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            str(meta_xml.get("Folio", "")),
+            str(meta_xml.get("Proveedor", "")),
+            len(df_final),
+            total_compra,
+            "Admin Nexus",
+            "OK"
         ])
+        _registrar_gasto_compra(ws_gas, meta_xml, info_pago, total_compra)
 
-        # ✅ FIX: fecha para registro de gasto (evita NameError)
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        id_prov = normalizar_str(meta_xml.get("ID_Proveedor", "")) if meta_xml else ""
-        nombre_prov = meta_xml.get("Nombre_Proveedor") or meta_xml.get("Proveedor", "") if meta_xml else ""
-        nombre_prov = nombre_prov.strip()
-        email = meta_xml.get("Email_Proveedor", "") if meta_xml else ""
-        costo_prov = costo_prov_pack
-        # Orden: ID_Proveedor, Nombre_Proveedor, SKU_Proveedor, SKU_Interno, Factor_Pack, Ultima_Actualizacion, Email, Costo_Proveedor, Producto_UID, Ultimo_IVA
-        row_data = [
-            id_prov,
-            nombre_prov,
-            sku_prov,
-            sku_interno,
-            factor,
-            now,
-            email,
-            costo_prov,
-            producto_uid,
-            iva_pct
-        ]
-
-        # Registrar gasto en hoja Gastos
-        registrar_gasto(ws_gas, meta_xml, info_pago, meta_xml.get("Total", 0))
         return True, logs
     except Exception as e:
         return False, [f"Error del Sistema: {e}"]
