@@ -582,11 +582,34 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             unidades = cant_pack * factor
 
             precio_editado = row.get("Precio_Sugerido", None)
+            precio_auto_original = row.get("_Precio_Auto_Unitario", None)
+            factor_inicial = row.get("_Factor_Pack_Inicial", factor)
             try:
                 precio_editado = float(precio_editado) if precio_editado not in (None, "", "None") else 0.0
             except Exception:
                 precio_editado = 0.0
-            precio_final = precio_editado if precio_editado > 0 else redondear_centena(precio_con_margen(costo_neto_unit, MARGEN_BRUTO_OBJ))
+            try:
+                precio_auto_original = float(precio_auto_original) if precio_auto_original not in (None, "", "None") else 0.0
+            except Exception:
+                precio_auto_original = 0.0
+            try:
+                factor_inicial = float(factor_inicial) if factor_inicial not in (None, "", "None") else factor
+            except Exception:
+                factor_inicial = factor
+
+            precio_unitario_calculado = redondear_centena(precio_con_margen(costo_neto_unit, MARGEN_BRUTO_OBJ))
+            factor_modificado = abs(float(factor) - float(factor_inicial)) > 0.0001
+
+            if precio_editado <= 0:
+                precio_final = precio_unitario_calculado
+            elif factor_modificado and precio_auto_original > 0 and abs(precio_editado - precio_auto_original) < 0.01:
+                precio_final = precio_unitario_calculado
+                logs.append(f"PRECIO RECALCULADO por factor: {sku_prov or sku_interno} -> {precio_final}")
+            elif factor > 1 and precio_unitario_calculado > 0 and precio_editado >= (precio_unitario_calculado * factor * 0.7):
+                precio_final = redondear_centena(precio_editado / factor)
+                logs.append(f"PRECIO NORMALIZADO a unitario: {sku_prov or sku_interno} {precio_editado} / factor {factor} = {precio_final}")
+            else:
+                precio_final = precio_editado
 
             es_nuevo = ("NUEVO" in sel.upper()) or (sel == "") or sel.upper().startswith("NUEVO")
             if es_nuevo:
@@ -915,6 +938,8 @@ def main():
                 "IVA_%": int(iva_val) if float(iva_val).is_integer() else iva_val,
                 "Factor_Pack": factor_val,
                 "Precio_Sugerido": float(precio_sug_est or 0.0),
+                "_Precio_Auto_Unitario": float(precio_sug_est or 0.0),
+                "_Factor_Pack_Inicial": float(factor_val or 1.0),
                 "Categoría": "Sin Categoría"
             })
 
@@ -924,6 +949,10 @@ def main():
             df_revision,
             use_container_width=True,
             hide_index=True,
+            column_order=[
+                "SKU_Proveedor", "Descripcion", "Nombre_Inventario", "📌 Producto_Interno",
+                "IVA_%", "Categoría", "Cantidad", "Costo_Base_Unitario", "Factor_Pack", "Precio_Sugerido"
+            ],
             column_config={
                 "SKU_Proveedor": st.column_config.TextColumn("SKU Prov.", disabled=True),
                 "Descripcion": st.column_config.TextColumn("Desc. Factura", disabled=True),
@@ -953,7 +982,7 @@ def main():
                 "Cantidad": st.column_config.NumberColumn("Cant.", disabled=True, step=1, format="%.0f"),  # ✅ sin 1.0
                 "Costo_Base_Unitario": st.column_config.NumberColumn("Costo Unit. Base", format="$%.0f", disabled=True),
                 "Factor_Pack": st.column_config.NumberColumn("Factor/Caja", min_value=1.0, step=1.0, format="%.0f"),  # ✅
-                "Precio_Sugerido": st.column_config.NumberColumn("Precio Sugerido (20%)", format="$%.0f", min_value=0.0),  # ✅
+                "Precio_Sugerido": st.column_config.NumberColumn("Precio Unitario Sugerido", format="$%.0f", min_value=0.0),
             },
         )
 
