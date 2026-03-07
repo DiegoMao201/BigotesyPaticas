@@ -2,9 +2,57 @@ import streamlit as st
 import pandas as pd
 import gspread
 import plotly.express as px
+import re
 from datetime import datetime, timedelta, date
 from urllib.parse import quote
 import unicodedata
+
+def money_int(val):
+    if isinstance(val, (int, float)):
+        return int(round(float(val)))
+    s = str(val or "").strip().replace("$", "").replace(" ", "")
+    if not s:
+        return 0
+    neg = s.startswith("-")
+    if neg:
+        s = s[1:]
+    s = re.sub(r"[^0-9,\.]", "", s)
+    if not s:
+        return 0
+    if "." in s and "," in s:
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif s.count(",") > 1:
+        s = s.replace(",", "")
+    elif s.count(".") > 1:
+        s = s.replace(".", "")
+    elif "," in s:
+        left, right = s.split(",", 1)
+        if len(right) <= 2:
+            s = f"{left}.{right}"
+        elif len(right) == 3 and len(left) <= 3:
+            s = left + right
+        elif len(right) == 3 and len(left) > 3:
+            s = f"{left}.{right}"
+        else:
+            s = left + right
+    elif "." in s:
+        left, right = s.split(".", 1)
+        if len(right) <= 2:
+            s = f"{left}.{right}"
+        elif len(right) == 3 and len(left) <= 3:
+            s = left + right
+        elif len(right) == 3 and len(left) > 3:
+            s = f"{left}.{right}"
+        else:
+            s = left + right
+    try:
+        out = int(round(float(s)))
+    except Exception:
+        out = int(re.sub(r"[^0-9]", "", s) or 0)
+    return -out if neg else out
 
 # ==========================================
 # 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME)
@@ -218,7 +266,7 @@ def _preparar_fuente_cli_ven(df_cli: pd.DataFrame, df_ven: pd.DataFrame) -> tupl
         df_ven = df_ven.rename(columns={col_total_v: "Total"})
     if "Total" not in df_ven.columns:
         df_ven["Total"] = 0.0
-    df_ven["Total"] = pd.to_numeric(df_ven["Total"], errors="coerce").fillna(0.0)
+    df_ven["Total"] = df_ven["Total"].apply(money_int)
 
     col_ced_v = _find_col(df_ven, ["Cedula_Cliente", "Cedula", "Cédula", "Documento"])
     if col_ced_v and col_ced_v != "Cedula_Cliente":

@@ -6,6 +6,7 @@ import numpy as np
 import time
 from datetime import datetime
 import math
+import re
 import uuid
 
 try:
@@ -15,6 +16,57 @@ except Exception:
     # fallback defensivo si ya existe localmente con otro nombre
     def normalizar_id_producto(x):
         return str(x or "").strip().upper()
+
+def money_int(val) -> int:
+    if isinstance(val, (np.integer, int)):
+        return int(val)
+    if isinstance(val, (np.floating, float)):
+        return int(round(float(val)))
+    s = str(val or "").strip().replace("$", "").replace(" ", "")
+    if not s:
+        return 0
+    neg = s.startswith("-")
+    if neg:
+        s = s[1:]
+    s = re.sub(r"[^0-9,\.]", "", s)
+    if not s:
+        return 0
+
+    if "." in s and "," in s:
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif s.count(",") > 1:
+        s = s.replace(",", "")
+    elif s.count(".") > 1:
+        s = s.replace(".", "")
+    elif "," in s:
+        left, right = s.split(",", 1)
+        if len(right) <= 2:
+            s = f"{left}.{right}"
+        elif len(right) == 3 and len(left) <= 3:
+            s = left + right
+        elif len(right) == 3 and len(left) > 3:
+            s = f"{left}.{right}"
+        else:
+            s = left + right
+    elif "." in s:
+        left, right = s.split(".", 1)
+        if len(right) <= 2:
+            s = f"{left}.{right}"
+        elif len(right) == 3 and len(left) <= 3:
+            s = left + right
+        elif len(right) == 3 and len(left) > 3:
+            s = f"{left}.{right}"
+        else:
+            s = left + right
+
+    try:
+        out = int(round(float(s)))
+    except Exception:
+        out = int(re.sub(r"[^0-9]", "", s) or 0)
+    return -out if neg else out
 
 # ==========================================
 # 3. FUNCIONES DE ACTUALIZACIÓN DE MAPEO PROVEEDORES
@@ -180,7 +232,7 @@ def _get_meta_safe():
         "Proveedor": meta.get("Proveedor", "").strip(),
         "ID_Proveedor": meta.get("ID_Proveedor", "").strip(),
         "Folio": meta.get("Folio", "").strip(),
-        "Total": float(meta.get("Total", 0.0) or 0.0),
+        "Total": money_int(meta.get("Total", 0)),
     }
 
 def normalizar_str(valor):
@@ -189,18 +241,7 @@ def normalizar_str(valor):
     return str(valor).replace(" ","").strip().upper()
 
 def clean_currency(val):
-    if isinstance(val, (int, float)): return float(val)
-    if isinstance(val, str):
-        val = val.replace('$', '').replace(' ', '').strip()
-        if not val: return 0.0
-        try:
-            if ',' in val and '.' in val:
-                if val.find('.') < val.find(','): val = val.replace('.', '').replace(',', '.')
-                else: val = val.replace(',', '')
-            elif ',' in val: val = val.replace(',', '.')
-            return float(val)
-        except: return 0.0
-    return 0.0
+    return money_int(val)
 
 def sanitizar_para_sheet(val):
     if isinstance(val, (np.int64, np.int32)): return int(val)
@@ -477,8 +518,8 @@ def parsear_xml_colombia(archivo):
         try: folio = invoice_root.find('cbc:ID', ns).text
         except: folio = "S/F"
 
-        try: total_pagar_factura = float(invoice_root.find('.//cac:LegalMonetaryTotal/cbc:PayableAmount', ns).text)
-        except: total_pagar_factura = 0.0
+        try: total_pagar_factura = money_int(invoice_root.find('.//cac:LegalMonetaryTotal/cbc:PayableAmount', ns).text)
+        except: total_pagar_factura = 0
 
         items = []
         lines = invoice_root.findall('.//cac:InvoiceLine', ns)
@@ -487,7 +528,7 @@ def parsear_xml_colombia(archivo):
             try:
                 qty = float(line.find('cbc:InvoicedQuantity', ns).text)
                 price_node = line.find('.//cac:Price/cbc:PriceAmount', ns)
-                base_price = float(price_node.text) if price_node is not None else 0.0
+                base_price = money_int(price_node.text) if price_node is not None else 0
                 
                 discount_amount = 0.0
                 allowances = line.findall('.//cac:AllowanceCharge', ns)
@@ -495,9 +536,9 @@ def parsear_xml_colombia(archivo):
                     first_allowance = allowances[0] 
                     if first_allowance.find('cbc:ChargeIndicator', ns).text == 'false':
                         val = first_allowance.find('cbc:Amount', ns).text
-                        discount_amount = float(val) if val else 0.0
+                        discount_amount = money_int(val) if val else 0
 
-                final_base_price = base_price - discount_amount
+                    final_base_price = money_int(base_price - discount_amount)
                 
                 item_node = line.find('cac:Item', ns)
                 desc = item_node.find('cbc:Description', ns).text
@@ -572,13 +613,13 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
 
             cant_pack = float(row.get("Cantidad_Recibida", 0) or 0)
             iva_pct = float(row.get("IVA_Porcentaje", 0) or 0)
-            costo_base_xml = float(row.get("Costo_Base_Unitario", 0) or 0)
+            costo_base_xml = money_int(row.get("Costo_Base_Unitario", 0))
             pr_item_trans = (pr_trans / total_items) if total_items else 0.0
             pr_item_desc = (pr_desc / total_items) if total_items else 0.0
 
             costo_base_unit = (costo_base_xml + pr_item_trans - pr_item_desc) / factor
             iva_unit = costo_base_unit * (iva_pct / 100.0)
-            costo_neto_unit = costo_base_unit + iva_unit
+            costo_neto_unit = money_int(costo_base_unit + iva_unit)
             unidades = cant_pack * factor
 
             precio_editado = row.get("Precio_Sugerido", None)
@@ -603,13 +644,13 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             if precio_editado <= 0:
                 precio_final = precio_unitario_calculado
             elif factor_modificado and precio_auto_original > 0 and abs(precio_editado - precio_auto_original) < 0.01:
-                precio_final = precio_unitario_calculado
+                precio_final = money_int(precio_unitario_calculado)
                 logs.append(f"PRECIO RECALCULADO por factor: {sku_prov or sku_interno} -> {precio_final}")
             elif factor > 1 and precio_unitario_calculado > 0 and precio_editado >= (precio_unitario_calculado * factor * 0.7):
-                precio_final = redondear_centena(precio_editado / factor)
+                precio_final = money_int(redondear_centena(precio_editado / factor))
                 logs.append(f"PRECIO NORMALIZADO a unitario: {sku_prov or sku_interno} {precio_editado} / factor {factor} = {precio_final}")
             else:
-                precio_final = precio_editado
+                precio_final = money_int(precio_editado)
 
             es_nuevo = ("NUEVO" in sel.upper()) or (sel == "") or sel.upper().startswith("NUEVO")
             if es_nuevo:
@@ -622,7 +663,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             sku_norm = normalizar_id_producto(sku_interno)
 
             if sku_prov and sku_prov != "S/C":
-                costo_prov_pack = costo_neto_unit * factor
+                costo_prov_pack = money_int(costo_neto_unit * factor)
                 _upsert_maestro_proveedores(
                     ws_map=ws_map,
                     meta_xml=meta_xml,
@@ -655,9 +696,9 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 if idx_stock is not None:
                     new_row[idx_stock] = str(unidades)
                 if idx_costo is not None:
-                    new_row[idx_costo] = str(costo_neto_unit)
+                    new_row[idx_costo] = str(money_int(costo_neto_unit))
                 if idx_precio is not None:
-                    new_row[idx_precio] = str(precio_final)
+                    new_row[idx_precio] = str(money_int(precio_final))
 
                 appends.append(new_row)
                 logs.append(f"CREADO inventario: {sku_interno} | UID {producto_uid[:8]}... (+{unidades})")
@@ -674,9 +715,9 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 if idx_stock is not None:
                     updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_stock + 1), "values": [[nuevo_stock]]})
                 if idx_costo is not None:
-                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_costo + 1), "values": [[costo_neto_unit]]})
+                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_costo + 1), "values": [[money_int(costo_neto_unit)]]})
                 if idx_precio is not None:
-                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_precio + 1), "values": [[precio_final]]})
+                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_precio + 1), "values": [[money_int(precio_final)]]})
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_uid + 1), "values": [[producto_uid]]})
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_norm + 1), "values": [[sku_norm]]})
                 logs.append(f"ACTUALIZADO inventario: {sku_interno} | UID {producto_uid[:8]}... Stock {stock_actual}->{nuevo_stock}")
@@ -686,7 +727,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
         if appends:
             ws_inv.append_rows(appends)
 
-        total_compra = clean_currency(meta_xml.get("Total", 0))
+        total_compra = money_int(meta_xml.get("Total", 0))
         ws_hist.append_row([
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             str(meta_xml.get("Folio", "")),
@@ -823,12 +864,12 @@ def main():
                         st.error("⚠️ Falta Proveedor o Factura.")
                     else:
                         items_std = []
-                        total_manual = 0.0
+                        total_manual = 0
                         for i, row in edited_manual.iterrows():
                             if row["Descripción"]:
                                 qty = float(row["Cantidad"])
-                                c_tot = float(row["Costo_Total_Línea"])
-                                base_unit = (c_tot / qty) if qty > 0 else 0.0
+                                c_tot = money_int(row["Costo_Total_Línea"])
+                                base_unit = money_int((c_tot / qty) if qty > 0 else 0)
                                 total_manual += c_tot
                                 
                                 items_std.append({
@@ -862,7 +903,7 @@ def main():
         st.info(
             f"🏢 **Proveedor:** {meta.get('Proveedor','—')} | "
             f"📄 **Folio:** {meta.get('Folio','—')} | "
-            f"💰 **Total Base:** ${float(meta.get('Total',0.0) or 0.0):,.2f}"
+            f"💰 **Total Base:** ${money_int(meta.get('Total',0)):,.0f}"
         )
 
         # --- LÓGICA DE MEMORIA (CEREBRO) ---
@@ -918,7 +959,7 @@ def main():
                         encontrado = True
                         break
 
-            base_unit = float(item.get("Costo_Base_Unitario", 0.0) or 0.0)
+            base_unit = money_int(item.get("Costo_Base_Unitario", 0))
             factor_val = float(factor_val or 1.0)
             if factor_val <= 0:
                 factor_val = 1.0
@@ -937,8 +978,8 @@ def main():
                 "📌 Producto_Interno": prod_interno_val,
                 "IVA_%": int(iva_val) if float(iva_val).is_integer() else iva_val,
                 "Factor_Pack": factor_val,
-                "Precio_Sugerido": float(precio_sug_est or 0.0),
-                "_Precio_Auto_Unitario": float(precio_sug_est or 0.0),
+                "Precio_Sugerido": money_int(precio_sug_est or 0),
+                "_Precio_Auto_Unitario": money_int(precio_sug_est or 0),
                 "_Factor_Pack_Inicial": float(factor_val or 1.0),
                 "Categoría": "Sin Categoría"
             })

@@ -1,17 +1,22 @@
 import streamlit as st
 import pandas as pd
 import gspread
+import importlib
 from datetime import datetime, date, timedelta
 import json
 import urllib.parse
 import jinja2
-from weasyprint import HTML
 from io import BytesIO
 import pytz
 import numpy as np
 import time  # Necesario para manejar las esperas en el error 429
 import uuid  # ya lo tienes; mantener
 import re  # ✅ nuevo
+
+try:
+    HTML = importlib.import_module("weasyprint").HTML
+except Exception:
+    HTML = None
 
 # --- CONFIGURACIÓN DE ZONA HORARIA ---
 TZ_CO = pytz.timezone("America/Bogota")
@@ -97,11 +102,16 @@ def limpiar_dataframe(raw_data):
     df = pd.DataFrame(raw_data[1:], columns=clean_header)
 
     # Convertir columnas numéricas y fechas
-    cols_num = ['Precio', 'Stock', 'Costo', 'Monto', 'Total', 'Costo_Total', 
-                'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 
-                'Dinero_A_Bancos', 'Saldo_Teorico', 'Saldo_Real', 'Diferencia']
-    
-    for col in cols_num:
+    cols_money = ['Precio', 'Costo', 'Monto', 'Total', 'Costo_Total', 
+                  'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 
+                  'Dinero_A_Bancos', 'Saldo_Teorico', 'Saldo_Real', 'Diferencia']
+    cols_numeric = ['Stock']
+
+    for col in cols_money:
+        if col in df.columns:
+            df[col] = df[col].apply(clean_currency)
+
+    for col in cols_numeric:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
@@ -137,7 +147,7 @@ def cargar_datos_iniciales():
 # ==========================================
 def sanitizar_para_sheet(val):
     if isinstance(val, (np.int64, np.int32)): return int(val)
-    if isinstance(val, (np.float64, np.float32)): return float(val)
+    if isinstance(val, (np.float64, np.float32, float)): return int(round(float(val)))
     if isinstance(val, (pd.Timestamp, datetime, date)): return val.strftime("%Y-%m-%d %H:%M:%S") if isinstance(val, datetime) else val.strftime("%Y-%m-%d")
     return val
 
@@ -148,6 +158,57 @@ def normalizar_id_producto(id_prod):
     if s.isdigit(): s = str(int(s))
     if s.endswith("00") and s[:-2].isdigit(): s = s[:-2]
     return s
+
+def clean_currency(val):
+    if isinstance(val, (np.integer, int)):
+        return int(val)
+    if isinstance(val, (np.floating, float)):
+        return int(round(float(val)))
+    s = str(val or "").strip().replace("$", "").replace(" ", "")
+    if not s:
+        return 0
+    neg = s.startswith("-")
+    if neg:
+        s = s[1:]
+    s = re.sub(r"[^0-9,\.]", "", s)
+    if not s:
+        return 0
+
+    if "." in s and "," in s:
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif s.count(",") > 1:
+        s = s.replace(",", "")
+    elif s.count(".") > 1:
+        s = s.replace(".", "")
+    elif "," in s:
+        left, right = s.split(",", 1)
+        if len(right) <= 2:
+            s = f"{left}.{right}"
+        elif len(right) == 3 and len(left) <= 3:
+            s = left + right
+        elif len(right) == 3 and len(left) > 3:
+            s = f"{left}.{right}"
+        else:
+            s = left + right
+    elif "." in s:
+        left, right = s.split(".", 1)
+        if len(right) <= 2:
+            s = f"{left}.{right}"
+        elif len(right) == 3 and len(left) <= 3:
+            s = left + right
+        elif len(right) == 3 and len(left) > 3:
+            s = f"{left}.{right}"
+        else:
+            s = left + right
+
+    try:
+        out = int(round(float(s)))
+    except Exception:
+        out = int(re.sub(r"[^0-9]", "", s) or 0)
+    return -out if neg else out
 
 def limpiar_tel(tel):
     t = str(tel).replace(" ", "").replace("+", "").replace("-", "").replace("(", "").replace(")", "").strip()
@@ -389,6 +450,7 @@ def registrar_venta(fila_datos, carrito):
     ws_inv = obtener_worksheets(sh)["inv"]
 
     # 1) Escribir venta
+    fila_datos = [sanitizar_para_sheet(v) for v in fila_datos]
     safe_api_call(ws_ven.append_row, fila_datos)
 
     # 2) Preparar inventario local
@@ -463,7 +525,9 @@ def registrar_venta(fila_datos, carrito):
         fila_datos += [""] * (len(cols) - len(fila_datos))
     nuevo_df = pd.DataFrame([fila_datos], columns=cols)
     if "Total" in nuevo_df.columns:
-        nuevo_df["Total"] = pd.to_numeric(nuevo_df["Total"], errors="coerce")
+        nuevo_df["Total"] = nuevo_df["Total"].apply(clean_currency)
+    if "Costo_Total" in nuevo_df.columns:
+        nuevo_df["Costo_Total"] = nuevo_df["Costo_Total"].apply(clean_currency)
     if "Fecha" in nuevo_df.columns:
         nuevo_df["Fecha"] = pd.to_datetime(nuevo_df["Fecha"], errors="coerce")
     st.session_state.db["ven"] = pd.concat([st.session_state.db["ven"], nuevo_df], ignore_index=True)
@@ -472,13 +536,14 @@ def registrar_gasto(fila_datos):
     sh = conectar_google_sheets()
     ws_gas = obtener_worksheets(sh)["gas"]
     
+    fila_datos = [sanitizar_para_sheet(v) for v in fila_datos]
     safe_api_call(ws_gas.append_row, fila_datos)
     
     # Update local
     cols = st.session_state.db['gas'].columns
     if len(fila_datos) < len(cols): fila_datos += [""] * (len(cols) - len(fila_datos))
     nuevo_df = pd.DataFrame([fila_datos], columns=cols)
-    if 'Monto' in nuevo_df.columns: nuevo_df['Monto'] = pd.to_numeric(nuevo_df['Monto'])
+    if 'Monto' in nuevo_df.columns: nuevo_df['Monto'] = nuevo_df['Monto'].apply(clean_currency)
     st.session_state.db['gas'] = pd.concat([st.session_state.db['gas'], nuevo_df], ignore_index=True)
 
 def registrar_cliente(fila_datos, update=False, row_idx=None):
@@ -643,8 +708,8 @@ def tab_pos():
     id_norm = str(row_prod.get("ID_Producto_Norm", normalizar_id_producto(id_prod))).strip()
     nombre = str(row_prod.get("Nombre", "")).strip()
     stock_disp = float(row_prod.get("Stock", 0) or 0)
-    precio_base = float(row_prod.get("Precio", 0) or 0)
-    costo_base = float(row_prod.get("Costo", 0) or 0)
+    precio_base = clean_currency(row_prod.get("Precio", 0) or 0)
+    costo_base = clean_currency(row_prod.get("Costo", 0) or 0)
 
     # =========================
     # FIX: Reset de inputs por producto
@@ -655,7 +720,7 @@ def tab_pos():
     if st.session_state.get("pos_last_producto_key") != producto_key:
         st.session_state["pos_last_producto_key"] = producto_key
         st.session_state["pos_cant"] = 1.0
-        st.session_state["pos_precio"] = float(precio_base or 0.0)
+        st.session_state["pos_precio"] = clean_currency(precio_base or 0)
         st.session_state["pos_desc"] = 0.0
 
     # =========================
@@ -688,7 +753,9 @@ def tab_pos():
         descuento = st.number_input("Descuento unit.", min_value=0.0, step=100.0, key="pos_desc")
     with cD:
         # Vista rápida de totales de línea (profesional)
-        subtotal_linea = (float(precio or 0) - float(descuento or 0)) * float(cant or 0)
+        precio = clean_currency(precio)
+        descuento = clean_currency(descuento)
+        subtotal_linea = clean_currency((precio - descuento) * float(cant or 0))
         st.caption("Subtotal línea")
         st.write(f"${subtotal_linea:,.0f}")
 
@@ -700,9 +767,9 @@ def tab_pos():
                 (not producto_uid) and str(it.get("ID_Producto_Norm", "")).strip() == id_norm
             ):
                 it["Cantidad"] = float(it.get("Cantidad", 0) or 0) + float(cant)
-                it["Precio"] = float(precio)
-                it["Descuento"] = float(descuento)
-                it["Subtotal"] = (float(it["Precio"]) - float(it["Descuento"])) * float(it["Cantidad"])
+                it["Precio"] = clean_currency(precio)
+                it["Descuento"] = clean_currency(descuento)
+                it["Subtotal"] = clean_currency((it["Precio"] - it["Descuento"]) * float(it["Cantidad"]))
                 existe = True
                 break
 
@@ -714,10 +781,10 @@ def tab_pos():
                     "ID_Producto_Norm": id_norm,
                     "Nombre_Producto": nombre,
                     "Cantidad": float(cant),
-                    "Precio": float(precio),
-                    "Descuento": float(descuento),
-                    "Costo": float(costo_base),
-                    "Subtotal": (float(precio) - float(descuento)) * float(cant),
+                    "Precio": clean_currency(precio),
+                    "Descuento": clean_currency(descuento),
+                    "Costo": clean_currency(costo_base),
+                    "Subtotal": clean_currency((clean_currency(precio) - clean_currency(descuento)) * float(cant)),
                 }
             )
         st.rerun()
@@ -742,7 +809,7 @@ def tab_pos():
 
     # Subtotal siempre consistente
     if "Subtotal" not in df_car.columns:
-        df_car["Subtotal"] = (df_car["Precio"] - df_car["Descuento"]) * df_car["Cantidad"]
+        df_car["Subtotal"] = ((df_car["Precio"] - df_car["Descuento"]) * df_car["Cantidad"]).round().astype(int)
 
     with st.form("pos_carrito_form", clear_on_submit=False):
         edited_car = st.data_editor(
@@ -783,7 +850,7 @@ def tab_pos():
                     edited_car[c] = pd.to_numeric(edited_car[c], errors="coerce").fillna(0.0)
 
             if not edited_car.empty:
-                edited_car["Subtotal"] = (edited_car["Precio"] - edited_car["Descuento"]) * edited_car["Cantidad"]
+                edited_car["Subtotal"] = ((edited_car["Precio"] - edited_car["Descuento"]) * edited_car["Cantidad"]).round().astype(int)
 
             # 3) Guardar en session_state (sin columna de acción)
             if "🗑️ Eliminar" in edited_car.columns:
@@ -798,11 +865,13 @@ def tab_pos():
         for c in ["Cantidad", "Precio", "Descuento", "Subtotal"]:
             if c in df_total.columns:
                 df_total[c] = pd.to_numeric(df_total[c], errors="coerce").fillna(0.0)
+                if c in ["Precio", "Descuento", "Subtotal"]:
+                    df_total[c] = df_total[c].round().astype(int)
         if "Subtotal" not in df_total.columns and {"Precio", "Descuento", "Cantidad"}.issubset(df_total.columns):
-            df_total["Subtotal"] = (df_total["Precio"] - df_total["Descuento"]) * df_total["Cantidad"]
-        total = float(df_total["Subtotal"].sum()) if "Subtotal" in df_total.columns else 0.0
+            df_total["Subtotal"] = ((df_total["Precio"] - df_total["Descuento"]) * df_total["Cantidad"]).round().astype(int)
+        total = clean_currency(df_total["Subtotal"].sum()) if "Subtotal" in df_total.columns else 0
     else:
-        total = 0.0
+        total = 0
 
     st.markdown(f"**TOTAL:** ${total:,.0f}")
 
@@ -829,7 +898,7 @@ def tab_pos():
             items_str = ", ".join([f"{x['Cantidad']}x {x['Nombre_Producto']}" for x in st.session_state.carrito])
 
             # total ya lo calculas más arriba; asegurar float
-            total_num = float(total or 0.0)
+            total_num = clean_currency(total or 0)
 
             items_json = json.dumps(
                 [
@@ -844,9 +913,9 @@ def tab_pos():
                 ]
             )
 
-            costo_total = sum(
-                [float(x.get("Costo", 0) or 0) * float(x.get("Cantidad", 0) or 0) for x in st.session_state.carrito]
-            )
+            costo_total = clean_currency(sum(
+                [clean_currency(x.get("Costo", 0) or 0) * float(x.get("Cantidad", 0) or 0) for x in st.session_state.carrito]
+            ))
 
             fila = [
                 id_venta,

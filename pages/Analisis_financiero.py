@@ -1,9 +1,59 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import re
 from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
+
+def money_int(val):
+    if isinstance(val, (np.integer, int)):
+        return int(val)
+    if isinstance(val, (np.floating, float)):
+        return int(round(float(val)))
+    s = str(val or "").strip().replace("$", "").replace(" ", "")
+    if not s:
+        return 0
+    neg = s.startswith("-")
+    if neg:
+        s = s[1:]
+    s = re.sub(r"[^0-9,\.]", "", s)
+    if not s:
+        return 0
+    if "." in s and "," in s:
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif s.count(",") > 1:
+        s = s.replace(",", "")
+    elif s.count(".") > 1:
+        s = s.replace(".", "")
+    elif "," in s:
+        left, right = s.split(",", 1)
+        if len(right) <= 2:
+            s = f"{left}.{right}"
+        elif len(right) == 3 and len(left) <= 3:
+            s = left + right
+        elif len(right) == 3 and len(left) > 3:
+            s = f"{left}.{right}"
+        else:
+            s = left + right
+    elif "." in s:
+        left, right = s.split(".", 1)
+        if len(right) <= 2:
+            s = f"{left}.{right}"
+        elif len(right) == 3 and len(left) <= 3:
+            s = left + right
+        elif len(right) == 3 and len(left) > 3:
+            s = f"{left}.{right}"
+        else:
+            s = left + right
+    try:
+        out = int(round(float(s)))
+    except Exception:
+        out = int(re.sub(r"[^0-9]", "", s) or 0)
+    return -out if neg else out
 
 # ==========================================================
 # CENTRO DE CONTROL FINANCIERO (Nexus Executive Finance)
@@ -182,7 +232,7 @@ def preparar_ventas(df_ven: pd.DataFrame) -> pd.DataFrame:
         df = df.rename(columns={col_total: "Total"})
     if "Total" not in df.columns:
         df["Total"] = 0.0
-    df["Total"] = pd.to_numeric(df["Total"], errors="coerce").fillna(0.0)
+    df["Total"] = df["Total"].apply(money_int)
 
     # Costo (si existe)
     col_costo = _col_pick(df, ["Costo_Total", "Costo total", "Costo", "COGS"])
@@ -190,7 +240,7 @@ def preparar_ventas(df_ven: pd.DataFrame) -> pd.DataFrame:
         df = df.rename(columns={col_costo: "Costo_Total"})
     if "Costo_Total" not in df.columns:
         df["Costo_Total"] = 0.0
-    df["Costo_Total"] = pd.to_numeric(df["Costo_Total"], errors="coerce").fillna(0.0)
+    df["Costo_Total"] = df["Costo_Total"].apply(money_int)
 
     # Método de pago (si existe)
     col_pago = _col_pick(df, ["Metodo_Pago", "Método_Pago", "Metodo", "Pago"])
@@ -226,7 +276,7 @@ def preparar_gastos(df_gas: pd.DataFrame) -> pd.DataFrame:
         df = df.rename(columns={col_monto: "Monto"})
     if "Monto" not in df.columns:
         df["Monto"] = 0.0
-    df["Monto"] = pd.to_numeric(df["Monto"], errors="coerce").fillna(0.0)
+    df["Monto"] = df["Monto"].apply(money_int)
 
     # Tipo gasto (en tu app principal es Tipo_Gasto)
     col_tipo = _col_pick(df, ["Tipo_Gasto", "Tipo", "tipo", "Tipo gasto"])

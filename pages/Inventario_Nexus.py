@@ -6,6 +6,7 @@ import json
 import uuid
 import time
 import io
+import re
 from datetime import datetime, timedelta, date
 from urllib.parse import quote
 import unicodedata
@@ -82,13 +83,59 @@ def normalizar_id_producto(id_prod):
     val = val.replace(".", "").replace(",", "").replace("\t", "").replace("\n", "").lstrip("0")
     return val if val else "SIN_ID"
 
+def money_int(x):
+    if isinstance(x, (np.integer, int)):
+        return int(x)
+    if isinstance(x, (np.floating, float)):
+        return int(round(float(x)))
+    s = str(x or "").strip().replace("$", "").replace(" ", "")
+    if not s:
+        return 0
+    neg = s.startswith("-")
+    if neg:
+        s = s[1:]
+    s = re.sub(r"[^0-9,\.]", "", s)
+    if not s:
+        return 0
+
+    if "." in s and "," in s:
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif s.count(",") > 1:
+        s = s.replace(",", "")
+    elif s.count(".") > 1:
+        s = s.replace(".", "")
+    elif "," in s:
+        left, right = s.split(",", 1)
+        if len(right) <= 2:
+            s = f"{left}.{right}"
+        elif len(right) == 3 and len(left) <= 3:
+            s = left + right
+        elif len(right) == 3 and len(left) > 3:
+            s = f"{left}.{right}"
+        else:
+            s = left + right
+    elif "." in s:
+        left, right = s.split(".", 1)
+        if len(right) <= 2:
+            s = f"{left}.{right}"
+        elif len(right) == 3 and len(left) <= 3:
+            s = left + right
+        elif len(right) == 3 and len(left) > 3:
+            s = f"{left}.{right}"
+        else:
+            s = left + right
+
+    try:
+        out = int(round(float(s)))
+    except Exception:
+        out = int(re.sub(r"[^0-9]", "", s) or 0)
+    return -out if neg else out
+
 def clean_currency(x):
-    if isinstance(x, (int, float)): return float(x)
-    if isinstance(x, str):
-        clean = x.replace('$', '').replace(',', '').replace(' ', '').strip()
-        try: return float(clean)
-        except: return 0.0
-    return 0.0
+    return money_int(x)
 
 
 # ==========================================
@@ -191,6 +238,7 @@ def cargar_datos_snapshot():
             df_prov["Costo_Proveedor"] / df_prov["Factor_Pack"],
             df_prov["Costo_Proveedor"]
         )
+        df_prov["Costo_Proveedor_Unitario"] = df_prov["Costo_Proveedor_Unitario"].apply(clean_currency)
 
         data_store["df_Maestro_Proveedores"] = df_prov
 
