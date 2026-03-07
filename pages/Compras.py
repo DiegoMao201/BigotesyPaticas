@@ -637,6 +637,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
         nombre_prov = meta_xml.get("Nombre_Proveedor") or meta_xml.get("Proveedor", "") if meta_xml else ""
         nombre_prov = nombre_prov.strip()
         email = meta_xml.get("Email_Proveedor", "") if meta_xml else ""
+        costo_prov = costo_prov_pack
         row_data = [
             id_prov,
             nombre_prov,
