@@ -8,7 +8,6 @@ import time
 import io
 from datetime import datetime, timedelta, date
 from urllib.parse import quote
-import xlsxwriter
 import unicodedata
 
 # ==========================================
@@ -147,7 +146,10 @@ def cargar_datos_snapshot():
         ],
         "Ventas": ['ID_Venta', 'Fecha', 'Cedula_Cliente', 'Nombre_Cliente', 'Tipo_Entrega', 'Direccion_Envio', 'Estado_Envio', 'Metodo_Pago', 'Banco_Destino', 'Total', 'Items', 'Items_Detalle', 'Costo_Total', 'Mascota'],
         "Gastos": ['ID_Gasto', 'Fecha', 'Tipo_Gasto', 'Categoria', 'Descripcion', 'Monto', 'Metodo_Pago', 'Banco_Origen'],
-        "Maestro_Proveedores": ['ID_Proveedor', 'Nombre_Proveedor', 'SKU_Interno', 'Factor_Pack', 'Costo_Proveedor', 'Email'],
+        "Maestro_Proveedores": [
+            'ID_Proveedor', 'Nombre_Proveedor', 'SKU_Proveedor', 'SKU_Interno', 'Factor_Pack',
+            'Ultima_Actualizacion', 'Email', 'Costo_Proveedor', 'Producto_UID', 'Ultimo_IVA'
+        ],
         "Historial_Ordenes": ['ID_Orden', 'Proveedor', 'Fecha_Orden', 'Items_JSON', 'Total_Dinero', 'Estado']
     }
 
@@ -184,6 +186,11 @@ def cargar_datos_snapshot():
             df_prov["Factor_Pack"] = 1.0
         df_prov["Factor_Pack"] = pd.to_numeric(df_prov["Factor_Pack"], errors="coerce").fillna(1.0)
         df_prov["Factor_Pack"] = np.where(df_prov["Factor_Pack"] <= 0, 1.0, df_prov["Factor_Pack"])
+        df_prov["Costo_Proveedor_Unitario"] = np.where(
+            df_prov["Factor_Pack"] > 0,
+            df_prov["Costo_Proveedor"] / df_prov["Factor_Pack"],
+            df_prov["Costo_Proveedor"]
+        )
 
         data_store["df_Maestro_Proveedores"] = df_prov
 
@@ -253,16 +260,21 @@ def calcular_master_df() -> pd.DataFrame:
         df_prov["SKU_Interno_Norm"] = df_prov["SKU_Interno"].apply(normalizar_id_producto)
     else:
         df_prov["SKU_Interno_Norm"] = df_prov["SKU_Interno_Norm"].apply(normalizar_id_producto)
+    df_prov["Costo_Proveedor_Unitario"] = np.where(
+        df_prov["Factor_Pack"] > 0,
+        df_prov["Costo_Proveedor"] / df_prov["Factor_Pack"],
+        df_prov["Costo_Proveedor"]
+    )
 
     # 3. MERGE
     if not df_prov.empty and "SKU_Interno_Norm" in df_prov.columns:
         df_prov_clean = (
-            df_prov.sort_values("Costo_Proveedor", na_position="last")
+            df_prov.sort_values("Ultima_Actualizacion" if "Ultima_Actualizacion" in df_prov.columns else "Costo_Proveedor", na_position="last")
             .drop_duplicates("SKU_Interno_Norm")
         )
         master = pd.merge(
             df_inv,
-            df_prov_clean[["SKU_Interno_Norm", "Nombre_Proveedor", "Costo_Proveedor", "Factor_Pack"]],
+            df_prov_clean[["SKU_Interno_Norm", "Nombre_Proveedor", "Costo_Proveedor", "Costo_Proveedor_Unitario", "Factor_Pack"]],
             left_on="ID_Producto_Norm", right_on="SKU_Interno_Norm",
             how="left",
         )
@@ -270,33 +282,67 @@ def calcular_master_df() -> pd.DataFrame:
         master = df_inv.copy()
         master["Nombre_Proveedor"] = "Sin Asignar"
         master["Costo_Proveedor"]  = 0.0
+        master["Costo_Proveedor_Unitario"] = 0.0
         master["Factor_Pack"]      = 1.0
 
     master["Nombre_Proveedor"] = master["Nombre_Proveedor"].fillna("Sin Asignar")
     master["Costo_Proveedor"]  = pd.to_numeric(master["Costo_Proveedor"], errors="coerce").fillna(0.0)
+    master["Costo_Proveedor_Unitario"] = pd.to_numeric(master["Costo_Proveedor_Unitario"], errors="coerce").fillna(0.0)
     master["Factor_Pack"]      = pd.to_numeric(master["Factor_Pack"], errors="coerce").fillna(1.0)
     master["Factor_Pack"]      = np.where(master["Factor_Pack"] <= 0, 1.0, master["Factor_Pack"])
 
     # 4. NUMÉRICOS BASE
-    for c in ["Stock", "Costo", "Precio", "Costo_Proveedor", "Factor_Pack"]:
+    for c in ["Stock", "Costo", "Precio", "Costo_Proveedor", "Costo_Proveedor_Unitario", "Factor_Pack"]:
         master[c] = pd.to_numeric(master[c], errors="coerce").fillna(0.0)
 
+    master["Costo_Inventario_Unitario"] = np.where(master["Costo"] > 0, master["Costo"], 0.0)
+    master["Costo_Referencia_Proveedor_Unitario"] = np.where(
+        master["Costo_Proveedor_Unitario"] > 0,
+        master["Costo_Proveedor_Unitario"],
+        0.0
+    )
     master["Costo_Efectivo"] = np.where(
-        master["Costo_Proveedor"] > 0,
-        master["Costo_Proveedor"],
-        master["Costo"],
+        master["Costo_Inventario_Unitario"] > 0,
+        master["Costo_Inventario_Unitario"],
+        master["Costo_Referencia_Proveedor_Unitario"],
     )
 
-    # Cálculo robusto de margen bruto
+    master["Precio_Valido"] = master["Precio"] > 0
+    master["Costo_Valido"] = master["Costo_Efectivo"] > 0
     master["Margen_%"] = np.where(
-        master["Precio"] > 0,
+        master["Precio_Valido"] & master["Costo_Valido"],
         (master["Precio"] - master["Costo_Efectivo"]) / master["Precio"],
         0.0
     )
     master["Margen_$"] = np.where(
-        master["Precio"] > 0,
+        master["Precio_Valido"] & master["Costo_Valido"],
         master["Precio"] - master["Costo_Efectivo"],
         0.0
+    )
+    master["Margen_Anomalo"] = (
+        (~master["Precio_Valido"]) |
+        (~master["Costo_Valido"]) |
+        (master["Margen_%"] < -0.25) |
+        (master["Margen_%"] > 0.95)
+    )
+    master["Alerta_Datos"] = np.select(
+        [
+            ~master["Precio_Valido"],
+            ~master["Costo_Valido"],
+            (master["Costo_Referencia_Proveedor_Unitario"] > 0) &
+            (master["Costo_Inventario_Unitario"] > 0) &
+            (np.abs(master["Costo_Inventario_Unitario"] - master["Costo_Referencia_Proveedor_Unitario"]) / np.maximum(master["Costo_Inventario_Unitario"], 1.0) > 1.5),
+            master["Margen_%"] < -0.25,
+            master["Margen_%"] > 0.95,
+        ],
+        [
+            "Sin precio",
+            "Sin costo",
+            "Costo difiere vs proveedor",
+            "Margen negativo anómalo",
+            "Margen demasiado alto",
+        ],
+        default="OK"
     )
 
     # 5. VENTAS / ROTACIÓN
@@ -644,11 +690,22 @@ def main():
     # ── KPIs ──────────────────────────────────────────────────────────────
     st.title("🐾 Panel Principal de Operaciones")
 
-    valor_inv       = float((master_df["Stock"] * master_df["Costo"]).sum())
+    valor_inv       = float((master_df["Stock"] * master_df["Costo_Efectivo"]).sum())
     agotados        = int(master_df["Stock"].le(0).sum())
     criticos        = int(master_df["Estado"].eq("🚨 CRÍTICO (A)").sum())
-    margen_vals     = master_df.loc[master_df["Stock"] > 0, "Margen_%"]
-    margen_promedio = float(margen_vals.mean() or 0.0) * 100.0 if not margen_vals.empty else 0.0
+    margen_base_df  = master_df[
+        (master_df["Stock"] > 0) &
+        (master_df["Precio"] > 0) &
+        (master_df["Costo_Efectivo"] > 0) &
+        (~master_df["Margen_Anomalo"])
+    ].copy()
+    if not margen_base_df.empty:
+        ventas_potenciales = (margen_base_df["Stock"] * margen_base_df["Precio"]).sum()
+        utilidad_potencial = (margen_base_df["Stock"] * (margen_base_df["Precio"] - margen_base_df["Costo_Efectivo"])).sum()
+        margen_promedio = float((utilidad_potencial / ventas_potenciales) * 100.0) if ventas_potenciales > 0 else 0.0
+    else:
+        margen_promedio = 0.0
+    alertas_datos = int(master_df[master_df["Alerta_Datos"].ne("OK")].shape[0])
 
     df_gastos  = st.session_state["data_store"].get("df_Gastos", pd.DataFrame())
     gastos_mes = 0.0
@@ -667,6 +724,9 @@ def main():
     c2.metric("📈 Margen Promedio",        f"{margen_promedio:.1f}%")
     c3.metric("🚨 Alertas de Quiebre",     agotados + criticos)
     c4.metric("💸 Gastos del Mes",         f"${gastos_mes:,.0f}")
+
+    if alertas_datos > 0:
+        st.warning(f"Se detectaron {alertas_datos} productos con datos dudosos de costo/precio. El margen promedio excluye esos casos para evitar distorsiones.")
 
     # ── TABS ──────────────────────────────────────────────────────────────
     tabs = st.tabs([
@@ -708,7 +768,7 @@ def main():
 
         cols_vista = [
             "ID_Producto", "Nombre", "Categoria", "Clase_ABC",
-            "Stock", "Estado", "Velocidad_Diaria", "Margen_%", "Costo", "Precio",
+            "Stock", "Estado", "Velocidad_Diaria", "Margen_%", "Costo_Efectivo", "Precio", "Alerta_Datos"
         ]
         cols_vista = [c for c in cols_vista if c in df_view.columns]
         st.dataframe(
@@ -717,11 +777,35 @@ def main():
                 "Clase_ABC":        st.column_config.TextColumn("ABC"),
                 "Velocidad_Diaria": st.column_config.NumberColumn("Ventas/Día",   format="%.2f"),
                 "Margen_%":         st.column_config.NumberColumn("Margen Bruto", format="%.1f%%"),
-                "Costo":            st.column_config.NumberColumn(format="$%.0f"),
+                "Costo_Efectivo":   st.column_config.NumberColumn("Costo Unit.", format="$%.0f"),
                 "Precio":           st.column_config.NumberColumn(format="$%.0f"),
+                "Alerta_Datos":     st.column_config.TextColumn("Diagnóstico"),
             },
             use_container_width=True, hide_index=True, height=500,
         )
+
+        with st.expander("Diagnóstico de calidad de datos"):
+            diag = master_df[master_df["Alerta_Datos"].ne("OK")].copy()
+            if diag.empty:
+                st.success("No se detectaron inconsistencias relevantes de costo/precio en inventario.")
+            else:
+                diag_cols = [
+                    "ID_Producto", "Nombre", "Costo_Inventario_Unitario", "Costo_Referencia_Proveedor_Unitario",
+                    "Costo_Efectivo", "Precio", "Margen_%", "Alerta_Datos"
+                ]
+                diag_cols = [c for c in diag_cols if c in diag.columns]
+                st.dataframe(
+                    diag[diag_cols].sort_values(["Alerta_Datos", "Margen_%"], ascending=[True, True]),
+                    column_config={
+                        "Costo_Inventario_Unitario": st.column_config.NumberColumn("Costo Inv.", format="$%.0f"),
+                        "Costo_Referencia_Proveedor_Unitario": st.column_config.NumberColumn("Costo Prov. Unit.", format="$%.0f"),
+                        "Costo_Efectivo": st.column_config.NumberColumn("Costo Efectivo", format="$%.0f"),
+                        "Precio": st.column_config.NumberColumn("Precio", format="$%.0f"),
+                        "Margen_%": st.column_config.NumberColumn("Margen", format="%.1f%%"),
+                    },
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
     # ── TAB 2: COMPRAS INTELIGENTES ───────────────────────────────────────
     with tabs[1]:
