@@ -265,11 +265,19 @@ def calcular_master_df() -> pd.DataFrame:
         df_prov["Costo_Proveedor"] / df_prov["Factor_Pack"],
         df_prov["Costo_Proveedor"]
     )
+    if "Ultima_Actualizacion" in df_prov.columns:
+        df_prov["Ultima_Actualizacion"] = df_prov["Ultima_Actualizacion"].astype(str).str.strip()
+        df_prov["Ultima_Actualizacion_dt"] = pd.to_datetime(df_prov["Ultima_Actualizacion"], errors="coerce")
+    else:
+        df_prov["Ultima_Actualizacion_dt"] = pd.NaT
+    df_prov["Sort_Costo_Proveedor"] = pd.to_numeric(df_prov["Costo_Proveedor"], errors="coerce").fillna(0.0)
 
     # 3. MERGE
     if not df_prov.empty and "SKU_Interno_Norm" in df_prov.columns:
+        sort_cols = ["Ultima_Actualizacion_dt", "Sort_Costo_Proveedor"]
+        ascending = [False, False]
         df_prov_clean = (
-            df_prov.sort_values("Ultima_Actualizacion" if "Ultima_Actualizacion" in df_prov.columns else "Costo_Proveedor", na_position="last")
+            df_prov.sort_values(sort_cols, ascending=ascending, na_position="last")
             .drop_duplicates("SKU_Interno_Norm")
         )
         master = pd.merge(
