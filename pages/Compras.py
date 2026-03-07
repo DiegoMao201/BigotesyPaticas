@@ -473,6 +473,24 @@ def parsear_xml_colombia(archivo):
 # ==========================================
 
 def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_pago):
+        def registrar_gasto(ws_gas, meta_xml, info_pago, total):
+            # Formato: ID_Gasto, Fecha, Tipo_Gasto, Categoria, Descripcion, Monto, Metodo_Pago, Banco_Origen
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            id_gasto = f"GAS-{int(time.time())}"
+            proveedor = meta_xml.get("Proveedor", "")
+            folio = meta_xml.get("Folio", "")
+            descripcion = f"[PROV: {proveedor}] [REF: {folio}] - Compra Mercancía"
+            row_gasto = [
+                id_gasto,
+                now,
+                "Variable",
+                "Compra Inventario",
+                descripcion,
+                total,
+                info_pago.get("Origen", ""),
+                info_pago.get("Origen", "")
+            ]
+            ws_gas.append_row(row_gasto)
     import pandas as pd
     logs = []
     # Validación robusta de tipos y estructura
@@ -655,19 +673,22 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
         nombre_prov = nombre_prov.strip()
         email = meta_xml.get("Email_Proveedor", "") if meta_xml else ""
         costo_prov = costo_prov_pack
+        # Orden: ID_Proveedor, Nombre_Proveedor, SKU_Proveedor, SKU_Interno, Factor_Pack, Ultima_Actualizacion, Email, Costo_Proveedor, Producto_UID, Ultimo_IVA
         row_data = [
             id_prov,
             nombre_prov,
             sku_prov,
             sku_interno,
-            producto_uid,
             factor,
             now,
             email,
             costo_prov,
+            producto_uid,
             iva_pct
         ]
 
+        # Registrar gasto en hoja Gastos
+        registrar_gasto(ws_gas, meta_xml, info_pago, meta_xml.get("Total", 0))
         return True, logs
     except Exception as e:
         return False, [f"Error del Sistema: {e}"]
