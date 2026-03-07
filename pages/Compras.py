@@ -473,9 +473,26 @@ def parsear_xml_colombia(archivo):
 # ==========================================
 
 def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_pago):
-    """
-    Garantía: cada renglón termina con Producto_UID y el update de inventario se hace por UID.
-    """
+    import pandas as pd
+    logs = []
+    # Validación robusta de tipos y estructura
+    if not isinstance(df_final, pd.DataFrame):
+        logs.append("Error: df_final no es un DataFrame.")
+        return False, logs
+    if df_final.empty:
+        logs.append("Error: df_final está vacío.")
+        return False, logs
+    if not isinstance(meta_xml, dict):
+        logs.append("Error: meta_xml no es un dict.")
+        return False, logs
+    if not isinstance(info_pago, dict):
+        logs.append("Error: info_pago no es un dict.")
+        return False, logs
+    for campo in ["Origen", "Transporte", "Descuento"]:
+        if campo not in info_pago:
+            logs.append(f"Error: Falta campo '{campo}' en info_pago.")
+            return False, logs
+
     try:
         # 1) Indexes inventario nube
         (inv_headers, idx_uid, idx_id, idx_norm, idx_stock, idx_costo, idx_precio, idx_nombre,
@@ -495,7 +512,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
 
         updates = []
         appends = []
-        logs = []
+        # logs ya definido arriba
 
         for _, row in df_final.iterrows():
             sel = str(row.get("SKU_Interno_Seleccionado", "")).strip()
@@ -579,7 +596,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 new_row[idx_norm] = sku_norm
 
                 if idx_nombre is not None:
-                    new_row[idx_nombre] = str(row.get("Nombre_Inventario", row.get("Descripcion", ""))).strip()
+                    new_row[idx_nombre] = str(row.get("Nombre_Inventario", row.get("Descripcion", "")).strip())
 
                 if idx_stock is not None:
                     new_row[idx_stock] = str(unidades)
@@ -651,6 +668,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             iva_pct
         ]
 
+        return True, logs
     except Exception as e:
         return False, [f"Error del Sistema: {e}"]
 
