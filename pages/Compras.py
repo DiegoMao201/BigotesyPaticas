@@ -8,6 +8,7 @@ from datetime import datetime
 import math
 import re
 import uuid
+from difflib import SequenceMatcher
 
 try:
     # si normalizar_id_producto vive en el módulo principal
@@ -18,54 +19,55 @@ except Exception:
         return str(x or "").strip().upper()
 
 def money_int(val) -> int:
-    if isinstance(val, (np.integer, int)):
-        return int(val)
-    if isinstance(val, (np.floating, float)):
-        return int(round(float(val)))
-    s = str(val or "").strip().replace("$", "").replace(" ", "")
-    if not s:
-        return 0
-    neg = s.startswith("-")
-    if neg:
-        s = s[1:]
-    s = re.sub(r"[^0-9,\.]", "", s)
-    if not s:
-        return 0
+    return int(round(money_float(val)))
 
-    if "." in s and "," in s:
-        if s.rfind(",") > s.rfind("."):
-            s = s.replace(".", "").replace(",", ".")
-        else:
-            s = s.replace(",", "")
+
+def money_float(val) -> float:
+    if val is None:
+        return 0.0
+    if isinstance(val, (np.integer, int)):
+        return float(val)
+    if isinstance(val, (np.floating, float)):
+        try:
+            if np.isnan(val) or np.isinf(val):
+                return 0.0
+        except Exception:
+            return 0.0
+        return float(val)
+
+    s = str(val).strip()
+    if not s or s.lower() in {"nan", "none", "null"}:
+        return 0.0
+
+    neg = s.startswith("-") or (s.startswith("(") and s.endswith(")"))
+    s = s.strip("()")
+    s = s.replace("$", "").replace("COP", "").replace("cop", "").replace(" ", "")
+    s = re.sub(r"[^0-9,\.\-]", "", s)
+    s = s.lstrip("-")
+    if not s:
+        return 0.0
+
+    if "," in s and "." in s:
+        decimal_sep = "," if s.rfind(",") > s.rfind(".") else "."
+        thousand_sep = "." if decimal_sep == "," else ","
+        s = s.replace(thousand_sep, "")
+        if decimal_sep == ",":
+            s = s.replace(",", ".")
     elif s.count(",") > 1:
         s = s.replace(",", "")
     elif s.count(".") > 1:
         s = s.replace(".", "")
     elif "," in s:
-        left, right = s.split(",", 1)
-        if len(right) <= 2:
-            s = f"{left}.{right}"
-        elif len(right) == 3 and len(left) <= 3:
-            s = left + right
-        elif len(right) == 3 and len(left) > 3:
-            s = f"{left}.{right}"
-        else:
-            s = left + right
+        left, right = s.rsplit(",", 1)
+        s = f"{left}.{right}" if len(right) <= 2 else left + right
     elif "." in s:
-        left, right = s.split(".", 1)
-        if len(right) <= 2:
-            s = f"{left}.{right}"
-        elif len(right) == 3 and len(left) <= 3:
-            s = left + right
-        elif len(right) == 3 and len(left) > 3:
-            s = f"{left}.{right}"
-        else:
-            s = left + right
+        left, right = s.rsplit(".", 1)
+        s = f"{left}.{right}" if len(right) <= 2 else left + right
 
     try:
-        out = int(round(float(s)))
+        out = float(s)
     except Exception:
-        out = int(re.sub(r"[^0-9]", "", s) or 0)
+        out = float(re.sub(r"[^0-9]", "", s) or 0)
     return -out if neg else out
 
 # ==========================================
@@ -240,6 +242,48 @@ def normalizar_str(valor):
     # Eliminar espacios internos y convertir a mayúsculas
     return str(valor).replace(" ","").strip().upper()
 
+
+def normalizar_nombre_producto(valor) -> str:
+    s = str(valor or "").upper().strip()
+    s = re.sub(r"[^A-Z0-9]+", " ", s)
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+
+def tokens_nombre_producto(valor) -> set[str]:
+    stopwords = {
+        "DE", "DEL", "LA", "EL", "LOS", "LAS", "PARA", "CON", "SIN", "Y", "EN", "POR",
+        "UND", "UN", "U", "X"
+    }
+    tokens = []
+    for tok in normalizar_nombre_producto(valor).split():
+        if len(tok) <= 1:
+            continue
+        if tok in stopwords:
+            continue
+        tokens.append(tok)
+    return set(tokens)
+
+
+def score_match_producto(nombre_origen: str, nombre_destino: str) -> float:
+    src = normalizar_nombre_producto(nombre_origen)
+    dst = normalizar_nombre_producto(nombre_destino)
+    if not src or not dst:
+        return 0.0
+    if src == dst:
+        return 1.0
+
+    src_tokens = tokens_nombre_producto(src)
+    dst_tokens = tokens_nombre_producto(dst)
+    overlap = len(src_tokens & dst_tokens) / max(len(src_tokens | dst_tokens), 1)
+    seq_ratio = SequenceMatcher(None, src, dst).ratio()
+    contains_bonus = 1.0 if (src in dst or dst in src) else 0.0
+    return (seq_ratio * 0.55) + (overlap * 0.35) + (contains_bonus * 0.10)
+
+
+def safe_text(node, default=""):
+    return str(node.text).strip() if node is not None and node.text is not None else default
+
 def clean_currency(val):
     return money_int(val)
 
@@ -313,7 +357,7 @@ def _build_inv_indexes(ws_inv):
     """
     headers = _ensure_headers(
         ws_inv,
-        ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Nombre", "Stock", "Costo", "Precio"]
+        ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "SKU_Proveedor", "Nombre", "Stock", "Costo", "Precio", "Categoria", "Iva"]
     )
 
     data = ws_inv.get_all_values() or []
@@ -321,11 +365,14 @@ def _build_inv_indexes(ws_inv):
         idx_uid = headers.index("Producto_UID")
         idx_id = headers.index("ID_Producto")
         idx_norm = headers.index("ID_Producto_Norm")
+        idx_sku_prov = headers.index("SKU_Proveedor") if "SKU_Proveedor" in headers else None
         idx_nombre = headers.index("Nombre")
         idx_stock = headers.index("Stock")
         idx_costo = headers.index("Costo")
         idx_precio = headers.index("Precio")
-        return (headers, idx_uid, idx_id, idx_norm, idx_stock, idx_costo, idx_precio, idx_nombre, {}, {}, {})
+        idx_categoria = headers.index("Categoria") if "Categoria" in headers else None
+        idx_iva = headers.index("Iva") if "Iva" in headers else None
+        return (headers, idx_uid, idx_id, idx_norm, idx_sku_prov, idx_stock, idx_costo, idx_precio, idx_nombre, idx_categoria, idx_iva, {}, {}, {})
 
     headers = data[0]
 
@@ -333,7 +380,7 @@ def _build_inv_indexes(ws_inv):
     if "Producto_UID" not in headers or "ID_Producto" not in headers or "ID_Producto_Norm" not in headers:
         headers = _ensure_headers(
             ws_inv,
-            ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Nombre", "Stock", "Costo", "Precio"]
+            ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "SKU_Proveedor", "Nombre", "Stock", "Costo", "Precio", "Categoria", "Iva"]
         )
         data = ws_inv.get_all_values() or []
         headers = data[0] if data else headers
@@ -341,10 +388,13 @@ def _build_inv_indexes(ws_inv):
     idx_uid = headers.index("Producto_UID")
     idx_id = headers.index("ID_Producto")
     idx_norm = headers.index("ID_Producto_Norm")
+    idx_sku_prov = headers.index("SKU_Proveedor") if "SKU_Proveedor" in headers else None
     idx_nombre = headers.index("Nombre") if "Nombre" in headers else None
     idx_stock = headers.index("Stock") if "Stock" in headers else None
     idx_costo = headers.index("Costo") if "Costo" in headers else None
     idx_precio = headers.index("Precio") if "Precio" in headers else None
+    idx_categoria = headers.index("Categoria") if "Categoria" in headers else None
+    idx_iva = headers.index("Iva") if "Iva" in headers else None
 
     uid_to_row, norm_to_row, norm_to_uid = {}, {}, {}
 
@@ -365,7 +415,7 @@ def _build_inv_indexes(ws_inv):
 
     return (
         headers,
-        idx_uid, idx_id, idx_norm, idx_stock, idx_costo, idx_precio, idx_nombre,
+        idx_uid, idx_id, idx_norm, idx_sku_prov, idx_stock, idx_costo, idx_precio, idx_nombre, idx_categoria, idx_iva,
         uid_to_row, norm_to_row, norm_to_uid
     )
 
@@ -386,7 +436,7 @@ def conectar_sheets():
             st.stop()
 
         # ✅ ya no falla: helper existe
-        _ensure_headers(ws_inv, ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "Stock", "Costo", "Precio", "Nombre"])
+        _ensure_headers(ws_inv, ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "SKU_Proveedor", "Stock", "Costo", "Precio", "Nombre", "Categoria", "Iva"])
 
         try: ws_map = sh.worksheet("Maestro_Proveedores")
         except:
@@ -404,8 +454,14 @@ def conectar_sheets():
 
         try: ws_hist = sh.worksheet("Historial_Recepciones")
         except:
-            ws_hist = sh.add_worksheet("Historial_Recepciones", 1000, 7)
-            ws_hist.append_row(["Fecha", "Folio", "Proveedor", "Items", "Total", "Usuario", "Estado"])
+            ws_hist = sh.add_worksheet("Historial_Recepciones", 1000, 24)
+
+        _ensure_sheet_schema(ws_hist, [
+            "Fecha", "Folio", "Proveedor", "Items", "Total", "Usuario", "Estado",
+            "Recepcion_ID", "ID_Proveedor", "Producto_UID", "SKU_Interno", "SKU_Proveedor", "Nombre_Producto",
+            "Cantidad_Pack", "Factor_Pack", "Unidades", "Costo_Unitario", "Costo_Total", "Precio_Unitario",
+            "IVA_Porcentaje", "Origen", "Transporte_Prorrateado", "Descuento_Prorrateado"
+        ])
         
         try: ws_gas = sh.worksheet("Gastos")
         except:
@@ -484,6 +540,133 @@ def cargar_cerebro(_ws_inv, _ws_map):
 
     return lista_prods, dict_prods, memoria
 
+
+@st.cache_data(ttl=60)
+def cargar_catalogo_inventario(_ws_inv):
+    try:
+        df_inv = pd.DataFrame(_ws_inv.get_all_records())
+        if df_inv.empty:
+            return []
+
+        col_id = "ID_Producto" if "ID_Producto" in df_inv.columns else next((c for c in df_inv.columns if 'ID' in c or 'SKU' in c), 'ID_Producto')
+        col_nm = "Nombre" if "Nombre" in df_inv.columns else next((c for c in df_inv.columns if 'Nombre' in c), 'Nombre')
+        col_cat = "Categoria" if "Categoria" in df_inv.columns else ("Categoría" if "Categoría" in df_inv.columns else None)
+        col_iva = "Iva" if "Iva" in df_inv.columns else ("IVA" if "IVA" in df_inv.columns else None)
+
+        catalogo = []
+        for _, row in df_inv.iterrows():
+            sku = str(row.get(col_id, "")).strip()
+            nombre = str(row.get(col_nm, "")).strip()
+            if not sku and not nombre:
+                continue
+            catalogo.append({
+                "display": f"{sku} | {nombre}" if sku else nombre,
+                "sku": sku,
+                "sku_norm": normalizar_id_producto(sku),
+                "nombre": nombre,
+                "nombre_norm": normalizar_nombre_producto(nombre),
+                "uid": str(row.get("Producto_UID", "")).strip(),
+                "categoria": str(row.get(col_cat, "Sin Categoría")).strip() if col_cat else "Sin Categoría",
+                "iva": float(money_float(row.get(col_iva, 0))) if col_iva else 0.0,
+            })
+        return catalogo
+    except Exception:
+        return []
+
+
+def buscar_producto_en_catalogo(catalogo, sku_interno="", producto_uid="", nombre=""):
+    sku_norm = normalizar_id_producto(sku_interno)
+    nombre_norm = normalizar_nombre_producto(nombre)
+    for prod in catalogo:
+        if producto_uid and prod.get("uid") and prod.get("uid") == producto_uid:
+            return prod
+        if sku_norm and prod.get("sku_norm") == sku_norm:
+            return prod
+        if nombre_norm and prod.get("nombre_norm") == nombre_norm:
+            return prod
+    return None
+
+
+def sugerir_producto_para_item(meta, item, memoria, catalogo):
+    nit_prov_norm = normalizar_str(meta.get('ID_Proveedor', ''))
+    sku_prov_norm = normalizar_str(item.get('SKU_Proveedor', 'S/C'))
+    nombre_item = str(item.get('Descripcion', '') or '').strip()
+    clave_memoria = f"{nit_prov_norm}_{sku_prov_norm}"
+
+    sugerencia = {
+        "display": "NUEVO (Crear Producto)",
+        "nombre": nombre_item,
+        "categoria": "Sin Categoría",
+        "iva": 0.0,
+        "factor": 1.0,
+        "motivo": "Nuevo producto"
+    }
+
+    recuerdo = memoria.get(clave_memoria)
+    if recuerdo is None and sku_prov_norm != "S/C":
+        recuerdo = next((r for k, r in memoria.items() if k.endswith(f"_{sku_prov_norm}")), None)
+
+    if recuerdo:
+        prod = buscar_producto_en_catalogo(
+            catalogo,
+            sku_interno=recuerdo.get("SKU_Interno", ""),
+            producto_uid=recuerdo.get("Producto_UID", ""),
+            nombre=nombre_item,
+        )
+        if prod:
+            sugerencia.update({
+                "display": prod.get("display", sugerencia["display"]),
+                "nombre": prod.get("nombre", sugerencia["nombre"]),
+                "categoria": prod.get("categoria") or "Sin Categoría",
+                "iva": float(recuerdo.get("IVA_Aprendido", prod.get("iva", 0.0)) or 0.0),
+                "factor": float(recuerdo.get("Factor", 1.0) or 1.0),
+                "motivo": "Memoria de proveedor"
+            })
+            return sugerencia
+
+    if sku_prov_norm and sku_prov_norm != "S/C":
+        prod = next((p for p in catalogo if p.get("sku_norm") == sku_prov_norm), None)
+        if prod:
+            sugerencia.update({
+                "display": prod.get("display", sugerencia["display"]),
+                "nombre": prod.get("nombre", sugerencia["nombre"]),
+                "categoria": prod.get("categoria") or "Sin Categoría",
+                "iva": float(prod.get("iva", 0.0) or 0.0),
+                "motivo": "SKU proveedor coincide con inventario"
+            })
+            return sugerencia
+
+    nombre_norm = normalizar_nombre_producto(nombre_item)
+    prod_nombre = next((p for p in catalogo if p.get("nombre_norm") == nombre_norm), None)
+    if prod_nombre:
+        sugerencia.update({
+            "display": prod_nombre.get("display", sugerencia["display"]),
+            "nombre": prod_nombre.get("nombre", sugerencia["nombre"]),
+            "categoria": prod_nombre.get("categoria") or "Sin Categoría",
+            "iva": float(prod_nombre.get("iva", 0.0) or 0.0),
+            "motivo": "Nombre exacto inventario"
+        })
+        return sugerencia
+
+    mejor = None
+    mejor_score = 0.0
+    for prod in catalogo:
+        score = score_match_producto(nombre_item, prod.get("nombre", ""))
+        if score > mejor_score:
+            mejor_score = score
+            mejor = prod
+
+    if mejor is not None and mejor_score >= 0.62:
+        sugerencia.update({
+            "display": mejor.get("display", sugerencia["display"]),
+            "nombre": mejor.get("nombre", sugerencia["nombre"]),
+            "categoria": mejor.get("categoria") or "Sin Categoría",
+            "iva": float(mejor.get("iva", 0.0) or 0.0),
+            "motivo": f"Coincidencia sugerida ({mejor_score:.0%})"
+        })
+
+    return sugerencia
+
 # ==========================================
 # 5. PARSER XML COLOMBIA
 # ==========================================
@@ -509,16 +692,18 @@ def parsear_xml_colombia(archivo):
         try:
             prov_node = invoice_root.find('.//cac:AccountingSupplierParty/cac:Party', ns)
             prov_tax = prov_node.find('.//cac:PartyTaxScheme', ns)
-            nombre_prov = prov_tax.find('cbc:RegistrationName', ns).text
-            nit_prov = prov_tax.find('cbc:CompanyID', ns).text
+            nombre_prov = safe_text(prov_tax.find('cbc:RegistrationName', ns), "Proveedor Desconocido")
+            nit_prov = safe_text(prov_tax.find('cbc:CompanyID', ns), "000000")
         except:
             nombre_prov = "Proveedor Desconocido"
             nit_prov = "000000"
 
-        try: folio = invoice_root.find('cbc:ID', ns).text
+        email_prov = safe_text(invoice_root.find('.//cac:AccountingSupplierParty//cbc:ElectronicMail', ns), "")
+
+        try: folio = safe_text(invoice_root.find('cbc:ID', ns), "S/F")
         except: folio = "S/F"
 
-        try: total_pagar_factura = money_int(invoice_root.find('.//cac:LegalMonetaryTotal/cbc:PayableAmount', ns).text)
+        try: total_pagar_factura = money_int(safe_text(invoice_root.find('.//cac:LegalMonetaryTotal/cbc:PayableAmount', ns), 0))
         except: total_pagar_factura = 0
 
         items = []
@@ -526,41 +711,65 @@ def parsear_xml_colombia(archivo):
         
         for line in lines:
             try:
-                qty = float(line.find('cbc:InvoicedQuantity', ns).text)
+                qty = money_float(safe_text(line.find('cbc:InvoicedQuantity', ns), 0))
+                if qty <= 0:
+                    qty = 1.0
+
                 price_node = line.find('.//cac:Price/cbc:PriceAmount', ns)
-                base_price = money_int(price_node.text) if price_node is not None else 0
+                base_qty_node = line.find('.//cac:Price/cbc:BaseQuantity', ns)
+                price_base_qty = money_float(safe_text(base_qty_node, 1)) or 1.0
+
+                if price_node is not None and safe_text(price_node, ""):
+                    base_price = money_float(price_node.text)
+                else:
+                    line_extension = money_float(safe_text(line.find('cbc:LineExtensionAmount', ns), 0))
+                    divisor = qty if qty > 0 else 1.0
+                    base_price = line_extension / divisor
+
+                if price_base_qty > 0 and abs(price_base_qty - qty) < 0.0001 and qty > 0:
+                    base_price = base_price / qty
                 
                 discount_amount = 0.0
                 allowances = line.findall('.//cac:AllowanceCharge', ns)
                 if allowances:
-                    first_allowance = allowances[0] 
-                    if first_allowance.find('cbc:ChargeIndicator', ns).text == 'false':
-                        val = first_allowance.find('cbc:Amount', ns).text
-                        discount_amount = money_int(val) if val else 0
+                    for allowance in allowances:
+                        charge_indicator = safe_text(allowance.find('cbc:ChargeIndicator', ns), "false").lower()
+                        val = money_float(safe_text(allowance.find('cbc:Amount', ns), 0))
+                        if charge_indicator == 'false':
+                            discount_amount += val
+                        else:
+                            discount_amount -= val
 
-                    final_base_price = money_int(base_price - discount_amount)
+                final_base_price = money_int(base_price - (discount_amount / max(qty, 1.0)))
                 
                 item_node = line.find('cac:Item', ns)
-                desc = item_node.find('cbc:Description', ns).text
+                desc = safe_text(item_node.find('cbc:Description', ns), "Producto XML")
+
+                iva_pct = money_float(safe_text(line.find('.//cac:TaxCategory/cbc:Percent', ns), 0))
                 
                 sku_prov = "S/C"
                 std_id = item_node.find('.//cac:StandardItemIdentification/cbc:ID', ns)
                 seller_id = item_node.find('.//cac:SellersItemIdentification/cbc:ID', ns)
+                line_id = line.find('cbc:ID', ns)
                 
                 if std_id is not None and std_id.text: sku_prov = std_id.text
-                elif seller_id is not None: sku_prov = seller_id.text
+                elif seller_id is not None and seller_id.text: sku_prov = seller_id.text
+                elif line_id is not None and line_id.text: sku_prov = line_id.text
                 
                 items.append({
                     'SKU_Proveedor': sku_prov,
                     'Descripcion': desc,
                     'Cantidad': qty,
-                    'Costo_Base_Unitario': final_base_price 
+                    'Costo_Base_Unitario': final_base_price,
+                    'IVA_Porcentaje': iva_pct,
                 })
-            except: continue
+            except Exception:
+                continue
 
         return {
             'Proveedor': nombre_prov,
             'ID_Proveedor': nit_prov,
+            'Email_Proveedor': email_prov,
             'Folio': folio,
             'Total': total_pagar_factura,
             'Items': items
@@ -594,7 +803,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
         return False, ["Falta columna SKU_Interno_Seleccionado en df_final (selección del usuario)."]
 
     try:
-        (inv_headers, idx_uid, idx_id, idx_norm, idx_stock, idx_costo, idx_precio, idx_nombre,
+        (inv_headers, idx_uid, idx_id, idx_norm, idx_sku_prov, idx_stock, idx_costo, idx_precio, idx_nombre, idx_categoria, idx_iva,
          uid_to_row, norm_to_row, norm_to_uid) = _build_inv_indexes(ws_inv)
 
         total_items = len(df_final)
@@ -602,10 +811,13 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
         pr_desc = float(info_pago.get("Descuento", 0.0) or 0.0)
         updates = []
         appends = []
+        hist_rows = []
+        recepcion_id = f"REC-{int(time.time())}"
 
         for _, row in df_final.iterrows():
             sel = str(row.get("SKU_Interno_Seleccionado", "")).strip()
             sku_prov = str(row.get("SKU_Proveedor", "")).strip()
+            item_label = sku_prov or str(row.get("Descripcion", "")).strip() or sel or "ITEM"
 
             factor = float(row.get("Factor_Pack", 1) or 1)
             if factor <= 0:
@@ -645,10 +857,10 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 precio_final = precio_unitario_calculado
             elif factor_modificado and precio_auto_original > 0 and abs(precio_editado - precio_auto_original) < 0.01:
                 precio_final = money_int(precio_unitario_calculado)
-                logs.append(f"PRECIO RECALCULADO por factor: {sku_prov or sku_interno} -> {precio_final}")
+                logs.append(f"PRECIO RECALCULADO por factor: {item_label} -> {precio_final}")
             elif factor > 1 and precio_unitario_calculado > 0 and precio_editado >= (precio_unitario_calculado * factor * 0.7):
                 precio_final = money_int(redondear_centena(precio_editado / factor))
-                logs.append(f"PRECIO NORMALIZADO a unitario: {sku_prov or sku_interno} {precio_editado} / factor {factor} = {precio_final}")
+                logs.append(f"PRECIO NORMALIZADO a unitario: {item_label} {precio_editado} / factor {factor} = {precio_final}")
             else:
                 precio_final = money_int(precio_editado)
 
@@ -661,6 +873,8 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 producto_uid = norm_to_uid.get(normalizar_id_producto(sku_interno), "")
 
             sku_norm = normalizar_id_producto(sku_interno)
+            nombre_inventario = str(row.get("Nombre_Inventario", row.get("Descripcion", ""))).strip()
+            categoria = str(row.get("Categoría", row.get("Categoria", "Sin Categoría"))).strip() or "Sin Categoría"
 
             if sku_prov and sku_prov != "S/C":
                 costo_prov_pack = money_int(costo_neto_unit * factor)
@@ -690,15 +904,21 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 new_row[idx_id] = sku_interno
                 new_row[idx_uid] = producto_uid
                 new_row[idx_norm] = sku_norm
+                if idx_sku_prov is not None:
+                    new_row[idx_sku_prov] = sku_prov
 
                 if idx_nombre is not None:
-                    new_row[idx_nombre] = str(row.get("Nombre_Inventario", row.get("Descripcion", ""))).strip()
+                    new_row[idx_nombre] = nombre_inventario
                 if idx_stock is not None:
                     new_row[idx_stock] = str(unidades)
                 if idx_costo is not None:
                     new_row[idx_costo] = str(money_int(costo_neto_unit))
                 if idx_precio is not None:
                     new_row[idx_precio] = str(money_int(precio_final))
+                if idx_categoria is not None:
+                    new_row[idx_categoria] = categoria
+                if idx_iva is not None:
+                    new_row[idx_iva] = str(iva_pct)
 
                 appends.append(new_row)
                 logs.append(f"CREADO inventario: {sku_interno} | UID {producto_uid[:8]}... (+{unidades})")
@@ -718,25 +938,52 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                     updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_costo + 1), "values": [[money_int(costo_neto_unit)]]})
                 if idx_precio is not None:
                     updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_precio + 1), "values": [[money_int(precio_final)]]})
+                if idx_sku_prov is not None and sku_prov:
+                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_sku_prov + 1), "values": [[sku_prov]]})
+                if idx_nombre is not None and nombre_inventario:
+                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_nombre + 1), "values": [[nombre_inventario]]})
+                if idx_categoria is not None and categoria:
+                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_categoria + 1), "values": [[categoria]]})
+                if idx_iva is not None:
+                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_iva + 1), "values": [[iva_pct]]})
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_uid + 1), "values": [[producto_uid]]})
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_norm + 1), "values": [[sku_norm]]})
                 logs.append(f"ACTUALIZADO inventario: {sku_interno} | UID {producto_uid[:8]}... Stock {stock_actual}->{nuevo_stock}")
+
+            hist_rows.append([
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                str(meta_xml.get("Folio", "")),
+                str(meta_xml.get("Proveedor", "")),
+                len(df_final),
+                money_int(meta_xml.get("Total", 0)),
+                "Admin Nexus",
+                "OK",
+                recepcion_id,
+                str(meta_xml.get("ID_Proveedor", "")),
+                producto_uid,
+                sku_interno,
+                sku_prov,
+                nombre_inventario,
+                _fmt_qty(cant_pack),
+                _fmt_qty(factor),
+                _fmt_qty(unidades),
+                money_int(costo_neto_unit),
+                money_int(costo_neto_unit * unidades),
+                money_int(precio_final),
+                iva_pct,
+                str(info_pago.get("Origen", "")),
+                money_int(pr_item_trans),
+                money_int(pr_item_desc),
+            ])
 
         if updates:
             ws_inv.batch_update(updates)
         if appends:
             ws_inv.append_rows(appends)
+        if hist_rows:
+            ws_hist.append_rows(hist_rows)
 
         total_compra = money_int(meta_xml.get("Total", 0))
-        ws_hist.append_row([
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            str(meta_xml.get("Folio", "")),
-            str(meta_xml.get("Proveedor", "")),
-            len(df_final),
-            total_compra,
-            "Admin Nexus",
-            "OK"
-        ])
         _registrar_gasto_compra(ws_gas, meta_xml, info_pago, total_compra)
 
         return True, logs
@@ -773,6 +1020,8 @@ def main():
         st.session_state.lst_prods_cache = l
         st.session_state.dct_prods_cache = d
         st.session_state.memoria_cache = m
+    if "catalogo_inv_cache" not in st.session_state:
+        st.session_state.catalogo_inv_cache = cargar_catalogo_inventario(ws_inv)
 
     # ✅ Proveedores (para manual)
     if "proveedores_cache" not in st.session_state:
@@ -876,8 +1125,13 @@ def main():
                                     'SKU_Proveedor': "S/C",
                                     'Descripcion': row["Descripción"],
                                     'Cantidad': qty,
-                                    'Costo_Base_Unitario': base_unit
+                                    'Costo_Base_Unitario': base_unit,
+                                    'IVA_Porcentaje': 0,
                                 })
+
+                        if not items_std:
+                            st.error("⚠️ Debes agregar al menos un producto válido.")
+                            st.stop()
                         
                         st.session_state.invoice_meta = {
                             "Proveedor": prov_man, "ID_Proveedor": nit_man,
@@ -911,53 +1165,19 @@ def main():
 
         for item in st.session_state.invoice_items:
             qty = float(item.get("Cantidad", 1) or 1)
+            sugerencia = sugerir_producto_para_item(
+                meta=meta,
+                item=item,
+                memoria=st.session_state.memoria_cache,
+                catalogo=st.session_state.catalogo_inv_cache,
+            )
 
-            nit_prov_norm = normalizar_str(meta['ID_Proveedor'])
-            sku_prov_norm = normalizar_str(item.get('SKU_Proveedor', 'S/C'))
-            clave_memoria = f"{nit_prov_norm}_{sku_prov_norm}"
-
-            prod_interno_val = "NUEVO (Crear Producto)"
-            iva_val = 0
-            factor_val = 1.0
-
-            memoria = st.session_state.memoria_cache
-            lst_prods = st.session_state.lst_prods_cache
-            encontrado = False
-
-            # 1. Buscar por NIT+SKU ignorando espacios/mayúsculas
-            for k, recuerdo in memoria.items():
-                if k == clave_memoria:
-                    sku_interno_recordado = recuerdo.get('SKU_Interno', "")
-                    match = next((p for p in lst_prods if normalizar_str(p.split(" | ",1)[0]) == normalizar_str(sku_interno_recordado)), None)
-                    if match:
-                        prod_interno_val = match
-                        iva_val = recuerdo.get('IVA_Aprendido', 0)
-                        factor_val = recuerdo.get('Factor', 1.0)
-                        encontrado = True
-                        break
-
-            # 2. Si no se encontró, buscar por solo SKU_Proveedor (sin NIT)
-            if not encontrado and sku_prov_norm != "S/C":
-                for k, recuerdo in memoria.items():
-                    if k.endswith(f"_{sku_prov_norm}"):
-                        sku_interno_recordado = recuerdo.get('SKU_Interno', "")
-                        match = next((p for p in lst_prods if normalizar_str(p.split(" | ",1)[0]) == normalizar_str(sku_interno_recordado)), None)
-                        if match:
-                            prod_interno_val = match
-                            iva_val = recuerdo.get('IVA_Aprendido', 0)
-                            factor_val = recuerdo.get('Factor', 1.0)
-                            encontrado = True
-                            break
-
-            # 3. Si aún no, buscar por nombre normalizado en inventario
-            if not encontrado:
-                nombre_item = normalizar_str(item.get('Descripcion', ''))
-                for p in lst_prods:
-                    partes = p.split(" | ", 1)
-                    if len(partes) > 1 and normalizar_str(partes[1]) == nombre_item:
-                        prod_interno_val = p
-                        encontrado = True
-                        break
+            prod_interno_val = sugerencia.get("display", "NUEVO (Crear Producto)")
+            iva_val = sugerencia.get("iva", item.get("IVA_Porcentaje", 0))
+            factor_val = sugerencia.get("factor", 1.0)
+            categoria_val = sugerencia.get("categoria", "Sin Categoría")
+            nombre_sugerido = sugerencia.get("nombre", item.get('Descripcion', ''))
+            motivo_sugerencia = sugerencia.get("motivo", "Nuevo producto")
 
             base_unit = money_int(item.get("Costo_Base_Unitario", 0))
             factor_val = float(factor_val or 1.0)
@@ -972,7 +1192,7 @@ def main():
             df_revision_data.append({
                 "SKU_Proveedor": item.get('SKU_Proveedor', 'S/C'),
                 "Descripcion": item.get('Descripcion', ''),
-                "Nombre_Inventario": item.get('Descripcion', ''),
+                "Nombre_Inventario": nombre_sugerido,
                 "Cantidad": _fmt_qty(qty),
                 "Costo_Base_Unitario": base_unit,
                 "📌 Producto_Interno": prod_interno_val,
@@ -981,7 +1201,8 @@ def main():
                 "Precio_Sugerido": money_int(precio_sug_est or 0),
                 "_Precio_Auto_Unitario": money_int(precio_sug_est or 0),
                 "_Factor_Pack_Inicial": float(factor_val or 1.0),
-                "Categoría": "Sin Categoría"
+                "Categoría": categoria_val,
+                "Sugerencia": motivo_sugerencia
             })
 
         df_revision = pd.DataFrame(df_revision_data)
@@ -992,12 +1213,13 @@ def main():
             hide_index=True,
             column_order=[
                 "SKU_Proveedor", "Descripcion", "Nombre_Inventario", "📌 Producto_Interno",
-                "IVA_%", "Categoría", "Cantidad", "Costo_Base_Unitario", "Factor_Pack", "Precio_Sugerido"
+                "Sugerencia", "IVA_%", "Categoría", "Cantidad", "Costo_Base_Unitario", "Factor_Pack", "Precio_Sugerido"
             ],
             column_config={
                 "SKU_Proveedor": st.column_config.TextColumn("SKU Prov.", disabled=True),
                 "Descripcion": st.column_config.TextColumn("Desc. Factura", disabled=True),
                 "Nombre_Inventario": st.column_config.TextColumn("✍️ Nombre a Crear (Editable)", disabled=False, width="medium"),
+                "Sugerencia": st.column_config.TextColumn("🤖 Sugerencia", disabled=True, width="medium"),
 
                 # ✅ Asociar a inventario (lista real)
                 "📌 Producto_Interno": st.column_config.SelectboxColumn(
