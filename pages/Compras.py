@@ -899,6 +899,12 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_norm + 1), "values": [[sku_norm]]})
                 logs.append(f"CURADO inventario: {sku_interno} ahora tiene UID {producto_uid[:8]}...")
 
+            nombre_historial = nombre_inventario
+            if fila is not None:
+                fila_actual = ws_inv.row_values(fila)
+                if idx_nombre is not None and idx_nombre < len(fila_actual) and str(fila_actual[idx_nombre]).strip():
+                    nombre_historial = str(fila_actual[idx_nombre]).strip()
+
             if fila is None:
                 new_row = [""] * len(inv_headers)
                 new_row[idx_id] = sku_interno
@@ -938,14 +944,6 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                     updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_costo + 1), "values": [[money_int(costo_neto_unit)]]})
                 if idx_precio is not None:
                     updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_precio + 1), "values": [[money_int(precio_final)]]})
-                if idx_sku_prov is not None and sku_prov:
-                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_sku_prov + 1), "values": [[sku_prov]]})
-                if idx_nombre is not None and nombre_inventario:
-                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_nombre + 1), "values": [[nombre_inventario]]})
-                if idx_categoria is not None and categoria:
-                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_categoria + 1), "values": [[categoria]]})
-                if idx_iva is not None:
-                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_iva + 1), "values": [[iva_pct]]})
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_uid + 1), "values": [[producto_uid]]})
                 updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_norm + 1), "values": [[sku_norm]]})
                 logs.append(f"ACTUALIZADO inventario: {sku_interno} | UID {producto_uid[:8]}... Stock {stock_actual}->{nuevo_stock}")
@@ -963,7 +961,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                 producto_uid,
                 sku_interno,
                 sku_prov,
-                nombre_inventario,
+                nombre_historial,
                 _fmt_qty(cant_pack),
                 _fmt_qty(factor),
                 _fmt_qty(unidades),
@@ -1218,7 +1216,7 @@ def main():
             column_config={
                 "SKU_Proveedor": st.column_config.TextColumn("SKU Prov.", disabled=True),
                 "Descripcion": st.column_config.TextColumn("Desc. Factura", disabled=True),
-                "Nombre_Inventario": st.column_config.TextColumn("✍️ Nombre a Crear (Editable)", disabled=False, width="medium"),
+                "Nombre_Inventario": st.column_config.TextColumn("✍️ Nombre si es nuevo", disabled=False, width="medium"),
                 "Sugerencia": st.column_config.TextColumn("🤖 Sugerencia", disabled=True, width="medium"),
 
                 # ✅ Asociar a inventario (lista real)
