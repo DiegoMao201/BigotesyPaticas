@@ -296,6 +296,27 @@ def redondear_centena(valor):
     if not valor: return 0.0
     return math.ceil(valor / 100.0) * 100.0
 
+
+def valor_bool(val, default=False) -> bool:
+    if isinstance(val, bool):
+        return val
+    if val is None:
+        return default
+    try:
+        if pd.isna(val):
+            return default
+    except Exception:
+        pass
+
+    txt = str(val).strip().lower()
+    if not txt:
+        return default
+    if txt in {"1", "true", "verdadero", "si", "sí", "yes", "y"}:
+        return True
+    if txt in {"0", "false", "falso", "no", "n"}:
+        return False
+    return default
+
 # ==========================================
 # 3. CONEXIÓN A GOOGLE SHEETS
 # ==========================================
@@ -762,6 +783,8 @@ def parsear_xml_colombia(archivo):
                     'Cantidad': qty,
                     'Costo_Base_Unitario': final_base_price,
                     'IVA_Porcentaje': iva_pct,
+                    '_Costo_Origen_Es_Unitario': True,
+                    '_Cantidad_Origen_Es_Unidad': True,
                 })
             except Exception:
                 continue
@@ -826,13 +849,19 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             cant_pack = float(row.get("Cantidad_Recibida", 0) or 0)
             iva_pct = float(row.get("IVA_Porcentaje", 0) or 0)
             costo_base_xml = money_int(row.get("Costo_Base_Unitario", 0))
+            costo_origen_es_unitario = valor_bool(row.get("_Costo_Origen_Es_Unitario"), default=True)
+            cantidad_origen_es_unidad = valor_bool(row.get("_Cantidad_Origen_Es_Unidad"), default=True)
             pr_item_trans = (pr_trans / total_items) if total_items else 0.0
             pr_item_desc = (pr_desc / total_items) if total_items else 0.0
 
-            costo_base_unit = (costo_base_xml + pr_item_trans - pr_item_desc) / factor
+            if costo_origen_es_unitario:
+                ajuste_unitario = (pr_item_trans - pr_item_desc) / max(cant_pack, 1.0)
+                costo_base_unit = costo_base_xml + ajuste_unitario
+            else:
+                costo_base_unit = (costo_base_xml + pr_item_trans - pr_item_desc) / factor
             iva_unit = costo_base_unit * (iva_pct / 100.0)
             costo_neto_unit = money_int(costo_base_unit + iva_unit)
-            unidades = cant_pack * factor
+            unidades = cant_pack if cantidad_origen_es_unidad else (cant_pack * factor)
 
             precio_editado = row.get("Precio_Sugerido", None)
             precio_auto_original = row.get("_Precio_Auto_Unitario", None)
@@ -858,7 +887,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             elif factor_modificado and precio_auto_original > 0 and abs(precio_editado - precio_auto_original) < 0.01:
                 precio_final = money_int(precio_unitario_calculado)
                 logs.append(f"PRECIO RECALCULADO por factor: {item_label} -> {precio_final}")
-            elif factor > 1 and precio_unitario_calculado > 0 and precio_editado >= (precio_unitario_calculado * factor * 0.7):
+            elif (not costo_origen_es_unitario) and factor > 1 and precio_unitario_calculado > 0 and precio_editado >= (precio_unitario_calculado * factor * 0.7):
                 precio_final = money_int(redondear_centena(precio_editado / factor))
                 logs.append(f"PRECIO NORMALIZADO a unitario: {item_label} {precio_editado} / factor {factor} = {precio_final}")
             else:
@@ -1125,6 +1154,8 @@ def main():
                                     'Cantidad': qty,
                                     'Costo_Base_Unitario': base_unit,
                                     'IVA_Porcentaje': 0,
+                                    '_Costo_Origen_Es_Unitario': True,
+                                    '_Cantidad_Origen_Es_Unidad': True,
                                 })
 
                         if not items_std:
@@ -1182,8 +1213,10 @@ def main():
             if factor_val <= 0:
                 factor_val = 1.0
             iva_val = float(iva_val or 0.0)
+            costo_origen_es_unitario = valor_bool(item.get("_Costo_Origen_Es_Unitario"), default=True)
+            cantidad_origen_es_unidad = valor_bool(item.get("_Cantidad_Origen_Es_Unidad"), default=True)
 
-            costo_base_unit_est = base_unit / factor_val
+            costo_base_unit_est = base_unit if costo_origen_es_unitario else (base_unit / factor_val)
             costo_neto_unit_est = costo_base_unit_est * (1.0 + (iva_val / 100.0))
             precio_sug_est = redondear_centena(precio_con_margen(costo_neto_unit_est, MARGEN_BRUTO_OBJ))
 
@@ -1199,11 +1232,15 @@ def main():
                 "Precio_Sugerido": money_int(precio_sug_est or 0),
                 "_Precio_Auto_Unitario": money_int(precio_sug_est or 0),
                 "_Factor_Pack_Inicial": float(factor_val or 1.0),
+                "_Costo_Origen_Es_Unitario": costo_origen_es_unitario,
+                "_Cantidad_Origen_Es_Unidad": cantidad_origen_es_unidad,
                 "Categoría": categoria_val,
                 "Sugerencia": motivo_sugerencia
             })
 
         df_revision = pd.DataFrame(df_revision_data)
+
+        st.caption("En compras por XML e ingreso manual, la cantidad y el costo base ya se tratan como unitarios. El campo Factor/Caja se conserva como referencia del proveedor y no divide el costo ni multiplica las unidades en este flujo.")
 
         edited_revision = st.data_editor(
             df_revision,
