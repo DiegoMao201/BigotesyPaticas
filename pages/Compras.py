@@ -284,6 +284,33 @@ def score_match_producto(nombre_origen: str, nombre_destino: str) -> float:
 def safe_text(node, default=""):
     return str(node.text).strip() if node is not None and node.text is not None else default
 
+
+def resolver_costo_unitario_xml(qty, price_amount, base_qty, line_extension, discount_amount):
+    """
+    Prioriza el total neto de la línea cuando existe en el XML.
+    Factor_Pack y BaseQuantity no deben reinterpretar el costo unitario en este flujo.
+    """
+    qty = money_float(qty)
+    qty = qty if qty > 0 else 1.0
+
+    unit_from_total = 0.0
+    if line_extension > 0:
+        unit_from_total = line_extension / qty
+
+    unit_from_price = 0.0
+    if price_amount > 0:
+        divisor = base_qty if base_qty > 0 else 1.0
+        unit_from_price = price_amount / divisor
+
+    if unit_from_total > 0:
+        return money_int(unit_from_total)
+
+    if unit_from_price > 0:
+        descuento_unit = (discount_amount / qty) if discount_amount > 0 else 0.0
+        return money_int(max(unit_from_price - descuento_unit, 0.0))
+
+    return 0
+
 def clean_currency(val):
     return money_int(val)
 
@@ -739,16 +766,12 @@ def parsear_xml_colombia(archivo):
                 price_node = line.find('.//cac:Price/cbc:PriceAmount', ns)
                 base_qty_node = line.find('.//cac:Price/cbc:BaseQuantity', ns)
                 price_base_qty = money_float(safe_text(base_qty_node, 1)) or 1.0
+                line_extension = money_float(safe_text(line.find('cbc:LineExtensionAmount', ns), 0))
 
                 if price_node is not None and safe_text(price_node, ""):
-                    base_price = money_float(price_node.text)
+                    price_amount = money_float(price_node.text)
                 else:
-                    line_extension = money_float(safe_text(line.find('cbc:LineExtensionAmount', ns), 0))
-                    divisor = qty if qty > 0 else 1.0
-                    base_price = line_extension / divisor
-
-                if price_base_qty > 0 and abs(price_base_qty - qty) < 0.0001 and qty > 0:
-                    base_price = base_price / qty
+                    price_amount = 0.0
                 
                 discount_amount = 0.0
                 allowances = line.findall('.//cac:AllowanceCharge', ns)
@@ -761,7 +784,13 @@ def parsear_xml_colombia(archivo):
                         else:
                             discount_amount -= val
 
-                final_base_price = money_int(base_price - (discount_amount / max(qty, 1.0)))
+                final_base_price = resolver_costo_unitario_xml(
+                    qty=qty,
+                    price_amount=price_amount,
+                    base_qty=price_base_qty,
+                    line_extension=line_extension,
+                    discount_amount=discount_amount,
+                )
                 
                 item_node = line.find('cac:Item', ns)
                 desc = safe_text(item_node.find('cbc:Description', ns), "Producto XML")
@@ -849,19 +878,14 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             cant_pack = float(row.get("Cantidad_Recibida", 0) or 0)
             iva_pct = float(row.get("IVA_Porcentaje", 0) or 0)
             costo_base_xml = money_int(row.get("Costo_Base_Unitario", 0))
-            costo_origen_es_unitario = valor_bool(row.get("_Costo_Origen_Es_Unitario"), default=True)
-            cantidad_origen_es_unidad = valor_bool(row.get("_Cantidad_Origen_Es_Unidad"), default=True)
             pr_item_trans = (pr_trans / total_items) if total_items else 0.0
             pr_item_desc = (pr_desc / total_items) if total_items else 0.0
 
-            if costo_origen_es_unitario:
-                ajuste_unitario = (pr_item_trans - pr_item_desc) / max(cant_pack, 1.0)
-                costo_base_unit = costo_base_xml + ajuste_unitario
-            else:
-                costo_base_unit = (costo_base_xml + pr_item_trans - pr_item_desc) / factor
+            unidades = cant_pack
+            ajuste_unitario = (pr_item_trans - pr_item_desc) / max(unidades, 1.0)
+            costo_base_unit = costo_base_xml + ajuste_unitario
             iva_unit = costo_base_unit * (iva_pct / 100.0)
             costo_neto_unit = money_int(costo_base_unit + iva_unit)
-            unidades = cant_pack if cantidad_origen_es_unidad else (cant_pack * factor)
 
             precio_editado = row.get("Precio_Sugerido", None)
             precio_auto_original = row.get("_Precio_Auto_Unitario", None)
@@ -887,9 +911,6 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             elif factor_modificado and precio_auto_original > 0 and abs(precio_editado - precio_auto_original) < 0.01:
                 precio_final = money_int(precio_unitario_calculado)
                 logs.append(f"PRECIO RECALCULADO por factor: {item_label} -> {precio_final}")
-            elif (not costo_origen_es_unitario) and factor > 1 and precio_unitario_calculado > 0 and precio_editado >= (precio_unitario_calculado * factor * 0.7):
-                precio_final = money_int(redondear_centena(precio_editado / factor))
-                logs.append(f"PRECIO NORMALIZADO a unitario: {item_label} {precio_editado} / factor {factor} = {precio_final}")
             else:
                 precio_final = money_int(precio_editado)
 
@@ -906,7 +927,6 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             categoria = str(row.get("Categoría", row.get("Categoria", "Sin Categoría"))).strip() or "Sin Categoría"
 
             if sku_prov and sku_prov != "S/C":
-                costo_prov_pack = money_int(costo_neto_unit * factor)
                 _upsert_maestro_proveedores(
                     ws_map=ws_map,
                     meta_xml=meta_xml,
@@ -914,7 +934,7 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                     sku_interno=sku_interno,
                     producto_uid=producto_uid,
                     factor=factor,
-                    costo_prov=costo_prov_pack,
+                    costo_prov=money_int(costo_neto_unit),
                     iva_pct=iva_pct,
                 )
 
@@ -1213,10 +1233,9 @@ def main():
             if factor_val <= 0:
                 factor_val = 1.0
             iva_val = float(iva_val or 0.0)
-            costo_origen_es_unitario = valor_bool(item.get("_Costo_Origen_Es_Unitario"), default=True)
             cantidad_origen_es_unidad = valor_bool(item.get("_Cantidad_Origen_Es_Unidad"), default=True)
 
-            costo_base_unit_est = base_unit if costo_origen_es_unitario else (base_unit / factor_val)
+            costo_base_unit_est = base_unit
             costo_neto_unit_est = costo_base_unit_est * (1.0 + (iva_val / 100.0))
             precio_sug_est = redondear_centena(precio_con_margen(costo_neto_unit_est, MARGEN_BRUTO_OBJ))
 
@@ -1232,7 +1251,7 @@ def main():
                 "Precio_Sugerido": money_int(precio_sug_est or 0),
                 "_Precio_Auto_Unitario": money_int(precio_sug_est or 0),
                 "_Factor_Pack_Inicial": float(factor_val or 1.0),
-                "_Costo_Origen_Es_Unitario": costo_origen_es_unitario,
+                "_Costo_Origen_Es_Unitario": True,
                 "_Cantidad_Origen_Es_Unidad": cantidad_origen_es_unidad,
                 "Categoría": categoria_val,
                 "Sugerencia": motivo_sugerencia

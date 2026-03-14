@@ -233,11 +233,7 @@ def cargar_datos_snapshot():
             df_prov["Factor_Pack"] = 1.0
         df_prov["Factor_Pack"] = pd.to_numeric(df_prov["Factor_Pack"], errors="coerce").fillna(1.0)
         df_prov["Factor_Pack"] = np.where(df_prov["Factor_Pack"] <= 0, 1.0, df_prov["Factor_Pack"])
-        df_prov["Costo_Proveedor_Unitario"] = np.where(
-            df_prov["Factor_Pack"] > 0,
-            df_prov["Costo_Proveedor"] / df_prov["Factor_Pack"],
-            df_prov["Costo_Proveedor"]
-        )
+        df_prov["Costo_Proveedor_Unitario"] = df_prov["Costo_Proveedor"]
         df_prov["Costo_Proveedor_Unitario"] = df_prov["Costo_Proveedor_Unitario"].apply(clean_currency)
 
         data_store["df_Maestro_Proveedores"] = df_prov
@@ -308,11 +304,7 @@ def calcular_master_df() -> pd.DataFrame:
         df_prov["SKU_Interno_Norm"] = df_prov["SKU_Interno"].apply(normalizar_id_producto)
     else:
         df_prov["SKU_Interno_Norm"] = df_prov["SKU_Interno_Norm"].apply(normalizar_id_producto)
-    df_prov["Costo_Proveedor_Unitario"] = np.where(
-        df_prov["Factor_Pack"] > 0,
-        df_prov["Costo_Proveedor"] / df_prov["Factor_Pack"],
-        df_prov["Costo_Proveedor"]
-    )
+    df_prov["Costo_Proveedor_Unitario"] = df_prov["Costo_Proveedor"]
     if "Ultima_Actualizacion" in df_prov.columns:
         df_prov["Ultima_Actualizacion"] = df_prov["Ultima_Actualizacion"].astype(str).str.strip()
         df_prov["Ultima_Actualizacion_dt"] = pd.to_datetime(df_prov["Ultima_Actualizacion"], errors="coerce")
