@@ -177,6 +177,37 @@ h1, h2, h3, h4 {{
     color: {COLOR_MUTED};
 }}
 
+.note-card {{
+    background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(252,249,243,0.98) 100%);
+    border: 1px solid rgba(15,23,42,0.06);
+    border-radius: 18px;
+    padding: 16px 18px;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+    margin: 8px 0 14px 0;
+}}
+
+.note-title {{
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    color: {COLOR_TEXTO};
+    margin-bottom: 6px;
+}}
+
+.note-body {{
+    color: {COLOR_MUTED};
+    line-height: 1.45;
+}}
+
+.mini-list {{
+    margin: 0;
+    padding-left: 18px;
+    color: {COLOR_MUTED};
+}}
+
+.mini-list li {{
+    margin-bottom: 5px;
+}}
+
 div[data-testid="stMetric"] {{
     background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,252,246,0.98) 100%);
     border: 1px solid rgba(15,23,42,0.06);
@@ -528,18 +559,50 @@ def badge(text: str) -> str:
 
 
 def render_metric_grid(metrics: list[dict]):
-    cards = []
-    for item in metrics:
-        cards.append(
-            f"""
-            <div class="metric-card-360">
-                <div class="metric-label-360">{item['label']}</div>
-                <div class="metric-value-360">{item['value']}</div>
-                <div class="metric-foot-360">{item.get('foot', '')}</div>
+    if not metrics:
+        return
+    cols = st.columns(len(metrics))
+    for col, item in zip(cols, metrics):
+        with col:
+            st.markdown(
+                f"""
+                <div class="metric-card-360">
+                    <div class="metric-label-360">{item['label']}</div>
+                    <div class="metric-value-360">{item['value']}</div>
+                    <div class="metric-foot-360">{item.get('foot', '')}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def render_note(title: str, body: str):
+    st.markdown(
+        f"""
+        <div class="note-card">
+            <div class="note-title">{title}</div>
+            <div class="note-body">{body}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_bullets(title: str, bullets: list[str]):
+    if not bullets:
+        return
+    items = "".join([f"<li>{b}</li>" for b in bullets])
+    st.markdown(
+        f"""
+        <div class="note-card">
+            <div class="note-title">{title}</div>
+            <div class="note-body">
+                <ul class="mini-list">{items}</ul>
             </div>
-            """
-        )
-    st.markdown(f'<div class="metric-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def build_alerts(producto, compras_df, ventas_df, costo_ref_actual):
@@ -572,6 +635,46 @@ def build_alerts(producto, compras_df, ventas_df, costo_ref_actual):
         alerts.append(("ok", "Lectura sana del producto", "La trazabilidad principal está disponible y no se detectan alertas críticas inmediatas en costo, precio o rotación."))
 
     return alerts
+
+
+def build_storyline(producto, compras_df, ventas_df, costo_ref_actual, compras_unidades, ventas_unidades, compras_total, ventas_total, margen_real):
+    story = []
+    nombre = str(producto.get("Nombre", "Producto")).strip() or "Producto"
+    costo_actual = money_float(producto.get("Costo", 0))
+    precio_actual = money_float(producto.get("Precio", 0))
+
+    if compras_unidades > 0:
+        story.append(f"{nombre} recibió {qty_fmt(compras_unidades)} unidades en el rango analizado, con una inversión acumulada de {money_fmt(compras_total)}.")
+    else:
+        story.append(f"{nombre} no tiene recepciones registradas en el rango analizado.")
+
+    if ventas_unidades > 0:
+        story.append(f"Se facturaron {qty_fmt(ventas_unidades)} unidades por {money_fmt(ventas_total)} y el margen bruto realizado del periodo fue {money_fmt(margen_real)}.")
+    else:
+        story.append(f"No se encontraron ventas del producto dentro del rango seleccionado.")
+
+    if costo_ref_actual > 0:
+        story.append(f"El costo de referencia del proveedor está en {money_fmt(costo_ref_actual)}, mientras que en inventario el costo vigente está en {money_fmt(costo_actual)}.")
+
+    if costo_actual > 0 and precio_actual > 0:
+        margen_actual = (precio_actual - costo_actual) / precio_actual if precio_actual > 0 else 0.0
+        story.append(f"Con el precio actual de {money_fmt(precio_actual)}, el margen teórico vigente del producto es {pct_fmt(margen_actual)}.")
+
+    return story
+
+
+def fig_base(fig, title: str, height: int = 360):
+    fig.update_layout(
+        height=height,
+        margin=dict(l=20, r=20, t=56, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.78)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        title=dict(text=title, x=0.02, xanchor="left", font=dict(size=18)),
+    )
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(gridcolor="rgba(15,23,42,0.08)")
+    return fig
 
 
 def main():
@@ -663,6 +766,20 @@ def main():
     costo_prom_compra = (compras_total / compras_unidades) if compras_unidades > 0 else 0.0
     precio_prom_venta = (ventas_total / ventas_unidades) if ventas_unidades > 0 else 0.0
     cobertura_precio = float((ventas_producto["Detalle_Fuente"].eq("Exacto") | ventas_producto["Detalle_Fuente"].eq("Inferido de venta de una sola línea")).mean()) if not ventas_producto.empty else 0.0
+    utilidad_potencial_actual = (money_float(producto.get("Precio", 0)) - money_float(producto.get("Costo", 0))) * money_float(producto.get("Stock", 0))
+    rotacion_neta = ventas_unidades - compras_unidades
+    avg_ticket_producto = ventas_total / len(ventas_producto["ID_Venta"].dropna().unique()) if not ventas_producto.empty and len(ventas_producto["ID_Venta"].dropna().unique()) > 0 else 0.0
+    storyline = build_storyline(
+        producto,
+        compras_producto,
+        ventas_producto,
+        costo_ref_actual,
+        compras_unidades,
+        ventas_unidades,
+        compras_total,
+        ventas_total,
+        margen_real,
+    )
 
     chips = [
         badge(f"SKU {str(producto.get('ID_Producto', '')).strip() or 'Sin SKU'}"),
@@ -694,12 +811,27 @@ def main():
         {"label": "Cobertura Detalle Venta", "value": pct_fmt(cobertura_precio), "foot": "Qué tanto del historial tiene precio/costo unitario utilizable"},
     ])
 
-    tabs = st.tabs(["Resumen", "Kardex", "Clientes y Proveedores", "Diagnóstico"])
+    render_metric_grid([
+        {"label": "Stock Actual", "value": qty_fmt(producto.get("Stock", 0)), "foot": f"Costo vigente {money_fmt(producto.get('Costo', 0))}"},
+        {"label": "Precio Vigente", "value": money_fmt(producto.get("Precio", 0)), "foot": f"Costo proveedor {money_fmt(costo_ref_actual)}"},
+        {"label": "Utilidad Potencial Stock", "value": money_fmt(utilidad_potencial_actual), "foot": "Con precio y costo vigentes"},
+        {"label": "Rotación Neta", "value": qty_fmt(rotacion_neta), "foot": "Ventas menos compras del rango"},
+        {"label": "Compradores Únicos", "value": qty_fmt(ventas_producto['Nombre_Cliente'].fillna('').replace('', np.nan).dropna().nunique()), "foot": "Clientes distintos del periodo"},
+        {"label": "Ticket Prom. Producto", "value": money_fmt(avg_ticket_producto), "foot": "Promedio por venta donde apareció"},
+    ])
+
+    tabs = st.tabs(["Resumen", "Kardex", "Clientes y Proveedores", "Diagnóstico", "Evolución"])
 
     with tabs[0]:
+        render_bullets("Lectura ejecutiva del producto", storyline)
+
         col_a, col_b = st.columns([1.35, 1])
 
         with col_a:
+            render_note(
+                "Qué muestra esta gráfica",
+                "Las barras verdes muestran entradas por compras y las barras rojas las salidas por ventas. Las líneas muestran cómo se ha movido el costo recibido y el precio realmente facturado para que puedas detectar si el margen se está estrechando o ampliando.",
+            )
             if compras_producto.empty and ventas_producto.empty:
                 st.info("Este producto no tiene movimientos dentro del rango seleccionado.")
             else:
@@ -757,15 +889,8 @@ def main():
                         secondary_y=True,
                     )
 
-                fig.update_layout(
-                    height=470,
-                    margin=dict(l=20, r=20, t=24, b=20),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(255,255,255,0.75)",
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-                    bargap=0.22,
-                    title=dict(text="Ritmo de movimiento, costo recibido y precio facturado", x=0.02, xanchor="left"),
-                )
+                fig = fig_base(fig, "Ritmo de movimiento, costo recibido y precio facturado", height=470)
+                fig.update_layout(bargap=0.22)
                 fig.update_yaxes(title_text="Unidades", secondary_y=False, zeroline=True, zerolinecolor="rgba(0,0,0,0.08)")
                 fig.update_yaxes(title_text="Valor unitario", secondary_y=True, tickprefix="$")
                 st.plotly_chart(fig, use_container_width=True)
@@ -794,8 +919,7 @@ def main():
             resumen_rows.append(f"Precio actual en inventario: {money_fmt(producto.get('Precio', 0))}")
             resumen_rows.append(f"Costo proveedor vigente: {money_fmt(costo_ref_actual)}")
             resumen_rows.append(f"Stock actual: {qty_fmt(producto.get('Stock', 0))}")
-            for line in resumen_rows:
-                st.write(f"• {line}")
+            render_bullets("Lo más importante hoy", resumen_rows)
 
             compras_cliente = ventas_producto.groupby("Nombre_Cliente", dropna=False).agg(
                 Unidades=("Cantidad", "sum"),
@@ -813,25 +937,45 @@ def main():
                     },
                 )
 
-        fig_mix = go.Figure()
-        if not compras_producto.empty:
-            compra_daily = compras_producto.groupby(compras_producto["Fecha"].dt.date).agg(Costo_Compra=("Costo_Unitario", "mean")).reset_index()
-            fig_mix.add_trace(go.Scatter(x=compra_daily["Fecha"], y=compra_daily["Costo_Compra"], mode="lines+markers", name="Costo compra", line=dict(color=COLOR_PRIMARIO, width=3)))
-        if not ventas_producto.dropna(subset=["Precio_Unitario"]).empty:
-            venta_daily = ventas_producto.dropna(subset=["Precio_Unitario"]).groupby(ventas_producto.dropna(subset=["Precio_Unitario"])["Fecha"].dt.date).agg(Precio_Venta=("Precio_Unitario", "mean")).reset_index()
-            fig_mix.add_trace(go.Scatter(x=venta_daily["Fecha"], y=venta_daily["Precio_Venta"], mode="lines+markers", name="Precio venta", line=dict(color=COLOR_ACENTO, width=3, dash="dot")))
-        fig_mix.update_layout(
-            height=360,
-            margin=dict(l=20, r=20, t=26, b=20),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(255,255,255,0.75)",
-            title=dict(text="Tendencia promedio de costo vs precio", x=0.02, xanchor="left"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-        )
-        fig_mix.update_yaxes(tickprefix="$", title="Valor unitario")
-        st.plotly_chart(fig_mix, use_container_width=True)
+        col_c1, col_c2 = st.columns([1, 1])
+        with col_c1:
+            render_note(
+                "Interpretación de costo vs precio",
+                "Esta línea compara el costo promedio de compra frente al precio promedio de venta a lo largo del tiempo. Si ambas curvas se acercan, el margen se está comprimiendo y conviene revisar precio o costo negociado.",
+            )
+            fig_mix = go.Figure()
+            if not compras_producto.empty:
+                compra_daily = compras_producto.groupby(compras_producto["Fecha"].dt.date).agg(Costo_Compra=("Costo_Unitario", "mean")).reset_index()
+                fig_mix.add_trace(go.Scatter(x=compra_daily["Fecha"], y=compra_daily["Costo_Compra"], mode="lines+markers", name="Costo compra", line=dict(color=COLOR_PRIMARIO, width=3)))
+            if not ventas_producto.dropna(subset=["Precio_Unitario"]).empty:
+                venta_daily = ventas_producto.dropna(subset=["Precio_Unitario"]).groupby(ventas_producto.dropna(subset=["Precio_Unitario"])["Fecha"].dt.date).agg(Precio_Venta=("Precio_Unitario", "mean")).reset_index()
+                fig_mix.add_trace(go.Scatter(x=venta_daily["Fecha"], y=venta_daily["Precio_Venta"], mode="lines+markers", name="Precio venta", line=dict(color=COLOR_ACENTO, width=3, dash="dot")))
+            fig_mix = fig_base(fig_mix, "Tendencia promedio de costo vs precio", height=360)
+            fig_mix.update_yaxes(tickprefix="$", title="Valor unitario")
+            st.plotly_chart(fig_mix, use_container_width=True)
+
+        with col_c2:
+            render_note(
+                "Interpretación de flujo económico",
+                "Este comparativo resume cuánto dinero entró por ventas frente a cuánto dinero salió por compras del producto dentro del rango. Ayuda a entender si el producto está convirtiendo capital en caja o si está acumulando inversión sin suficiente salida.",
+            )
+            fig_cash = go.Figure()
+            fig_cash.add_trace(go.Bar(
+                x=["Compras", "Ventas", "Margen"],
+                y=[compras_total, ventas_total, margen_real],
+                marker_color=[COLOR_PRIMARIO, COLOR_ACENTO, COLOR_OK if margen_real >= 0 else COLOR_PELIGRO],
+                text=[money_fmt(compras_total), money_fmt(ventas_total), money_fmt(margen_real)],
+                textposition="outside",
+            ))
+            fig_cash = fig_base(fig_cash, "Dinero invertido, facturado y margen generado", height=360)
+            fig_cash.update_yaxes(tickprefix="$", title="Valor")
+            st.plotly_chart(fig_cash, use_container_width=True)
 
     with tabs[1]:
+        render_note(
+            "Qué estás viendo en el kardex",
+            "Aquí se unifican compras y ventas del producto en una sola trazabilidad cronológica. Unidades positivas son entradas al inventario; unidades negativas son salidas por facturación.",
+        )
         kardex_cols = st.columns([1, 1, 1])
         movimiento_tipo = kardex_cols[0].selectbox("Ver en kardex", ["Todos", "Compras", "Ventas"])
         incluir_sin_detalle = kardex_cols[1].checkbox("Incluir ventas históricas sin detalle unitario", value=True)
@@ -930,6 +1074,10 @@ def main():
                 )
 
     with tabs[2]:
+        render_note(
+            "Lectura de relaciones comerciales",
+            "A la izquierda ves a quién le compras este producto y en qué condiciones promedio llega. A la derecha ves quién te lo compra, cuánto factura y qué margen te deja cada cliente en el periodo.",
+        )
         col_p, col_q = st.columns([1, 1])
         with col_p:
             st.markdown("### Relación con proveedores")
@@ -962,7 +1110,7 @@ def main():
                     color_continuous_scale=[COLOR_OK, COLOR_ACENTO, COLOR_CORAL],
                     title="Volumen por proveedor",
                 )
-                fig_prov.update_layout(height=320, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.75)")
+                fig_prov = fig_base(fig_prov, "Volumen por proveedor", height=320)
                 st.plotly_chart(fig_prov, use_container_width=True)
 
         with col_q:
@@ -996,10 +1144,14 @@ def main():
                     color_continuous_scale=[COLOR_CORAL, COLOR_ACENTO, COLOR_OK],
                     title="Facturación por cliente",
                 )
-                fig_cli.update_layout(height=320, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.75)")
+                fig_cli = fig_base(fig_cli, "Facturación por cliente", height=320)
                 st.plotly_chart(fig_cli, use_container_width=True)
 
     with tabs[3]:
+        render_note(
+            "Diagnóstico ejecutivo",
+            "Este bloque concentra alertas de margen, brechas de costo y señales de rotación. Está pensado para decidir rápido si el problema del producto está en compra, precio, salida o consistencia del dato.",
+        )
         st.markdown("### Alertas y lectura analítica")
         for level, title, body in build_alerts(producto, compras_producto, ventas_producto, costo_ref_actual):
             st.markdown(
@@ -1033,6 +1185,79 @@ def main():
             use_container_width=True,
             hide_index=True,
         )
+
+    with tabs[4]:
+        render_note(
+            "Evolución temporal del producto",
+            "Aquí se profundiza en cómo se ha comportado el producto por periodos: compras, ventas, precios, costos y margen por bloque de tiempo para detectar tendencias y cambios estructurales.",
+        )
+        frecuencia = st.selectbox("Frecuencia de análisis", ["Diaria", "Semanal", "Mensual"], index=2)
+        freq_map = {"Diaria": "D", "Semanal": "W", "Mensual": "M"}
+        freq = freq_map[frecuencia]
+
+        compras_ev = compras_producto.copy()
+        ventas_ev = ventas_producto.copy()
+        if not compras_ev.empty:
+            compras_ev["Periodo"] = compras_ev["Fecha"].dt.to_period("M" if freq == "M" else ("W" if freq == "W" else "D")).dt.to_timestamp()
+            compras_agg = compras_ev.groupby("Periodo").agg(
+                Unidades_Compradas=("Unidades", "sum"),
+                Costo_Comprado=("Costo_Total", "sum"),
+                Costo_Unit_Prom=("Costo_Unitario", "mean"),
+            ).reset_index()
+        else:
+            compras_agg = pd.DataFrame(columns=["Periodo", "Unidades_Compradas", "Costo_Comprado", "Costo_Unit_Prom"])
+
+        if not ventas_ev.empty:
+            ventas_ev["Periodo"] = ventas_ev["Fecha"].dt.to_period("M" if freq == "M" else ("W" if freq == "W" else "D")).dt.to_timestamp()
+            ventas_agg = ventas_ev.groupby("Periodo").agg(
+                Unidades_Vendidas=("Cantidad", "sum"),
+                Facturacion=("Ingreso_Linea", "sum"),
+                Costo_Vendido=("Costo_Total_Linea", "sum"),
+                Precio_Unit_Prom=("Precio_Unitario", "mean"),
+            ).reset_index()
+            ventas_agg["Margen"] = ventas_agg["Facturacion"] - ventas_agg["Costo_Vendido"]
+        else:
+            ventas_agg = pd.DataFrame(columns=["Periodo", "Unidades_Vendidas", "Facturacion", "Costo_Vendido", "Precio_Unit_Prom", "Margen"])
+
+        evo = pd.merge(compras_agg, ventas_agg, on="Periodo", how="outer").sort_values("Periodo").fillna(0)
+        if evo.empty:
+            st.info("No hay suficiente historial para construir evolución del producto en este rango.")
+        else:
+            col_e1, col_e2 = st.columns([1.15, 1])
+            with col_e1:
+                fig_evo = go.Figure()
+                fig_evo.add_trace(go.Bar(x=evo["Periodo"], y=evo["Unidades_Compradas"], name="Compradas", marker_color=COLOR_OK, opacity=0.60))
+                fig_evo.add_trace(go.Bar(x=evo["Periodo"], y=-evo["Unidades_Vendidas"], name="Vendidas", marker_color=COLOR_CORAL, opacity=0.50))
+                fig_evo = fig_base(fig_evo, "Balance de unidades por periodo", height=360)
+                fig_evo.update_layout(barmode="relative")
+                fig_evo.update_yaxes(title="Unidades")
+                st.plotly_chart(fig_evo, use_container_width=True)
+            with col_e2:
+                fig_evo2 = go.Figure()
+                if "Costo_Unit_Prom" in evo.columns:
+                    fig_evo2.add_trace(go.Scatter(x=evo["Periodo"], y=evo["Costo_Unit_Prom"], mode="lines+markers", name="Costo unitario prom.", line=dict(color=COLOR_PRIMARIO, width=3)))
+                if "Precio_Unit_Prom" in evo.columns:
+                    fig_evo2.add_trace(go.Scatter(x=evo["Periodo"], y=evo["Precio_Unit_Prom"], mode="lines+markers", name="Precio unitario prom.", line=dict(color=COLOR_ACENTO, width=3, dash="dot")))
+                fig_evo2 = fig_base(fig_evo2, "Evolución de costo y precio promedio", height=360)
+                fig_evo2.update_yaxes(tickprefix="$", title="Valor unitario")
+                st.plotly_chart(fig_evo2, use_container_width=True)
+
+            st.dataframe(
+                evo,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Periodo": st.column_config.DatetimeColumn(format="YYYY-MM-DD"),
+                    "Unidades_Compradas": st.column_config.NumberColumn(format="%.0f"),
+                    "Costo_Comprado": st.column_config.NumberColumn(format="$%.0f"),
+                    "Costo_Unit_Prom": st.column_config.NumberColumn(format="$%.0f"),
+                    "Unidades_Vendidas": st.column_config.NumberColumn(format="%.0f"),
+                    "Facturacion": st.column_config.NumberColumn(format="$%.0f"),
+                    "Costo_Vendido": st.column_config.NumberColumn(format="$%.0f"),
+                    "Precio_Unit_Prom": st.column_config.NumberColumn(format="$%.0f"),
+                    "Margen": st.column_config.NumberColumn(format="$%.0f"),
+                },
+            )
 
 
 if __name__ == "__main__":
