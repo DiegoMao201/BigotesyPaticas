@@ -289,6 +289,7 @@ def resolver_costo_unitario_xml(qty, price_amount, base_qty, line_extension, dis
     """
     Prioriza el total neto de la línea cuando existe en el XML.
     Factor_Pack y BaseQuantity no deben reinterpretar el costo unitario en este flujo.
+    PriceAmount se trata como unitario cuando el XML no trae LineExtensionAmount usable.
     """
     qty = money_float(qty)
     qty = qty if qty > 0 else 1.0
@@ -299,8 +300,7 @@ def resolver_costo_unitario_xml(qty, price_amount, base_qty, line_extension, dis
 
     unit_from_price = 0.0
     if price_amount > 0:
-        divisor = base_qty if base_qty > 0 else 1.0
-        unit_from_price = price_amount / divisor
+        unit_from_price = price_amount
 
     if unit_from_total > 0:
         return money_int(unit_from_total)
@@ -1140,8 +1140,10 @@ def main():
                 st.markdown("---")
                 st.write("📝 **Items de la Factura**")
 
+                st.caption("En ingreso manual puedes escribir costo unitario o total de la línea. Si llenas ambos, el sistema tomará el costo unitario como prioridad para evitar divisiones erróneas cuando haya varias unidades.")
+
                 df_template = pd.DataFrame([{
-                    "Descripción": "", "Cantidad": 1, "Costo_Total_Línea": 0.0
+                    "Descripción": "", "Cantidad": 1, "Costo_Unitario": 0.0, "Costo_Total_Línea": 0.0
                 }])
 
                 edited_manual = st.data_editor(
@@ -1149,6 +1151,7 @@ def main():
                     column_config={
                         "Descripción": st.column_config.TextColumn("Descripción del Producto", required=True),
                         "Cantidad": st.column_config.NumberColumn("Cant.", min_value=1),
+                        "Costo_Unitario": st.column_config.NumberColumn("Costo Unitario ($)", min_value=0.0),
                         "Costo_Total_Línea": st.column_config.NumberColumn("Costo Total ($)", min_value=0.0)
                     }
                 )
@@ -1164,8 +1167,22 @@ def main():
                         for i, row in edited_manual.iterrows():
                             if row["Descripción"]:
                                 qty = float(row["Cantidad"])
-                                c_tot = money_int(row["Costo_Total_Línea"])
-                                base_unit = money_int((c_tot / qty) if qty > 0 else 0)
+                                c_unit_input = money_float(row.get("Costo_Unitario", 0))
+                                c_tot_input = money_float(row.get("Costo_Total_Línea", 0))
+
+                                if qty <= 0:
+                                    qty = 1.0
+
+                                if c_unit_input > 0:
+                                    base_unit = money_int(c_unit_input)
+                                    c_tot = money_int(c_unit_input * qty)
+                                else:
+                                    c_tot = money_int(c_tot_input)
+                                    base_unit = money_int((c_tot / qty) if qty > 0 else 0)
+
+                                if base_unit <= 0 and c_tot <= 0:
+                                    continue
+
                                 total_manual += c_tot
                                 
                                 items_std.append({

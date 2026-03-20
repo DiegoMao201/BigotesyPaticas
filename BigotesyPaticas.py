@@ -908,6 +908,10 @@ def tab_pos():
                         "ID_Producto_Norm": x.get("ID_Producto_Norm", ""),
                         "Nombre": x.get("Nombre_Producto", ""),
                         "Cantidad": x.get("Cantidad", 0),
+                        "Precio_Unitario": clean_currency(x.get("Precio", 0) or 0),
+                        "Descuento_Unitario": clean_currency(x.get("Descuento", 0) or 0),
+                        "Costo_Unitario": clean_currency(x.get("Costo", 0) or 0),
+                        "Subtotal_Linea": clean_currency(x.get("Subtotal", 0) or 0),
                     }
                     for x in st.session_state.carrito
                 ]

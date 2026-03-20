@@ -138,6 +138,115 @@ def clean_currency(x):
     return money_int(x)
 
 
+MARGEN_BRUTO_OBJ = 0.20
+
+
+def precio_con_margen(costo_neto_unit: float, margen: float = MARGEN_BRUTO_OBJ) -> float:
+    try:
+        c = float(costo_neto_unit or 0.0)
+        m = float(margen or 0.0)
+        if c <= 0:
+            return 0.0
+        m = max(0.0, min(0.95, m))
+        return c / (1.0 - m)
+    except Exception:
+        return 0.0
+
+
+def redondear_centena(valor):
+    valor = float(valor or 0.0)
+    if valor <= 0:
+        return 0.0
+    return float(np.ceil(valor / 100.0) * 100.0)
+
+
+def calcular_precio_protegido(costo_actual, precio_actual, costo_nuevo):
+    costo_actual = money_int(costo_actual)
+    precio_actual = money_int(precio_actual)
+    costo_nuevo = money_int(costo_nuevo)
+
+    if costo_nuevo <= 0:
+        return precio_actual
+    if costo_nuevo <= costo_actual:
+        return precio_actual
+
+    precio_minimo = money_int(redondear_centena(precio_con_margen(costo_nuevo, MARGEN_BRUTO_OBJ)))
+    return max(precio_actual, precio_minimo)
+
+
+def aplicar_correccion_costos(ws_inv, ws_map, df_correcciones: pd.DataFrame):
+    if df_correcciones is None or df_correcciones.empty:
+        return 0, []
+
+    logs = []
+    inv_values = safe_google_op(ws_inv.get_all_values) or []
+    if not inv_values:
+        return 0, ["Inventario vacío; no hay filas para corregir."]
+
+    inv_headers = inv_values[0]
+    idx_uid = inv_headers.index("Producto_UID") if "Producto_UID" in inv_headers else None
+    idx_id = inv_headers.index("ID_Producto") if "ID_Producto" in inv_headers else None
+    idx_norm = inv_headers.index("ID_Producto_Norm") if "ID_Producto_Norm" in inv_headers else None
+    idx_costo = inv_headers.index("Costo") if "Costo" in inv_headers else None
+    idx_precio = inv_headers.index("Precio") if "Precio" in inv_headers else None
+
+    inv_row_map = {}
+    for sheet_row, raw in enumerate(inv_values[1:], start=2):
+        uid = str(raw[idx_uid]).strip() if idx_uid is not None and idx_uid < len(raw) else ""
+        sku = str(raw[idx_id]).strip() if idx_id is not None and idx_id < len(raw) else ""
+        sku_norm = str(raw[idx_norm]).strip() if idx_norm is not None and idx_norm < len(raw) else normalizar_id_producto(sku)
+        if uid:
+            inv_row_map[("uid", uid)] = sheet_row
+        if sku_norm:
+            inv_row_map[("sku", sku_norm)] = sheet_row
+
+    map_values = safe_google_op(ws_map.get_all_values) if ws_map is not None else []
+    map_headers = map_values[0] if map_values else []
+    map_idx_uid = map_headers.index("Producto_UID") if "Producto_UID" in map_headers else None
+    map_idx_sku = map_headers.index("SKU_Interno") if "SKU_Interno" in map_headers else None
+    map_idx_costo = map_headers.index("Costo_Proveedor") if "Costo_Proveedor" in map_headers else None
+    map_updates = []
+
+    inv_updates = []
+    applied = 0
+    for _, row in df_correcciones.iterrows():
+        if not bool(row.get("Aplicar", False)):
+            continue
+
+        producto_uid = str(row.get("Producto_UID", "")).strip()
+        sku_norm = normalizar_id_producto(row.get("ID_Producto", ""))
+        fila_inv = inv_row_map.get(("uid", producto_uid)) or inv_row_map.get(("sku", sku_norm))
+        if fila_inv is None:
+            logs.append(f"No se encontró inventario para {row.get('ID_Producto', '')}.")
+            continue
+
+        nuevo_costo = money_int(row.get("Costo_Nuevo", 0))
+        nuevo_precio = money_int(row.get("Precio_Resultante", 0))
+        if idx_costo is not None:
+            inv_updates.append({"range": gspread.utils.rowcol_to_a1(fila_inv, idx_costo + 1), "values": [[nuevo_costo]]})
+        if idx_precio is not None:
+            inv_updates.append({"range": gspread.utils.rowcol_to_a1(fila_inv, idx_precio + 1), "values": [[nuevo_precio]]})
+
+        if map_values and map_idx_costo is not None:
+            for map_row_num, raw in enumerate(map_values[1:], start=2):
+                map_uid = str(raw[map_idx_uid]).strip() if map_idx_uid is not None and map_idx_uid < len(raw) else ""
+                map_sku = str(raw[map_idx_sku]).strip() if map_idx_sku is not None and map_idx_sku < len(raw) else ""
+                if (producto_uid and map_uid == producto_uid) or (sku_norm and normalizar_id_producto(map_sku) == sku_norm):
+                    map_updates.append({"range": gspread.utils.rowcol_to_a1(map_row_num, map_idx_costo + 1), "values": [[nuevo_costo]]})
+
+        applied += 1
+        logs.append(
+            f"{row.get('ID_Producto', '')}: costo {money_int(row.get('Costo_Actual', 0))}->{nuevo_costo}, precio {money_int(row.get('Precio_Actual', 0))}->{nuevo_precio}"
+        )
+
+    if inv_updates:
+        safe_google_op(ws_inv.batch_update, inv_updates)
+    if map_updates:
+        safe_google_op(ws_map.batch_update, map_updates)
+
+    return applied, logs
+
+
 # ==========================================
 # 2. GESTIÓN DE API (Anti-Caídas)
 # ==========================================
@@ -776,6 +885,10 @@ def main():
     if alertas_datos > 0:
         st.warning(f"Se detectaron {alertas_datos} productos con datos dudosos de costo/precio. El margen promedio excluye esos casos para evitar distorsiones.")
 
+    data_store = st.session_state.get("data_store", {})
+    ws_inv = data_store.get("ws_Inventario")
+    ws_map = data_store.get("ws_Maestro_Proveedores")
+
     # ── TABS ──────────────────────────────────────────────────────────────
     tabs = st.tabs([
         "📊 Visión 360",
@@ -854,6 +967,99 @@ def main():
                     use_container_width=True,
                     hide_index=True,
                 )
+
+            st.markdown("### Corrección manual de costos")
+            st.caption("Regla aplicada: si el costo nuevo baja, el precio actual se conserva. Si el costo nuevo sube, el sistema solo sube el precio cuando el actual ya no soporta el margen objetivo.")
+
+            fuente_correccion = master_df.copy()
+            solo_alertas = st.checkbox("Mostrar solo productos con alerta de datos", value=True, key="fix_cost_only_alerts")
+            if solo_alertas:
+                fuente_correccion = fuente_correccion[fuente_correccion["Alerta_Datos"].ne("OK")].copy()
+
+            filtro_fix = st.text_input("Filtrar productos a corregir", key="fix_cost_filter")
+            if filtro_fix:
+                mask_fix = (
+                    fuente_correccion["Nombre"].astype(str).str.contains(filtro_fix, case=False, na=False) |
+                    fuente_correccion["ID_Producto"].astype(str).str.contains(filtro_fix, case=False, na=False)
+                )
+                fuente_correccion = fuente_correccion[mask_fix].copy()
+
+            if fuente_correccion.empty:
+                st.info("No hay productos disponibles con ese filtro para corregir.")
+            else:
+                correction_df = fuente_correccion[[
+                    "Producto_UID", "ID_Producto", "Nombre", "Costo_Inventario_Unitario",
+                    "Costo_Referencia_Proveedor_Unitario", "Precio", "Alerta_Datos"
+                ]].copy()
+                correction_df = correction_df.rename(columns={
+                    "Costo_Inventario_Unitario": "Costo_Actual",
+                    "Costo_Referencia_Proveedor_Unitario": "Costo_Proveedor_Ref",
+                    "Precio": "Precio_Actual",
+                })
+                correction_df["Aplicar"] = False
+                correction_df["Costo_Nuevo"] = correction_df["Costo_Actual"].apply(money_int)
+
+                edited_fix = st.data_editor(
+                    correction_df[[
+                        "Aplicar", "ID_Producto", "Nombre", "Costo_Actual", "Costo_Proveedor_Ref",
+                        "Precio_Actual", "Costo_Nuevo", "Alerta_Datos", "Producto_UID"
+                    ]],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Aplicar": st.column_config.CheckboxColumn("Aplicar"),
+                        "ID_Producto": st.column_config.TextColumn("SKU", disabled=True),
+                        "Nombre": st.column_config.TextColumn("Producto", disabled=True),
+                        "Costo_Actual": st.column_config.NumberColumn("Costo actual", format="$%.0f", disabled=True),
+                        "Costo_Proveedor_Ref": st.column_config.NumberColumn("Costo proveedor", format="$%.0f", disabled=True),
+                        "Precio_Actual": st.column_config.NumberColumn("Precio actual", format="$%.0f", disabled=True),
+                        "Costo_Nuevo": st.column_config.NumberColumn("Costo nuevo", format="$%.0f", min_value=0.0),
+                        "Alerta_Datos": st.column_config.TextColumn("Diagnóstico", disabled=True),
+                        "Producto_UID": None,
+                    },
+                    key="editor_fix_costs",
+                )
+
+                preview_fix = edited_fix.copy()
+                preview_fix["Costo_Nuevo"] = preview_fix["Costo_Nuevo"].apply(money_int)
+                preview_fix["Precio_Resultante"] = preview_fix.apply(
+                    lambda r: calcular_precio_protegido(r.get("Costo_Actual", 0), r.get("Precio_Actual", 0), r.get("Costo_Nuevo", 0)),
+                    axis=1,
+                )
+                preview_fix["Cambio_Precio"] = preview_fix["Precio_Resultante"] - preview_fix["Precio_Actual"].apply(money_int)
+
+                seleccion_fix = preview_fix[preview_fix["Aplicar"] == True].copy()
+                if seleccion_fix.empty:
+                    st.info("Marca los productos que quieras corregir para ver el resultado antes de guardar.")
+                else:
+                    st.dataframe(
+                        seleccion_fix[["ID_Producto", "Nombre", "Costo_Actual", "Costo_Nuevo", "Precio_Actual", "Precio_Resultante", "Cambio_Precio"]],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Costo_Actual": st.column_config.NumberColumn("Costo actual", format="$%.0f"),
+                            "Costo_Nuevo": st.column_config.NumberColumn("Costo nuevo", format="$%.0f"),
+                            "Precio_Actual": st.column_config.NumberColumn("Precio actual", format="$%.0f"),
+                            "Precio_Resultante": st.column_config.NumberColumn("Precio final", format="$%.0f"),
+                            "Cambio_Precio": st.column_config.NumberColumn("Ajuste precio", format="$%.0f"),
+                        },
+                    )
+
+                    if st.button("Guardar correcciones de costo", type="primary", key="btn_save_cost_fixes"):
+                        if ws_inv is None:
+                            st.error("No se encontró la hoja Inventario para aplicar las correcciones.")
+                        else:
+                            applied, logs = aplicar_correccion_costos(ws_inv, ws_map, seleccion_fix)
+                            if applied <= 0:
+                                st.warning("No se aplicaron correcciones.")
+                                if logs:
+                                    for log in logs:
+                                        st.write(log)
+                            else:
+                                st.success(f"Se corrigieron {applied} productos y se sincronizó el costo de referencia del proveedor cuando existía mapeo.")
+                                st.session_state.pop("data_store", None)
+                                cargar_datos_snapshot()
+                                st.rerun()
 
     # ── TAB 2: COMPRAS INTELIGENTES ───────────────────────────────────────
     with tabs[1]:
