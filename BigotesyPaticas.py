@@ -39,7 +39,7 @@ def now_co():
     return datetime.now(TZ_CO)
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Nexus Pro | Bigotes y Patitas", page_icon="🐾", layout="wide")
+st.set_page_config(page_title="Nexus Pro | Bigotes y Paticas", page_icon="🐾", layout="wide")
 
 # ==========================================
 # 1. SISTEMA ANTI-BLOQUEO (RETRY LOGIC)
@@ -258,7 +258,7 @@ def msg_venta(nombre: str, mascota: str, items_str: str, total: float) -> str:
 
     return (
         f"Hola *{nombre}* 👋🐾\n\n"
-        f"¡Gracias por tu compra en *Bigotes y Patitas*! 💚\n"
+        f"¡Gracias por tu compra en *Bigotes y Paticas*! 💚\n"
         f"Hoy consentimos a *{mascota}* ✨\n\n"
         f"🛍️ *Productos:*\n{items_bullets}\n\n"
         f"💳 *Total:* ${float(total or 0):,.0f}\n\n"
@@ -270,7 +270,7 @@ def msg_venta_fidelidad(nombre: str, mascota: str, items_str: str, total: float)
     return msg_venta(nombre, mascota, items_str, total)
 
 def msg_bienvenida(nombre, mascota):
-    return f"""🐾 ¡Hola {nombre}! Bienvenido/a a Bigotes y Patitas.
+    return f"""🐾 ¡Hola {nombre}! Bienvenido/a a Bigotes y Paticas.
 🎉 Estamos felices de consentir a {mascota or 'tu peludito'}.
 📦 Necesites comida, snacks o juguetes, aquí estamos.
 🤗 Gracias por confiar en nosotros."""
@@ -509,7 +509,7 @@ def generar_pdf_reportlab(venta_data, items):
         pdf.setFont("Helvetica-Bold", 11)
         pdf.drawString(margin + 62, height - margin - 16, "FACTURA POST VENTA")
         pdf.setFont("Helvetica-Bold", 22)
-        pdf.drawString(margin + 62, height - margin - 38, "Bigotes y Patitas")
+        pdf.drawString(margin + 62, height - margin - 38, "Bigotes y Paticas")
         pdf.setFont("Helvetica", 10)
         pdf.drawString(margin + 62, height - margin - 54, "Tu tienda de confianza para consentir a cada peludito.")
         pdf.drawString(margin + 62, height - margin - 67, "Tel: 3206876633")
@@ -667,7 +667,7 @@ def generar_pdf_reportlab(venta_data, items):
     pdf.setFillColor(muted)
     pdf.setFont("Helvetica", 8.2)
     pdf.drawString(margin, footer_y - 10, "Conserva este recibo para cambios o garantias durante los siguientes 5 dias habiles.")
-    pdf.drawRightString(width - margin, footer_y - 2, "Bigotes y Patitas · Servicio con detalle")
+    pdf.drawRightString(width - margin, footer_y - 2, "Bigotes y Paticas · Servicio con detalle")
 
     pdf.save()
     return buffer.getvalue()
@@ -1051,7 +1051,7 @@ def tab_pos():
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="main-title">🐾 Punto de Venta Bigotes y Patitas</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">🐾 Punto de Venta Bigotes y Paticas</div>', unsafe_allow_html=True)
     
     # Inicializar variables POS
     if 'carrito' not in st.session_state: st.session_state.carrito = []
@@ -1530,7 +1530,7 @@ def msg_venta(nombre: str, mascota: str, items_str: str, total: float) -> str:
 
     return (
         f"Hola *{nombre}* 👋🐾\n\n"
-        f"¡Gracias por tu compra en *Bigotes y Patitas*! 💚\n"
+        f"¡Gracias por tu compra en *Bigotes y Paticas*! 💚\n"
         f"Hoy consentimos a *{mascota}* ✨\n\n"
         f"🛍️ *Productos:*\n{items_bullets}\n\n"
         f"💳 *Total:* ${float(total or 0):,.0f}\n\n"
