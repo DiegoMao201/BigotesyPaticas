@@ -338,6 +338,112 @@ def construir_resumen_venta(id_venta, fecha, metodo, entrega, dir_envio, cliente
         "items": items_normalizados,
     }
 
+def _row_pick(row, candidates, default=""):
+    for key in candidates:
+        if key in row:
+            value = row.get(key)
+            if pd.notna(value) and str(value).strip() != "":
+                return value
+    return default
+
+def _normalizar_items_factura(items):
+    items_normalizados = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        cantidad = float(item.get("Cantidad", item.get("Qty", 0)) or 0)
+        precio = clean_currency(item.get("Precio", item.get("Precio_Unitario", 0)) or 0)
+        descuento = clean_currency(item.get("Descuento", item.get("Descuento_Unitario", 0)) or 0)
+        subtotal = clean_currency(item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad)) or 0)
+        items_normalizados.append(
+            {
+                "Nombre_Producto": item.get("Nombre_Producto", item.get("Nombre", item.get("Descripcion", "Producto"))),
+                "Cantidad": cantidad,
+                "Precio": precio,
+                "Descuento": descuento,
+                "Subtotal": subtotal,
+            }
+        )
+    return items_normalizados
+
+def _items_desde_texto(items_str, total_num):
+    partes = [p.strip() for p in str(items_str or "").split(",") if p.strip()]
+    if not partes:
+        return []
+    items = []
+    distribuir_total = len(partes) == 1
+    for parte in partes:
+        match = re.match(r"^([\d\.,]+)x\s+(.+)$", parte)
+        if match:
+            cantidad = float(str(match.group(1)).replace(",", "."))
+            nombre = match.group(2).strip()
+        else:
+            cantidad = 1.0
+            nombre = parte
+        subtotal = clean_currency(total_num) if distribuir_total else 0
+        precio = int(round(subtotal / cantidad)) if distribuir_total and cantidad > 0 else 0
+        items.append(
+            {
+                "Nombre_Producto": nombre,
+                "Cantidad": cantidad,
+                "Precio": precio,
+                "Descuento": 0,
+                "Subtotal": subtotal,
+            }
+        )
+    return items
+
+def construir_resumen_venta_desde_fila(row):
+    row_dict = row.to_dict() if hasattr(row, "to_dict") else dict(row)
+    total_num = clean_currency(_row_pick(row_dict, ["Total", "Monto", "Valor_Total"], 0))
+
+    items_json_raw = _row_pick(
+        row_dict,
+        ["Items_JSON", "Items_Json", "Items_Detalle", "Detalle_JSON", "Detalle_Venta", "Productos_JSON"],
+        "",
+    )
+    parsed_items = []
+    if items_json_raw:
+        try:
+            loaded = json.loads(str(items_json_raw))
+            if isinstance(loaded, list):
+                parsed_items = _normalizar_items_factura(loaded)
+        except Exception:
+            parsed_items = []
+
+    if not parsed_items:
+        items_text = _row_pick(row_dict, ["Items", "Detalle", "Productos", "Descripcion"], "")
+        parsed_items = _items_desde_texto(items_text, total_num)
+
+    if not parsed_items:
+        parsed_items = [
+            {
+                "Nombre_Producto": "Venta registrada",
+                "Cantidad": 1,
+                "Precio": total_num,
+                "Descuento": 0,
+                "Subtotal": total_num,
+            }
+        ]
+
+    cliente = {
+        "Nombre": _row_pick(row_dict, ["Nombre_Cliente", "Cliente", "Nombre"], "Consumidor Final"),
+        "Cedula": _row_pick(row_dict, ["Cedula_Cliente", "Cedula", "Documento"], ""),
+        "Direccion": _row_pick(row_dict, ["Direccion", "Dirección", "Direccion_Entrega"], "Local"),
+    }
+
+    return construir_resumen_venta(
+        id_venta=str(_row_pick(row_dict, ["ID_Venta", "ID", "Venta_ID"], "SIN-ID")),
+        fecha=str(_row_pick(row_dict, ["Fecha", "Fecha_Venta"], "")),
+        metodo=str(_row_pick(row_dict, ["Metodo_Pago", "Método_Pago", "Pago"], "Efectivo")),
+        entrega=str(_row_pick(row_dict, ["Tipo_Entrega", "Entrega", "Modalidad_Entrega"], "Local")),
+        dir_envio=str(_row_pick(row_dict, ["Direccion", "Dirección", "Direccion_Entrega"], "Local")),
+        cliente=cliente,
+        mascota=str(_row_pick(row_dict, ["Mascota", "Nombre_Mascota"], "")),
+        carrito=parsed_items,
+        total_num=total_num,
+    )
+
 def generar_pdf_reportlab(venta_data, items):
     if canvas is None or colors is None or A4 is None or mm is None:
         return None
@@ -376,6 +482,7 @@ def generar_pdf_reportlab(venta_data, items):
     ink = colors.HexColor("#16313f")
     muted = colors.HexColor("#5c7280")
     white = colors.white
+    compact_mode = len(items_render) <= 8
 
     def money(value):
         return f"${clean_currency(value or 0):,.0f}"
@@ -385,10 +492,11 @@ def generar_pdf_reportlab(venta_data, items):
         pdf.roundRect(margin - 4, margin - 2, width - (2 * margin) + 8, height - (2 * margin) + 4, 18, stroke=0, fill=1)
         pdf.setFillColor(gold)
         pdf.roundRect(margin - 4, height - margin + 8, width - (2 * margin) + 8, 10, 5, stroke=0, fill=1)
+        header_height = 76 if compact_mode else 88
         pdf.setFillColor(teal)
-        pdf.roundRect(margin - 4, height - margin - 78, width - (2 * margin) + 8, 88, 18, stroke=0, fill=1)
+        pdf.roundRect(margin - 4, height - margin - (header_height - 10), width - (2 * margin) + 8, header_height, 18, stroke=0, fill=1)
         pdf.setFillColor(teal_deep)
-        pdf.roundRect(width - margin - 165, height - margin - 58, 150, 52, 16, stroke=0, fill=1)
+        pdf.roundRect(width - margin - 165, height - margin - 54, 150, 48, 16, stroke=0, fill=1)
 
         logo_path = BASE_DIR / "BigotesyPaticas.png"
         if logo_path.exists():
@@ -404,7 +512,7 @@ def generar_pdf_reportlab(venta_data, items):
         pdf.drawString(margin + 62, height - margin - 38, "Bigotes y Patitas")
         pdf.setFont("Helvetica", 10)
         pdf.drawString(margin + 62, height - margin - 54, "Tu tienda de confianza para consentir a cada peludito.")
-        pdf.drawString(margin + 62, height - margin - 68, "Tel: 320 504 6277")
+        pdf.drawString(margin + 62, height - margin - 67, "Tel: 3206876633")
 
         pdf.setFont("Helvetica-Bold", 18)
         pdf.drawRightString(width - margin - 28, height - margin - 22, "RECIBO")
@@ -414,6 +522,9 @@ def generar_pdf_reportlab(venta_data, items):
 
     def draw_summary_cards(top_y):
         card_width = (width - (2 * margin) - 20) / 3
+        card_height = 34 if compact_mode else 42
+        value_offset = 22 if compact_mode else 26
+        foot_offset = 30 if compact_mode else 37
         cards = [
             ("Total cobrado", money(venta_data.get("Total", 0)), "Factura lista para descargar"),
             ("Unidades", f"{total_unidades:,.0f}", "Productos entregados"),
@@ -422,49 +533,50 @@ def generar_pdf_reportlab(venta_data, items):
         x = margin
         for title, value, foot in cards:
             pdf.setFillColor(sand)
-            pdf.roundRect(x, top_y - 44, card_width, 42, 14, stroke=0, fill=1)
+            pdf.roundRect(x, top_y - card_height, card_width, card_height - 2, 14, stroke=0, fill=1)
             pdf.setStrokeColor(colors.HexColor("#d9e5e3"))
-            pdf.roundRect(x, top_y - 44, card_width, 42, 14, stroke=1, fill=0)
+            pdf.roundRect(x, top_y - card_height, card_width, card_height - 2, 14, stroke=1, fill=0)
             pdf.setFillColor(muted)
             pdf.setFont("Helvetica-Bold", 7.5)
             pdf.drawString(x + 10, top_y - 12, title.upper())
             pdf.setFillColor(ink)
-            pdf.setFont("Helvetica-Bold", 14)
-            pdf.drawString(x + 10, top_y - 26, value)
+            pdf.setFont("Helvetica-Bold", 13 if compact_mode else 14)
+            pdf.drawString(x + 10, top_y - value_offset, value)
             pdf.setFillColor(muted)
-            pdf.setFont("Helvetica", 8.5)
-            pdf.drawString(x + 10, top_y - 37, foot)
+            pdf.setFont("Helvetica", 7.8 if compact_mode else 8.5)
+            pdf.drawString(x + 10, top_y - foot_offset, foot)
             x += card_width + 10
 
     def draw_info_box(x, y, box_width, title, lines):
+        box_height = 48 if compact_mode else 56
         pdf.setFillColor(white)
-        pdf.roundRect(x, y - 56, box_width, 56, 14, stroke=0, fill=1)
+        pdf.roundRect(x, y - box_height, box_width, box_height, 14, stroke=0, fill=1)
         pdf.setStrokeColor(colors.HexColor("#d9e5e3"))
-        pdf.roundRect(x, y - 56, box_width, 56, 14, stroke=1, fill=0)
+        pdf.roundRect(x, y - box_height, box_width, box_height, 14, stroke=1, fill=0)
         pdf.setFillColor(teal)
         pdf.setFont("Helvetica-Bold", 8.5)
         pdf.drawString(x + 10, y - 12, title.upper())
         pdf.setFillColor(ink)
         current_y = y - 24
         for idx, line in enumerate(lines):
-            pdf.setFont("Helvetica-Bold" if idx == 0 else "Helvetica", 9.5)
+            pdf.setFont("Helvetica-Bold" if idx == 0 else "Helvetica", 8.8 if compact_mode else 9.5)
             pdf.drawString(x + 10, current_y, str(line)[:58])
-            current_y -= 11
+            current_y -= 9 if compact_mode else 11
 
     def draw_table_header(y):
         pdf.setFillColor(mist)
-        pdf.roundRect(margin, y - 18, width - (2 * margin), 18, 8, stroke=0, fill=1)
+        pdf.roundRect(margin, y - 16, width - (2 * margin), 16, 8, stroke=0, fill=1)
         pdf.setFillColor(teal)
-        pdf.setFont("Helvetica-Bold", 8.5)
+        pdf.setFont("Helvetica-Bold", 8)
         pdf.drawString(margin + 10, y - 12, "Descripcion")
         pdf.drawCentredString(margin + 265, y - 12, "Cant.")
         pdf.drawRightString(width - margin - 115, y - 12, "Precio Unit.")
         pdf.drawRightString(width - margin - 10, y - 12, "Subtotal")
 
     draw_base_header()
-    draw_summary_cards(height - margin - 98)
+    draw_summary_cards(height - margin - (92 if compact_mode else 98))
 
-    info_top = height - margin - 152
+    info_top = height - margin - (136 if compact_mode else 152)
     info_width = (width - (2 * margin) - 12) / 2
     draw_info_box(
         margin,
@@ -491,9 +603,9 @@ def generar_pdf_reportlab(venta_data, items):
         ],
     )
 
-    y = info_top - 76
+    y = info_top - (64 if compact_mode else 76)
     draw_table_header(y)
-    y -= 26
+    y -= 22 if compact_mode else 26
 
     for item in items_render:
         if y < margin + 88:
@@ -502,34 +614,34 @@ def generar_pdf_reportlab(venta_data, items):
             y = height - margin - 32
             draw_table_header(y)
             y -= 26
-        row_height = 18 if item["Descuento"] <= 0 else 24
+        row_height = 14 if compact_mode and item["Descuento"] <= 0 else 18 if item["Descuento"] <= 0 else 20 if compact_mode else 24
         pdf.setStrokeColor(colors.HexColor("#edf3f2"))
         pdf.line(margin, y - row_height + 4, width - margin, y - row_height + 4)
         pdf.setFillColor(ink)
-        pdf.setFont("Helvetica-Bold", 9.2)
+        pdf.setFont("Helvetica-Bold", 8.7 if compact_mode else 9.2)
         nombre = item["Nombre_Producto"]
-        if len(nombre) > 38:
-            nombre = nombre[:35] + "..."
+        if len(nombre) > (46 if compact_mode else 38):
+            nombre = nombre[:43] + "..." if compact_mode else nombre[:35] + "..."
         pdf.drawString(margin + 10, y - 7, nombre)
         if item["Descuento"] > 0:
             pdf.setFillColor(colors.HexColor("#9a6200"))
-            pdf.setFont("Helvetica", 7.8)
+            pdf.setFont("Helvetica", 7.1 if compact_mode else 7.8)
             pdf.drawString(margin + 10, y - 17, f"Descuento unitario {money(item['Descuento'])}")
         pdf.setFillColor(ink)
-        pdf.setFont("Helvetica", 9)
+        pdf.setFont("Helvetica", 8.4 if compact_mode else 9)
         pdf.drawCentredString(margin + 265, y - 7, f"{item['Cantidad']:,.0f}")
         pdf.drawRightString(width - margin - 115, y - 7, money(item["Precio"]))
         pdf.drawRightString(width - margin - 10, y - 7, money(item["Subtotal"]))
         y -= row_height
 
-    note_y = max(y - 10, margin + 70)
+    note_y = max(y - (6 if compact_mode else 10), margin + 68)
     pdf.setFillColor(mist)
-    pdf.roundRect(margin, note_y - 44, width - (2 * margin) - 168, 44, 14, stroke=0, fill=1)
+    pdf.roundRect(margin, note_y - (36 if compact_mode else 44), width - (2 * margin) - 168, 36 if compact_mode else 44, 14, stroke=0, fill=1)
     pdf.setFillColor(teal)
-    pdf.setFont("Helvetica-Bold", 11)
+    pdf.setFont("Helvetica-Bold", 10 if compact_mode else 11)
     pdf.drawString(margin + 12, note_y - 14, "Una factura que deja huella")
     pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 8.5)
+    pdf.setFont("Helvetica", 7.8 if compact_mode else 8.5)
     pdf.drawString(margin + 12, note_y - 28, "Resumen elegante, claro y listo para respaldo, cambios o garantias dentro del plazo informado.")
 
     totals_x = width - margin - 156
@@ -611,6 +723,7 @@ def generar_pdf_html(venta_data, items):
             "descuento_total": descuento_total,
             "total_unidades": total_unidades,
             "total_items": venta_data.get("Total_Items", len(items_render)),
+            "compact_mode": len(items_render) <= 8,
             "total": clean_currency(venta_data['Total']),
         }
         template = jinja2.Template(template_str)
@@ -1488,6 +1601,121 @@ def tab_despachos_ui():
                 st.rerun()
             else: st.error("Error al actualizar")
 
+def tab_facturas_ui():
+    st.header("Facturas y Reimpresiones")
+    df = st.session_state.db['ven'].copy()
+    if df.empty:
+        st.info("No hay ventas registradas todavía.")
+        return
+
+    if 'Fecha' in df.columns:
+        df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+        df = df.sort_values('Fecha', ascending=False)
+        fechas_validas = df['Fecha'].dropna()
+    else:
+        fechas_validas = pd.Series(dtype='datetime64[ns]')
+
+    texto = st.text_input("Buscar venta", placeholder="Cliente, cédula, mascota o ID de venta", key="buscar_factura_texto")
+    c1, c2 = st.columns(2)
+    usar_rango = c1.toggle("Filtrar por rango de fechas", value=False, key="facturas_filtrar_fechas")
+
+    fecha_ini = fecha_fin = None
+    if usar_rango and not fechas_validas.empty:
+        min_fecha = fechas_validas.min().date()
+        max_fecha = fechas_validas.max().date()
+        fecha_ini = c1.date_input("Desde", value=min_fecha, min_value=min_fecha, max_value=max_fecha, key="facturas_desde")
+        fecha_fin = c2.date_input("Hasta", value=max_fecha, min_value=min_fecha, max_value=max_fecha, key="facturas_hasta")
+    else:
+        c2.caption("Activa el rango solo cuando quieras acotar la búsqueda.")
+
+    filtrado = df.copy()
+    if usar_rango and fecha_ini and fecha_fin and 'Fecha' in filtrado.columns:
+        if fecha_ini > fecha_fin:
+            fecha_ini, fecha_fin = fecha_fin, fecha_ini
+        filtrado = filtrado[(filtrado['Fecha'].dt.date >= fecha_ini) & (filtrado['Fecha'].dt.date <= fecha_fin)].copy()
+
+    if texto.strip():
+        q = texto.strip()
+        columnas_busqueda = [col for col in ["ID_Venta", "Nombre_Cliente", "Cedula_Cliente", "Mascota", "Items", "Direccion"] if col in filtrado.columns]
+        if columnas_busqueda:
+            mask = pd.Series(False, index=filtrado.index)
+            for col in columnas_busqueda:
+                mask = mask | filtrado[col].astype(str).str.contains(q, case=False, na=False)
+            filtrado = filtrado[mask].copy()
+
+    if filtrado.empty:
+        st.info("No encontré ventas con esos filtros.")
+        return
+
+    mostrar_cols = [col for col in ["Fecha", "ID_Venta", "Nombre_Cliente", "Cedula_Cliente", "Mascota", "Metodo_Pago", "Total"] if col in filtrado.columns]
+    vista = filtrado[mostrar_cols].copy()
+    st.dataframe(
+        vista,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Fecha": st.column_config.DatetimeColumn("Fecha", format="YYYY-MM-DD HH:mm"),
+            "Total": st.column_config.NumberColumn("Total", format="$%.0f"),
+        },
+    )
+
+    id_col = "ID_Venta" if "ID_Venta" in filtrado.columns else filtrado.columns[0]
+    selected_id = st.selectbox(
+        "Selecciona la venta para descargar la factura",
+        filtrado[id_col].astype(str).tolist(),
+        key="facturas_select_id",
+    )
+    venta_sel = filtrado[filtrado[id_col].astype(str) == str(selected_id)].iloc[0]
+    resumen = construir_resumen_venta_desde_fila(venta_sel)
+    pdf_data = generar_pdf_html(resumen["venta"], resumen["items"])
+
+    st.markdown(
+        f"""
+<div style="background:linear-gradient(135deg,#0f766e 0%,#164e63 58%,#082f49 100%);border-radius:20px;padding:18px 20px;color:white;box-shadow:0 14px 34px rgba(8,47,73,0.18);margin:12px 0 14px 0;">
+  <div style="display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:.76rem;letter-spacing:.14em;text-transform:uppercase;opacity:.78;font-weight:700;">Factura histórica</div>
+      <div style="font-size:1.55rem;font-weight:900;margin-top:4px;">{resumen['venta'].get('ID', '')}</div>
+      <div style="font-size:.98rem;opacity:.92;max-width:720px;">{resumen['venta'].get('Cliente', 'Consumidor Final')} · {resumen['venta'].get('Fecha', '')}</div>
+    </div>
+    <div style="min-width:200px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:12px 14px;">
+      <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;opacity:.8;">Total</div>
+      <div style="font-size:1.55rem;font-weight:900;">${resumen['venta'].get('Total', 0):,.0f}</div>
+      <div style="font-size:.9rem;opacity:.88;">{resumen['venta'].get('Total_Items', 0)} artículos</div>
+    </div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    if resumen["items"]:
+        st.dataframe(
+            pd.DataFrame(resumen["items"])[["Nombre_Producto", "Cantidad", "Precio", "Descuento", "Subtotal"]],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Nombre_Producto": st.column_config.TextColumn("Producto", width="large"),
+                "Cantidad": st.column_config.NumberColumn("Cant.", format="%.0f"),
+                "Precio": st.column_config.NumberColumn("Precio", format="$%.0f"),
+                "Descuento": st.column_config.NumberColumn("Desc.", format="$%.0f"),
+                "Subtotal": st.column_config.NumberColumn("Subtotal", format="$%.0f"),
+            },
+        )
+
+    st.download_button(
+        "📄 Descargar factura PDF",
+        data=pdf_data or b"",
+        file_name=f"Factura_{resumen['venta'].get('ID', 'venta')}.pdf",
+        mime="application/pdf",
+        type="primary",
+        use_container_width=True,
+        disabled=not bool(pdf_data),
+        key="hist_download_pdf",
+    )
+    if not pdf_data:
+        st.caption("No se pudo generar el PDF para esta venta. Revisa si el detalle guardado está incompleto.")
+
 def tab_gastos_ui():
     st.header("Gastos")
     with st.form("gastos"):
@@ -1641,14 +1869,15 @@ def main():
             asegurar_ids_inventario_nube()
 
     # Tabs
-    tabs = st.tabs(["🛒 POS", "👤 Clientes", "🚚 Despachos", "💳 Gastos", "💵 Cuadre", "📊 Resumen"])
+    tabs = st.tabs(["🛒 POS", "🧾 Facturas", "👤 Clientes", "🚚 Despachos", "💳 Gastos", "💵 Cuadre", "📊 Resumen"])
     
     with tabs[0]: tab_pos()
-    with tabs[1]: tab_clientes_ui()
-    with tabs[2]: tab_despachos_ui()
-    with tabs[3]: tab_gastos_ui()
-    with tabs[4]: tab_cuadre_ui()
-    with tabs[5]: tab_resumen_ui()
+    with tabs[1]: tab_facturas_ui()
+    with tabs[2]: tab_clientes_ui()
+    with tabs[3]: tab_despachos_ui()
+    with tabs[4]: tab_gastos_ui()
+    with tabs[5]: tab_cuadre_ui()
+    with tabs[6]: tab_resumen_ui()
 
 if __name__ == "__main__":
     main()
