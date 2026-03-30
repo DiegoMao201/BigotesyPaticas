@@ -7,6 +7,7 @@ import json
 import urllib.parse
 import jinja2
 from io import BytesIO
+from pathlib import Path
 import pytz
 import numpy as np
 import time  # Necesario para manejar las esperas en el error 429
@@ -18,8 +19,21 @@ try:
 except Exception:
     HTML = None
 
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
+except Exception:
+    colors = None
+    A4 = None
+    mm = None
+    canvas = None
+
 # --- CONFIGURACIÓN DE ZONA HORARIA ---
 TZ_CO = pytz.timezone("America/Bogota")
+BASE_DIR = Path(__file__).resolve().parent
+FACTURA_TEMPLATE_PATH = BASE_DIR / "factura.html"
 
 def now_co():
     return datetime.now(TZ_CO)
@@ -261,14 +275,327 @@ def msg_bienvenida(nombre, mascota):
 📦 Necesites comida, snacks o juguetes, aquí estamos.
 🤗 Gracias por confiar en nosotros."""
 
+def reset_pos_workflow(clear_cliente=True):
+    if clear_cliente:
+        st.session_state.pop("cliente_actual", None)
+        st.session_state.pop("mascota_seleccionada", None)
+    for key in [
+        "carrito",
+        "ultimo_pdf",
+        "ultimo_pdf_nombre",
+        "ultima_venta_id",
+        "ultima_venta_resumen",
+        "whatsapp_link",
+        "whatsapp_link_web",
+        "pos_last_producto_key",
+        "pos_cant",
+        "pos_precio",
+        "pos_desc",
+        "busca_cli_pos",
+        "pos_dir",
+        "editor_carrito",
+    ]:
+        st.session_state.pop(key, None)
+
+def construir_resumen_venta(id_venta, fecha, metodo, entrega, dir_envio, cliente, mascota, carrito, total_num):
+    items_normalizados = []
+    unidades_total = 0.0
+    descuento_total = 0
+    for item in carrito:
+        cantidad = float(item.get("Cantidad", 0) or 0)
+        precio = clean_currency(item.get("Precio", item.get("Precio_Unitario", 0)) or 0)
+        descuento = clean_currency(item.get("Descuento", item.get("Descuento_Unitario", 0)) or 0)
+        subtotal = clean_currency(item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad)) or 0)
+        unidades_total += cantidad
+        descuento_total += clean_currency(descuento * cantidad)
+        items_normalizados.append(
+            {
+                "Producto_UID": item.get("Producto_UID", ""),
+                "ID_Producto": item.get("ID_Producto", item.get("ID", "")),
+                "Nombre_Producto": item.get("Nombre_Producto", item.get("Nombre", "Producto")),
+                "Cantidad": cantidad,
+                "Precio": precio,
+                "Descuento": descuento,
+                "Subtotal": subtotal,
+            }
+        )
+
+    return {
+        "venta": {
+            "ID": id_venta,
+            "Fecha": fecha,
+            "Cliente": cliente.get("Nombre", "Consumidor Final") if cliente else "Consumidor Final",
+            "Cedula_Cliente": cliente.get("Cedula", "") if cliente else "",
+            "Direccion": dir_envio or (cliente.get("Direccion", "") if cliente else "Local"),
+            "Mascota": mascota or "",
+            "Metodo_Pago": metodo,
+            "Tipo_Entrega": entrega,
+            "Total": clean_currency(total_num or 0),
+            "Total_Items": len(items_normalizados),
+            "Unidades": unidades_total,
+            "Descuento_Total": descuento_total,
+        },
+        "items": items_normalizados,
+    }
+
+def generar_pdf_reportlab(venta_data, items):
+    if canvas is None or colors is None or A4 is None or mm is None:
+        return None
+
+    items_render = []
+    subtotal_bruto = 0
+    descuento_total = 0
+    total_unidades = 0.0
+    for item in items:
+        cantidad = float(item.get("Cantidad", 0) or 0)
+        precio = clean_currency(item.get("Precio", item.get("Precio_Unitario", 0)) or 0)
+        descuento = clean_currency(item.get("Descuento", item.get("Descuento_Unitario", 0)) or 0)
+        subtotal = clean_currency(item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad)) or 0)
+        subtotal_bruto += clean_currency(precio * cantidad)
+        descuento_total += clean_currency(descuento * cantidad)
+        total_unidades += cantidad
+        items_render.append(
+            {
+                "Nombre_Producto": str(item.get("Nombre_Producto", item.get("Nombre", "Producto"))),
+                "Cantidad": cantidad,
+                "Precio": precio,
+                "Descuento": descuento,
+                "Subtotal": subtotal,
+            }
+        )
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    margin = 13 * mm
+    teal = colors.HexColor("#187f77")
+    teal_deep = colors.HexColor("#0f5f5a")
+    gold = colors.HexColor("#f5a641")
+    sand = colors.HexColor("#f8f4eb")
+    mist = colors.HexColor("#eef6f5")
+    ink = colors.HexColor("#16313f")
+    muted = colors.HexColor("#5c7280")
+    white = colors.white
+
+    def money(value):
+        return f"${clean_currency(value or 0):,.0f}"
+
+    def draw_base_header():
+        pdf.setFillColor(white)
+        pdf.roundRect(margin - 4, margin - 2, width - (2 * margin) + 8, height - (2 * margin) + 4, 18, stroke=0, fill=1)
+        pdf.setFillColor(gold)
+        pdf.roundRect(margin - 4, height - margin + 8, width - (2 * margin) + 8, 10, 5, stroke=0, fill=1)
+        pdf.setFillColor(teal)
+        pdf.roundRect(margin - 4, height - margin - 78, width - (2 * margin) + 8, 88, 18, stroke=0, fill=1)
+        pdf.setFillColor(teal_deep)
+        pdf.roundRect(width - margin - 165, height - margin - 58, 150, 52, 16, stroke=0, fill=1)
+
+        logo_path = BASE_DIR / "BigotesyPaticas.png"
+        if logo_path.exists():
+            try:
+                pdf.drawImage(str(logo_path), margin + 10, height - margin - 58, width=42, height=42, preserveAspectRatio=True, mask="auto")
+            except Exception:
+                pass
+
+        pdf.setFillColor(white)
+        pdf.setFont("Helvetica-Bold", 11)
+        pdf.drawString(margin + 62, height - margin - 16, "FACTURA POST VENTA")
+        pdf.setFont("Helvetica-Bold", 22)
+        pdf.drawString(margin + 62, height - margin - 38, "Bigotes y Patitas")
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(margin + 62, height - margin - 54, "Tu tienda de confianza para consentir a cada peludito.")
+        pdf.drawString(margin + 62, height - margin - 68, "Tel: 320 504 6277")
+
+        pdf.setFont("Helvetica-Bold", 18)
+        pdf.drawRightString(width - margin - 28, height - margin - 22, "RECIBO")
+        pdf.setFont("Helvetica", 10)
+        pdf.drawRightString(width - margin - 28, height - margin - 38, f"No: {venta_data.get('ID', '')}")
+        pdf.drawRightString(width - margin - 28, height - margin - 52, f"Fecha: {venta_data.get('Fecha', '')}")
+
+    def draw_summary_cards(top_y):
+        card_width = (width - (2 * margin) - 20) / 3
+        cards = [
+            ("Total cobrado", money(venta_data.get("Total", 0)), "Factura lista para descargar"),
+            ("Unidades", f"{total_unidades:,.0f}", "Productos entregados"),
+            ("Ahorro", money(descuento_total), "Descuentos aplicados"),
+        ]
+        x = margin
+        for title, value, foot in cards:
+            pdf.setFillColor(sand)
+            pdf.roundRect(x, top_y - 44, card_width, 42, 14, stroke=0, fill=1)
+            pdf.setStrokeColor(colors.HexColor("#d9e5e3"))
+            pdf.roundRect(x, top_y - 44, card_width, 42, 14, stroke=1, fill=0)
+            pdf.setFillColor(muted)
+            pdf.setFont("Helvetica-Bold", 7.5)
+            pdf.drawString(x + 10, top_y - 12, title.upper())
+            pdf.setFillColor(ink)
+            pdf.setFont("Helvetica-Bold", 14)
+            pdf.drawString(x + 10, top_y - 26, value)
+            pdf.setFillColor(muted)
+            pdf.setFont("Helvetica", 8.5)
+            pdf.drawString(x + 10, top_y - 37, foot)
+            x += card_width + 10
+
+    def draw_info_box(x, y, box_width, title, lines):
+        pdf.setFillColor(white)
+        pdf.roundRect(x, y - 56, box_width, 56, 14, stroke=0, fill=1)
+        pdf.setStrokeColor(colors.HexColor("#d9e5e3"))
+        pdf.roundRect(x, y - 56, box_width, 56, 14, stroke=1, fill=0)
+        pdf.setFillColor(teal)
+        pdf.setFont("Helvetica-Bold", 8.5)
+        pdf.drawString(x + 10, y - 12, title.upper())
+        pdf.setFillColor(ink)
+        current_y = y - 24
+        for idx, line in enumerate(lines):
+            pdf.setFont("Helvetica-Bold" if idx == 0 else "Helvetica", 9.5)
+            pdf.drawString(x + 10, current_y, str(line)[:58])
+            current_y -= 11
+
+    def draw_table_header(y):
+        pdf.setFillColor(mist)
+        pdf.roundRect(margin, y - 18, width - (2 * margin), 18, 8, stroke=0, fill=1)
+        pdf.setFillColor(teal)
+        pdf.setFont("Helvetica-Bold", 8.5)
+        pdf.drawString(margin + 10, y - 12, "Descripcion")
+        pdf.drawCentredString(margin + 265, y - 12, "Cant.")
+        pdf.drawRightString(width - margin - 115, y - 12, "Precio Unit.")
+        pdf.drawRightString(width - margin - 10, y - 12, "Subtotal")
+
+    draw_base_header()
+    draw_summary_cards(height - margin - 98)
+
+    info_top = height - margin - 152
+    info_width = (width - (2 * margin) - 12) / 2
+    draw_info_box(
+        margin,
+        info_top,
+        info_width,
+        "Facturado a",
+        [
+            venta_data.get("Cliente", "Consumidor Final"),
+            f"ID: {venta_data.get('Cedula_Cliente', '---')}",
+            venta_data.get("Direccion", "Local"),
+            f"Mascota: {venta_data.get('Mascota', '---')}",
+        ],
+    )
+    draw_info_box(
+        margin + info_width + 12,
+        info_top,
+        info_width,
+        "Detalles de la operacion",
+        [
+            f"Metodo: {venta_data.get('Metodo_Pago', 'Efectivo')}",
+            f"Entrega: {venta_data.get('Tipo_Entrega', 'Local')}",
+            "Estado: Pagado",
+            f"Items: {venta_data.get('Total_Items', len(items_render))}",
+        ],
+    )
+
+    y = info_top - 76
+    draw_table_header(y)
+    y -= 26
+
+    for item in items_render:
+        if y < margin + 88:
+            pdf.showPage()
+            draw_base_header()
+            y = height - margin - 32
+            draw_table_header(y)
+            y -= 26
+        row_height = 18 if item["Descuento"] <= 0 else 24
+        pdf.setStrokeColor(colors.HexColor("#edf3f2"))
+        pdf.line(margin, y - row_height + 4, width - margin, y - row_height + 4)
+        pdf.setFillColor(ink)
+        pdf.setFont("Helvetica-Bold", 9.2)
+        nombre = item["Nombre_Producto"]
+        if len(nombre) > 38:
+            nombre = nombre[:35] + "..."
+        pdf.drawString(margin + 10, y - 7, nombre)
+        if item["Descuento"] > 0:
+            pdf.setFillColor(colors.HexColor("#9a6200"))
+            pdf.setFont("Helvetica", 7.8)
+            pdf.drawString(margin + 10, y - 17, f"Descuento unitario {money(item['Descuento'])}")
+        pdf.setFillColor(ink)
+        pdf.setFont("Helvetica", 9)
+        pdf.drawCentredString(margin + 265, y - 7, f"{item['Cantidad']:,.0f}")
+        pdf.drawRightString(width - margin - 115, y - 7, money(item["Precio"]))
+        pdf.drawRightString(width - margin - 10, y - 7, money(item["Subtotal"]))
+        y -= row_height
+
+    note_y = max(y - 10, margin + 70)
+    pdf.setFillColor(mist)
+    pdf.roundRect(margin, note_y - 44, width - (2 * margin) - 168, 44, 14, stroke=0, fill=1)
+    pdf.setFillColor(teal)
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(margin + 12, note_y - 14, "Una factura que deja huella")
+    pdf.setFillColor(muted)
+    pdf.setFont("Helvetica", 8.5)
+    pdf.drawString(margin + 12, note_y - 28, "Resumen elegante, claro y listo para respaldo, cambios o garantias dentro del plazo informado.")
+
+    totals_x = width - margin - 156
+    pdf.setFillColor(colors.HexColor("#fffaf2"))
+    pdf.roundRect(totals_x, note_y - 52, 156, 52, 14, stroke=0, fill=1)
+    pdf.setStrokeColor(colors.HexColor("#efd2a5"))
+    pdf.roundRect(totals_x, note_y - 52, 156, 52, 14, stroke=1, fill=0)
+    pdf.setFillColor(muted)
+    pdf.setFont("Helvetica", 8.5)
+    pdf.drawString(totals_x + 10, note_y - 14, f"Subtotal bruto: {money(subtotal_bruto)}")
+    pdf.drawString(totals_x + 10, note_y - 25, f"Descuentos: {money(descuento_total)}")
+    pdf.drawString(totals_x + 10, note_y - 36, f"Items: {venta_data.get('Total_Items', len(items_render))}")
+    pdf.setFillColor(gold)
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawRightString(totals_x + 146, note_y - 16, money(venta_data.get("Total", 0)))
+
+    footer_y = margin + 14
+    pdf.setStrokeColor(colors.HexColor("#e2eceb"))
+    pdf.line(margin, footer_y + 14, width - margin, footer_y + 14)
+    pdf.setFillColor(teal)
+    pdf.setFont("Helvetica-Bold", 10.5)
+    pdf.drawString(margin, footer_y, "Gracias por consentir a tu mascota con nosotros")
+    pdf.setFillColor(muted)
+    pdf.setFont("Helvetica", 8.2)
+    pdf.drawString(margin, footer_y - 10, "Conserva este recibo para cambios o garantias durante los siguientes 5 dias habiles.")
+    pdf.drawRightString(width - margin, footer_y - 2, "Bigotes y Patitas · Servicio con detalle")
+
+    pdf.save()
+    return buffer.getvalue()
+
 def generar_pdf_html(venta_data, items):
     try:
+        if HTML is None:
+            pdf_alt = generar_pdf_reportlab(venta_data, items)
+            if pdf_alt is not None:
+                return pdf_alt
+            st.warning("No se pudo cargar WeasyPrint y tampoco está disponible ReportLab para generar el PDF.")
+            return None
         try:
-            with open("factura.html", "r", encoding="utf-8") as f:
+            with FACTURA_TEMPLATE_PATH.open("r", encoding="utf-8") as f:
                 template_str = f.read()
         except FileNotFoundError:
             # Plantilla de respaldo por si falla la lectura del archivo
             template_str = "<html><body><h1>Factura {{id_venta}}</h1><p>Total: {{total}}</p></body></html>"
+
+        items_render = []
+        subtotal_bruto = 0
+        descuento_total = 0
+        total_unidades = 0.0
+        for item in items:
+            cantidad = float(item.get("Cantidad", 0) or 0)
+            precio = clean_currency(item.get("Precio", item.get("Precio_Unitario", 0)) or 0)
+            descuento = clean_currency(item.get("Descuento", item.get("Descuento_Unitario", 0)) or 0)
+            subtotal = clean_currency(item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad)) or 0)
+            subtotal_bruto += clean_currency(precio * cantidad)
+            descuento_total += clean_currency(descuento * cantidad)
+            total_unidades += cantidad
+            items_render.append(
+                {
+                    "Nombre_Producto": item.get("Nombre_Producto", item.get("Nombre", "Producto")),
+                    "Cantidad": cantidad,
+                    "Precio": precio,
+                    "Descuento": descuento,
+                    "Subtotal": subtotal,
+                }
+            )
 
         context = {
             "id_venta": venta_data['ID'],
@@ -279,13 +606,23 @@ def generar_pdf_html(venta_data, items):
             "cliente_mascota": venta_data.get('Mascota', '---'),
             "metodo_pago": venta_data.get('Metodo_Pago', 'Efectivo'),
             "tipo_entrega": venta_data.get('Tipo_Entrega', 'Local'),
-            "items": items,
-            "total": venta_data['Total']
+            "items": items_render,
+            "subtotal_bruto": subtotal_bruto,
+            "descuento_total": descuento_total,
+            "total_unidades": total_unidades,
+            "total_items": venta_data.get("Total_Items", len(items_render)),
+            "total": clean_currency(venta_data['Total']),
         }
         template = jinja2.Template(template_str)
         html_renderizado = template.render(context)
-        pdf_file = HTML(string=html_renderizado).write_pdf()
-        return pdf_file
+        try:
+            pdf_file = HTML(string=html_renderizado, base_url=str(BASE_DIR)).write_pdf()
+            return pdf_file
+        except Exception:
+            pdf_alt = generar_pdf_reportlab(venta_data, items)
+            if pdf_alt is not None:
+                return pdf_alt
+            raise
     except Exception as e:
         st.error(f"Error generando PDF: {e}")
         return None
@@ -608,8 +945,11 @@ def tab_pos():
     if 'cliente_actual' not in st.session_state: st.session_state.cliente_actual = None
     if 'mascota_seleccionada' not in st.session_state: st.session_state.mascota_seleccionada = None
     if 'ultimo_pdf' not in st.session_state: st.session_state.ultimo_pdf = None
+    if 'ultimo_pdf_nombre' not in st.session_state: st.session_state.ultimo_pdf_nombre = None
     if 'ultima_venta_id' not in st.session_state: st.session_state.ultima_venta_id = None
+    if 'ultima_venta_resumen' not in st.session_state: st.session_state.ultima_venta_resumen = None
     if 'whatsapp_link' not in st.session_state: st.session_state.whatsapp_link = None
+    if 'whatsapp_link_web' not in st.session_state: st.session_state.whatsapp_link_web = None
 
     df_c = st.session_state.db['cli']
     df_inv = st.session_state.db['inv']
@@ -894,8 +1234,9 @@ def tab_pos():
         with st.spinner("Procesando..."):
             id_venta = f"VEN-{int(now_co().timestamp())}"
             fecha = now_co().strftime("%Y-%m-%d %H:%M:%S")
+            carrito_cerrado = [dict(item) for item in st.session_state.carrito]
 
-            items_str = ", ".join([f"{x['Cantidad']}x {x['Nombre_Producto']}" for x in st.session_state.carrito])
+            items_str = ", ".join([f"{x['Cantidad']}x {x['Nombre_Producto']}" for x in carrito_cerrado])
 
             # total ya lo calculas más arriba; asegurar float
             total_num = clean_currency(total or 0)
@@ -913,12 +1254,12 @@ def tab_pos():
                         "Costo_Unitario": clean_currency(x.get("Costo", 0) or 0),
                         "Subtotal_Linea": clean_currency(x.get("Subtotal", 0) or 0),
                     }
-                    for x in st.session_state.carrito
+                    for x in carrito_cerrado
                 ]
             )
 
             costo_total = clean_currency(sum(
-                [clean_currency(x.get("Costo", 0) or 0) * float(x.get("Cantidad", 0) or 0) for x in st.session_state.carrito]
+                [clean_currency(x.get("Costo", 0) or 0) * float(x.get("Cantidad", 0) or 0) for x in carrito_cerrado]
             ))
 
             fila = [
@@ -938,7 +1279,22 @@ def tab_pos():
                 st.session_state.mascota_seleccionada,
             ]
 
-            registrar_venta(fila, st.session_state.carrito)
+            registrar_venta(fila, carrito_cerrado)
+
+            resumen_venta = construir_resumen_venta(
+                id_venta=id_venta,
+                fecha=fecha,
+                metodo=metodo,
+                entrega=entrega,
+                dir_envio=dir_envio,
+                cliente=st.session_state.cliente_actual,
+                mascota=st.session_state.mascota_seleccionada,
+                carrito=carrito_cerrado,
+                total_num=total_num,
+            )
+            st.session_state.ultimo_pdf = generar_pdf_html(resumen_venta["venta"], resumen_venta["items"])
+            st.session_state.ultimo_pdf_nombre = f"Factura_{id_venta}.pdf"
+            st.session_state.ultima_venta_resumen = resumen_venta
 
             # ===== POST-VENTA WhatsApp (SOLO 1 mensaje) =====
             tel_raw = _get_cliente_tel(st.session_state.cliente_actual)
@@ -960,15 +1316,71 @@ def tab_pos():
     # ===== UI POST-VENTA =====
     if st.session_state.get("ultima_venta_id"):
         st.markdown("### Acciones post-venta")
-        c1, c2 = st.columns([1, 1])
+        resumen = st.session_state.get("ultima_venta_resumen") or {}
+        venta_resumen = resumen.get("venta", {})
+        items_resumen = resumen.get("items", [])
+        st.markdown(
+            f"""
+<div style="background:linear-gradient(135deg,#0f766e 0%,#164e63 58%,#082f49 100%);border-radius:22px;padding:22px 24px;color:white;box-shadow:0 18px 42px rgba(8,47,73,0.22);margin:10px 0 16px 0;">
+  <div style="display:flex;justify-content:space-between;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:0.78rem;letter-spacing:.14em;text-transform:uppercase;opacity:.8;font-weight:700;">Venta confirmada</div>
+      <div style="font-size:1.9rem;font-weight:900;line-height:1.05;margin:6px 0 10px 0;">{venta_resumen.get('ID', st.session_state.get('ultima_venta_id', ''))}</div>
+      <div style="font-size:1rem;opacity:.92;max-width:720px;">Factura lista para descargar. Cliente: <b>{venta_resumen.get('Cliente', 'Consumidor Final')}</b> · Mascota: <b>{venta_resumen.get('Mascota', 'Sin registro')}</b></div>
+    </div>
+    <div style="min-width:220px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);border-radius:18px;padding:14px 16px;backdrop-filter:blur(8px);">
+      <div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:.08em;opacity:.8;">Total cobrado</div>
+      <div style="font-size:1.8rem;font-weight:900;margin-top:4px;">${venta_resumen.get('Total', 0):,.0f}</div>
+      <div style="margin-top:6px;font-size:0.94rem;opacity:.9;">{venta_resumen.get('Total_Items', len(items_resumen))} líneas · {venta_resumen.get('Unidades', 0):,.0f} unidades</div>
+    </div>
+  </div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+        if items_resumen:
+            preview_items = pd.DataFrame(items_resumen)[["Nombre_Producto", "Cantidad", "Precio", "Descuento", "Subtotal"]].copy()
+            st.dataframe(
+                preview_items,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Nombre_Producto": st.column_config.TextColumn("Producto", width="large"),
+                    "Cantidad": st.column_config.NumberColumn("Cant.", format="%.0f"),
+                    "Precio": st.column_config.NumberColumn("Precio", format="$%.0f"),
+                    "Descuento": st.column_config.NumberColumn("Desc.", format="$%.0f"),
+                    "Subtotal": st.column_config.NumberColumn("Subtotal", format="$%.0f"),
+                },
+            )
+        c1, c2, c3 = st.columns([1, 1, 1])
         with c1:
+            st.download_button(
+                "📄 Descargar factura PDF",
+                data=st.session_state.get("ultimo_pdf") or b"",
+                file_name=st.session_state.get("ultimo_pdf_nombre") or f"Factura_{st.session_state.get('ultima_venta_id', 'venta')}.pdf",
+                mime="application/pdf",
+                type="primary",
+                use_container_width=True,
+                disabled=not bool(st.session_state.get("ultimo_pdf")),
+                key="pos_download_pdf",
+            )
+            if not st.session_state.get("ultimo_pdf"):
+                st.caption("La venta se guardó, pero el PDF no se pudo generar en este entorno.")
+        with c2:
             if st.session_state.get("whatsapp_link"):
-                st.link_button("📲 Enviar WhatsApp (Celular / App)", st.session_state["whatsapp_link"], type="primary")
+                st.link_button("📲 Enviar WhatsApp (Celular / App)", st.session_state["whatsapp_link"], type="secondary", use_container_width=True)
             else:
                 st.warning("No hay teléfono válido para WhatsApp en este cliente.")
-        with c2:
+        with c3:
             if st.session_state.get("whatsapp_link_web"):
-                st.link_button("💻 Abrir WhatsApp Web (PC)", st.session_state["whatsapp_link_web"])
+                st.link_button("💻 Abrir WhatsApp Web (PC)", st.session_state["whatsapp_link_web"], use_container_width=True)
+        st.button(
+            "✨ Nueva venta limpia",
+            key="pos_nueva_venta",
+            use_container_width=True,
+            on_click=reset_pos_workflow,
+            kwargs={"clear_cliente": True},
+        )
 
 def _get_cliente_tel(cliente: dict) -> str:
     """Obtiene teléfono de forma robusta desde el dict de cliente."""
