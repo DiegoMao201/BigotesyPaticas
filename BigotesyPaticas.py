@@ -8,7 +8,16 @@ import urllib.parse
 import jinja2
 from io import BytesIO
 from pathlib import Path
-import pytz
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None
+
+try:
+    import pytz
+except Exception:
+    pytz = None
+
 import numpy as np
 import time  # Necesario para manejar las esperas en el error 429
 import uuid  # ya lo tienes; mantener
@@ -31,7 +40,15 @@ except Exception:
     canvas = None
 
 # --- CONFIGURACIÓN DE ZONA HORARIA ---
-TZ_CO = pytz.timezone("America/Bogota")
+def _get_bogota_timezone():
+    if ZoneInfo is not None:
+        return ZoneInfo("America/Bogota")
+    if pytz is not None:
+        return pytz.timezone("America/Bogota")
+    raise RuntimeError("No hay soporte de zona horaria disponible para America/Bogota.")
+
+
+TZ_CO = _get_bogota_timezone()
 BASE_DIR = Path(__file__).resolve().parent
 FACTURA_TEMPLATE_PATH = BASE_DIR / "factura.html"
 

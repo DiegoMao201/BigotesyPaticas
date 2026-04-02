@@ -1,6 +1,7 @@
 streamlit
 pandas
 gspread
+pytz
 jinja2
 weasyprint
 xlsxwriter
