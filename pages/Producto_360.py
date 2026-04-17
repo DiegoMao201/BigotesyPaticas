@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import re
 from datetime import datetime, timedelta
@@ -8,6 +10,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
 import streamlit as st
 
 
@@ -363,7 +366,9 @@ def cargar_datos():
     df_ven = ws_to_df(get_ws_safe(sh, "Ventas"), {
         "ID_Venta": "", "Fecha": "", "Nombre_Cliente": "", "Metodo_Pago": "",
         "Total": 0.0, "Items": "", "Items_Detalle": "", "Costo_Total": 0.0, "Mascota": "",
-        "Estado_Envio": "", "Direccion_Envio": "",
+        "Estado_Envio": "", "Direccion_Envio": "", "Direccion": "", "Banco_Destino": "",
+        "Estado_Pago": "", "Abono_Recibido": 0.0, "Saldo_Pendiente": 0.0,
+        "Fecha_Promesa_Pago": "", "Nota_Pago": "", "Items_JSON": "",
     })
     df_hist = ws_to_df(get_ws_safe(sh, "Historial_Recepciones"), {
         "Fecha": "", "Folio": "", "Proveedor": "", "Recepcion_ID": "", "ID_Proveedor": "",

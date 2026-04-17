@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import streamlit as st
 import pandas as pd
 import gspread
@@ -252,20 +254,31 @@ VENTAS_REQUIRED_COLUMNS = [
     "Cedula_Cliente",
     "Nombre_Cliente",
     "Tipo_Entrega",
-    "Direccion",
+    "Direccion_Envio",
     "Estado_Envio",
     "Metodo_Pago",
+    "Banco_Destino",
+    "Total",
+    "Items",
+    "Items_Detalle",
+    "Costo_Total",
+    "Mascota",
+    "Direccion",
     "Estado_Pago",
     "Abono_Recibido",
     "Saldo_Pendiente",
     "Fecha_Promesa_Pago",
     "Nota_Pago",
-    "Total",
-    "Items",
     "Items_JSON",
-    "Costo_Total",
-    "Mascota",
 ]
+
+VENTAS_COLUMN_ALIASES = {
+    "Direccion_Envio": ["Direccion", "Dirección", "Direccion_Entrega"],
+    "Direccion": ["Direccion_Envio", "Dirección", "Direccion_Entrega"],
+    "Items_Detalle": ["Items_JSON", "Items_Json", "Detalle_JSON", "Detalle_Venta", "Productos_JSON"],
+    "Items_JSON": ["Items_Detalle", "Items_Json", "Detalle_JSON", "Detalle_Venta", "Productos_JSON"],
+    "Banco_Destino": ["Banco_Origen", "Banco", "Cuenta_Destino"],
+}
 
 CIERRES_REQUIRED_COLUMNS = [
     "Fecha",
@@ -309,10 +322,65 @@ def _ensure_headers_if_missing(ws, required_cols):
     return headers
 
 
+def _row_pick_from_map(row_map, candidates, default=""):
+    for key in candidates:
+        value = row_map.get(key, "")
+        if pd.notna(value) and str(value).strip() != "":
+            return value
+    return default
+
+
+def _ensure_sheet_schema_with_aliases(ws, ordered_headers, alias_map=None):
+    alias_map = alias_map or {}
+    values = safe_api_call(ws.get_all_values) or []
+    if not values:
+        safe_api_call(ws.update, "A1", [ordered_headers])
+        return ordered_headers
+
+    current_headers = [str(h).strip() for h in values[0]]
+    extras = [h for h in current_headers if h and h not in ordered_headers]
+    final_headers = ordered_headers + extras
+
+    if current_headers == final_headers:
+        return final_headers
+
+    rewritten_rows = [final_headers]
+    for raw_row in values[1:]:
+        row_map = {
+            header: raw_row[idx] if idx < len(raw_row) else ""
+            for idx, header in enumerate(current_headers)
+            if header
+        }
+        new_row = []
+        for header in final_headers:
+            if header in ordered_headers:
+                aliases = [header] + alias_map.get(header, [])
+                new_row.append(_row_pick_from_map(row_map, aliases, ""))
+            else:
+                new_row.append(row_map.get(header, ""))
+        rewritten_rows.append(new_row)
+
+    safe_api_call(ws.clear)
+    safe_api_call(ws.update, "A1", rewritten_rows)
+    return final_headers
+
+
+def normalizar_payload_venta(payload):
+    payload = dict(payload or {})
+    direccion_envio = payload.get("Direccion_Envio") or payload.get("Direccion") or ""
+    items_detalle = payload.get("Items_Detalle") or payload.get("Items_JSON") or ""
+    payload.setdefault("Direccion_Envio", direccion_envio)
+    payload.setdefault("Direccion", direccion_envio)
+    payload.setdefault("Items_Detalle", items_detalle)
+    payload.setdefault("Items_JSON", items_detalle)
+    payload.setdefault("Banco_Destino", payload.get("Banco_Destino", ""))
+    return payload
+
+
 def asegurar_esquema_operativo(sh=None):
     sh = sh or conectar_google_sheets()
     hojas = obtener_worksheets(sh)
-    _ensure_headers_if_missing(hojas["ven"], VENTAS_REQUIRED_COLUMNS)
+    _ensure_sheet_schema_with_aliases(hojas["ven"], VENTAS_REQUIRED_COLUMNS, VENTAS_COLUMN_ALIASES)
     _ensure_headers_if_missing(hojas["cie"], CIERRES_REQUIRED_COLUMNS)
     return hojas
 
@@ -651,7 +719,7 @@ def construir_resumen_venta_desde_fila(row):
     cliente = {
         "Nombre": _row_pick(row_dict, ["Nombre_Cliente", "Cliente", "Nombre"], "Consumidor Final"),
         "Cedula": _row_pick(row_dict, ["Cedula_Cliente", "Cedula", "Documento"], ""),
-        "Direccion": _row_pick(row_dict, ["Direccion", "Dirección", "Direccion_Entrega"], "Local"),
+        "Direccion": _row_pick(row_dict, ["Direccion_Envio", "Direccion", "Dirección", "Direccion_Entrega"], "Local"),
     }
 
     return construir_resumen_venta(
@@ -659,7 +727,7 @@ def construir_resumen_venta_desde_fila(row):
         fecha=str(_row_pick(row_dict, ["Fecha", "Fecha_Venta"], "")),
         metodo=str(_row_pick(row_dict, ["Metodo_Pago", "Método_Pago", "Pago"], "Efectivo")),
         entrega=str(_row_pick(row_dict, ["Tipo_Entrega", "Entrega", "Modalidad_Entrega"], "Local")),
-        dir_envio=str(_row_pick(row_dict, ["Direccion", "Dirección", "Direccion_Entrega"], "Local")),
+        dir_envio=str(_row_pick(row_dict, ["Direccion_Envio", "Direccion", "Dirección", "Direccion_Entrega"], "Local")),
         cliente=cliente,
         mascota=str(_row_pick(row_dict, ["Mascota", "Nombre_Mascota"], "")),
         carrito=parsed_items,
@@ -1126,6 +1194,7 @@ def registrar_venta(venta_data, carrito):
     hojas = asegurar_esquema_operativo(sh)
     ws_ven = hojas["ven"]
     ws_inv = hojas["inv"]
+    venta_data = normalizar_payload_venta(venta_data)
 
     # 1) Escribir venta
     headers_ven = safe_api_call(ws_ven.row_values, 1) or VENTAS_REQUIRED_COLUMNS
@@ -1742,19 +1811,22 @@ def tab_pos():
                 "Cedula_Cliente": st.session_state.cliente_actual.get("Cedula", ""),
                 "Nombre_Cliente": st.session_state.cliente_actual.get("Nombre", ""),
                 "Tipo_Entrega": entrega,
-                "Direccion": dir_envio,
+                "Direccion_Envio": dir_envio,
                 "Estado_Envio": "Pendiente" if entrega != "Local" else "Entregado",
                 "Metodo_Pago": metodo,
+                "Banco_Destino": "",
+                "Total": total_num,
+                "Items": items_str,
+                "Items_Detalle": items_json,
+                "Costo_Total": costo_total,
+                "Mascota": st.session_state.mascota_seleccionada,
+                "Direccion": dir_envio,
                 "Estado_Pago": estado_pago,
                 "Abono_Recibido": abono_recibido,
                 "Saldo_Pendiente": saldo_pendiente,
                 "Fecha_Promesa_Pago": fecha_promesa_pago,
                 "Nota_Pago": nota_pago,
-                "Total": total_num,
-                "Items": items_str,
                 "Items_JSON": items_json,
-                "Costo_Total": costo_total,
-                "Mascota": st.session_state.mascota_seleccionada,
             }
 
             registrar_venta(venta_payload, carrito_cerrado)
@@ -2010,7 +2082,7 @@ def tab_facturas_ui():
 
     if texto.strip():
         q = texto.strip()
-        columnas_busqueda = [col for col in ["ID_Venta", "Nombre_Cliente", "Cedula_Cliente", "Mascota", "Items", "Direccion"] if col in filtrado.columns]
+        columnas_busqueda = [col for col in ["ID_Venta", "Nombre_Cliente", "Cedula_Cliente", "Mascota", "Items", "Direccion_Envio", "Direccion"] if col in filtrado.columns]
         if columnas_busqueda:
             mask = pd.Series(False, index=filtrado.index)
             for col in columnas_busqueda:

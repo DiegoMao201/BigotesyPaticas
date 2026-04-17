@@ -300,7 +300,12 @@ def cargar_datos_snapshot():
             "Producto_UID", "ID_Producto", "ID_Producto_Norm", "SKU_Proveedor", "Nombre", "Stock",
             "Precio", "Costo", "Categoria", "Iva"
         ],
-        "Ventas": ['ID_Venta', 'Fecha', 'Cedula_Cliente', 'Nombre_Cliente', 'Tipo_Entrega', 'Direccion_Envio', 'Estado_Envio', 'Metodo_Pago', 'Banco_Destino', 'Total', 'Items', 'Items_Detalle', 'Costo_Total', 'Mascota'],
+        "Ventas": [
+            'ID_Venta', 'Fecha', 'Cedula_Cliente', 'Nombre_Cliente', 'Tipo_Entrega', 'Direccion_Envio',
+            'Estado_Envio', 'Metodo_Pago', 'Banco_Destino', 'Total', 'Items', 'Items_Detalle',
+            'Costo_Total', 'Mascota', 'Direccion', 'Estado_Pago', 'Abono_Recibido',
+            'Saldo_Pendiente', 'Fecha_Promesa_Pago', 'Nota_Pago', 'Items_JSON'
+        ],
         "Gastos": ['ID_Gasto', 'Fecha', 'Tipo_Gasto', 'Categoria', 'Descripcion', 'Monto', 'Metodo_Pago', 'Banco_Origen'],
         "Maestro_Proveedores": [
             'ID_Proveedor', 'Nombre_Proveedor', 'SKU_Proveedor', 'SKU_Interno', 'Factor_Pack',
