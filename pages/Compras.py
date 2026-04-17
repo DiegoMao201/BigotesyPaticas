@@ -123,6 +123,76 @@ def _upsert_maestro_proveedores(ws_map, meta_xml, sku_prov, sku_interno, product
     except Exception as e:
         st.warning(f"Error actualizando Maestro_Proveedores: {e}")
 
+
+def _upsert_proveedor_base(ws_map, meta_xml):
+    """
+    Garantiza que el proveedor exista en Maestro_Proveedores aunque la compra sea manual
+    y no tenga SKU_Proveedor para aprender un mapeo.
+    """
+    if not meta_xml:
+        return
+
+    nombre_prov = str(meta_xml.get("Nombre_Proveedor") or meta_xml.get("Proveedor", "")).strip()
+    id_prov = str(meta_xml.get("ID_Proveedor", "")).strip()
+    email = str(meta_xml.get("Email_Proveedor", "")).strip()
+
+    if not nombre_prov:
+        return
+
+    try:
+        ordered_headers = [
+            "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Factor_Pack",
+            "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Producto_UID", "Ultimo_IVA"
+        ]
+        headers = _ensure_sheet_schema(ws_map, ordered_headers)
+        recs = ws_map.get_all_records()
+        df = pd.DataFrame(recs)
+        for col in ordered_headers:
+            if col not in df.columns:
+                df[col] = ""
+
+        if df.empty:
+            mask = pd.Series(dtype=bool)
+        else:
+            nombre_norm = df["Nombre_Proveedor"].fillna("").astype(str).str.strip().str.upper()
+            id_norm = df["ID_Proveedor"].fillna("").astype(str).str.strip().str.upper()
+            target_nombre = nombre_prov.upper()
+            target_id = id_prov.upper()
+            mask = nombre_norm.eq(target_nombre)
+            if target_id:
+                mask = mask | id_norm.eq(target_id)
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        row_map = {
+            "ID_Proveedor": id_prov,
+            "Nombre_Proveedor": nombre_prov,
+            "SKU_Proveedor": "",
+            "SKU_Interno": "",
+            "Factor_Pack": "",
+            "Ultima_Actualizacion": now,
+            "Email": email,
+            "Costo_Proveedor": "",
+            "Producto_UID": "",
+            "Ultimo_IVA": "",
+        }
+        row_data = [row_map.get(header, "") for header in headers]
+
+        if not df.empty and mask.any():
+            idx = mask[mask].index[0] + 2
+            start_a1 = gspread.utils.rowcol_to_a1(idx, 1)
+            end_a1 = gspread.utils.rowcol_to_a1(idx, len(headers))
+            existing = df.iloc[idx - 2].to_dict()
+            merged = []
+            for header in headers:
+                nuevo = row_map.get(header, "")
+                actual = existing.get(header, "")
+                merged.append(nuevo if str(nuevo).strip() else actual)
+            ws_map.update(f"{start_a1}:{end_a1}", [merged])
+        else:
+            ws_map.append_row(row_data)
+    except Exception as e:
+        st.warning(f"Error asegurando proveedor base: {e}")
+
 def _registrar_gasto_compra(ws_gas, meta_xml, info_pago, total_compra):
     headers = _ensure_sheet_schema(ws_gas, [
         "ID_Gasto", "Fecha", "Tipo_Gasto", "Categoria", "Descripcion", "Monto", "Metodo_Pago", "Banco_Origen"
@@ -855,6 +925,8 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
         return False, ["Falta columna SKU_Interno_Seleccionado en df_final (selección del usuario)."]
 
     try:
+        _upsert_proveedor_base(ws_map, meta_xml)
+
         (inv_headers, idx_uid, idx_id, idx_norm, idx_sku_prov, idx_stock, idx_costo, idx_precio, idx_nombre, idx_categoria, idx_iva,
          uid_to_row, norm_to_row, norm_to_uid) = _build_inv_indexes(ws_inv)
 
