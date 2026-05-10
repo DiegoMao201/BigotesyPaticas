@@ -97,3 +97,52 @@ cd apps/admin && pnpm install && pnpm dev   # :3001
 # Store dev
 cd apps/store && pnpm install && pnpm dev   # :3000
 ```
+
+---
+
+## Sesión 2 — Configuración Coolify completa (2026-05-10 PM)
+
+### Recursos creados en Coolify
+Proyecto: **Bigotes y Paticas** (`eockwkw8cskwgwgg4w808ok4`)  
+Environment: **production** (`ggogsgkog4kc8gc0ss08cksg`)  
+Server: localhost (Coolify host) — IP pública: **`192.81.216.49`**
+
+| Recurso | Tipo | ID Coolify | Estado |
+|---|---|---|---|
+| bp-postgres | PostgreSQL 17 | `l0k0kck8cwck4goskcs0scsg` | ✅ Running healthy |
+| bp-redis | Redis 7 | `wc8kgcsgws8cc00oc4404cks` | ✅ Running healthy |
+| bp-api | App (Dockerfile `/apps/api/Dockerfile`, port 8000) | `bcs404cksc0cksc0o0w04cc4` | ⚙️ Configurada, no desplegada |
+| bp-admin | App (Nixpacks `/apps/admin`, port 3001) | `v0kog0sooooo4kk8ok8wscgg` | ⚙️ Configurada, no desplegada |
+| bp-store | App (Nixpacks `/apps/store`, port 3000) | `zgs00cw00ggsw0gcc0wo00kc` | ⚙️ Configurada, no desplegada |
+
+Todas las apps tienen ENV vars completas guardadas (DATABASE_URL, REDIS_URL, JWT/SESSION secrets generados con `openssl rand -hex 32`, credenciales admin, S3 DigitalOcean Spaces compartido con Ferreinox vía prefix `bigotesypaticas/`, dominios y CORS).
+
+### Notas de implementación
+- **PostgreSQL 17** (default Coolify v4 beta) en lugar de PG16: extensiones contrib (pgcrypto, citext, pg_trgm, unaccent, btree_gin) disponibles, asyncpg compatible.
+- **Hostname interno PG/Redis** = ID corto Coolify, no nombre cosmético (`l0k0kck8cwck4goskcs0scsg:5432`, `wc8kgcsgws8cc00oc4404cks:6379`).
+- **Bucket DO Spaces** compartido con Ferreinox (`catalogo-ferreinox`); separación lógica por `S3_PREFIX=bigotesypaticas/`.
+- **bcrypt pinned a 3.2.2** en `apps/api/requirements.txt` (incompat. passlib con 4.x).
+- Secretos en `project-secrets/.env.production` (gitignored, chmod 600).
+
+### Pendiente bloqueante: DNS
+SSL automático Let's Encrypt requiere que estos 4 A records apunten al server **antes** de hacer Deploy:
+
+| Hostname | Tipo | Valor |
+|---|---|---|
+| `bigotesypaticas.com` | A | `192.81.216.49` |
+| `www.bigotesypaticas.com` | A | `192.81.216.49` |
+| `admin.bigotesypaticas.com` | A | `192.81.216.49` |
+| `api.bigotesypaticas.com` | A | `192.81.216.49` |
+
+TTL recomendado: 300s. Verificar con `dig +short api.bigotesypaticas.com` antes de deploy.
+
+### Plan post-DNS (orden estricto)
+1. **Deploy bp-api** → esperar healthy → `curl https://api.bigotesypaticas.com/health/ready`
+2. Verificar login: `curl -X POST https://api.bigotesypaticas.com/v1/auth/login -d '{"email":"...","password":"..."}'`
+3. **Deploy bp-admin** → abrir `https://admin.bigotesypaticas.com` y login
+4. **Deploy bp-store** → abrir `https://bigotesypaticas.com`
+5. Configurar webhooks GitHub (cada app tiene su URL en Coolify) para auto-deploy en push a `main`
+
+### Acceso Coolify
+- Panel: `https://panel.datovatenexuspro.com`
+- Proyecto: `https://panel.datovatenexuspro.com/project/eockwkw8cskwgwgg4w808ok4/environment/ggogsgkog4kc8gc0ss08cksg`
