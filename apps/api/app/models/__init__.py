@@ -1,0 +1,18 @@
+"""Re-exporta todos los modelos para que Alembic los detecte."""
+from app.models.auth import PERMISSIONS, ROLE_DEFAULTS, Role, User, user_roles  # noqa
+from app.models.catalog import Brand, Category, Product  # noqa
+from app.models.common import Base  # noqa
+from app.models.crm import Customer  # noqa
+from app.models.inventory import Stock, StockLocation, StockMovement  # noqa
+from app.models.ops import AuditLog, LegacyIdMap  # noqa
+from app.models.sales import Order, OrderItem, Payment  # noqa
+
+__all__ = [
+    "Base",
+    "User", "Role", "user_roles", "PERMISSIONS", "ROLE_DEFAULTS",
+    "Brand", "Category", "Product",
+    "Customer",
+    "StockLocation", "Stock", "StockMovement",
+    "Order", "OrderItem", "Payment",
+    "LegacyIdMap", "AuditLog",
+]

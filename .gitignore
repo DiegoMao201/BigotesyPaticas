@@ -55,3 +55,6 @@ out/
 
 # Docker
 .docker-data/
+# Extra venvs
+.venv-1/
+.venv-api/
