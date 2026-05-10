@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 33 60% 99%;
+    --foreground: 22 30% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 22 30% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 22 30% 8%;
+    --primary: 18 100% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 33 25% 95%;
+    --secondary-foreground: 22 30% 8%;
+    --muted: 33 25% 95%;
+    --muted-foreground: 22 10% 40%;
+    --accent: 33 25% 95%;
+    --accent-foreground: 22 30% 8%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 33 20% 90%;
+    --input: 33 20% 90%;
+    --ring: 18 100% 60%;
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 22 30% 5%;
+    --foreground: 33 30% 96%;
+    --card: 22 25% 8%;
+    --card-foreground: 33 30% 96%;
+    --popover: 22 25% 8%;
+    --popover-foreground: 33 30% 96%;
+    --primary: 18 100% 60%;
+    --primary-foreground: 22 30% 5%;
+    --secondary: 22 20% 12%;
+    --secondary-foreground: 33 30% 96%;
+    --muted: 22 20% 12%;
+    --muted-foreground: 22 10% 65%;
+    --accent: 22 20% 12%;
+    --accent-foreground: 33 30% 96%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 33 30% 96%;
+    --border: 22 20% 14%;
+    --input: 22 20% 14%;
+    --ring: 18 100% 60%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+  }
+  h1, h2, h3, h4 { @apply font-display tracking-tight; }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #FF6B35, #E84F18 60%, #B53C12);
+  }
+  .gradient-brand {
+    background: linear-gradient(135deg, #FF6B35 0%, #FF8347 50%, #FFA275 100%);
+  }
+  .glass {
+    @apply backdrop-blur-xl bg-background/80 border border-border/50;
+  }
+  .shadow-elegant {
+    box-shadow: 0 1px 2px rgba(26,20,16,0.04), 0 24px 48px -16px rgba(255,107,53,0.18);
+  }
+  .shadow-glow {
+    box-shadow: 0 0 0 1px rgba(255,107,53,0.1), 0 24px 64px -16px rgba(255,107,53,0.32);
+  }
+  .container-tight { @apply container max-w-6xl; }
+  .container-wide { @apply container max-w-[1400px]; }
+}
