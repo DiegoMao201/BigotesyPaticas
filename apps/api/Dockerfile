@@ -41,5 +41,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://localhost:8000/health || exit 1
 
-# Migraciones + seed + servidor
-CMD ["sh", "-c", "alembic upgrade head && python -m app.cli.seed && exec gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --access-logfile - --error-logfile -"]
+# Migraciones + seed (auth + catálogo demo) + servidor
+CMD ["sh", "-c", "alembic upgrade head && python -m app.cli.seed && python -m app.cli.seed_catalog && exec gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --access-logfile - --error-logfile -"]
