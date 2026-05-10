@@ -1,0 +1,12 @@
+# Ignorar todos los binarios (imágenes, videos) — se sirven desde DO Spaces.
+# Mantener metadata y stubs de carpeta.
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.mp4
+*.mov
+*.psd
+*.ai
+*.pdf
