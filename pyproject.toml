@@ -1,0 +1,114 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bigotesypaticas"
+version = "0.1.0"
+description = "Plataforma operativa de Bigotes y Paticas (POS, CRM, inventario)."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "Proprietary" }
+authors = [{ name = "Bigotes y Paticas" }]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["bp_common*"]
+exclude = ["pages*", "tests*"]
+
+# ---------------------------------------------------------------------------
+# Ruff — linter + import sorter + formatter check
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+    ".venv",
+    "__pycache__",
+    "factura.html",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",      # pycodestyle / pyflakes
+    "I",                 # isort
+    "B",                 # bugbear
+    "UP",                # pyupgrade
+    "C4",                # comprehensions
+    "SIM",               # simplify
+    "RUF",               # ruff-specific
+]
+ignore = [
+    "E501",   # line too long (line-length suelto)
+    "B008",   # function calls in default args (FastAPI Depends/Query)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011", "SIM117"]
+"BigotesyPaticas.py" = ["E", "F", "W", "B", "UP", "C4", "SIM", "RUF", "I"]
+"pages/*" = ["E", "F", "W", "B", "UP", "C4", "SIM", "RUF", "I"]
+# ↑ Streamlit legacy queda exento del linter hasta migrar — sólo formato manual.
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# ---------------------------------------------------------------------------
+# Black (alternativa, no se ejecuta por defecto — ruff format basta)
+# ---------------------------------------------------------------------------
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "golden: tests bit-exact contra el comportamiento legacy",
+    "integration: tests que tocan servicios externos (Sheets/PG)",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+]
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+branch = true
+source = ["bp_common"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = false
+
+# ---------------------------------------------------------------------------
+# Mypy (modo gradual — empezamos por bp_common; pages/legacy ignorado)
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "bp_common.*"
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["pages.*", "BigotesyPaticas"]
+ignore_errors = true

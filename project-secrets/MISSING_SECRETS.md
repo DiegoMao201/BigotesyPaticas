@@ -5,6 +5,28 @@
 
 ---
 
+## ⚠️ INCIDENTE 2026-05-10 — Secretos pegados en `.example` (mitigado, NO commiteado)
+
+Ver `docs/INCIDENT_2026-05-10_secrets_in_example.md` para el detalle completo.
+
+**Acción humana pendiente: ROTAR las siguientes credenciales:**
+
+| Prioridad | Credencial | Ubicación |
+|-----------|------------|-----------|
+| 🔴 Alta | Google Service Account `robot-portal-ferreinox@formulario-de-datos-465801.iam.gserviceaccount.com` | GCP Console → IAM → Service Accounts → Keys |
+| 🔴 Alta | Postgres password (DB existente y nueva NYC1) | Coolify / cliente Postgres |
+| 🔴 Alta | DigitalOcean Spaces access/secret keys | DO Console → API → Spaces Keys |
+| 🟠 Media | Gmail App Password de `bigotesypaticasdosquebradas@gmail.com` | Google Account → Security → App Passwords |
+| 🟠 Media | OpenRouter API key (`sk-or-v1-...`) | https://openrouter.ai/keys |
+| 🟡 Baja | `AUTH_SECRET` NextAuth (era dev-secret) | regenerar con `openssl rand -base64 32` |
+
+Después de rotar, actualizar:
+- Streamlit Cloud secrets (Google SA + SHEET_URL).
+- Coolify env vars (resto).
+- `project-secrets/.env.production` local (gitignored).
+
+---
+
 ## ESTADO ACTUAL (Streamlit legacy)
 
 | Secreto | Estado | Notas |

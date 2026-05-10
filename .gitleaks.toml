@@ -1,0 +1,53 @@
+# Configuración de gitleaks
+# Detecta secretos al hacer commit. Reglas custom para el contexto del proyecto.
+
+title = "BigotesyPaticas gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Excepciones legítimas — placeholders y plantillas"
+paths = [
+    '''project-secrets/.*\.example$''',
+    '''docs/.*\.md$''',
+    '''README\.md$''',
+]
+regexes = [
+    # placeholders explícitos
+    '''PUT_VALUE_HERE''',
+    '''PUT_PATH_HERE''',
+    '''PUT_HOST''',
+    '''PUT_DEV_SHEET_URL_HERE''',
+    '''CHANGE_ME''',
+    '''dev-only-change-me''',
+    '''dev-secret-change-me''',
+    '''devpass''',
+    '''minioadmin''',
+    '''example\.com''',
+]
+
+# Reglas adicionales específicas del proyecto
+[[rules]]
+id = "google-service-account-private-key"
+description = "Detecta clave privada de Google Service Account inline"
+regex = '''-----BEGIN PRIVATE KEY-----'''
+tags = ["google", "private-key"]
+
+[[rules]]
+id = "openrouter-api-key"
+description = "Detecta API key de OpenRouter"
+regex = '''sk-or-v1-[A-Za-z0-9]{32,}'''
+tags = ["openrouter"]
+
+[[rules]]
+id = "do-spaces-key"
+description = "DigitalOcean Spaces access key (formato típico)"
+regex = '''DO[A-Z0-9]{18,}'''
+tags = ["digitalocean"]
+
+[[rules]]
+id = "gmail-app-password"
+description = "Gmail App Password (4 grupos de 4 letras minúsculas)"
+regex = '''\b([a-z]{4} ){3}[a-z]{4}\b'''
+tags = ["gmail"]

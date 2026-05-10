@@ -33,6 +33,24 @@
 - **No se modificó código de la aplicación Streamlit.** Producción intacta.
 - Próxima acción autónoma definida: **Sprint 0 de quick wins** (extraer `utils.py`, pinear deps, audit log mínimo, README, ruff/black) — todo sobre Streamlit, sin tocar lógica de negocio.
 
+### 2026-05-10 — Incidente de secretos en `.env.production.example`
+- El usuario pegó valores REALES (Google SA private key, OpenRouter, Spaces, Postgres, Gmail App Password) al final de la plantilla.
+- **NO se llegaron a commitear.** Se verificó `git log` y `git show e99f6dd` — ningún hash en remoto contiene los secretos.
+- Mitigación: secretos movidos a `project-secrets/.env.production` (ya gitignored), `.example` restaurado limpio, añadido `.gitleaks.toml` con reglas custom + hook pre-commit + job CI.
+- **Acción humana pendiente**: rotar Google SA key, password Postgres, OpenRouter API key, DigitalOcean Spaces keys, Gmail App Password (ver `INCIDENT_2026-05-10_secrets_in_example.md` y `MISSING_SECRETS.md`).
+
+### 2026-05-10 — Sprint 0 (Hardening Streamlit) ENTREGADO
+- Paquete `bp_common/` (11 módulos opt-in, bit-exact respecto al legacy): `currency`, `ids`, `pricing`, `payments`, `tz`, `sheets_sanitize`, `flags`, `audit`, `version_info`, `logging_setup`.
+- Suite de tests: 88 casos verdes (`pytest -q` → 88 passed). Golden tests para `clean_currency`, `normalizar_id_producto`, `precio_con_margen`, `_normalizar_estado_pago`.
+- `pyproject.toml` con ruff (lint+format), pytest, coverage, mypy. Streamlit legacy exento del linter para no introducir cambios destructivos.
+- `requirements.txt` pineado (removido `twilio` no usado). `requirements-dev.txt` añadido.
+- `.pre-commit-config.yaml` (ruff + gitleaks + detect-private-key + checks varios).
+- `.github/workflows/ci.yml` (lint + tests py3.11/3.12 + secrets-scan).
+- `scripts/backup_sheets.py` standalone con manifest JSON, listo para cron.
+- Documentado en `docs/SPRINT0_HARDENING.md`.
+- **App Streamlit y `pages/*.py` NO se modificaron.** Producción intacta.
+- Próximo: Fase 1 — Fundación infraestructura (monorepo, docker-compose, esqueletos `apps/api` FastAPI y `apps/admin` Next.js).
+
 ---
 
 ## PLANTILLA PARA NUEVAS ENTRADAS
