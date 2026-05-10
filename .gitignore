@@ -1,2 +1,57 @@
+# OS
 .DS_Store
+Thumbs.db
+
+# Python
 __pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Secrets — NEVER commit real values
+project-secrets/.env
+project-secrets/.env.local
+project-secrets/.env.production
+project-secrets/*.json
+!project-secrets/*.example
+!project-secrets/*.md
+.env
+.env.local
+.env.production
+
+# Build / dist
+dist/
+build/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Logs / data
+*.log
+*.sqlite
+*.sqlite3
+data/local/
+backups/
+
+# Node (futuro Next.js)
+node_modules/
+.next/
+.turbo/
+.vercel/
+out/
+
+# Docker
+.docker-data/
