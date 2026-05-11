@@ -625,6 +625,51 @@ def _run_etl_sync(sheet_id: str, creds_json_str: str, tabs_filter: list[str] | N
 
 # ── Endpoint ─────────────────────────────────────────────────────────────────
 
+@router.get(
+    "/debug-env",
+    summary="Diagnóstico seguro de la env var del SA",
+    description="Solo superadmin. No expone secretos — solo metadatos.",
+)
+async def debug_env(_current_user=Depends(require_superadmin)):
+    raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    if not raw:
+        return {"status": "NOT_SET"}
+
+    preview_start = raw[:8]
+    preview_end = raw[-8:]
+    length = len(raw)
+
+    # Intentar parsear
+    try:
+        stripped = raw.strip()
+        if stripped.startswith("'") and stripped.endswith("'"):
+            stripped = stripped[1:-1]
+        stripped = stripped.replace('\\"', '"')
+        sa = json.loads(stripped)
+        pk = sa.get("private_key", "")
+        pk_first8 = repr(pk[:8])
+        has_newlines = "\n" in pk
+        has_literal_slash_n = "\\n" in pk
+        return {
+            "status": "PARSED_OK",
+            "raw_length": length,
+            "raw_start": repr(preview_start),
+            "raw_end": repr(preview_end),
+            "private_key_first8": pk_first8,
+            "private_key_has_real_newlines": has_newlines,
+            "private_key_has_literal_slash_n": has_literal_slash_n,
+            "client_email": sa.get("client_email", "?"),
+        }
+    except Exception as exc:
+        return {
+            "status": "PARSE_FAILED",
+            "error": str(exc),
+            "raw_length": length,
+            "raw_start": repr(preview_start),
+            "raw_end": repr(preview_end),
+        }
+
+
 @router.post(
     "/sheets",
     response_model=ETLResponse,
