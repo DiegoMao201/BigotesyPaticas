@@ -105,7 +105,14 @@ def _run_etl_sync(sheet_id: str, creds_json_str: str, tabs_filter: list[str] | N
     import psycopg
     from google.oauth2.service_account import Credentials
 
-    sa_info = json.loads(creds_json_str)
+    # Coolify a veces envuelve el valor entre comillas simples o escapa las dobles.
+    # Limpiamos para garantizar JSON válido.
+    raw = creds_json_str.strip()
+    if raw.startswith("'") and raw.endswith("'"):
+        raw = raw[1:-1]
+    # Algunos shells escapan las comillas como \"  → las restauramos
+    raw = raw.replace('\\"', '"')
+    sa_info = json.loads(raw)
     scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
     gc_creds = Credentials.from_service_account_info(sa_info, scopes=scopes)
     gc = gspread.authorize(gc_creds)
