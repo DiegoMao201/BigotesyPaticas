@@ -122,10 +122,10 @@ export function Sidebar() {
         {user && (
           <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-brand/5">
             <div className="w-8 h-8 rounded-full gradient-brand flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {user.full_name.charAt(0).toUpperCase()}
+              {(user.full_name ?? user.email ?? '?').charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <div className="font-medium text-sm truncate">{user.full_name}</div>
+              <div className="font-medium text-sm truncate">{user.full_name ?? user.email}</div>
               <div className="text-[11px] text-muted-foreground truncate">{user.email}</div>
             </div>
           </div>

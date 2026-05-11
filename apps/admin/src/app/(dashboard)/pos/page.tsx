@@ -143,7 +143,7 @@ function CustomerSelector({
               className="w-full flex items-center gap-2 px-3 py-2 hover:bg-accent/50 text-sm text-left"
             >
               <div className="w-7 h-7 rounded-full gradient-brand flex items-center justify-center text-white text-xs font-bold shrink-0">
-                {c.full_name.charAt(0)}
+                {(c.full_name ?? '?').charAt(0)}
               </div>
               <div>
                 <div className="font-medium">{c.full_name}</div>

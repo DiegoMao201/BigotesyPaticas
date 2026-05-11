@@ -83,7 +83,7 @@ export default function CustomersPage() {
                 <div key={c.id} className="flex items-center gap-4 px-4 py-3 hover:bg-accent/30 transition-colors">
                   {/* Avatar */}
                   <div className="w-9 h-9 rounded-full gradient-brand flex items-center justify-center text-white text-sm font-bold shrink-0">
-                    {c.full_name.charAt(0).toUpperCase()}
+                    {(c.full_name ?? '?').charAt(0).toUpperCase()}
                   </div>
                   {/* Info */}
                   <div className="flex-1 min-w-0">
