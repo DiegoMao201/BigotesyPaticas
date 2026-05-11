@@ -135,6 +135,40 @@ async def create_customer(payload: CustomerCreate, db: DBSession) -> CustomerOut
     return CustomerOut.from_orm(c)
 
 
+class CustomerUpdate(BaseModel):
+    full_name: str | None = None
+    document_id: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    city: str | None = None
+    notes: str | None = None
+
+
+@router.patch(
+    "/{customer_id}",
+    response_model=CustomerOut,
+    dependencies=[Depends(require_permission("crm:write"))],
+)
+async def update_customer(
+    customer_id: uuid.UUID, payload: CustomerUpdate, db: DBSession
+) -> CustomerOut:
+    c = (
+        await db.execute(
+            select(Customer)
+            .where(Customer.id == customer_id)
+            .where(Customer.deleted_at == None)  # noqa: E711
+        )
+    ).scalar_one_or_none()
+    if not c:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    for k, v in payload.model_dump(exclude_unset=True).items():
+        setattr(c, k, v)
+    await db.commit()
+    await db.refresh(c)
+    return CustomerOut.from_orm(c)
+
+
 @router.get(
     "/{customer_id}/orders",
     dependencies=[Depends(require_permission("crm:read"))],

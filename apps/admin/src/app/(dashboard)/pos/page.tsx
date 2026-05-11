@@ -4,13 +4,15 @@ import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CreditCard,
-  Banknote, Smartphone, CheckCircle2, Printer, RotateCcw, X,
+  Banknote, Smartphone, CheckCircle2, Printer, RotateCcw, X, XCircle, FileText,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn, formatCurrency } from '@/lib/utils';
-import { products, customers, pos, type Product, type Customer, type Order } from '@/lib/api';
+import { products, customers, pos, sales, API_BASE, type Product, type Customer, type Order } from '@/lib/api';
+import { useAuth } from '@/lib/auth-store';
+import { toast } from 'sonner';
 
 // ─── Types ────────────────────────────────────────────────────────
 interface CartItem {
@@ -159,13 +161,32 @@ function CustomerSelector({
 
 // ─── Success Screen ───────────────────────────────────────────────
 function SuccessScreen({ order, onNew }: { order: Order; onNew: () => void }) {
+  const token = useAuth((s) => s.token);
+  const qc = useQueryClient();
+  const [cancelled, setCancelled] = useState(false);
+
+  const cancelMut = useMutation({
+    mutationFn: () => sales.cancel(order.id, 'Cancelado desde POS'),
+    onSuccess: () => { setCancelled(true); toast.success('Venta cancelada y stock revertido'); qc.invalidateQueries({ queryKey: ['orders'] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function downloadInvoice() {
+    fetch(`${API_BASE}/v1/sales/orders/${order.id}/invoice`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => { if (!r.ok) throw new Error('Error'); return r.blob(); })
+      .then((blob) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `factura-${order.order_number}.html`; a.click(); })
+      .catch(() => toast.error('No se pudo generar la factura'));
+  }
+
   return (
     <div className="flex flex-col items-center justify-center h-full gap-6 text-center py-12">
-      <div className="w-20 h-20 rounded-full gradient-brand flex items-center justify-center shadow-glow">
-        <CheckCircle2 className="h-10 w-10 text-white" />
+      <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-glow ${cancelled ? 'bg-rose-100' : 'gradient-brand'}`}>
+        {cancelled ? <XCircle className="h-10 w-10 text-rose-500" /> : <CheckCircle2 className="h-10 w-10 text-white" />}
       </div>
       <div>
-        <h2 className="text-2xl font-display font-bold">¡Venta registrada!</h2>
+        <h2 className="text-2xl font-display font-bold">{cancelled ? 'Venta cancelada' : '¡Venta registrada!'}</h2>
         <p className="text-muted-foreground mt-1">Orden <span className="font-mono font-bold text-brand-700">#{order.order_number}</span></p>
       </div>
       <div className="w-full max-w-xs space-y-2 text-left rounded-xl border border-border p-4 bg-card">
@@ -185,13 +206,21 @@ function SuccessScreen({ order, onNew }: { order: Order; onNew: () => void }) {
         )}
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Estado</span>
-          <span className="font-medium">{order.payment_status}</span>
+          <span className="font-medium">{cancelled ? 'Cancelado' : order.payment_status}</span>
         </div>
       </div>
-      <div className="flex gap-3">
+      <div className="flex gap-2 flex-wrap justify-center">
         <Button variant="outline" onClick={() => window.print()}>
           <Printer className="h-4 w-4 mr-2" /> Imprimir
         </Button>
+        <Button variant="outline" onClick={downloadInvoice}>
+          <FileText className="h-4 w-4 mr-2" /> Factura
+        </Button>
+        {!cancelled && (
+          <Button variant="destructive" onClick={() => cancelMut.mutate()} disabled={cancelMut.isPending}>
+            <XCircle className="h-4 w-4 mr-2" /> {cancelMut.isPending ? 'Cancelando…' : 'Nota crédito'}
+          </Button>
+        )}
         <Button onClick={onNew}>
           <RotateCcw className="h-4 w-4 mr-2" /> Nueva venta
         </Button>

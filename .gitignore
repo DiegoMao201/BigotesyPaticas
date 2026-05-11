@@ -58,3 +58,5 @@ out/
 # Extra venvs
 .venv-1/
 .venv-api/
+project-secrets/
+pnpm-lock.yaml

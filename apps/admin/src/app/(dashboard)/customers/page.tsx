@@ -1,10 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Search, Users, User, Phone, Mail, MapPin, Star } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Search, Users, Phone, Mail, MapPin, Plus, Pencil } from 'lucide-react';
+import { toast } from 'sonner';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { cn, formatCurrency } from '@/lib/utils';
 import { customers, type Customer } from '@/lib/api';
 
@@ -26,9 +29,90 @@ function RfmBadge({ segment }: { segment: string | null }) {
   );
 }
 
+type CustomerFormData = {
+  full_name: string;
+  email: string;
+  phone: string;
+  city: string;
+  document_id: string;
+  notes: string;
+};
+
+function CustomerForm({
+  initial,
+  onSubmit,
+  loading,
+}: {
+  initial?: Customer;
+  onSubmit: (d: CustomerFormData) => void;
+  loading: boolean;
+}) {
+  const [form, setForm] = useState<CustomerFormData>({
+    full_name: initial?.full_name || '',
+    email: initial?.email || '',
+    phone: initial?.phone || '',
+    city: initial?.city || '',
+    document_id: initial?.document_id || '',
+    notes: initial?.notes || '',
+  });
+  const set = (k: keyof CustomerFormData, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit(form);
+      }}
+    >
+      <DialogBody className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className="text-xs font-medium mb-1 block">Nombre completo *</label>
+            <Input required value={form.full_name} onChange={(e) => set('full_name', e.target.value)} placeholder="Juan García" />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Email</label>
+            <Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="email@ejemplo.com" />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Teléfono</label>
+            <Input value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="300 000 0000" />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Ciudad</label>
+            <Input value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Dosquebradas" />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Documento (CC/NIT)</label>
+            <Input value={form.document_id} onChange={(e) => set('document_id', e.target.value)} placeholder="1234567890" />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs font-medium mb-1 block">Notas</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => set('notes', e.target.value)}
+              rows={2}
+              placeholder="Notas internas…"
+              className="w-full px-3 py-2 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+      </DialogBody>
+      <DialogFooter>
+        <Button type="submit" disabled={loading || !form.full_name}>
+          {loading ? 'Guardando…' : initial ? 'Guardar cambios' : 'Crear cliente'}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
 export default function CustomersPage() {
+  const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
+  const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
+  const [openCreate, setOpenCreate] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['customers', q, page],
@@ -36,17 +120,30 @@ export default function CustomersPage() {
     staleTime: 30_000,
   });
 
+  const createMut = useMutation({
+    mutationFn: (d: CustomerFormData) => customers.create({ ...d, email: d.email || undefined, phone: d.phone || undefined, city: d.city || undefined, document_id: d.document_id || undefined, notes: d.notes || undefined }),
+    onSuccess: () => { toast.success('Cliente creado'); qc.invalidateQueries({ queryKey: ['customers'] }); setOpenCreate(false); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, d }: { id: string; d: CustomerFormData }) => customers.update!(id, { ...d, email: d.email || undefined, phone: d.phone || undefined, city: d.city || undefined, document_id: d.document_id || undefined, notes: d.notes || undefined }),
+    onSuccess: () => { toast.success('Cliente actualizado'); qc.invalidateQueries({ queryKey: ['customers'] }); setEditCustomer(null); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-display font-bold tracking-tight">Clientes</h1>
           <p className="text-muted-foreground mt-1 text-sm">CRM con segmentación RFM — {data?.total ?? '…'} registros</p>
         </div>
+        <Button onClick={() => setOpenCreate(true)}>
+          <Plus className="h-4 w-4" /> Nuevo cliente
+        </Button>
       </div>
 
-      {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -57,7 +154,6 @@ export default function CustomersPage() {
         />
       </div>
 
-      {/* Table */}
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
@@ -80,12 +176,10 @@ export default function CustomersPage() {
           ) : (
             <div className="divide-y divide-border/40">
               {data!.items.map((c: Customer) => (
-                <div key={c.id} className="flex items-center gap-4 px-4 py-3 hover:bg-accent/30 transition-colors">
-                  {/* Avatar */}
+                <div key={c.id} className="flex items-center gap-4 px-4 py-3 hover:bg-accent/30 transition-colors group">
                   <div className="w-9 h-9 rounded-full gradient-brand flex items-center justify-center text-white text-sm font-bold shrink-0">
                     {(c.full_name ?? '?').charAt(0).toUpperCase()}
                   </div>
-                  {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">{c.full_name}</span>
@@ -97,20 +191,25 @@ export default function CustomersPage() {
                       {c.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{c.city}</span>}
                     </div>
                   </div>
-                  {/* Monetary */}
                   {c.rfm_monetary != null && (
                     <div className="text-right text-sm">
                       <div className="font-semibold text-brand-700">{formatCurrency(c.rfm_monetary)}</div>
                       <div className="text-xs text-muted-foreground">acumulado</div>
                     </div>
                   )}
+                  <button
+                    onClick={() => setEditCustomer(c)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-muted text-muted-foreground transition-opacity"
+                    title="Editar"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               ))}
             </div>
           )}
         </CardContent>
 
-        {/* Pagination */}
         {(data?.total ?? 0) > 25 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border/40 text-sm text-muted-foreground">
             <span>Página {page} de {Math.ceil((data?.total ?? 0) / 25)}</span>
@@ -121,6 +220,20 @@ export default function CustomersPage() {
           </div>
         )}
       </Card>
+
+      <Dialog open={openCreate} onClose={() => setOpenCreate(false)} title="Nuevo cliente" size="md">
+        <CustomerForm onSubmit={(d) => createMut.mutate(d)} loading={createMut.isPending} />
+      </Dialog>
+
+      <Dialog open={!!editCustomer} onClose={() => setEditCustomer(null)} title="Editar cliente" size="md">
+        {editCustomer && (
+          <CustomerForm
+            initial={editCustomer}
+            onSubmit={(d) => updateMut.mutate({ id: editCustomer.id, d })}
+            loading={updateMut.isPending}
+          />
+        )}
+      </Dialog>
     </div>
   );
 }

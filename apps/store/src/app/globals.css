@@ -3,6 +3,149 @@
 @tailwind utilities;
 
 /* ───────────────────────────────────────────────────────────
+   Bigotes y Paticas — Store Design System v2
+   Primary: Orange #FF6B35 (Brand B&P institucional)
+   Accent:  Teal #187f77 (Nexus Pro / confianza)
+   ─────────────────────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    --background: 30 33% 99%;
+    --foreground: 20 15% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 15% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 15% 12%;
+
+    /* Primary: Naranja BP #FF6B35 */
+    --primary: 18 100% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 20% 96%;
+    --secondary-foreground: 20 15% 12%;
+    --muted: 30 15% 95%;
+    --muted-foreground: 20 10% 45%;
+    --accent: 30 20% 94%;
+    --accent-foreground: 20 15% 12%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 20% 88%;
+    --input: 30 20% 88%;
+    --ring: 18 100% 60%;
+    --radius: 0.875rem;
+
+    --warm: 36 90% 61%;
+    --warm-fg: 0 0% 100%;
+    --brand-orange: 18 100% 60%;     /* #FF6B35 */
+    --brand-orange-mid: 28 100% 63%; /* #FF8C42 */
+    --brand-yellow: 36 100% 65%;     /* #FFB347 */
+    --brand-teal: 176 68% 30%;       /* #187f77 — accent de confianza */
+  }
+
+  .dark {
+    --background: 20 30% 6%;
+    --foreground: 30 20% 95%;
+    --card: 20 25% 9%;
+    --card-foreground: 30 20% 95%;
+    --popover: 20 25% 9%;
+    --popover-foreground: 30 20% 95%;
+    --primary: 18 100% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 20 20% 14%;
+    --secondary-foreground: 30 20% 95%;
+    --muted: 20 20% 14%;
+    --muted-foreground: 20 15% 60%;
+    --accent: 20 20% 14%;
+    --accent-foreground: 30 20% 95%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 20 20% 18%;
+    --input: 20 20% 18%;
+    --ring: 18 100% 60%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+  }
+  h1, h2, h3, h4 { @apply font-display tracking-tight; }
+}
+
+@layer utilities {
+  /* Gradientes de texto */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #FF6B35, #FF8C42 50%, #FFB347);
+  }
+  .text-gradient-warm {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #FF6B35, #e5541c 60%, #c94014);
+  }
+  .text-gradient-teal {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #187f77, #0d4a45 60%, #1a9991);
+  }
+  /* Gradientes de fondo */
+  .gradient-brand {
+    background: linear-gradient(135deg, #FF6B35 0%, #FF8C42 50%, #FFB347 100%);
+  }
+  .gradient-brand-dark {
+    background: linear-gradient(135deg, #c94014 0%, #e5541c 100%);
+  }
+  .gradient-warm {
+    background: linear-gradient(135deg, #e5721c 0%, #f5a641 60%, #f7b96a 100%);
+  }
+  .gradient-hero {
+    background: linear-gradient(160deg, #fff7f4 0%, #ffe8df 40%, #fff3e8 100%);
+  }
+  .gradient-teal {
+    background: linear-gradient(135deg, #187f77 0%, #1a9991 50%, #20b2a8 100%);
+  }
+  /* Glass */
+  .glass {
+    @apply backdrop-blur-xl bg-background/80 border border-border/50;
+  }
+  .glass-brand {
+    backdrop-filter: blur(16px);
+    background: rgba(255,107,53,0.06);
+    border: 1px solid rgba(255,107,53,0.15);
+  }
+  /* Sombras */
+  .shadow-elegant {
+    box-shadow: 0 1px 2px rgba(180,50,0,0.04), 0 24px 48px -16px rgba(255,107,53,0.18);
+  }
+  .shadow-glow {
+    box-shadow: 0 0 0 1px rgba(255,107,53,0.12), 0 24px 64px -16px rgba(255,107,53,0.32);
+  }
+  .shadow-warm {
+    box-shadow: 0 8px 32px rgba(255,140,66,0.25);
+  }
+  /* Contenedores */
+  .container-tight { @apply container max-w-6xl; }
+  .container-wide { @apply container max-w-[1400px]; }
+  /* Interactivos */
+  .link-brand {
+    @apply text-primary hover:opacity-80 transition-opacity;
+  }
+  .badge-brand {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+           bg-orange-100 text-orange-700;
+  }
+  .badge-warm {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+           bg-amber-100 text-amber-800;
+  }
+  /* Paw pattern bg */
+  .bg-paw-pattern {
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23FF6B35' fill-opacity='0.04'%3E%3Cpath d='M30 8c2 0 4 1.5 4 4s-2 4-4 4-4-1.5-4-4 2-4 4-4zM18 14c1.5 0 3 1 3 3s-1.5 3-3 3-3-1-3-3 1.5-3 3-3zm24 0c1.5 0 3 1 3 3s-1.5 3-3 3-3-1-3-3 1.5-3 3-3zM14 24c1.5 0 3 1 3 3s-1.5 3-3 3-3-1-3-3 1.5-3 3-3zm32 0c1.5 0 3 1 3 3s-1.5 3-3 3-3-1-3-3 1.5-3 3-3zM30 26c5 0 10 4 10 9 0 4-3 7-10 7s-10-3-10-7c0-5 5-9 10-9z'/%3E%3C/g%3E%3C/svg%3E");
+  }
+}
+
+/* ───────────────────────────────────────────────────────────
    Bigotes y Paticas — Store Design System
    Primary: Teal #187f77 (Brand BP / Nexus Pro)
    Accent:  Amber #f5a641 (Warmth / Emotion)

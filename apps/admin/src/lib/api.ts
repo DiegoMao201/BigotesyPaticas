@@ -2,7 +2,7 @@
  * Cliente HTTP tipado para el backend FastAPI.
  * Lee el token del localStorage en el cliente; en server components usar cookies.
  */
-const API_BASE =
+export const API_BASE =
   typeof window === 'undefined'
     ? process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
     : process.env.NEXT_PUBLIC_API_BASE_URL || '';
@@ -86,6 +86,7 @@ export interface Product {
   slug: string;
   name: string;
   short_description: string | null;
+  description: string | null;
   brand_id: string | null;
   category_id: string | null;
   cost: string;
@@ -97,6 +98,8 @@ export interface Product {
   primary_image_url: string | null;
   images: string[];
   tags: string[];
+  stock_qty: number;
+  in_stock: boolean;
 }
 
 export interface PaginatedProducts {
@@ -107,13 +110,21 @@ export interface PaginatedProducts {
 }
 
 export const products = {
-  list: (params: { page?: number; page_size?: number; q?: string } = {}) => {
+  list: (params: { page?: number; page_size?: number; q?: string; is_published?: boolean } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
     if (params.page_size) qs.set('page_size', String(params.page_size));
     if (params.q) qs.set('q', params.q);
+    if (params.is_published !== undefined) qs.set('is_published', String(params.is_published));
     return api<PaginatedProducts>(`/v1/products?${qs.toString()}`);
   },
+  get: (id: string) => api<Product>(`/v1/products/${id}`),
+  create: (payload: Partial<Product> & { sku: string; name: string }) =>
+    api<Product>('/v1/products', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id: string, payload: Partial<Product>) =>
+    api<Product>(`/v1/products/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  brands: () => api<{ id: string; name: string; slug: string }[]>('/v1/brands'),
+  categories: () => api<{ id: string; name: string; slug: string }[]>('/v1/categories'),
 };
 
 export interface Order {
@@ -132,12 +143,20 @@ export interface Order {
 }
 
 export const sales = {
-  list: (params: { page?: number; page_size?: number } = {}) => {
+  list: (params: { page?: number; page_size?: number; status?: string } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
-    if (params.page_size) qs.set('page_size', String(params.page_size));
+    if (params.page_size) qs.set('limit', String(params.page_size));
+    if (params.status) qs.set('status', params.status);
     return api<{ items: Order[]; total: number }>(`/v1/sales/orders?${qs.toString()}`);
   },
+  get: (id: string) => api<Order>(`/v1/sales/orders/${id}`),
+  cancel: (id: string, reason?: string) =>
+    api<{ ok: boolean; order_number: string }>(`/v1/sales/orders/${id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  invoiceUrl: (id: string) => `${API_BASE}/v1/sales/orders/${id}/invoice`,
 };
 
 // ─── Analytics ────────────────────────────────────────────────────
@@ -198,6 +217,7 @@ export interface Customer {
   email: string | null;
   phone: string | null;
   city: string | null;
+  notes: string | null;
   rfm_segment: string | null;
   rfm_monetary: number | null;
   last_purchase_at: string | null;
@@ -231,6 +251,18 @@ export const customers = {
   }) =>
     api<Customer>('/v1/customers', {
       method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  update: (id: string, payload: {
+    full_name?: string;
+    document_id?: string;
+    email?: string;
+    phone?: string;
+    city?: string;
+    notes?: string;
+  }) =>
+    api<Customer>(`/v1/customers/${id}`, {
+      method: 'PATCH',
       body: JSON.stringify(payload),
     }),
 };
