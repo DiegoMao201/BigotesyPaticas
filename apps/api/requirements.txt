@@ -30,6 +30,10 @@ python-json-logger==2.0.7
 # Storage S3 / MinIO / Spaces
 boto3==1.35.60
 
+# Google Sheets (ETL)
+gspread==6.1.2
+google-auth==2.35.0
+
 # HTTP client (para integraciones)
 httpx==0.27.2
 

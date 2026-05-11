@@ -61,3 +61,13 @@ def require_permission(permission: str):
         return user
 
     return _check
+
+
+async def require_superadmin(user: CurrentUser) -> User:
+    """Solo permite acceso a usuarios con is_superadmin=True."""
+    if not user.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere rol superadmin",
+        )
+    return user
