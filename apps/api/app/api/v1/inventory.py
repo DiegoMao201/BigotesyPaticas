@@ -4,9 +4,9 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from app.deps import CurrentUser, DBSession, require_permission
 from app.models.catalog import Product
@@ -116,3 +116,169 @@ async def adjust_stock(payload: AdjustmentIn, db: DBSession, user: CurrentUser):
         reserved=stock.reserved,
         available=max(0, stock.quantity - stock.reserved),
     )
+
+
+# ─────────────── List all stock with product info (for inventory page) ────────────
+
+class StockRowOut(BaseModel):
+    product_id: uuid.UUID
+    sku: str
+    name: str
+    category_name: str | None = None
+    quantity: int
+    reserved: int
+    available: int
+    cost: float
+    price: float
+    stock_value_cost: float
+    stock_value_price: float
+
+
+class StockListResponse(BaseModel):
+    items: list[StockRowOut]
+    total: int
+    page: int
+    page_size: int
+    total_value_cost: float
+    total_value_price: float
+    out_of_stock: int
+    low_stock: int
+
+
+@router.get("/stock", response_model=StockListResponse)
+async def list_stock(
+    db: DBSession,
+    user: CurrentUser,
+    q: str | None = Query(None),
+    only_in_stock: bool = False,
+    only_low_stock: bool = False,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+):
+    # Sum stock per product
+    stock_sub = (
+        select(
+            Stock.product_id.label("product_id"),
+            func.coalesce(func.sum(Stock.quantity), 0).label("qty"),
+            func.coalesce(func.sum(Stock.reserved), 0).label("reserved"),
+        )
+        .group_by(Stock.product_id)
+        .subquery()
+    )
+
+    stmt = (
+        select(Product, stock_sub.c.qty, stock_sub.c.reserved)
+        .outerjoin(stock_sub, stock_sub.c.product_id == Product.id)
+        .where(Product.deleted_at.is_(None))
+    )
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(or_(Product.name.ilike(like), Product.sku.ilike(like)))
+
+    rows = (await db.execute(stmt)).all()
+    items = []
+    total_value_cost = 0.0
+    total_value_price = 0.0
+    out_of_stock = 0
+    low_stock = 0
+    for p, qty, reserved in rows:
+        q_int = int(qty or 0)
+        r_int = int(reserved or 0)
+        avail = max(0, q_int - r_int)
+        cost = float(p.cost or 0)
+        price = float(p.price or 0)
+        if only_in_stock and q_int <= 0:
+            continue
+        if only_low_stock and q_int > 5:
+            continue
+        if q_int <= 0:
+            out_of_stock += 1
+        elif q_int < 5:
+            low_stock += 1
+        sv_cost = q_int * cost
+        sv_price = q_int * price
+        total_value_cost += sv_cost
+        total_value_price += sv_price
+        items.append(StockRowOut(
+            product_id=p.id,
+            sku=p.sku,
+            name=p.name,
+            category_name=None,
+            quantity=q_int,
+            reserved=r_int,
+            available=avail,
+            cost=cost,
+            price=price,
+            stock_value_cost=sv_cost,
+            stock_value_price=sv_price,
+        ))
+
+    items.sort(key=lambda x: -x.quantity)
+    total = len(items)
+    start_idx = (page - 1) * page_size
+    return StockListResponse(
+        items=items[start_idx:start_idx + page_size],
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_value_cost=total_value_cost,
+        total_value_price=total_value_price,
+        out_of_stock=out_of_stock,
+        low_stock=low_stock,
+    )
+
+
+# ─────────────── List stock movements ────────────────────
+
+class MovementOut(BaseModel):
+    id: uuid.UUID
+    product_id: uuid.UUID
+    product_name: str | None = None
+    product_sku: str | None = None
+    movement_type: str
+    quantity_delta: int
+    quantity_after: int
+    unit_cost: float | None = None
+    reference_type: str | None = None
+    reference_id: str | None = None
+    notes: str | None = None
+    occurred_at: datetime
+    created_by: str | None = None
+
+
+@router.get("/movements", response_model=dict)
+async def list_movements(
+    db: DBSession,
+    user: CurrentUser,
+    product_id: uuid.UUID | None = None,
+    movement_type: str | None = None,
+    limit: int = Query(100, ge=1, le=500),
+):
+    stmt = select(StockMovement, Product.name, Product.sku).join(
+        Product, Product.id == StockMovement.product_id
+    )
+    if product_id:
+        stmt = stmt.where(StockMovement.product_id == product_id)
+    if movement_type:
+        stmt = stmt.where(StockMovement.movement_type == movement_type)
+    stmt = stmt.order_by(StockMovement.occurred_at.desc()).limit(limit)
+    rows = (await db.execute(stmt)).all()
+    items = [
+        MovementOut(
+            id=m.id,
+            product_id=m.product_id,
+            product_name=name,
+            product_sku=sku,
+            movement_type=m.movement_type,
+            quantity_delta=m.quantity_delta,
+            quantity_after=m.quantity_after,
+            unit_cost=float(m.unit_cost) if m.unit_cost is not None else None,
+            reference_type=m.reference_type,
+            reference_id=str(m.reference_id) if m.reference_id else None,
+            notes=m.notes,
+            occurred_at=m.occurred_at,
+            created_by=m.created_by,
+        )
+        for m, name, sku in rows
+    ]
+    return {"items": items, "total": len(items)}

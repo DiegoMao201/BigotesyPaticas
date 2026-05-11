@@ -267,3 +267,166 @@ export const pos = {
     }),
 };
 
+
+// ─── Finance / Expenses / Cash Closings / Suppliers ───────────────
+export interface ExpenseRow {
+  id: string;
+  legacy_id: string;
+  fecha: string;
+  tipo: string;
+  categoria: string;
+  descripcion: string;
+  monto: number;
+  metodo_pago: string;
+  banco_origen: string;
+}
+
+export interface ExpensesPage {
+  items: ExpenseRow[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_monto: number;
+}
+
+export const expenses = {
+  list: (params: { start?: string; end?: string; categoria?: string; metodo_pago?: string; page?: number; page_size?: number } = {}) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => v && qs.set(k, String(v)));
+    return api<ExpensesPage>(`/v1/expenses?${qs.toString()}`);
+  },
+  create: (payload: { fecha: string; tipo: string; categoria: string; descripcion: string; monto: number; metodo_pago: string; banco_origen?: string }) =>
+    api<ExpenseRow>('/v1/expenses', { method: 'POST', body: JSON.stringify(payload) }),
+  categories: () => api<{ name: string; count: number; total: number }[]>('/v1/expenses/categories'),
+};
+
+export interface CashClosing {
+  id: string;
+  legacy_id: string;
+  fecha: string;
+  ventas_efectivo: number;
+  gastos_efectivo: number;
+  saldo_inicial: number;
+  saldo_final: number;
+  diferencia: number;
+  notas: string;
+}
+
+export const cashClosings = {
+  list: (params: { page?: number; page_size?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.page) qs.set('page', String(params.page));
+    if (params.page_size) qs.set('page_size', String(params.page_size));
+    return api<{ items: CashClosing[]; total: number; page: number; page_size: number }>(`/v1/cash-closings?${qs.toString()}`);
+  },
+};
+
+export interface SupplierRow {
+  id_proveedor: string;
+  nombre_proveedor: string;
+  sku_proveedor: string;
+  sku_interno: string;
+  factor_pack: number;
+  costo_unidad: number;
+}
+
+export interface SupplierGroup {
+  nombre_proveedor: string;
+  id_proveedor: string;
+  sku_count: number;
+  skus: { sku_proveedor: string; sku_interno: string; costo: number }[];
+}
+
+export const suppliers = {
+  list: (params: { q?: string; page?: number; page_size?: number } = {}) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => v && qs.set(k, String(v)));
+    return api<{ items: SupplierRow[]; total: number; page: number; page_size: number }>(`/v1/suppliers?${qs.toString()}`);
+  },
+  grouped: () => api<SupplierGroup[]>('/v1/suppliers/grouped'),
+};
+
+export interface FinanceSummary {
+  period_start: string;
+  period_end: string;
+  revenue: number;
+  cogs: number;
+  gross_profit: number;
+  gross_margin_pct: number;
+  expenses_total: number;
+  net_profit: number;
+  net_margin_pct: number;
+  expenses_by_category: { category: string; total: number }[];
+  revenue_by_method: { method: string; total: number }[];
+  daily_cashflow: { date: string; revenue: number; expenses: number }[];
+}
+
+export const finance = {
+  summary: (start?: string, end?: string) => {
+    const qs = new URLSearchParams();
+    if (start) qs.set('start', start);
+    if (end) qs.set('end', end);
+    return api<FinanceSummary>(`/v1/finance/summary?${qs.toString()}`);
+  },
+};
+
+// ─── Inventory extended ───────────────────────────────────────────
+export interface StockRow {
+  product_id: string;
+  sku: string;
+  name: string;
+  category_name: string | null;
+  quantity: number;
+  reserved: number;
+  available: number;
+  cost: number;
+  price: number;
+  stock_value_cost: number;
+  stock_value_price: number;
+}
+
+export interface StockListResponse {
+  items: StockRow[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_value_cost: number;
+  total_value_price: number;
+  out_of_stock: number;
+  low_stock: number;
+}
+
+export interface MovementRow {
+  id: string;
+  product_id: string;
+  product_name: string | null;
+  product_sku: string | null;
+  movement_type: string;
+  quantity_delta: number;
+  quantity_after: number;
+  unit_cost: number | null;
+  reference_type: string | null;
+  reference_id: string | null;
+  notes: string | null;
+  occurred_at: string;
+  created_by: string | null;
+}
+
+export const inventory = {
+  list: (params: { q?: string; only_in_stock?: boolean; only_low_stock?: boolean; page?: number; page_size?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.q) qs.set('q', params.q);
+    if (params.only_in_stock) qs.set('only_in_stock', 'true');
+    if (params.only_low_stock) qs.set('only_low_stock', 'true');
+    if (params.page) qs.set('page', String(params.page));
+    if (params.page_size) qs.set('page_size', String(params.page_size));
+    return api<StockListResponse>(`/v1/inventory/stock?${qs.toString()}`);
+  },
+  movements: (params: { product_id?: string; movement_type?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => v && qs.set(k, String(v)));
+    return api<{ items: MovementRow[]; total: number }>(`/v1/inventory/movements?${qs.toString()}`);
+  },
+  adjust: (payload: { product_id: string; quantity_delta: number; notes?: string; location_id?: string }) =>
+    api('/v1/inventory/adjust', { method: 'POST', body: JSON.stringify(payload) }),
+};

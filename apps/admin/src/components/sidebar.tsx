@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Package, ShoppingCart, Boxes, Users, BarChart3,
   Settings, LogOut, AlertTriangle, TrendingUp, CreditCard, Tag,
-  Building2, ChevronRight, ShoppingBag,
+  Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-store';
@@ -33,21 +33,25 @@ const NAV_GROUPS = [
     items: [
       { href: '/products', label: 'Productos', icon: Package },
       { href: '/inventory', label: 'Inventario', icon: Boxes },
-      { href: '/categories', label: 'Categorías', icon: Tag },
-      { href: '/brands', label: 'Marcas', icon: Building2 },
     ],
   },
   {
     label: 'Finanzas',
     items: [
-      { href: '/finance', label: 'Reportes', icon: TrendingUp },
-      { href: '/payments', label: 'Pagos', icon: CreditCard },
+      { href: '/finance', label: 'P&L y Cash Flow', icon: TrendingUp },
+      { href: '/expenses', label: 'Gastos', icon: Wallet },
+      { href: '/cash-closings', label: 'Cierres de Caja', icon: ReceiptText },
+    ],
+  },
+  {
+    label: 'Compras',
+    items: [
+      { href: '/suppliers', label: 'Proveedores', icon: Truck },
     ],
   },
   {
     label: 'Sistema',
     items: [
-      { href: '/alerts', label: 'Alertas', icon: AlertTriangle },
       { href: '/settings', label: 'Configuración', icon: Settings },
     ],
   },
