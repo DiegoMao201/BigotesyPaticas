@@ -116,6 +116,12 @@ def _run_etl_sync(sheet_id: str, creds_json_str: str, tabs_filter: list[str] | N
         if raw.startswith("'") and raw.endswith("'"):
             raw = raw[1:-1]
         raw = raw.replace('\\"', '"')
+        # Si no empieza con '{', puede ser base64 (usuario pegó el b64 en GOOGLE_SERVICE_ACCOUNT_JSON)
+        if not raw.startswith('{'):
+            try:
+                raw = _b64.b64decode(raw).decode("utf-8")
+            except Exception:
+                pass  # si no es base64 válido, dejar como está y que json.loads falle con mensaje claro
         sa_info = json.loads(raw)
         # Coolify double-escapa \n en private_key → convertir a newlines reales
         pk = sa_info.get("private_key", "")
@@ -647,6 +653,15 @@ async def debug_env(_current_user=Depends(require_superadmin)):
         if stripped.startswith("'") and stripped.endswith("'"):
             stripped = stripped[1:-1]
         stripped = stripped.replace('\\"', '"')
+        # Auto-detectar base64
+        is_b64 = False
+        if not stripped.startswith('{'):
+            import base64 as _b64_debug
+            try:
+                stripped = _b64_debug.b64decode(stripped).decode("utf-8")
+                is_b64 = True
+            except Exception:
+                pass
         sa = json.loads(stripped)
         pk = sa.get("private_key", "")
         pk_first8 = repr(pk[:8])
@@ -657,6 +672,7 @@ async def debug_env(_current_user=Depends(require_superadmin)):
             "raw_length": length,
             "raw_start": repr(preview_start),
             "raw_end": repr(preview_end),
+            "was_base64": is_b64,
             "private_key_first8": pk_first8,
             "private_key_has_real_newlines": has_newlines,
             "private_key_has_literal_slash_n": has_literal_slash_n,
