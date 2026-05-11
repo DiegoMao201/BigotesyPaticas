@@ -113,6 +113,12 @@ def _run_etl_sync(sheet_id: str, creds_json_str: str, tabs_filter: list[str] | N
     # Algunos shells escapan las comillas como \"  → las restauramos
     raw = raw.replace('\\"', '"')
     sa_info = json.loads(raw)
+
+    # Coolify double-escapa backslashes en env vars: el private_key llega con \n
+    # como dos chars literales en vez de newline real → lo corregimos post-parse.
+    pk = sa_info.get("private_key", "")
+    if pk and "\n" not in pk and "\\n" in pk:
+        sa_info["private_key"] = pk.replace("\\n", "\n")
     scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
     gc_creds = Credentials.from_service_account_info(sa_info, scopes=scopes)
     gc = gspread.authorize(gc_creds)
