@@ -215,45 +215,54 @@ def _run_etl_sync(sheet_id: str, creds_json_str: str, tabs_filter: list[str] | N
                             if crow:
                                 cat_id = crow[0]
 
-                        # Margin
-                        margin = round((price - cost) / price, 4) if price > 0 else 0.20
+                        # Margin: clamp a rango válido NUMERIC(5,4) = [-9.9999, 9.9999]
+                        margin_raw = round((price - cost) / price, 4) if price > 0 else 0.20
+                        margin = max(-9.9999, min(9.9999, margin_raw))
 
                         cur.execute("SELECT id FROM catalog.products WHERE sku = %s", (sku,))
                         existing = cur.fetchone()
-                        if existing:
-                            cur.execute(
-                                """UPDATE catalog.products
-                                   SET name=%s, price=%s, cost=%s, margin_pct=%s,
-                                       category_id=%s, is_active=true, is_published=true,
-                                       attributes=%s, updated_at=%s
-                                   WHERE sku=%s""",
-                                (name, price, cost, margin, cat_id,
-                                 json.dumps({"iva": iva}), _now(), sku),
-                            )
-                            rep["rows_updated"] += 1
-                        else:
-                            # Slug único
-                            base_slug = _slug(name)
-                            slug = base_slug
-                            suffix = 0
-                            while True:
-                                cur.execute("SELECT id FROM catalog.products WHERE slug = %s", (slug,))
-                                if not cur.fetchone():
-                                    break
-                                suffix += 1
-                                slug = f"{base_slug}-{suffix}"
+                        try:
+                            cur.execute("SAVEPOINT sp_product")
+                            if existing:
+                                cur.execute(
+                                    """UPDATE catalog.products
+                                       SET name=%s, price=%s, cost=%s, margin_pct=%s,
+                                           category_id=%s, is_active=true, is_published=true,
+                                           attributes=%s, updated_at=%s
+                                       WHERE sku=%s""",
+                                    (name, price, cost, margin, cat_id,
+                                     json.dumps({"iva": iva}), _now(), sku),
+                                )
+                                rep["rows_updated"] += 1
+                            else:
+                                # Slug único
+                                base_slug = _slug(name)
+                                slug = base_slug
+                                suffix = 0
+                                while True:
+                                    cur.execute("SELECT id FROM catalog.products WHERE slug = %s", (slug,))
+                                    if not cur.fetchone():
+                                        break
+                                    suffix += 1
+                                    slug = f"{base_slug}-{suffix}"
 
-                            cur.execute(
-                                """INSERT INTO catalog.products
-                                   (id, sku, slug, name, price, cost, margin_pct, category_id,
-                                    is_active, is_published, attributes, tags, images,
-                                    created_at, updated_at)
-                                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,
-                                           true,true,%s,'[]','[]',%s,%s)""",
-                                (str(uuid.uuid4()), sku, slug, name, price, cost, margin, cat_id,
-                                 json.dumps({"iva": iva}), _now(), _now()),
-                            )
-                            rep["rows_inserted"] += 1
+                                cur.execute(
+                                    """INSERT INTO catalog.products
+                                       (id, sku, slug, name, price, cost, margin_pct, category_id,
+                                        is_active, is_published, attributes, tags, images,
+                                        created_at, updated_at)
+                                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,
+                                               true,true,%s,'[]','[]',%s,%s)""",
+                                    (str(uuid.uuid4()), sku, slug, name, price, cost, margin, cat_id,
+                                     json.dumps({"iva": iva}), _now(), _now()),
+                                )
+                                rep["rows_inserted"] += 1
+                            cur.execute("RELEASE SAVEPOINT sp_product")
+                        except Exception as row_exc:
+                            cur.execute("ROLLBACK TO SAVEPOINT sp_product")
+                            rep["rows_rejected"] += 1
+                            if len(rep["sample_errors"]) < 5:
+                                rep["sample_errors"].append(f"sku={sku}: {row_exc}")
                     conn.commit()
                 except Exception as exc:
                     conn.rollback()
