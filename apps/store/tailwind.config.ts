@@ -19,13 +19,20 @@ const config: Config = {
         card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
         primary: { DEFAULT: 'hsl(var(--primary))', foreground: 'hsl(var(--primary-foreground))' },
         accent: { DEFAULT: 'hsl(var(--accent))', foreground: 'hsl(var(--accent-foreground))' },
+        // Brand BP: Teal (identidad oficial Nexus Pro)
         brand: {
-          DEFAULT: '#FF6B35', 50: '#FFF1EB', 100: '#FFE0D1', 200: '#FFC1A3',
-          300: '#FFA275', 400: '#FF8347', 500: '#FF6B35', 600: '#E84F18',
-          700: '#B53C12', 800: '#7E2A0D', 900: '#471706',
+          DEFAULT: '#187f77', 50: '#edfaf9', 100: '#d4f5f3', 200: '#a3eeea',
+          300: '#6be2d8', 400: '#34cfc4', 500: '#20b2a8', 600: '#1a9991',
+          700: '#187f77', 800: '#125e58', 900: '#0d4a45', 950: '#061e1c',
         },
-        cream: '#FFF8F2',
-        ink: '#1A1410',
+        // Warm: Amber/naranja — acento emocional, CTAs
+        warm: {
+          DEFAULT: '#f5a641', 50: '#fffbf5', 100: '#fef3e0', 200: '#fde4bb',
+          300: '#fad093', 400: '#f7b96a', 500: '#f5a641', 600: '#e5721c',
+          700: '#c96114', 800: '#a34f0d', 900: '#7c3d0a',
+        },
+        cream: '#f8f9fa',
+        ink: '#262730',
       },
       borderRadius: {
         lg: 'var(--radius)', md: 'calc(var(--radius) - 2px)', sm: 'calc(var(--radius) - 4px)',

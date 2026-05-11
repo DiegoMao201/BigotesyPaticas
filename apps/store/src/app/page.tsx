@@ -8,7 +8,7 @@ const CATEGORIES = [
   { slug: 'perros', name: 'Perros', emoji: '🐕', tone: 'from-brand-100 to-brand-50' },
   { slug: 'gatos', name: 'Gatos', emoji: '🐈', tone: 'from-amber-100 to-amber-50' },
   { slug: 'accesorios', name: 'Accesorios', emoji: '🎀', tone: 'from-rose-100 to-rose-50' },
-  { slug: 'cuidado', name: 'Cuidado', emoji: '✨', tone: 'from-violet-100 to-violet-50' },
+  { slug: 'snacks', name: 'Snacks', emoji: '🦴', tone: 'from-violet-100 to-violet-50' },
 ];
 
 const VALUES = [

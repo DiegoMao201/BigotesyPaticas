@@ -2,50 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ───────────────────────────────────────────────────────────
+   Bigotes y Paticas — Store Design System
+   Primary: Teal #187f77 (Brand BP / Nexus Pro)
+   Accent:  Amber #f5a641 (Warmth / Emotion)
+   ─────────────────────────────────────────────────────────── */
+
 @layer base {
   :root {
-    --background: 33 60% 99%;
-    --foreground: 22 30% 8%;
+    /* Fondo suave cálido */
+    --background: 160 20% 99%;
+    --foreground: 210 15% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 22 30% 8%;
+    --card-foreground: 210 15% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 22 30% 8%;
-    --primary: 18 100% 60%;
+    --popover-foreground: 210 15% 12%;
+
+    /* Primary: Teal BP */
+    --primary: 176 68% 30%;        /* #187f77 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 33 25% 95%;
-    --secondary-foreground: 22 30% 8%;
-    --muted: 33 25% 95%;
-    --muted-foreground: 22 10% 40%;
-    --accent: 33 25% 95%;
-    --accent-foreground: 22 30% 8%;
+
+    /* Secondary suave */
+    --secondary: 160 20% 95%;
+    --secondary-foreground: 210 15% 12%;
+    --muted: 160 15% 95%;
+    --muted-foreground: 210 10% 45%;
+    --accent: 160 15% 94%;
+    --accent-foreground: 210 15% 12%;
+
+    /* Sistema */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 33 20% 90%;
-    --input: 33 20% 90%;
-    --ring: 18 100% 60%;
-    --radius: 1rem;
+    --border: 160 15% 88%;
+    --input: 160 15% 88%;
+    --ring: 176 68% 30%;
+    --radius: 0.875rem;
+
+    /* Tokens custom */
+    --warm: 36 90% 61%;            /* #f5a641 */
+    --warm-fg: 0 0% 100%;
+    --brand-teal: 176 68% 30%;
+    --brand-dark: 176 72% 17%;     /* #125e58 */
+    --brand-deeper: 176 76% 10%;   /* #0d4a45 */
   }
 
   .dark {
-    --background: 22 30% 5%;
-    --foreground: 33 30% 96%;
-    --card: 22 25% 8%;
-    --card-foreground: 33 30% 96%;
-    --popover: 22 25% 8%;
-    --popover-foreground: 33 30% 96%;
-    --primary: 18 100% 60%;
-    --primary-foreground: 22 30% 5%;
-    --secondary: 22 20% 12%;
-    --secondary-foreground: 33 30% 96%;
-    --muted: 22 20% 12%;
-    --muted-foreground: 22 10% 65%;
-    --accent: 22 20% 12%;
-    --accent-foreground: 33 30% 96%;
+    --background: 176 50% 6%;
+    --foreground: 160 20% 95%;
+    --card: 176 40% 9%;
+    --card-foreground: 160 20% 95%;
+    --popover: 176 40% 9%;
+    --popover-foreground: 160 20% 95%;
+    --primary: 176 68% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 176 30% 14%;
+    --secondary-foreground: 160 20% 95%;
+    --muted: 176 30% 14%;
+    --muted-foreground: 176 15% 60%;
+    --accent: 176 30% 14%;
+    --accent-foreground: 160 20% 95%;
     --destructive: 0 62% 50%;
-    --destructive-foreground: 33 30% 96%;
-    --border: 22 20% 14%;
-    --input: 22 20% 14%;
-    --ring: 18 100% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 176 25% 16%;
+    --input: 176 25% 16%;
+    --ring: 176 68% 30%;
   }
 }
 
@@ -59,22 +79,60 @@
 }
 
 @layer utilities {
+  /* Gradientes de texto */
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #FF6B35, #E84F18 60%, #B53C12);
+    background-image: linear-gradient(135deg, #187f77, #0d4a45 60%, #1a9991);
   }
+  .text-gradient-warm {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #f5a641, #e5721c 60%, #c96114);
+  }
+  /* Gradientes de fondo */
   .gradient-brand {
-    background: linear-gradient(135deg, #FF6B35 0%, #FF8347 50%, #FFA275 100%);
+    background: linear-gradient(135deg, #187f77 0%, #1a9991 50%, #20b2a8 100%);
   }
+  .gradient-brand-dark {
+    background: linear-gradient(135deg, #0d4a45 0%, #125e58 100%);
+  }
+  .gradient-warm {
+    background: linear-gradient(135deg, #e5721c 0%, #f5a641 60%, #f7b96a 100%);
+  }
+  .gradient-hero {
+    background: linear-gradient(160deg, #edfaf9 0%, #d4f5f3 40%, #fef3e0 100%);
+  }
+  /* Glass */
   .glass {
     @apply backdrop-blur-xl bg-background/80 border border-border/50;
   }
+  .glass-brand {
+    backdrop-filter: blur(16px);
+    background: rgba(24,127,119,0.08);
+    border: 1px solid rgba(24,127,119,0.15);
+  }
+  /* Sombras */
   .shadow-elegant {
-    box-shadow: 0 1px 2px rgba(26,20,16,0.04), 0 24px 48px -16px rgba(255,107,53,0.18);
+    box-shadow: 0 1px 2px rgba(13,74,69,0.04), 0 24px 48px -16px rgba(24,127,119,0.18);
   }
   .shadow-glow {
-    box-shadow: 0 0 0 1px rgba(255,107,53,0.1), 0 24px 64px -16px rgba(255,107,53,0.32);
+    box-shadow: 0 0 0 1px rgba(24,127,119,0.1), 0 24px 64px -16px rgba(24,127,119,0.32);
   }
+  .shadow-warm {
+    box-shadow: 0 8px 32px rgba(245,166,65,0.25);
+  }
+  /* Contenedores */
   .container-tight { @apply container max-w-6xl; }
   .container-wide { @apply container max-w-[1400px]; }
+  /* Interactivos */
+  .link-brand {
+    @apply text-brand-700 hover:text-brand-600 transition-colors;
+  }
+  .badge-brand {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+           bg-brand-100 text-brand-800;
+  }
+  .badge-warm {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+           bg-warm-100 text-warm-800;
+  }
 }

@@ -1,0 +1,12 @@
+{
+  "name": "@bp/branding",
+  "version": "1.0.0",
+  "description": "Design system tokens — Bigotes y Paticas",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./tokens": "./tokens.ts",
+    "./tailwind-preset": "./tailwind-preset.ts"
+  }
+}

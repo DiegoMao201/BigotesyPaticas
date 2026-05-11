@@ -139,3 +139,99 @@ export const sales = {
     return api<{ items: Order[]; total: number }>(`/v1/sales/orders?${qs.toString()}`);
   },
 };
+
+// ─── Analytics ────────────────────────────────────────────────────
+export interface DashboardKpis {
+  revenue_month: number;
+  revenue_prev_month: number;
+  revenue_delta_pct: number;
+  orders_month: number;
+  orders_prev_month: number;
+  orders_delta_pct: number;
+  avg_ticket: number;
+  products_active: number;
+  customers_total: number;
+  low_stock_count: number;
+}
+
+export interface DailySale {
+  date: string;
+  revenue: number;
+  orders: number;
+}
+
+export interface TopProduct {
+  product_id: string;
+  name: string;
+  sku: string;
+  units_sold: number;
+  revenue: number;
+  primary_image_url: string | null;
+}
+
+export interface DashboardData {
+  kpis: DashboardKpis;
+  daily_sales: DailySale[];
+  top_products: TopProduct[];
+  recent_orders: Order[];
+}
+
+export interface StockAlert {
+  product_id: string;
+  sku: string;
+  name: string;
+  available: number;
+  level: 'critical' | 'low';
+}
+
+export const analytics = {
+  dashboard: () => api<DashboardData>('/v1/analytics/dashboard'),
+  stockAlerts: (threshold = 10) =>
+    api<StockAlert[]>(`/v1/analytics/stock-alerts?threshold=${threshold}`),
+};
+
+// ─── Customers ────────────────────────────────────────────────────
+export interface Customer {
+  id: string;
+  full_name: string;
+  document_id: string | null;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  rfm_segment: string | null;
+  rfm_monetary: number | null;
+  last_purchase_at: string | null;
+  created_at: string;
+}
+
+export interface PaginatedCustomers {
+  items: Customer[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export const customers = {
+  list: (params: { page?: number; page_size?: number; q?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.page) qs.set('page', String(params.page));
+    if (params.page_size) qs.set('page_size', String(params.page_size));
+    if (params.q) qs.set('q', params.q);
+    return api<PaginatedCustomers>(`/v1/customers?${qs.toString()}`);
+  },
+  get: (id: string) => api<Customer>(`/v1/customers/${id}`),
+  orders: (id: string) => api<Order[]>(`/v1/customers/${id}/orders`),
+  create: (payload: {
+    full_name: string;
+    document_id?: string;
+    email?: string;
+    phone?: string;
+    city?: string;
+    notes?: string;
+  }) =>
+    api<Customer>('/v1/customers', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+};
+
