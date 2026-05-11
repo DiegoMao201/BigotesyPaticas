@@ -413,6 +413,7 @@ export interface StockRow {
   available: number;
   cost: number;
   price: number;
+  margin_pct: number;
   stock_value_cost: number;
   stock_value_price: number;
 }
@@ -445,11 +446,13 @@ export interface MovementRow {
 }
 
 export const inventory = {
-  list: (params: { q?: string; only_in_stock?: boolean; only_low_stock?: boolean; page?: number; page_size?: number } = {}) => {
+  list: (params: { q?: string; only_in_stock?: boolean; only_low_stock?: boolean; sort_by?: string; sort_dir?: string; page?: number; page_size?: number } = {}) => {
     const qs = new URLSearchParams();
     if (params.q) qs.set('q', params.q);
     if (params.only_in_stock) qs.set('only_in_stock', 'true');
     if (params.only_low_stock) qs.set('only_low_stock', 'true');
+    if (params.sort_by) qs.set('sort_by', params.sort_by);
+    if (params.sort_dir) qs.set('sort_dir', params.sort_dir);
     if (params.page) qs.set('page', String(params.page));
     if (params.page_size) qs.set('page_size', String(params.page_size));
     return api<StockListResponse>(`/v1/inventory/stock?${qs.toString()}`);
@@ -461,4 +464,98 @@ export const inventory = {
   },
   adjust: (payload: { product_id: string; quantity_delta: number; notes?: string; location_id?: string }) =>
     api('/v1/inventory/adjust', { method: 'POST', body: JSON.stringify(payload) }),
+  updatePricing: (product_id: string, payload: { cost?: number; price?: number }) =>
+    api(`/v1/inventory/stock/${product_id}/pricing`, { method: 'PATCH', body: JSON.stringify(payload) }),
 };
+
+// ─── Purchases (Compras a proveedores) ────────────────────────────
+
+export interface PurchaseItemIn {
+  product_id?: string;
+  sku_proveedor?: string;
+  sku_interno?: string;
+  product_name: string;
+  quantity: number;
+  factor_pack?: number;
+  unit_cost: number;
+  tax_pct?: number;
+}
+
+export interface PurchaseItemOut {
+  id: string;
+  product_id: string | null;
+  sku_proveedor: string | null;
+  sku_interno: string | null;
+  product_name: string;
+  quantity: number;
+  factor_pack: number;
+  unit_cost: number;
+  tax_pct: number;
+  total_cost: number;
+}
+
+export interface PurchaseOut {
+  id: string;
+  folio: string | null;
+  supplier_name: string;
+  supplier_id: string | null;
+  status: string;
+  subtotal: number;
+  tax_amount: number;
+  total: number;
+  payment_method: string;
+  payment_reference: string | null;
+  notes: string | null;
+  purchased_at: string;
+  created_at: string;
+  items: PurchaseItemOut[];
+}
+
+export interface PurchaseSummary {
+  id: string;
+  folio: string | null;
+  supplier_name: string;
+  status: string;
+  total: number;
+  items_count: number;
+  payment_method: string;
+  purchased_at: string;
+  created_at: string;
+}
+
+export interface PurchaseListResponse {
+  items: PurchaseSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_spend: number;
+}
+
+export interface PurchaseCreate {
+  folio?: string;
+  supplier_name: string;
+  supplier_id?: string;
+  payment_method?: string;
+  payment_reference?: string;
+  notes?: string;
+  purchased_at?: string;
+  items: PurchaseItemIn[];
+  receive_now?: boolean;
+}
+
+export const purchases = {
+  list: (params: { q?: string; status?: string; page?: number; page_size?: number } = {}) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => v && qs.set(k, String(v)));
+    return api<PurchaseListResponse>(`/v1/purchases?${qs.toString()}`);
+  },
+  get: (id: string) => api<PurchaseOut>(`/v1/purchases/${id}`),
+  create: (payload: PurchaseCreate) =>
+    api<PurchaseOut>('/v1/purchases', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id: string, payload: Partial<PurchaseCreate & { status: string }>) =>
+    api<PurchaseOut>(`/v1/purchases/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  delete: (id: string) => api(`/v1/purchases/${id}`, { method: 'DELETE' }),
+  receive: (id: string) => api<PurchaseOut>(`/v1/purchases/${id}/receive`, { method: 'POST' }),
+  stats: () => api<{ total_spend_month: number; total_count_month: number; top_suppliers: { supplier_name: string; total: number; count: number }[] }>('/v1/purchases/stats/summary'),
+};
+

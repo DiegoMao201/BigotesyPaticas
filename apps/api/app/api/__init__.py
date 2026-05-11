@@ -10,6 +10,7 @@ from app.api.v1 import (
     health,
     inventory,
     products,
+    purchases,
     sales,
 )
 
@@ -29,3 +30,4 @@ api_router.include_router(finance.router, prefix="/v1")
 api_router.include_router(finance.expenses_router, prefix="/v1")
 api_router.include_router(finance.suppliers_router, prefix="/v1")
 api_router.include_router(finance.closings_router, prefix="/v1")
+api_router.include_router(purchases.router, prefix="/v1")

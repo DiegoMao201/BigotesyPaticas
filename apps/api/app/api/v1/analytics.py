@@ -135,17 +135,18 @@ async def get_dashboard(db: DBSession) -> DashboardOut:
 
     # Ventas diarias últimos 30 días
     since_30 = now - timedelta(days=30)
+    day_trunc = func.date_trunc("day", Order.occurred_at)
     daily_rows = (
         await db.execute(
             select(
-                func.date_trunc("day", Order.occurred_at).label("day"),
+                day_trunc.label("day"),
                 func.sum(Order.grand_total).label("revenue"),
                 func.count(Order.id).label("orders"),
             )
             .where(Order.occurred_at >= since_30)
             .where(Order.status.notin_(["cancelled", "refunded"]))
-            .group_by(func.date_trunc("day", Order.occurred_at))
-            .order_by(func.date_trunc("day", Order.occurred_at))
+            .group_by(day_trunc)
+            .order_by(day_trunc)
         )
     ).all()
 
@@ -158,7 +159,12 @@ async def get_dashboard(db: DBSession) -> DashboardOut:
         for r in daily_rows
     ]
 
-    # Top 5 productos por revenue este mes
+    # Top 5 productos por revenue este mes (subquery evita GroupingError en PG)
+    valid_order_ids_sub = (
+        select(Order.id)
+        .where(Order.occurred_at >= start_month)
+        .where(Order.status.notin_(["cancelled", "refunded"]))
+    )
     top_rows = (
         await db.execute(
             select(
@@ -168,9 +174,7 @@ async def get_dashboard(db: DBSession) -> DashboardOut:
                 func.sum(OrderItem.quantity).label("units"),
                 func.sum(OrderItem.unit_price * OrderItem.quantity - OrderItem.discount).label("rev"),
             )
-            .join(Order, Order.id == OrderItem.order_id)
-            .where(Order.occurred_at >= start_month)
-            .where(Order.status.notin_(["cancelled", "refunded"]))
+            .where(OrderItem.order_id.in_(valid_order_ids_sub))
             .group_by(OrderItem.product_id, OrderItem.name_snapshot, OrderItem.sku_snapshot)
             .order_by(func.sum(OrderItem.unit_price * OrderItem.quantity - OrderItem.discount).desc())
             .limit(5)

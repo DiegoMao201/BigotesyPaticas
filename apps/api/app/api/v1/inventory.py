@@ -130,6 +130,7 @@ class StockRowOut(BaseModel):
     available: int
     cost: float
     price: float
+    margin_pct: float
     stock_value_cost: float
     stock_value_price: float
 
@@ -152,6 +153,8 @@ async def list_stock(
     q: str | None = Query(None),
     only_in_stock: bool = False,
     only_low_stock: bool = False,
+    sort_by: str = Query("quantity", pattern="^(quantity|cost|price|stock_value_cost|stock_value_price|margin_pct|name|sku)$"),
+    sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
 ):
@@ -197,6 +200,7 @@ async def list_stock(
             low_stock += 1
         sv_cost = q_int * cost
         sv_price = q_int * price
+        margin = round((price - cost) / price * 100, 1) if price > 0 else 0.0
         total_value_cost += sv_cost
         total_value_price += sv_price
         items.append(StockRowOut(
@@ -209,11 +213,24 @@ async def list_stock(
             available=avail,
             cost=cost,
             price=price,
+            margin_pct=margin,
             stock_value_cost=sv_cost,
             stock_value_price=sv_price,
         ))
 
-    items.sort(key=lambda x: -x.quantity)
+    # Sort
+    reverse = (sort_dir == "desc")
+    sort_key_map = {
+        "quantity": lambda x: x.quantity,
+        "cost": lambda x: x.cost,
+        "price": lambda x: x.price,
+        "stock_value_cost": lambda x: x.stock_value_cost,
+        "stock_value_price": lambda x: x.stock_value_price,
+        "margin_pct": lambda x: x.margin_pct,
+        "name": lambda x: x.name.lower(),
+        "sku": lambda x: x.sku.lower(),
+    }
+    items.sort(key=sort_key_map.get(sort_by, lambda x: -x.quantity), reverse=reverse)
     total = len(items)
     start_idx = (page - 1) * page_size
     return StockListResponse(
@@ -282,3 +299,63 @@ async def list_movements(
         for m, name, sku in rows
     ]
     return {"items": items, "total": len(items)}
+
+
+# ─────────────── Update product pricing (cost + price) ────────────
+
+class PricingUpdateIn(BaseModel):
+    cost: float | None = Field(None, ge=0, description="Costo unitario (precio de compra)")
+    price: float | None = Field(None, ge=0, description="Precio de venta público")
+
+
+class PricingUpdateOut(BaseModel):
+    product_id: uuid.UUID
+    sku: str
+    name: str
+    cost: float
+    price: float
+    margin_pct: float
+
+
+@router.patch(
+    "/stock/{product_id}/pricing",
+    response_model=PricingUpdateOut,
+    dependencies=[Depends(require_permission("inventory:write"))],
+)
+async def update_product_pricing(
+    product_id: uuid.UUID,
+    payload: PricingUpdateIn,
+    db: DBSession,
+    user: CurrentUser,
+):
+    """Actualiza costo y/o precio de venta de un producto."""
+    product = (
+        await db.execute(
+            select(Product).where(Product.id == product_id).where(Product.deleted_at.is_(None))
+        )
+    ).scalar_one_or_none()
+    if product is None:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    if payload.cost is not None:
+        from decimal import Decimal
+        product.cost = Decimal(str(payload.cost))
+    if payload.price is not None:
+        from decimal import Decimal
+        product.price = Decimal(str(payload.price))
+
+    await db.commit()
+    await db.refresh(product)
+
+    cost = float(product.cost or 0)
+    price = float(product.price or 0)
+    margin = round((price - cost) / price * 100, 1) if price > 0 else 0.0
+
+    return PricingUpdateOut(
+        product_id=product.id,
+        sku=product.sku,
+        name=product.name,
+        cost=cost,
+        price=price,
+        margin_pct=margin,
+    )
