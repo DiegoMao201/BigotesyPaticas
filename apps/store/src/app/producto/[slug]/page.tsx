@@ -43,6 +43,15 @@ export default async function ProductPage({ params }: { params: { slug: string }
           )}
         </div>
 
+        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${
+          product.in_stock
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'bg-gray-100 text-gray-500'
+        }`}>
+          <span className={`w-2 h-2 rounded-full ${product.in_stock ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+          {product.in_stock ? `Disponible (${product.stock_qty} uds.)` : 'No disponible'}
+        </div>
+
         <AddToCart
           product={{
             productId: product.id,

@@ -140,6 +140,13 @@ export default async function HomePage() {
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-6xl">🐾</div>
                   )}
+                  <div className={`absolute top-2 left-2 text-xs font-medium px-2 py-0.5 rounded-full ${
+                    p.in_stock
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {p.in_stock ? 'Disponible' : 'No disponible'}
+                  </div>
                 </div>
                 <div className="p-4">
                   <h3 className="font-medium text-sm line-clamp-2 group-hover:text-brand transition-colors">

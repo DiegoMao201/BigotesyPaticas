@@ -12,13 +12,6 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=4, max_length=200)
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int
-
-
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -30,6 +23,14 @@ class UserOut(BaseModel):
     last_login_at: datetime | None = None
     roles: list[str] = []
     permissions: list[str] = []
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserOut | None = None
 
 
 class RefreshRequest(BaseModel):

@@ -51,6 +51,16 @@ async def login(payload: LoginRequest, db: DBSession) -> TokenResponse:
         access_token=access,
         refresh_token=refresh,
         expires_in=settings.jwt_access_token_expire_minutes * 60,
+        user=UserOut(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name or user.email,
+            is_active=user.is_active,
+            is_superadmin=user.is_superadmin,
+            last_login_at=user.last_login_at,
+            roles=[],
+            permissions=[],
+        ),
     )
 
 

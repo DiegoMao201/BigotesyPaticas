@@ -10,6 +10,7 @@ from sqlalchemy import func, or_, select
 
 from app.deps import DBSession, require_permission
 from app.models.catalog import Brand, Category, Product
+from app.models.inventory import Stock
 from app.schemas.catalog import (
     BrandOut,
     CategoryOut,
@@ -61,8 +62,26 @@ async def list_products(
     stmt = stmt.order_by(Product.created_at.desc()).offset((page - 1) * per_page).limit(per_page)
     rows = (await db.execute(stmt)).scalars().all()
 
+    # Fetch stock totals for all products in one query
+    product_ids = [r.id for r in rows]
+    stock_map: dict = {}
+    if product_ids:
+        stock_rows = (await db.execute(
+            select(Stock.product_id, func.sum(Stock.quantity).label("qty"))
+            .where(Stock.product_id.in_(product_ids))
+            .group_by(Stock.product_id)
+        )).all()
+        stock_map = {r.product_id: int(r.qty or 0) for r in stock_rows}
+
+    items = []
+    for r in rows:
+        p_out = ProductOut.model_validate(r)
+        p_out.stock_qty = stock_map.get(r.id, 0)
+        p_out.in_stock = p_out.stock_qty > 0
+        items.append(p_out)
+
     return ProductListResponse(
-        items=[ProductOut.model_validate(r) for r in rows],
+        items=items,
         total=total,
         page=page,
         per_page=per_page,
@@ -75,7 +94,13 @@ async def get_product(product_id: uuid.UUID, db: DBSession):
     p = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one_or_none()
     if p is None or p.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-    return p
+    p_out = ProductOut.model_validate(p)
+    stock_rows = (await db.execute(
+        select(func.sum(Stock.quantity)).where(Stock.product_id == p.id)
+    )).scalar_one()
+    p_out.stock_qty = int(stock_rows or 0)
+    p_out.in_stock = p_out.stock_qty > 0
+    return p_out
 
 
 @router.get("/by-slug/{slug}", response_model=ProductOut)
@@ -85,7 +110,13 @@ async def get_product_by_slug(slug: str, db: DBSession):
     ).scalar_one_or_none()
     if p is None or p.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-    return p
+    p_out = ProductOut.model_validate(p)
+    stock_total = (await db.execute(
+        select(func.sum(Stock.quantity)).where(Stock.product_id == p.id)
+    )).scalar_one()
+    p_out.stock_qty = int(stock_total or 0)
+    p_out.in_stock = p_out.stock_qty > 0
+    return p_out
 
 
 @router.post(

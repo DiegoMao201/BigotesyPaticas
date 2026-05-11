@@ -19,6 +19,8 @@ export interface Product {
   images: string[];
   tags: string[];
   is_featured: boolean;
+  stock_qty: number;
+  in_stock: boolean;
 }
 
 export interface ProductsPage {

@@ -79,6 +79,8 @@ class ProductOut(ProductBase):
     slug: str
     brand: BrandOut | None = None
     category: CategoryOut | None = None
+    stock_qty: int = 0
+    in_stock: bool = True
 
 
 class ProductListResponse(BaseModel):
