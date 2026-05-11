@@ -155,11 +155,11 @@ async def list_expenses(
     }
 
 
-@expenses_router.post("", response_model=ExpenseOut)
+@expenses_router.post("", response_model=ExpenseOut, dependencies=[Depends(require_permission("finance:write"))])
 async def create_expense(
     payload: ExpenseCreate,
     db: DBSession,
-    user: CurrentUser = Depends(require_permission("finance:write")),
+    user: CurrentUser,
 ):
     legacy_id = f"GASTO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
     extra = {
