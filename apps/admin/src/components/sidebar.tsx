@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Package, ShoppingCart, Boxes, Users, BarChart3,
   Settings, LogOut, AlertTriangle, TrendingUp, CreditCard, Tag,
-  Building2, ChevronRight,
+  Building2, ChevronRight, ShoppingBag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-store';
@@ -23,7 +23,8 @@ const NAV_GROUPS = [
   {
     label: 'Comercial',
     items: [
-      { href: '/sales', label: 'Ventas & POS', icon: ShoppingCart },
+      { href: '/pos', label: 'Punto de Venta', icon: ShoppingBag, highlight: true },
+      { href: '/sales', label: 'Ventas', icon: ShoppingCart },
       { href: '/customers', label: 'Clientes', icon: Users },
     ],
   },
@@ -98,11 +99,13 @@ export function Sidebar() {
                       'flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all group',
                       active
                         ? 'bg-brand/10 text-brand-700'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-accent/60',
+                        : item.highlight
+                          ? 'gradient-brand text-white shadow-sm hover:opacity-90'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent/60',
                     )}
                   >
                     <div className="flex items-center gap-2.5">
-                      <Icon className={cn('h-4 w-4', active ? 'text-brand-700' : '')} />
+                      <Icon className={cn('h-4 w-4', active ? 'text-brand-700' : item.highlight && !active ? 'text-white' : '')} />
                       {item.label}
                     </div>
                     {active && <ChevronRight className="h-3 w-3 text-brand-400" />}

@@ -235,3 +235,35 @@ export const customers = {
     }),
 };
 
+// ─── POS / Sales creation ─────────────────────────────────────────
+export interface OrderItemIn {
+  product_id: string;
+  quantity: number;
+  unit_price?: number;
+  discount?: number;
+}
+
+export interface PaymentIn {
+  method: string;
+  amount: number;
+  reference?: string;
+  notes?: string;
+}
+
+export interface OrderCreate {
+  customer_id?: string;
+  channel?: string;
+  items: OrderItemIn[];
+  payments?: PaymentIn[];
+  shipping_total?: number;
+  notes?: string;
+}
+
+export const pos = {
+  createOrder: (payload: OrderCreate) =>
+    api<Order>('/v1/sales/orders', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+};
+
