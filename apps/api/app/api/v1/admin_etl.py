@@ -101,24 +101,26 @@ def _now() -> datetime:
 # ── Sync ETL (se ejecuta en thread separado) ─────────────────────────────────
 
 def _run_etl_sync(sheet_id: str, creds_json_str: str, tabs_filter: list[str] | None) -> dict[str, Any]:
+    import base64 as _b64
     import gspread
     import psycopg
     from google.oauth2.service_account import Credentials
 
-    # Coolify a veces envuelve el valor entre comillas simples o escapa las dobles.
-    # Limpiamos para garantizar JSON válido.
-    raw = creds_json_str.strip()
-    if raw.startswith("'") and raw.endswith("'"):
-        raw = raw[1:-1]
-    # Algunos shells escapan las comillas como \"  → las restauramos
-    raw = raw.replace('\\"', '"')
-    sa_info = json.loads(raw)
-
-    # Coolify double-escapa backslashes en env vars: el private_key llega con \n
-    # como dos chars literales en vez de newline real → lo corregimos post-parse.
-    pk = sa_info.get("private_key", "")
-    if pk and "\n" not in pk and "\\n" in pk:
-        sa_info["private_key"] = pk.replace("\\n", "\n")
+    # GOOGLE_SA_B64 tiene prioridad: base64 evita todos los problemas de escaping de Coolify.
+    sa_b64 = os.environ.get("GOOGLE_SA_B64", "").strip()
+    if sa_b64:
+        sa_info = json.loads(_b64.b64decode(sa_b64).decode("utf-8"))
+    else:
+        # Fallback: limpiar el JSON crudo que Coolify puede haber escapado
+        raw = creds_json_str.strip()
+        if raw.startswith("'") and raw.endswith("'"):
+            raw = raw[1:-1]
+        raw = raw.replace('\\"', '"')
+        sa_info = json.loads(raw)
+        # Coolify double-escapa \n en private_key → convertir a newlines reales
+        pk = sa_info.get("private_key", "")
+        if pk and "\n" not in pk and "\\n" in pk:
+            sa_info["private_key"] = pk.replace("\\n", "\n")
     scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
     gc_creds = Credentials.from_service_account_info(sa_info, scopes=scopes)
     gc = gspread.authorize(gc_creds)
