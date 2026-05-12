@@ -190,11 +190,22 @@ export default function SalesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
+  const [channelFilter, setChannelFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['orders', page, search, statusFilter, paymentFilter],
-    queryFn: () => sales.list({ page, page_size: 30, q: search || undefined, status: statusFilter || undefined, payment_status: paymentFilter || undefined }),
+    queryKey: ['orders', page, search, statusFilter, paymentFilter, channelFilter, dateFrom, dateTo],
+    queryFn: () => sales.list({
+      page, page_size: 30,
+      q: search || undefined,
+      status: statusFilter || undefined,
+      payment_status: paymentFilter || undefined,
+      channel: channelFilter || undefined,
+      date_from: dateFrom || undefined,
+      date_to: dateTo || undefined,
+    }),
     staleTime: 15_000,
   });
 
@@ -236,13 +247,27 @@ export default function SalesPage() {
       </div>
 
       {/* Filters */}
-      <Card className="p-3">
+      <Card className="p-3 space-y-3">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
             <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Buscar por # orden…" className="pl-9" />
           </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">Desde</label>
+            <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="w-40" />
+            <label className="text-xs text-muted-foreground">Hasta</label>
+            <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="w-40" />
+            {(dateFrom || dateTo) && (
+              <Button size="sm" variant="outline" onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); }}>
+                <XCircle className="w-3 h-3" />
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex gap-2 flex-wrap">
+            <span className="text-xs font-medium text-muted-foreground self-center">Estado:</span>
             {['', 'confirmed', 'completed', 'cancelled'].map((s) => (
               <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" onClick={() => { setStatusFilter(s); setPage(1); }}>
                 {s === '' ? 'Todos' : s === 'confirmed' ? 'Confirmada' : s === 'completed' ? 'Completada' : 'Anulada'}
@@ -250,9 +275,18 @@ export default function SalesPage() {
             ))}
           </div>
           <div className="flex gap-2">
+            <span className="text-xs font-medium text-muted-foreground self-center">Pago:</span>
             {['', 'Pagado', 'Pendiente', 'Abono parcial'].map((s) => (
               <Button key={s} variant={paymentFilter === s ? 'default' : 'outline'} size="sm" onClick={() => { setPaymentFilter(s); setPage(1); }}>
-                {s === '' ? 'Pago' : s}
+                {s === '' ? 'Todos' : s}
+              </Button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <span className="text-xs font-medium text-muted-foreground self-center">Canal:</span>
+            {['', 'POS', 'STORE', 'STORE_LEGACY'].map((s) => (
+              <Button key={s} variant={channelFilter === s ? 'default' : 'outline'} size="sm" onClick={() => { setChannelFilter(s); setPage(1); }}>
+                {s === '' ? 'Todos' : s}
               </Button>
             ))}
           </div>

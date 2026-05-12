@@ -359,3 +359,226 @@ async def update_product_pricing(
         price=price,
         margin_pct=margin,
     )
+
+
+# ─── Analytics: movements per product, ABC, reorder suggestions ───
+
+@router.get("/movements/by-product/{product_id}")
+async def product_movements(
+    product_id: uuid.UUID,
+    db: DBSession,
+    user: CurrentUser,
+    days: int = Query(30, ge=1, le=365),
+):
+    """Movimientos de stock de un producto en los últimos N días."""
+    from datetime import timedelta
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    rows = (await db.execute(
+        select(StockMovement)
+        .where(StockMovement.product_id == product_id, StockMovement.occurred_at >= cutoff)
+        .order_by(StockMovement.occurred_at.desc())
+        .limit(500)
+    )).scalars().all()
+    return {
+        "product_id": str(product_id),
+        "days": days,
+        "movements": [
+            {
+                "id": str(m.id),
+                "type": m.type,
+                "quantity": m.quantity,
+                "occurred_at": m.occurred_at.isoformat(),
+                "reference": m.reference,
+                "notes": m.notes,
+            } for m in rows
+        ],
+    }
+
+
+@router.get("/analytics/velocity")
+async def velocity_analysis(
+    db: DBSession,
+    user: CurrentUser,
+    days_short: int = Query(30, ge=7, le=90),
+    days_long: int = Query(90, ge=30, le=365),
+):
+    """Velocidad de venta blended (65% largo + 35% corto) con ABC y reorder.
+
+    Lógica portada de Inventario_Nexus.py — Streamlit (heurística pet-shop).
+    """
+    from datetime import timedelta
+    from sqlalchemy import text
+
+    cutoff_short = datetime.now(UTC) - timedelta(days=days_short)
+    cutoff_long = datetime.now(UTC) - timedelta(days=days_long)
+
+    # SALE movements (negative qty) por producto
+    short_q = await db.execute(text("""
+        SELECT product_id::text, SUM(ABS(quantity)) AS units
+        FROM inventory.stock_movements
+        WHERE type = 'SALE' AND occurred_at >= :cutoff
+        GROUP BY product_id
+    """), {"cutoff": cutoff_short})
+    short_map = {r[0]: float(r[1] or 0) for r in short_q.all()}
+
+    long_q = await db.execute(text("""
+        SELECT product_id::text, SUM(ABS(quantity)) AS units
+        FROM inventory.stock_movements
+        WHERE type = 'SALE' AND occurred_at >= :cutoff
+        GROUP BY product_id
+    """), {"cutoff": cutoff_long})
+    long_map = {r[0]: float(r[1] or 0) for r in long_q.all()}
+
+    # Productos + stock + costo + precio
+    rows = await db.execute(text("""
+        SELECT p.id::text, p.sku, p.name, p.cost::float, p.price::float,
+               COALESCE(SUM(s.quantity - s.reserved), 0) AS stock
+        FROM catalog.products p
+        LEFT JOIN inventory.stock s ON s.product_id = p.id
+        WHERE p.deleted_at IS NULL AND p.is_active = true
+        GROUP BY p.id
+    """))
+
+    productos = []
+    for r in rows.all():
+        pid, sku, name, cost, price, stock = r
+        v_short = short_map.get(pid, 0)
+        v_long = long_map.get(pid, 0)
+        vel_short = v_short / days_short
+        vel_long = v_long / days_long
+        vel_blend = 0.65 * vel_long + 0.35 * vel_short
+        # Confidence damping (poca historia → menos confianza)
+        conf = min(1.0, v_long / 6.0)
+        velocidad = vel_blend * conf
+
+        DIAS_OBJETIVO = 8
+        DIAS_SEGURIDAD = 1
+        LEAD_TIME = 5
+        stock_seguridad = velocidad * DIAS_SEGURIDAD
+        punto_reorden = velocidad * LEAD_TIME + stock_seguridad
+        stock_objetivo = velocidad * DIAS_OBJETIVO + stock_seguridad
+        faltante = max(0, stock_objetivo - (stock or 0))
+
+        # Estado
+        if stock <= 0:
+            estado = "AGOTADO"
+        elif velocidad > 0 and stock <= punto_reorden:
+            estado = "COMPRAR"
+        elif velocidad > 0 and stock > velocidad * 120:
+            estado = "SOBRESTOCK"
+        else:
+            estado = "OK"
+
+        valor_ventas_long = v_long * (price or 0)
+        dias_cobertura = (stock / velocidad) if velocidad > 0 else 9999
+
+        productos.append({
+            "product_id": pid,
+            "sku": sku,
+            "name": name,
+            "stock": int(stock or 0),
+            "cost": cost or 0,
+            "price": price or 0,
+            "v_short": v_short,
+            "v_long": v_long,
+            "velocidad_diaria": round(velocidad, 3),
+            "punto_reorden": round(punto_reorden, 1),
+            "stock_objetivo": round(stock_objetivo, 1),
+            "faltante": round(faltante, 1),
+            "dias_cobertura": round(dias_cobertura, 1) if dias_cobertura < 9999 else None,
+            "valor_ventas_long": round(valor_ventas_long, 0),
+            "estado": estado,
+            "requiere_compra": estado in ("AGOTADO", "COMPRAR"),
+        })
+
+    # ABC analysis: cumulative Pareto sobre valor_ventas_long
+    productos.sort(key=lambda x: -x["valor_ventas_long"])
+    total_val = sum(p["valor_ventas_long"] for p in productos) or 1
+    cum = 0.0
+    for p in productos:
+        cum += p["valor_ventas_long"]
+        ratio = cum / total_val
+        if ratio <= 0.80:
+            p["clase_abc"] = "A"
+        elif ratio <= 0.95:
+            p["clase_abc"] = "B"
+        else:
+            p["clase_abc"] = "C"
+
+    return {
+        "days_short": days_short,
+        "days_long": days_long,
+        "products": productos,
+        "summary": {
+            "total_productos": len(productos),
+            "agotados": sum(1 for p in productos if p["estado"] == "AGOTADO"),
+            "requieren_compra": sum(1 for p in productos if p["requiere_compra"]),
+            "sobrestock": sum(1 for p in productos if p["estado"] == "SOBRESTOCK"),
+            "valor_inventario": round(sum(p["stock"] * p["cost"] for p in productos), 0),
+        },
+    }
+
+
+@router.get("/export/excel")
+async def export_inventory_excel(db: DBSession, user: CurrentUser):
+    """Descarga inventario completo como Excel (xlsxwriter)."""
+    import io
+    try:
+        import xlsxwriter
+    except ImportError:
+        raise HTTPException(500, "xlsxwriter no instalado en el servidor")
+
+    from sqlalchemy import text
+    rows = (await db.execute(text("""
+        SELECT p.sku, p.name, c.name AS categoria, b.name AS marca,
+               COALESCE(SUM(s.quantity - s.reserved), 0) AS stock,
+               p.cost::float AS costo, p.price::float AS precio,
+               (p.price::float - p.cost::float) AS margen_$,
+               CASE WHEN p.price > 0 THEN ROUND(((p.price - p.cost) / p.price * 100)::numeric, 1) ELSE 0 END AS margen_pct
+        FROM catalog.products p
+        LEFT JOIN catalog.categories c ON c.id = p.category_id
+        LEFT JOIN catalog.brands b ON b.id = p.brand_id
+        LEFT JOIN inventory.stock s ON s.product_id = p.id
+        WHERE p.deleted_at IS NULL
+        GROUP BY p.id, c.name, b.name
+        ORDER BY p.name
+    """))).all()
+
+    output = io.BytesIO()
+    wb = xlsxwriter.Workbook(output, {"in_memory": True})
+    ws = wb.add_worksheet("Inventario")
+
+    headers = ["SKU", "Nombre", "Categoría", "Marca", "Stock", "Costo", "Precio", "Margen $", "Margen %"]
+    bold = wb.add_format({"bold": True, "bg_color": "#FF6B35", "font_color": "white", "border": 1})
+    money = wb.add_format({"num_format": "$#,##0"})
+    pct = wb.add_format({"num_format": "0.0\"%\""})
+
+    for col, h in enumerate(headers):
+        ws.write(0, col, h, bold)
+    for ri, r in enumerate(rows, start=1):
+        ws.write(ri, 0, r[0] or "")
+        ws.write(ri, 1, r[1] or "")
+        ws.write(ri, 2, r[2] or "")
+        ws.write(ri, 3, r[3] or "")
+        ws.write(ri, 4, int(r[4] or 0))
+        ws.write(ri, 5, float(r[5] or 0), money)
+        ws.write(ri, 6, float(r[6] or 0), money)
+        ws.write(ri, 7, float(r[7] or 0), money)
+        ws.write(ri, 8, float(r[8] or 0), pct)
+
+    ws.set_column("A:A", 16)
+    ws.set_column("B:B", 40)
+    ws.set_column("C:D", 18)
+    ws.set_column("E:I", 12)
+    ws.freeze_panes(1, 0)
+    ws.autofilter(0, 0, len(rows), len(headers) - 1)
+    wb.close()
+
+    output.seek(0)
+    from fastapi.responses import StreamingResponse
+    filename = f"inventario_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

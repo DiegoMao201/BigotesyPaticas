@@ -401,13 +401,58 @@ export interface SupplierGroup {
   skus: { sku_proveedor: string; sku_interno: string; costo: number }[];
 }
 
-export const suppliers = {
+export const suppliersLegacy = {
   list: (params: { q?: string; page?: number; page_size?: number } = {}) => {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => v && qs.set(k, String(v)));
-    return api<{ items: SupplierRow[]; total: number; page: number; page_size: number }>(`/v1/suppliers?${qs.toString()}`);
+    return api<{ items: SupplierRow[]; total: number; page: number; page_size: number }>(`/v1-legacy/suppliers?${qs.toString()}`);
   },
-  grouped: () => api<SupplierGroup[]>('/v1/suppliers/grouped'),
+  grouped: () => api<SupplierGroup[]>('/v1-legacy/suppliers/grouped'),
+};
+
+// ─── Suppliers (CRUD real, schema purchasing.suppliers) ───────────
+export interface Supplier {
+  id: string;
+  nit: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  contact_name: string | null;
+  payment_terms_days: number;
+  notes: string | null;
+  is_active: boolean;
+  sku_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupplierIn {
+  nit: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contact_name?: string;
+  payment_terms_days?: number;
+  notes?: string;
+}
+
+export const suppliers = {
+  list: (params: { q?: string; is_active?: boolean; page?: number; page_size?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.q) qs.set('q', params.q);
+    if (params.is_active !== undefined) qs.set('is_active', String(params.is_active));
+    if (params.page) qs.set('page', String(params.page));
+    if (params.page_size) qs.set('page_size', String(params.page_size));
+    return api<{ items: Supplier[]; total: number; page: number; page_size: number }>(`/v1/suppliers?${qs.toString()}`);
+  },
+  get: (id: string) => api<Supplier>(`/v1/suppliers/${id}`),
+  create: (payload: SupplierIn) => api<Supplier>('/v1/suppliers', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id: string, payload: Partial<SupplierIn> & { is_active?: boolean }) =>
+    api<Supplier>(`/v1/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  delete: (id: string) => api(`/v1/suppliers/${id}`, { method: 'DELETE' }),
+  listSkus: (id: string) => api<{ items: { sku_proveedor: string; product_id: string; product_sku: string; product_name: string; factor_pack: number; last_unit_cost: number; last_tax_pct: number; last_seen_at: string }[] }>(`/v1/suppliers/${id}/skus`),
 };
 
 export interface FinanceSummary {
@@ -498,7 +543,52 @@ export const inventory = {
     api('/v1/inventory/adjust', { method: 'POST', body: JSON.stringify(payload) }),
   updatePricing: (product_id: string, payload: { cost?: number; price?: number }) =>
     api(`/v1/inventory/stock/${product_id}/pricing`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  movementsByProduct: (product_id: string, days = 30) =>
+    api<{ product_id: string; days: number; movements: { id: string; type: string; quantity: number; occurred_at: string; reference: string | null; notes: string | null }[] }>(`/v1/inventory/movements/by-product/${product_id}?days=${days}`),
+  velocityAnalysis: (days_short = 30, days_long = 90) =>
+    api<VelocityAnalysisResponse>(`/v1/inventory/analytics/velocity?days_short=${days_short}&days_long=${days_long}`),
+  exportExcel: async (): Promise<Blob> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('bp_admin_token') : null;
+    const res = await fetch(`${API_BASE}/v1/inventory/export/excel`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Error descargando Excel');
+    return res.blob();
+  },
 };
+
+export interface VelocityProduct {
+  product_id: string;
+  sku: string;
+  name: string;
+  stock: number;
+  cost: number;
+  price: number;
+  v_short: number;
+  v_long: number;
+  velocidad_diaria: number;
+  punto_reorden: number;
+  stock_objetivo: number;
+  faltante: number;
+  dias_cobertura: number | null;
+  valor_ventas_long: number;
+  estado: 'AGOTADO' | 'COMPRAR' | 'SOBRESTOCK' | 'OK';
+  requiere_compra: boolean;
+  clase_abc: 'A' | 'B' | 'C';
+}
+
+export interface VelocityAnalysisResponse {
+  days_short: number;
+  days_long: number;
+  products: VelocityProduct[];
+  summary: {
+    total_productos: number;
+    agotados: number;
+    requieren_compra: number;
+    sobrestock: number;
+    valor_inventario: number;
+  };
+}
 
 // ─── Purchases (Compras a proveedores) ────────────────────────────
 
@@ -589,5 +679,52 @@ export const purchases = {
   delete: (id: string) => api(`/v1/purchases/${id}`, { method: 'DELETE' }),
   receive: (id: string) => api<PurchaseOut>(`/v1/purchases/${id}/receive`, { method: 'POST' }),
   stats: () => api<{ total_spend_month: number; total_count_month: number; top_suppliers: { supplier_name: string; total: number; count: number }[] }>('/v1/purchases/stats/summary'),
+  parseXml: async (file: File): Promise<ParsedInvoice> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('bp_admin_token') : null;
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_BASE}/v1/purchases/xml/parse`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Error al procesar XML' }));
+      throw new Error(err.detail || 'Error al procesar XML');
+    }
+    return res.json();
+  },
 };
+
+export interface ParsedItem {
+  sku_proveedor: string | null;
+  descripcion: string;
+  cantidad: number;
+  costo_base_unitario: number;
+  iva_pct: number;
+  descuento: number;
+  total_linea: number;
+  suggested_product_id: string | null;
+  suggested_product_sku: string | null;
+  suggested_product_name: string | null;
+  match_reason: string | null;
+  match_score: number | null;
+}
+
+export interface ParsedInvoice {
+  supplier: {
+    nit: string | null;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    matched_supplier_id: string | null;
+  };
+  folio: string | null;
+  fecha: string | null;
+  subtotal: number;
+  tax_amount: number;
+  total: number;
+  items: ParsedItem[];
+}
 

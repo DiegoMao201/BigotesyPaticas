@@ -96,3 +96,49 @@ class PurchaseItem(UUIDPKMixin, TimestampMixin, Base):
 
     # Relación inversa
     purchase: Mapped["Purchase"] = relationship("Purchase", back_populates="items")
+
+
+class Supplier(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
+    """Proveedor (maestro). Crear inline desde Compras o desde /suppliers."""
+    __tablename__ = "suppliers"
+    __table_args__ = (
+        UniqueConstraint("nit", name="uq_suppliers_nit"),
+        {"schema": "purchasing"},
+    )
+
+    nit: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contact_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    payment_terms_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+
+
+class SupplierSkuMap(UUIDPKMixin, TimestampMixin, Base):
+    """Memoria SKU proveedor → producto interno (para auto-match en parser XML)."""
+    __tablename__ = "supplier_sku_map"
+    __table_args__ = (
+        UniqueConstraint("supplier_id", "sku_proveedor", name="uq_supplier_sku"),
+        {"schema": "purchasing"},
+    )
+
+    supplier_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("purchasing.suppliers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sku_proveedor: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("catalog.products.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    factor_pack: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    last_unit_cost: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    last_tax_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

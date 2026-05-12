@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Boxes, AlertTriangle, Search, Package, History, ArrowUpDown,
   ArrowUp, ArrowDown, Edit2, Check, X, RefreshCw, TrendingUp,
-  DollarSign, ShoppingBag, Plus, Minus,
+  DollarSign, ShoppingBag, Plus, Minus, Sparkles, Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, inventory, analytics, type StockRow } from '@/lib/api';
@@ -45,7 +45,7 @@ function SortTh({
 
 export default function InventoryPage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<'stock' | 'movements' | 'alerts'>('stock');
+  const [tab, setTab] = useState<'stock' | 'movements' | 'alerts' | 'analytics'>('stock');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<{ only_in_stock?: boolean; only_low_stock?: boolean }>({});
@@ -174,11 +174,32 @@ export default function InventoryPage() {
       </div>
 
       <div className="flex gap-1 border-b border-border overflow-x-auto">
-        {[{ id: 'stock', label: 'Stock & Precios', icon: Package }, { id: 'alerts', label: `Alertas (${critical.length + low.length})`, icon: AlertTriangle }, { id: 'movements', label: 'Movimientos', icon: History }].map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id as 'stock' | 'movements' | 'alerts')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${tab === t.id ? 'border-brand-500 text-brand-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+        {[{ id: 'stock', label: 'Stock & Precios', icon: Package }, { id: 'alerts', label: `Alertas (${critical.length + low.length})`, icon: AlertTriangle }, { id: 'movements', label: 'Movimientos', icon: History }, { id: 'analytics', label: 'Análisis IA', icon: Sparkles }].map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id as 'stock' | 'movements' | 'alerts' | 'analytics')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${tab === t.id ? 'border-brand-500 text-brand-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             <t.icon className="w-4 h-4" /> {t.label}
           </button>
         ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          onClick={async () => {
+            try {
+              const blob = await inventory.exportExcel();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `inventario_${new Date().toISOString().slice(0, 10)}.xlsx`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.success('Excel descargado');
+            } catch (e) {
+              toast.error((e as Error).message);
+            }
+          }}
+        >
+          <Download className="w-4 h-4 mr-1" />Excel
+        </Button>
       </div>
 
       {tab === 'stock' && (
@@ -327,6 +348,8 @@ export default function InventoryPage() {
         </Card>
       )}
 
+      {tab === 'analytics' && <AnalyticsTab />}
+
       {adjustRow && (
         <Dialog open onClose={() => setAdjustRow(null)}>
           <div className="p-6 space-y-4 max-w-sm">
@@ -362,6 +385,142 @@ export default function InventoryPage() {
           </div>
         </Dialog>
       )}
+    </div>
+  );
+}
+
+function AnalyticsTab() {
+  const [daysShort, setDaysShort] = useState(30);
+  const [daysLong, setDaysLong] = useState(90);
+  const [filter, setFilter] = useState<'all' | 'comprar' | 'agotado' | 'sobrestock'>('comprar');
+  const [classFilter, setClassFilter] = useState<'all' | 'A' | 'B' | 'C'>('all');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['velocity-analysis', daysShort, daysLong],
+    queryFn: () => inventory.velocityAnalysis(daysShort, daysLong),
+    staleTime: 5 * 60_000,
+  });
+
+  if (isLoading) return <Card className="p-12 text-center text-muted-foreground">Calculando análisis IA…</Card>;
+  if (!data) return null;
+
+  const filtered = data.products.filter((p) => {
+    if (filter === 'comprar' && !p.requiere_compra) return false;
+    if (filter === 'agotado' && p.estado !== 'AGOTADO') return false;
+    if (filter === 'sobrestock' && p.estado !== 'SOBRESTOCK') return false;
+    if (classFilter !== 'all' && p.clase_abc !== classFilter) return false;
+    return true;
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Card className="p-3">
+          <p className="text-xs text-muted-foreground">Total productos</p>
+          <p className="text-2xl font-bold">{data.summary.total_productos}</p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-xs text-muted-foreground">💀 Agotados</p>
+          <p className="text-2xl font-bold text-red-600">{data.summary.agotados}</p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-xs text-muted-foreground">🛒 Requieren compra</p>
+          <p className="text-2xl font-bold text-orange-600">{data.summary.requieren_compra}</p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-xs text-muted-foreground">🧊 Sobre-stock</p>
+          <p className="text-2xl font-bold text-blue-600">{data.summary.sobrestock}</p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-xs text-muted-foreground">💰 Valor inventario</p>
+          <p className="text-xl font-bold">{formatCurrency(data.summary.valor_inventario)}</p>
+        </Card>
+      </div>
+
+      <Card className="p-4 flex flex-wrap items-center gap-3">
+        <div className="text-sm font-medium">Ventana:</div>
+        <select className="border rounded px-2 py-1 text-sm" value={daysShort} onChange={(e) => setDaysShort(Number(e.target.value))}>
+          <option value={7}>7d corto</option>
+          <option value={14}>14d corto</option>
+          <option value={30}>30d corto</option>
+        </select>
+        <select className="border rounded px-2 py-1 text-sm" value={daysLong} onChange={(e) => setDaysLong(Number(e.target.value))}>
+          <option value={30}>30d largo</option>
+          <option value={60}>60d largo</option>
+          <option value={90}>90d largo</option>
+          <option value={180}>180d largo</option>
+        </select>
+
+        <div className="ml-4 flex gap-1">
+          {(['comprar', 'agotado', 'sobrestock', 'all'] as const).map((f) => (
+            <Button key={f} size="sm" variant={filter === f ? 'default' : 'outline'} onClick={() => setFilter(f)}>
+              {f === 'comprar' ? '🛒 Comprar' : f === 'agotado' ? '💀 Agotados' : f === 'sobrestock' ? '🧊 Sobre-stock' : 'Todos'}
+            </Button>
+          ))}
+        </div>
+        <div className="flex gap-1">
+          {(['all', 'A', 'B', 'C'] as const).map((c) => (
+            <Button key={c} size="sm" variant={classFilter === c ? 'default' : 'outline'} onClick={() => setClassFilter(c)}>
+              {c === 'all' ? 'ABC' : c}
+            </Button>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <div className="overflow-auto max-h-[600px]">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/50 sticky top-0">
+              <tr>
+                <th className="text-left p-2">Producto</th>
+                <th className="text-center p-2">ABC</th>
+                <th className="text-right p-2">Stock</th>
+                <th className="text-right p-2">V/día</th>
+                <th className="text-right p-2">Días cob.</th>
+                <th className="text-right p-2">Reorden</th>
+                <th className="text-right p-2">Faltante</th>
+                <th className="text-center p-2">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((p) => {
+                const estadoCls = p.estado === 'AGOTADO' ? 'bg-red-100 text-red-800' :
+                                  p.estado === 'COMPRAR' ? 'bg-orange-100 text-orange-800' :
+                                  p.estado === 'SOBRESTOCK' ? 'bg-blue-100 text-blue-800' :
+                                  'bg-green-100 text-green-800';
+                const estadoLabel = p.estado === 'AGOTADO' ? '💀 Agotado' :
+                                    p.estado === 'COMPRAR' ? '🛒 Comprar' :
+                                    p.estado === 'SOBRESTOCK' ? '🧊 Sobre-stock' : '✅ OK';
+                const abcCls = p.clase_abc === 'A' ? 'bg-green-100 text-green-800' :
+                               p.clase_abc === 'B' ? 'bg-yellow-100 text-yellow-800' :
+                               'bg-gray-100 text-gray-800';
+                return (
+                  <tr key={p.product_id} className="border-t hover:bg-muted/20">
+                    <td className="p-2">
+                      <p className="font-medium">{p.name}</p>
+                      <p className="text-muted-foreground font-mono">{p.sku}</p>
+                    </td>
+                    <td className="p-2 text-center">
+                      <span className={`px-2 py-0.5 rounded ${abcCls}`}>{p.clase_abc}</span>
+                    </td>
+                    <td className="p-2 text-right font-bold">{p.stock}</td>
+                    <td className="p-2 text-right">{p.velocidad_diaria.toFixed(2)}</td>
+                    <td className="p-2 text-right">{p.dias_cobertura !== null ? p.dias_cobertura : '∞'}</td>
+                    <td className="p-2 text-right">{p.punto_reorden.toFixed(0)}</td>
+                    <td className="p-2 text-right font-bold text-orange-600">{p.faltante.toFixed(0)}</td>
+                    <td className="p-2 text-center">
+                      <span className={`px-2 py-0.5 rounded text-xs ${estadoCls}`}>{estadoLabel}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!filtered.length && (
+                <tr><td colSpan={8} className="text-center p-8 text-muted-foreground">Sin resultados con los filtros aplicados</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }

@@ -60,3 +60,7 @@ out/
 .venv-api/
 project-secrets/
 pnpm-lock.yaml
+
+# Local assets (no subir a github, migrar a DO Spaces)
+local-assets/
+

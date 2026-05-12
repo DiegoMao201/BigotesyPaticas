@@ -5,7 +5,7 @@ from app.models.common import Base  # noqa
 from app.models.crm import Customer  # noqa
 from app.models.inventory import Stock, StockLocation, StockMovement  # noqa
 from app.models.ops import AuditLog, LegacyIdMap  # noqa
-from app.models.purchasing import Purchase, PurchaseItem  # noqa
+from app.models.purchasing import Purchase, PurchaseItem, Supplier, SupplierSkuMap  # noqa
 from app.models.sales import Order, OrderItem, Payment  # noqa
 
 __all__ = [
@@ -16,5 +16,6 @@ __all__ = [
     "StockLocation", "Stock", "StockMovement",
     "Order", "OrderItem", "Payment",
     "Purchase", "PurchaseItem",
+    "Supplier", "SupplierSkuMap",
     "LegacyIdMap", "AuditLog",
 ]
