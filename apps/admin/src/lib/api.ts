@@ -127,6 +127,26 @@ export const products = {
   categories: () => api<{ id: string; name: string; slug: string }[]>('/v1/categories'),
 };
 
+export interface OrderItemOut {
+  id: string;
+  product_id: string;
+  sku_snapshot: string;
+  name_snapshot: string;
+  quantity: number;
+  unit_price: string;
+  unit_cost: string;
+  discount: string;
+  line_total: string;
+}
+
+export interface PaymentOut {
+  id: string;
+  method: string;
+  amount: string;
+  received_at: string;
+  reference: string | null;
+}
+
 export interface Order {
   id: string;
   order_number: string;
@@ -134,21 +154,33 @@ export interface Order {
   status: string;
   customer_id: string | null;
   subtotal: string;
+  discount_total: string;
+  tax_total: string;
+  shipping_total: string;
   grand_total: string;
   paid_amount: string;
   balance_due: string;
   payment_status: string;
+  payment_method: string | null;
   occurred_at: string;
   created_at: string;
+  notes: string | null;
+  items: OrderItemOut[];
+  payments: PaymentOut[];
 }
 
 export const sales = {
-  list: (params: { page?: number; page_size?: number; status?: string } = {}) => {
+  list: (params: { page?: number; page_size?: number; q?: string; status?: string; payment_status?: string; channel?: string; date_from?: string; date_to?: string } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
-    if (params.page_size) qs.set('limit', String(params.page_size));
+    if (params.page_size) qs.set('page_size', String(params.page_size));
+    if (params.q) qs.set('q', params.q);
     if (params.status) qs.set('status', params.status);
-    return api<{ items: Order[]; total: number }>(`/v1/sales/orders?${qs.toString()}`);
+    if (params.payment_status) qs.set('payment_status', params.payment_status);
+    if (params.channel) qs.set('channel', params.channel);
+    if (params.date_from) qs.set('date_from', params.date_from);
+    if (params.date_to) qs.set('date_to', params.date_to);
+    return api<{ items: Order[]; total: number; page: number; page_size: number }>(`/v1/sales/orders?${qs.toString()}`);
   },
   get: (id: string) => api<Order>(`/v1/sales/orders/${id}`),
   cancel: (id: string, reason?: string) =>

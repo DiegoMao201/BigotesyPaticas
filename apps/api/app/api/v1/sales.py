@@ -205,20 +205,64 @@ async def get_order(order_id: uuid.UUID, db: DBSession) -> OrderOut:
     return o
 
 
-@router.get("/orders", response_model=list[OrderOut])
+@router.get("/orders")
 async def list_orders(
     db: DBSession,
-    limit: int = Query(50, ge=1, le=500),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    q: str | None = None,
     status_filter: str | None = Query(None, alias="status"),
     channel: str | None = None,
+    payment_status: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
 ):
-    stmt = select(Order).order_by(desc(Order.occurred_at)).limit(limit)
+    """Lista órdenes con búsqueda por número o cliente, filtros y paginación."""
+    from sqlalchemy import or_, cast, String, Date as SADate
+    from datetime import date as dt_date
+
+    stmt = select(Order).order_by(desc(Order.occurred_at))
+    count_stmt = select(func.count()).select_from(Order)
+
     if status_filter:
         stmt = stmt.where(Order.status == status_filter)
+        count_stmt = count_stmt.where(Order.status == status_filter)
     if channel:
         stmt = stmt.where(Order.channel == channel)
-    rows = (await db.execute(stmt)).scalars().all()
-    return rows
+        count_stmt = count_stmt.where(Order.channel == channel)
+    if payment_status:
+        stmt = stmt.where(Order.payment_status == payment_status)
+        count_stmt = count_stmt.where(Order.payment_status == payment_status)
+    if q:
+        pattern = f"%{q}%"
+        cond = or_(
+            Order.order_number.ilike(pattern),
+            cast(Order.notes, String).ilike(pattern),
+        )
+        stmt = stmt.where(cond)
+        count_stmt = count_stmt.where(cond)
+    if date_from:
+        try:
+            d = dt_date.fromisoformat(date_from)
+            stmt = stmt.where(Order.occurred_at >= d)
+            count_stmt = count_stmt.where(Order.occurred_at >= d)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            d = dt_date.fromisoformat(date_to)
+            from datetime import timedelta
+            d_end = d + timedelta(days=1)
+            stmt = stmt.where(Order.occurred_at < d_end)
+            count_stmt = count_stmt.where(Order.occurred_at < d_end)
+        except ValueError:
+            pass
+
+    total = (await db.execute(count_stmt)).scalar_one()
+    offset = (page - 1) * page_size
+    rows = (await db.execute(stmt.offset(offset).limit(page_size))).scalars().all()
+
+    return {"items": rows, "total": total, "page": page, "page_size": page_size}
 
 
 @router.post(

@@ -2,16 +2,19 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, XCircle, ShoppingCart, Filter } from 'lucide-react';
+import {
+  FileText, XCircle, ShoppingCart, Search, RefreshCw, Eye,
+  TrendingUp, DollarSign, Hash, MessageCircle,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { sales, API_BASE } from '@/lib/api';
+import { sales, API_BASE, type Order } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Pagination } from '@/components/ui/pagination';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 const STATUS_BADGE: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
@@ -20,179 +23,306 @@ const STATUS_BADGE: Record<string, 'success' | 'warning' | 'danger' | 'neutral'>
   Pendiente: 'danger',
 };
 
-const ORDER_STATUS_BADGE: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
-  completed: 'success',
-  pending: 'warning',
-  cancelled: 'danger',
-  processing: 'warning',
-};
+function buildWhatsAppMsg(order: Order): string {
+  const items = order.items.map((i) =>
+    `  • ${i.name_snapshot} ×${i.quantity} → $${Number(i.line_total).toLocaleString('es-CO')}`
+  ).join('\n');
+  return encodeURIComponent(
+    `🐾 *¡Gracias por tu compra en Bigotes y Paticas!* 🐾\n\n` +
+    `📋 *Orden:* ${order.order_number}\n` +
+    `📅 *Fecha:* ${new Date(order.occurred_at).toLocaleDateString('es-CO', { dateStyle: 'medium' })}\n\n` +
+    `🛍️ *Productos:*\n${items}\n\n` +
+    `💰 *Total:* *$${Number(order.grand_total).toLocaleString('es-CO')}*\n\n` +
+    `¡Gracias por confiar en nosotros! 🐶🐱🐾`
+  );
+}
 
-export default function SalesPage() {
-  const qc = useQueryClient();
+function OrderDetailModal({ order, onClose, onCancelDone }: { order: Order; onClose: () => void; onCancelDone: () => void }) {
   const token = useAuth((s) => s.token);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const qc = useQueryClient();
   const [cancelReason, setCancelReason] = useState('');
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['orders', statusFilter],
-    queryFn: () => sales.list({ page_size: 100, status: statusFilter || undefined }),
-  });
+  const [showCancel, setShowCancel] = useState(false);
 
   const cancelMut = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) => sales.cancel(id, reason),
-    onSuccess: (_, { id }) => {
-      toast.success('Venta cancelada');
+    mutationFn: () => sales.cancel(order.id, cancelReason),
+    onSuccess: () => {
+      toast.success('Venta anulada — stock revertido');
       qc.invalidateQueries({ queryKey: ['orders'] });
-      setCancelTarget(null);
-      setCancelReason('');
+      qc.invalidateQueries({ queryKey: ['pos-history'] });
+      qc.invalidateQueries({ queryKey: ['inventory-stock'] });
+      onCancelDone();
+      onClose();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  function downloadInvoice(orderId: string) {
-    const url = `${API_BASE}/v1/sales/orders/${orderId}/invoice`;
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank';
-    // Pass auth header via direct fetch
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => {
-        if (!r.ok) throw new Error('Error al obtener factura');
-        return r.blob();
-      })
+  function downloadInvoice() {
+    fetch(`${API_BASE}/v1/sales/orders/${order.id}/invoice`, {
+      headers: { Authorization: `Bearer ${token ?? ''}` },
+    })
+      .then((r) => { if (!r.ok) throw new Error('Error'); return r.blob(); })
       .then((blob) => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `factura-${orderId}.html`;
+        a.download = `comprobante-${order.order_number}.html`;
         a.click();
+        toast.success('Comprobante descargado');
       })
-      .catch((e) => toast.error(e.message));
+      .catch(() => toast.error('No se pudo generar el comprobante'));
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-4xl font-display font-bold tracking-tight flex items-center gap-2">
-            <ShoppingCart className="h-8 w-8 text-brand-600" /> Ventas
-          </h1>
-          <p className="text-muted-foreground mt-1">{data?.items?.length ?? '…'} pedidos · todos los canales</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-40">
-            <option value="">Todos los estados</option>
-            <option value="completed">Completado</option>
-            <option value="pending">Pendiente</option>
-            <option value="cancelled">Cancelado</option>
-          </Select>
-        </div>
-      </div>
+  const waText = buildWhatsAppMsg(order);
 
-      {isLoading && <div className="text-center py-12 text-muted-foreground">Cargando…</div>}
-
-      {data && (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="text-left p-4 font-medium">Pedido</th>
-                  <th className="text-left p-4 font-medium">Canal</th>
-                  <th className="text-left p-4 font-medium">Fecha</th>
-                  <th className="text-right p-4 font-medium">Total</th>
-                  <th className="text-right p-4 font-medium">Saldo</th>
-                  <th className="text-center p-4 font-medium">Pago</th>
-                  <th className="text-center p-4 font-medium">Estado</th>
-                  <th className="text-center p-4 font-medium">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((o) => (
-                  <tr key={o.id} className="border-t border-border hover:bg-accent/30">
-                    <td className="p-4 font-mono text-xs font-semibold">{o.order_number}</td>
-                    <td className="p-4 text-xs">{o.channel}</td>
-                    <td className="p-4 text-xs">
-                      {formatDate(o.occurred_at, { dateStyle: 'short', timeStyle: 'short' })}
-                    </td>
-                    <td className="p-4 text-right font-semibold">{formatCurrency(o.grand_total)}</td>
-                    <td className="p-4 text-right text-muted-foreground">{formatCurrency(o.balance_due)}</td>
-                    <td className="p-4 text-center">
-                      <Badge variant={STATUS_BADGE[o.payment_status] ?? 'neutral'}>{o.payment_status}</Badge>
-                    </td>
-                    <td className="p-4 text-center">
-                      <Badge variant={ORDER_STATUS_BADGE[o.status] ?? 'neutral'}>{o.status}</Badge>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          title="Descargar comprobante"
-                          onClick={() => downloadInvoice(o.id)}
-                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                        >
-                          <FileText className="w-4 h-4" />
-                        </button>
-                        {o.status !== 'cancelled' && (
-                          <button
-                            title="Cancelar venta"
-                            onClick={() => setCancelTarget(o.id)}
-                            className="p-1.5 rounded hover:bg-rose-50 text-muted-foreground hover:text-rose-600"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {data.items.length === 0 && (
-            <div className="p-12 text-center text-muted-foreground text-sm">
-              No hay pedidos {statusFilter ? `con estado "${statusFilter}"` : 'registrados'}.
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* Cancel dialog */}
-      <Dialog
-        open={!!cancelTarget}
-        onClose={() => { setCancelTarget(null); setCancelReason(''); }}
-        title="Cancelar venta"
-        size="sm"
-      >
+  if (showCancel) {
+    return (
+      <Dialog open onClose={() => setShowCancel(false)} title="Anular venta" size="sm">
         <DialogBody className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Esta acción cancelará la orden y revertirá el stock. No se puede deshacer.
+            Se anulará la orden <strong>{order.order_number}</strong> y el stock será revertido automáticamente.
+            Esta acción no se puede deshacer.
           </p>
           <div>
-            <label className="text-xs font-medium mb-1 block">Motivo (opcional)</label>
-            <Input
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Ej: solicitud del cliente"
-            />
+            <label className="text-xs font-medium text-muted-foreground uppercase mb-1 block">Motivo (opcional)</label>
+            <Input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Ej: error en la venta, devolución del cliente…" />
           </div>
         </DialogBody>
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => { setCancelTarget(null); setCancelReason(''); }}
-          >
-            Volver
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={cancelMut.isPending}
-            onClick={() => cancelTarget && cancelMut.mutate({ id: cancelTarget, reason: cancelReason })}
-          >
-            {cancelMut.isPending ? 'Cancelando…' : 'Confirmar cancelación'}
+          <Button variant="outline" onClick={() => setShowCancel(false)}>Volver</Button>
+          <Button variant="destructive" disabled={cancelMut.isPending} onClick={() => cancelMut.mutate()}>
+            {cancelMut.isPending ? 'Anulando…' : 'Confirmar anulación'}
           </Button>
         </DialogFooter>
       </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open onClose={onClose} title={order.order_number} size="md">
+      <DialogBody className="space-y-4">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <div><span className="text-muted-foreground">Canal:</span> <span className="font-medium">{order.channel}</span></div>
+          <div><span className="text-muted-foreground">Fecha:</span> <span className="font-medium">{formatDate(order.occurred_at)}</span></div>
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground">Pago:</span>
+            <Badge variant={STATUS_BADGE[order.payment_status] ?? 'neutral'} className="ml-1">{order.payment_status}</Badge>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground">Estado:</span>
+            <Badge variant={order.status === 'cancelled' ? 'danger' : 'success'} className="ml-1">{order.status}</Badge>
+          </div>
+          {order.notes && <div className="col-span-2 text-muted-foreground">📝 {order.notes}</div>}
+        </div>
+
+        <table className="w-full text-sm rounded-xl border border-border overflow-hidden">
+          <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+            <tr>
+              <th className="text-left px-3 py-2">Producto</th>
+              <th className="text-right px-3 py-2">Cant.</th>
+              <th className="text-right px-3 py-2">Precio</th>
+              <th className="text-right px-3 py-2">Dto.</th>
+              <th className="text-right px-3 py-2">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {order.items.map((it) => (
+              <tr key={it.id} className="border-t border-border">
+                <td className="px-3 py-2">
+                  <div className="font-medium">{it.name_snapshot}</div>
+                  <div className="text-xs text-muted-foreground font-mono">{it.sku_snapshot}</div>
+                </td>
+                <td className="px-3 py-2 text-right">{it.quantity}</td>
+                <td className="px-3 py-2 text-right">{formatCurrency(Number(it.unit_price))}</td>
+                <td className="px-3 py-2 text-right text-rose-500">{Number(it.discount) > 0 ? `-${formatCurrency(Number(it.discount))}` : '—'}</td>
+                <td className="px-3 py-2 text-right font-semibold">{formatCurrency(Number(it.line_total))}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="bg-muted/30 border-t-2 border-border text-sm font-bold">
+            {Number(order.discount_total) > 0 && (
+              <tr><td colSpan={4} className="px-3 py-1 text-right text-rose-500 font-normal text-xs">Descuentos</td><td className="px-3 py-1 text-right text-rose-500">-{formatCurrency(Number(order.discount_total))}</td></tr>
+            )}
+            <tr><td colSpan={4} className="px-3 py-2 text-right">Total</td><td className="px-3 py-2 text-right text-emerald-700 text-base">{formatCurrency(Number(order.grand_total))}</td></tr>
+          </tfoot>
+        </table>
+
+        {order.payments.length > 0 && (
+          <div className="text-sm">
+            <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Pagos recibidos</p>
+            {order.payments.map((p) => (
+              <div key={p.id} className="flex justify-between py-0.5">
+                <span className="text-muted-foreground">{p.method}</span>
+                <span className="font-semibold text-emerald-600">{formatCurrency(Number(p.amount))}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-2 flex-wrap pt-1">
+          <Button variant="outline" size="sm" onClick={downloadInvoice}>
+            <FileText className="w-4 h-4 mr-1" /> Comprobante PDF
+          </Button>
+          <a href={`https://wa.me/?text=${waText}`} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50">
+              <MessageCircle className="w-4 h-4 mr-1" /> WhatsApp
+            </Button>
+          </a>
+        </div>
+      </DialogBody>
+      <DialogFooter>
+        <div className="flex justify-between w-full">
+          <div>
+            {order.status !== 'cancelled' && (
+              <Button variant="outline" size="sm" onClick={() => setShowCancel(true)} className="text-rose-600 border-rose-200 hover:bg-rose-50">
+                <XCircle className="w-4 h-4 mr-1" /> Anular venta
+              </Button>
+            )}
+          </div>
+          <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        </div>
+      </DialogFooter>
+    </Dialog>
+  );
+}
+
+export default function SalesPage() {
+  const qc = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('');
+  const [detailOrder, setDetailOrder] = useState<Order | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['orders', page, search, statusFilter, paymentFilter],
+    queryFn: () => sales.list({ page, page_size: 30, q: search || undefined, status: statusFilter || undefined, payment_status: paymentFilter || undefined }),
+    staleTime: 15_000,
+  });
+
+  const totalRevenue = data?.items.filter((o) => o.status !== 'cancelled').reduce((s, o) => s + Number(o.grand_total), 0) ?? 0;
+  const avgTicket = data && data.items.filter((o) => o.status !== 'cancelled').length > 0
+    ? totalRevenue / data.items.filter((o) => o.status !== 'cancelled').length : 0;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold font-display flex items-center gap-2">
+            <ShoppingCart className="w-6 h-6 text-brand-600" /> Ventas
+          </h1>
+          <p className="text-sm text-muted-foreground">Historial completo · todos los canales · clic en fila para ver detalle</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ['orders'] })}>
+          <RefreshCw className="w-4 h-4 mr-1" /> Actualizar
+        </Button>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-1"><span className="text-xs text-muted-foreground uppercase">Total (página)</span><DollarSign className="w-4 h-4 text-emerald-600" /></div>
+          <div className="text-2xl font-bold font-display text-emerald-600">{formatCurrency(totalRevenue)}</div>
+          <div className="text-xs text-muted-foreground mt-1">Solo ventas activas</div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-1"><span className="text-xs text-muted-foreground uppercase">Ticket promedio</span><TrendingUp className="w-4 h-4 text-brand-600" /></div>
+          <div className="text-2xl font-bold font-display">{formatCurrency(avgTicket)}</div>
+          <div className="text-xs text-muted-foreground mt-1">Esta página</div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-1"><span className="text-xs text-muted-foreground uppercase">Órdenes</span><Hash className="w-4 h-4 text-muted-foreground" /></div>
+          <div className="text-2xl font-bold font-display">{data?.total ?? '…'}</div>
+          <div className="text-xs text-muted-foreground mt-1">Con filtros actuales</div>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <Card className="p-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+            <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Buscar por # orden…" className="pl-9" />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {['', 'confirmed', 'completed', 'cancelled'].map((s) => (
+              <Button key={s} variant={statusFilter === s ? 'default' : 'outline'} size="sm" onClick={() => { setStatusFilter(s); setPage(1); }}>
+                {s === '' ? 'Todos' : s === 'confirmed' ? 'Confirmada' : s === 'completed' ? 'Completada' : 'Anulada'}
+              </Button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            {['', 'Pagado', 'Pendiente', 'Abono parcial'].map((s) => (
+              <Button key={s} variant={paymentFilter === s ? 'default' : 'outline'} size="sm" onClick={() => { setPaymentFilter(s); setPage(1); }}>
+                {s === '' ? 'Pago' : s}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {/* Table */}
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="text-left px-4 py-3">Orden</th>
+                <th className="text-left px-4 py-3 hidden sm:table-cell">Canal</th>
+                <th className="text-left px-4 py-3">Fecha</th>
+                <th className="text-right px-4 py-3">Total</th>
+                <th className="text-right px-4 py-3 hidden md:table-cell">Saldo</th>
+                <th className="text-center px-4 py-3">Pago</th>
+                <th className="text-center px-4 py-3">Estado</th>
+                <th className="text-center px-4 py-3">Ver</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? Array.from({ length: 8 }).map((_, i) => (
+                <tr key={i} className="border-t border-border"><td colSpan={8} className="px-4 py-3"><div className="h-4 bg-muted/40 rounded animate-pulse" /></td></tr>
+              )) : data?.items.length === 0 ? (
+                <tr><td colSpan={8} className="text-center py-16 text-muted-foreground">
+                  <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                  <p>No hay ventas con los filtros seleccionados</p>
+                </td></tr>
+              ) : data?.items.map((o) => (
+                <tr key={o.id} className="border-t border-border hover:bg-muted/20 cursor-pointer" onClick={() => setDetailOrder(o)}>
+                  <td className="px-4 py-3 font-mono text-xs font-bold text-brand-700">{o.order_number}</td>
+                  <td className="px-4 py-3 text-xs hidden sm:table-cell">{o.channel}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(o.occurred_at)}</td>
+                  <td className="px-4 py-3 text-right font-semibold">{formatCurrency(Number(o.grand_total))}</td>
+                  <td className="px-4 py-3 text-right text-muted-foreground hidden md:table-cell">
+                    {Number(o.balance_due) > 0 ? <span className="text-rose-500 font-medium">{formatCurrency(Number(o.balance_due))}</span> : <span className="text-emerald-500">✓</span>}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Badge variant={STATUS_BADGE[o.payment_status] ?? 'neutral'}>{o.payment_status}</Badge>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Badge variant={o.status === 'cancelled' ? 'danger' : 'success'}>
+                      {o.status === 'cancelled' ? 'Anulada' : o.status === 'confirmed' ? 'Activa' : o.status}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button className="p-1.5 rounded text-muted-foreground hover:text-brand-600 hover:bg-brand-50 transition" onClick={(e) => { e.stopPropagation(); setDetailOrder(o); }}>
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-4 border-t border-border">
+          {data && <Pagination page={page} pageSize={data.page_size} total={data.total} onPageChange={setPage} />}
+        </div>
+      </Card>
+
+      {detailOrder && (
+        <OrderDetailModal
+          order={detailOrder}
+          onClose={() => setDetailOrder(null)}
+          onCancelDone={() => setDetailOrder(null)}
+        />
+      )}
     </div>
   );
 }
+
