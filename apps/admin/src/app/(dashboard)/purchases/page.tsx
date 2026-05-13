@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Upload, FileText, Plus, Trash2, Search, Save, Eye, Truck, Sparkles,
-  AlertTriangle, CheckCircle2, Package, X, FileUp, Edit2,
+  AlertTriangle, CheckCircle2, Package, X, FileUp, Edit2, RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  purchases, suppliers as suppliersApi, products as productsApi,
+  purchases, suppliers as suppliersApi, products as productsApi, adminEtl,
   type ParsedInvoice, type ParsedItem, type Supplier, type SupplierIn,
   type PurchaseSummary,
 } from '@/lib/api';
@@ -33,14 +33,36 @@ const DEFAULT_MARGIN = 20;
 
 export default function PurchasesPage() {
   const [tab, setTab] = useState<Tab>('historial');
+  const qc = useQueryClient();
+  const bootstrapMut = useMutation({
+    mutationFn: () => adminEtl.bootstrapSuppliers(),
+    onSuccess: (res) => {
+      toast.success(`Proveedores creados: ${res.created} nuevos, ${res.skipped} ya existían`);
+      qc.invalidateQueries({ queryKey: ['suppliers'] });
+    },
+    onError: (e: Error) => toast.error(`Error: ${e.message}`),
+  });
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <ShoppingCart className="h-8 w-8 text-orange-500" />
-          Compras a Proveedores
-        </h1>
-        <p className="text-gray-600 mt-1">Carga facturas DIAN, asocia productos y genera órdenes</p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <ShoppingCart className="h-8 w-8 text-orange-500" />
+            Compras a Proveedores
+          </h1>
+          <p className="text-gray-600 mt-1">Carga facturas DIAN, asocia productos y genera órdenes</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => bootstrapMut.mutate()}
+          disabled={bootstrapMut.isPending}
+          className="text-orange-600 border-orange-300 hover:bg-orange-50"
+        >
+          <RefreshCw className="w-4 h-4 mr-1" />
+          {bootstrapMut.isPending ? 'Importando…' : 'Importar proveedores legados'}
+        </Button>
       </div>
 
       <div className="flex gap-2 border-b">
@@ -229,8 +251,6 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
   const [newSupplier, setNewSupplier] = useState<SupplierIn>({ nit: '', name: '' });
   const [folio, setFolio] = useState('');
   const [transportCost, setTransportCost] = useState(0);
-  const fileRef = useRef<HTMLInputElement>(null);
-
   const parseMut = useMutation({
     mutationFn: (file: File) => purchases.parseXml(file),
     onSuccess: (data) => {
@@ -334,20 +354,30 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
           <FileUp className="h-16 w-16 mx-auto text-orange-500 mb-4" />
           <h3 className="text-xl font-bold mb-2">Sube el XML de la factura DIAN</h3>
           <p className="text-gray-600 mb-6">Soporta formato Invoice o AttachedDocument (UBL)</p>
+          <label
+            htmlFor="xml-upload-input"
+            className={`inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold cursor-pointer transition
+              ${parseMut.isPending
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-orange-500 hover:bg-orange-600 text-white'}`}
+          >
+            <Upload className="h-4 w-4" />
+            {parseMut.isPending ? 'Procesando XML...' : 'Seleccionar archivo XML'}
+          </label>
           <input
-            ref={fileRef}
+            id="xml-upload-input"
             type="file"
-            accept=".xml"
-            className="hidden"
+            accept=".xml,text/xml,application/xml"
+            className="sr-only"
+            disabled={parseMut.isPending}
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) parseMut.mutate(file);
+              if (file) {
+                parseMut.mutate(file);
+                e.target.value = '';
+              }
             }}
           />
-          <Button onClick={() => fileRef.current?.click()} disabled={parseMut.isPending} className="bg-orange-500 hover:bg-orange-600">
-            <Upload className="h-4 w-4 mr-2" />
-            {parseMut.isPending ? 'Procesando XML...' : 'Seleccionar archivo XML'}
-          </Button>
         </Card>
       )}
 

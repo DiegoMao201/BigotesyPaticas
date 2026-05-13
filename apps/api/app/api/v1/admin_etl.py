@@ -768,9 +768,216 @@ async def etl_status(_current_user=Depends(require_superadmin)):
             "gastos": "SELECT COUNT(*) FROM ops.legacy_id_map WHERE entity='gasto'",
             "cierres_caja": "SELECT COUNT(*) FROM ops.legacy_id_map WHERE entity='cierre_caja'",
             "maestro_proveedores": "SELECT COUNT(*) FROM ops.legacy_id_map WHERE entity='proveedor_sku'",
+            "purchasing_suppliers": "SELECT COUNT(*) FROM purchasing.suppliers",
         }
         for key, sql in queries.items():
             result = await conn.execute(text(sql))
             counts[key] = result.scalar()
     await engine.dispose()
     return counts
+
+
+# ── Fix sales dates — re-reads Ventas tab and updates occurred_at ─────────
+
+class FixDatesRequest(BaseModel):
+    sheet_id: str = DEFAULT_SHEET_ID
+    dry_run: bool = False
+
+
+class FixDatesResponse(BaseModel):
+    total_orders: int
+    updated: int
+    skipped_no_date: int
+    skipped_already_ok: int
+    errors: list[str]
+    sample_fixed: list[dict]
+
+
+def _fix_dates_sync(sheet_id: str, creds_json_str: str, dry_run: bool) -> dict[str, Any]:
+    import base64 as _b64
+    import gspread
+    import psycopg
+    from google.oauth2.service_account import Credentials
+
+    sa_b64 = os.environ.get("GOOGLE_SA_B64", "").strip()
+    if sa_b64:
+        sa_info = json.loads(_b64.b64decode(sa_b64).decode("utf-8"))
+    else:
+        raw = creds_json_str.strip()
+        if not raw.startswith("{"):
+            try:
+                raw = _b64.b64decode(raw).decode("utf-8")
+            except Exception:
+                pass
+        sa_info = json.loads(raw)
+        pk = sa_info.get("private_key", "")
+        if pk and "\n" not in pk and "\\n" in pk:
+            sa_info["private_key"] = pk.replace("\\n", "\n")
+
+    scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    gc_creds = Credentials.from_service_account_info(sa_info, scopes=scopes)
+    gc = gspread.authorize(gc_creds)
+    sh = gc.open_by_key(sheet_id)
+
+    try:
+        ws = sh.worksheet("Ventas")
+        records = ws.get_all_records(empty2zero=False, head=1, default_blank="")
+        vta_rows = [r for r in records if any(str(v).strip() for v in list(r.values())[:4])]
+    except Exception as exc:
+        return {"total_orders": 0, "updated": 0, "skipped_no_date": 0, "skipped_already_ok": 0, "errors": [str(exc)], "sample_fixed": []}
+
+    raw_url = os.environ.get("DATABASE_URL_SYNC", "")
+    conn_str = raw_url.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+asyncpg://", "postgresql://")
+
+    updated = 0
+    skipped_no_date = 0
+    skipped_ok = 0
+    errors: list[str] = []
+    sample: list[dict] = []
+
+    with psycopg.connect(conn_str) as conn:
+        with conn.cursor() as cur:
+            for r in vta_rows:
+                id_venta = str(r.get("ID_Venta") or "").strip()
+                if not id_venta:
+                    continue
+                fecha = _parse_dt(r.get("Fecha"))
+                if not fecha:
+                    skipped_no_date += 1
+                    continue
+
+                order_num = f"LEG-{id_venta}"
+                cur.execute("SELECT id, occurred_at FROM sales.orders WHERE order_number = %s", (order_num,))
+                row = cur.fetchone()
+                if not row:
+                    continue
+                order_id, current_dt = row
+                # Only update if currently on 2026-05-10 (migration default) or significantly wrong
+                if current_dt and abs((current_dt.replace(tzinfo=UTC) - fecha).days) < 1:
+                    skipped_ok += 1
+                    continue
+
+                if len(sample) < 10:
+                    sample.append({"order_number": order_num, "from": str(current_dt)[:10], "to": str(fecha)[:10]})
+
+                if not dry_run:
+                    try:
+                        cur.execute(
+                            "UPDATE sales.orders SET occurred_at = %s, created_at = %s WHERE id = %s",
+                            (fecha, fecha, str(order_id)),
+                        )
+                        updated += 1
+                    except Exception as exc:
+                        errors.append(f"{order_num}: {exc}")
+            if not dry_run:
+                conn.commit()
+
+    return {
+        "total_orders": len(vta_rows),
+        "updated": updated,
+        "skipped_no_date": skipped_no_date,
+        "skipped_already_ok": skipped_ok,
+        "errors": errors[:20],
+        "sample_fixed": sample,
+    }
+
+
+@router.post(
+    "/fix-sales-dates",
+    response_model=FixDatesResponse,
+    summary="Corregir fechas de ventas legadas desde Google Sheets",
+)
+async def fix_sales_dates(
+    body: FixDatesRequest,
+    _current_user=Depends(require_superadmin),
+):
+    creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    if not creds_json:
+        raise HTTPException(503, "GOOGLE_SERVICE_ACCOUNT_JSON no configurada")
+    try:
+        result = await asyncio.to_thread(_fix_dates_sync, body.sheet_id, creds_json, body.dry_run)
+    except Exception as exc:
+        raise HTTPException(500, f"Error: {exc}")
+    return FixDatesResponse(**result)
+
+
+# ── Bootstrap suppliers — crea purchasing.suppliers desde legado ──────────
+
+class BootstrapSuppliersResponse(BaseModel):
+    total_legacy: int
+    created: int
+    skipped: int
+    errors: list[str]
+
+
+def _bootstrap_suppliers_sync() -> dict[str, Any]:
+    import psycopg
+
+    raw_url = os.environ.get("DATABASE_URL_SYNC", "")
+    conn_str = raw_url.replace("postgresql+psycopg://", "postgresql://").replace("postgresql+asyncpg://", "postgresql://")
+
+    created = 0
+    skipped = 0
+    total_legacy = 0
+    errors: list[str] = []
+
+    with psycopg.connect(conn_str) as conn:
+        with conn.cursor() as cur:
+            # Recopilar nombres únicos de proveedores del legado
+            cur.execute(
+                "SELECT extra->>'nombre_proveedor', extra->>'id_proveedor' FROM ops.legacy_id_map WHERE entity='proveedor_sku'"
+            )
+            legacy_rows = cur.fetchall()
+            total_legacy = len(legacy_rows)
+
+            seen: set[str] = set()
+            for (nombre, id_prov) in legacy_rows:
+                name = (nombre or id_prov or "").strip()
+                if not name or name.upper() in ("N/A", "-", ""):
+                    continue
+                name_key = name.lower()
+                if name_key in seen:
+                    continue
+                seen.add(name_key)
+
+                cur.execute("SELECT id FROM purchasing.suppliers WHERE LOWER(name) = %s", (name_key,))
+                if cur.fetchone():
+                    skipped += 1
+                    continue
+
+                # NIT: usar id_proveedor si parece un número, si no generar placeholder
+                nit = (id_prov or "").strip()
+                if not nit or not any(c.isdigit() for c in nit):
+                    # Generar NIT placeholder único
+                    nit = f"LEGADO-{len(seen):04d}"
+
+                try:
+                    cur.execute("SAVEPOINT sp_sup")
+                    cur.execute(
+                        """INSERT INTO purchasing.suppliers
+                           (id, nit, name, is_active, payment_terms_days, created_at, updated_at)
+                           VALUES (%s, %s, %s, true, 0, %s, %s)""",
+                        (str(uuid.uuid4()), nit, name, _now(), _now()),
+                    )
+                    cur.execute("RELEASE SAVEPOINT sp_sup")
+                    created += 1
+                except Exception as exc:
+                    cur.execute("ROLLBACK TO SAVEPOINT sp_sup")
+                    errors.append(f"{name}: {exc}")
+
+            conn.commit()
+
+    return {"total_legacy": total_legacy, "created": created, "skipped": skipped, "errors": errors[:20]}
+
+
+@router.post(
+    "/bootstrap-suppliers",
+    response_model=BootstrapSuppliersResponse,
+    summary="Crear proveedores en purchasing.suppliers desde datos legados",
+)
+async def bootstrap_suppliers(_current_user=Depends(require_superadmin)):
+    try:
+        result = await asyncio.to_thread(_bootstrap_suppliers_sync)
+    except Exception as exc:
+        raise HTTPException(500, f"Error: {exc}")
+    return BootstrapSuppliersResponse(**result)

@@ -3,9 +3,12 @@
 import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
+} from 'recharts';
+import {
   Boxes, AlertTriangle, Search, Package, History, ArrowUpDown,
   ArrowUp, ArrowDown, Edit2, Check, X, RefreshCw, TrendingUp,
-  DollarSign, ShoppingBag, Plus, Minus, Sparkles, Download,
+  DollarSign, ShoppingBag, Plus, Minus, Sparkles, Download, ShoppingCart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, inventory, analytics, type StockRow } from '@/lib/api';
@@ -394,6 +397,8 @@ function AnalyticsTab() {
   const [daysLong, setDaysLong] = useState(90);
   const [filter, setFilter] = useState<'all' | 'comprar' | 'agotado' | 'sobrestock'>('comprar');
   const [classFilter, setClassFilter] = useState<'all' | 'A' | 'B' | 'C'>('all');
+  const [planDays, setPlanDays] = useState(15);
+  const [subTab, setSubTab] = useState<'tabla' | 'velocidad' | 'plan'>('tabla');
 
   const { data, isLoading } = useQuery({
     queryKey: ['velocity-analysis', daysShort, daysLong],
@@ -412,31 +417,55 @@ function AnalyticsTab() {
     return true;
   });
 
+  // Products that need purchasing for the plan
+  const purchasePlan = data.products
+    .filter((p) => p.requiere_compra || p.estado === 'AGOTADO')
+    .map((p) => ({
+      ...p,
+      qty_sugerida: Math.max(0, Math.ceil(p.velocidad_diaria * planDays - p.stock)),
+      costo_estimado: Math.max(0, Math.ceil(p.velocidad_diaria * planDays - p.stock)) * ((p as any).costo_unitario ?? 0),
+    }))
+    .filter((p) => p.qty_sugerida > 0)
+    .sort((a, b) => (b.clase_abc === 'A' ? 1 : 0) - (a.clase_abc === 'A' ? 1 : 0) || b.qty_sugerida - a.qty_sugerida);
+
+  const topVelocity = [...data.products]
+    .sort((a, b) => b.velocidad_diaria - a.velocidad_diaria)
+    .slice(0, 20);
+
+  const totalPlanCost = purchasePlan.reduce((s, p) => s + (p.costo_estimado || 0), 0);
+  const totalPlanUnits = purchasePlan.reduce((s, p) => s + p.qty_sugerida, 0);
+
+  const ESTADO_COLOR: Record<string, string> = {
+    AGOTADO: '#ef4444', COMPRAR: '#f97316', SOBRESTOCK: '#3b82f6', OK: '#10b981',
+  };
+
   return (
     <div className="space-y-4">
+      {/* Summary KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card className="p-3">
           <p className="text-xs text-muted-foreground">Total productos</p>
           <p className="text-2xl font-bold">{data.summary.total_productos}</p>
         </Card>
-        <Card className="p-3">
-          <p className="text-xs text-muted-foreground">💀 Agotados</p>
+        <Card className="p-3 border-red-200">
+          <p className="text-xs text-red-600">💀 Agotados</p>
           <p className="text-2xl font-bold text-red-600">{data.summary.agotados}</p>
         </Card>
-        <Card className="p-3">
-          <p className="text-xs text-muted-foreground">🛒 Requieren compra</p>
+        <Card className="p-3 border-orange-200">
+          <p className="text-xs text-orange-600">🛒 Requieren compra</p>
           <p className="text-2xl font-bold text-orange-600">{data.summary.requieren_compra}</p>
         </Card>
-        <Card className="p-3">
-          <p className="text-xs text-muted-foreground">🧊 Sobre-stock</p>
+        <Card className="p-3 border-blue-200">
+          <p className="text-xs text-blue-600">🧊 Sobre-stock</p>
           <p className="text-2xl font-bold text-blue-600">{data.summary.sobrestock}</p>
         </Card>
-        <Card className="p-3">
-          <p className="text-xs text-muted-foreground">💰 Valor inventario</p>
-          <p className="text-xl font-bold">{formatCurrency(data.summary.valor_inventario)}</p>
+        <Card className="p-3 border-emerald-200">
+          <p className="text-xs text-emerald-600">💰 Valor inventario</p>
+          <p className="text-xl font-bold text-emerald-700">{formatCurrency(data.summary.valor_inventario)}</p>
         </Card>
       </div>
 
+      {/* Controls */}
       <Card className="p-4 flex flex-wrap items-center gap-3">
         <div className="text-sm font-medium">Ventana:</div>
         <select className="border rounded px-2 py-1 text-sm" value={daysShort} onChange={(e) => setDaysShort(Number(e.target.value))}>
@@ -450,7 +479,6 @@ function AnalyticsTab() {
           <option value={90}>90d largo</option>
           <option value={180}>180d largo</option>
         </select>
-
         <div className="ml-4 flex gap-1">
           {(['comprar', 'agotado', 'sobrestock', 'all'] as const).map((f) => (
             <Button key={f} size="sm" variant={filter === f ? 'default' : 'outline'} onClick={() => setFilter(f)}>
@@ -467,60 +495,196 @@ function AnalyticsTab() {
         </div>
       </Card>
 
-      <Card className="overflow-hidden">
-        <div className="overflow-auto max-h-[600px]">
-          <table className="w-full text-xs">
-            <thead className="bg-muted/50 sticky top-0">
-              <tr>
-                <th className="text-left p-2">Producto</th>
-                <th className="text-center p-2">ABC</th>
-                <th className="text-right p-2">Stock</th>
-                <th className="text-right p-2">V/día</th>
-                <th className="text-right p-2">Días cob.</th>
-                <th className="text-right p-2">Reorden</th>
-                <th className="text-right p-2">Faltante</th>
-                <th className="text-center p-2">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((p) => {
-                const estadoCls = p.estado === 'AGOTADO' ? 'bg-red-100 text-red-800' :
-                                  p.estado === 'COMPRAR' ? 'bg-orange-100 text-orange-800' :
-                                  p.estado === 'SOBRESTOCK' ? 'bg-blue-100 text-blue-800' :
-                                  'bg-green-100 text-green-800';
-                const estadoLabel = p.estado === 'AGOTADO' ? '💀 Agotado' :
-                                    p.estado === 'COMPRAR' ? '🛒 Comprar' :
-                                    p.estado === 'SOBRESTOCK' ? '🧊 Sobre-stock' : '✅ OK';
-                const abcCls = p.clase_abc === 'A' ? 'bg-green-100 text-green-800' :
-                               p.clase_abc === 'B' ? 'bg-yellow-100 text-yellow-800' :
-                               'bg-gray-100 text-gray-800';
-                return (
-                  <tr key={p.product_id} className="border-t hover:bg-muted/20">
-                    <td className="p-2">
-                      <p className="font-medium">{p.name}</p>
-                      <p className="text-muted-foreground font-mono">{p.sku}</p>
-                    </td>
-                    <td className="p-2 text-center">
-                      <span className={`px-2 py-0.5 rounded ${abcCls}`}>{p.clase_abc}</span>
-                    </td>
-                    <td className="p-2 text-right font-bold">{p.stock}</td>
-                    <td className="p-2 text-right">{p.velocidad_diaria.toFixed(2)}</td>
-                    <td className="p-2 text-right">{p.dias_cobertura !== null ? p.dias_cobertura : '∞'}</td>
-                    <td className="p-2 text-right">{p.punto_reorden.toFixed(0)}</td>
-                    <td className="p-2 text-right font-bold text-orange-600">{p.faltante.toFixed(0)}</td>
-                    <td className="p-2 text-center">
-                      <span className={`px-2 py-0.5 rounded text-xs ${estadoCls}`}>{estadoLabel}</span>
-                    </td>
+      {/* Sub-tabs */}
+      <div className="flex gap-1 border-b border-border">
+        {([
+          { id: 'tabla', label: '📋 Tabla' },
+          { id: 'velocidad', label: '⚡ Top Velocidad' },
+          { id: 'plan', label: `🛒 Plan Compra (${planDays}d)` },
+        ] as { id: typeof subTab; label: string }[]).map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setSubTab(t.id)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors
+              ${subTab === t.id ? 'border-brand-500 text-brand-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* TABLA SUB-TAB */}
+      {subTab === 'tabla' && (
+        <Card className="overflow-hidden">
+          <div className="overflow-auto max-h-[600px]">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/50 sticky top-0">
+                <tr>
+                  <th className="text-left p-2">Producto</th>
+                  <th className="text-center p-2">ABC</th>
+                  <th className="text-right p-2">Stock</th>
+                  <th className="text-right p-2">V/día</th>
+                  <th className="text-right p-2">Días cob.</th>
+                  <th className="text-right p-2">Reorden</th>
+                  <th className="text-right p-2">Faltante</th>
+                  <th className="text-center p-2">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((p) => {
+                  const estadoCls = p.estado === 'AGOTADO' ? 'bg-red-100 text-red-800' :
+                                    p.estado === 'COMPRAR' ? 'bg-orange-100 text-orange-800' :
+                                    p.estado === 'SOBRESTOCK' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-green-100 text-green-800';
+                  const estadoLabel = p.estado === 'AGOTADO' ? '💀 Agotado' :
+                                      p.estado === 'COMPRAR' ? '🛒 Comprar' :
+                                      p.estado === 'SOBRESTOCK' ? '🧊 Sobre-stock' : '✅ OK';
+                  const abcCls = p.clase_abc === 'A' ? 'bg-green-100 text-green-800' :
+                                 p.clase_abc === 'B' ? 'bg-yellow-100 text-yellow-800' :
+                                 'bg-gray-100 text-gray-800';
+                  return (
+                    <tr key={p.product_id} className="border-t hover:bg-muted/20">
+                      <td className="p-2">
+                        <p className="font-medium">{p.name}</p>
+                        <p className="text-muted-foreground font-mono">{p.sku}</p>
+                      </td>
+                      <td className="p-2 text-center">
+                        <span className={`px-2 py-0.5 rounded ${abcCls}`}>{p.clase_abc}</span>
+                      </td>
+                      <td className="p-2 text-right font-bold">{p.stock}</td>
+                      <td className="p-2 text-right">{p.velocidad_diaria.toFixed(2)}</td>
+                      <td className="p-2 text-right">{p.dias_cobertura !== null ? p.dias_cobertura : '∞'}</td>
+                      <td className="p-2 text-right">{p.punto_reorden.toFixed(0)}</td>
+                      <td className="p-2 text-right font-bold text-orange-600">{p.faltante.toFixed(0)}</td>
+                      <td className="p-2 text-center">
+                        <span className={`px-2 py-0.5 rounded text-xs ${estadoCls}`}>{estadoLabel}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!filtered.length && (
+                  <tr><td colSpan={8} className="text-center p-8 text-muted-foreground">Sin resultados con los filtros aplicados</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* VELOCIDAD SUB-TAB */}
+      {subTab === 'velocidad' && (
+        <Card className="p-6">
+          <h3 className="text-base font-bold mb-4">Top 20 Productos por Velocidad de Venta</h3>
+          <div className="h-96">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={topVelocity} layout="vertical" margin={{ left: 8 }}>
+                <CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" />
+                <XAxis type="number" tick={{ fontSize: 10 }} label={{ value: 'unidades/día', position: 'insideBottomRight', fontSize: 10 }} />
+                <YAxis type="category" dataKey="sku" tick={{ fontSize: 9 }} width={90} />
+                <Tooltip
+                  formatter={(v: number) => [`${v.toFixed(3)} u/día`, 'Velocidad']}
+                  labelFormatter={(l) => topVelocity.find((p) => p.sku === l)?.name ?? l}
+                />
+                <Bar dataKey="velocidad_diaria" name="Velocidad" radius={[0, 6, 6, 0]}>
+                  {topVelocity.map((p, i) => (
+                    <Cell key={i} fill={ESTADO_COLOR[p.estado] ?? '#6b7280'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex gap-4 mt-3 text-xs flex-wrap">
+            {Object.entries(ESTADO_COLOR).map(([estado, color]) => (
+              <span key={estado} className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full inline-block" style={{ backgroundColor: color }} />
+                {estado}
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* PLAN DE COMPRA SUB-TAB */}
+      {subTab === 'plan' && (
+        <div className="space-y-4">
+          <Card className="p-4 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Horizonte:</span>
+              <select className="border rounded px-2 py-1 text-sm" value={planDays} onChange={(e) => setPlanDays(Number(e.target.value))}>
+                <option value={7}>7 días</option>
+                <option value={15}>15 días</option>
+                <option value={30}>30 días</option>
+                <option value={45}>45 días</option>
+                <option value={60}>60 días</option>
+              </select>
+            </div>
+            <div className="flex gap-4">
+              <div>
+                <span className="text-xs text-muted-foreground">Productos a comprar</span>
+                <p className="text-xl font-bold text-orange-600">{purchasePlan.length}</p>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground">Unidades totales</span>
+                <p className="text-xl font-bold">{totalPlanUnits.toLocaleString('es-CO')}</p>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground">Costo est. total</span>
+                <p className="text-xl font-bold text-emerald-700">{formatCurrency(totalPlanCost)}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <div className="overflow-auto max-h-[580px]">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/50 sticky top-0">
+                  <tr>
+                    <th className="text-left p-2">Producto</th>
+                    <th className="text-center p-2">ABC</th>
+                    <th className="text-right p-2">Stock actual</th>
+                    <th className="text-right p-2">V/día</th>
+                    <th className="text-right p-2">Días cob.</th>
+                    <th className="text-right p-2 text-orange-700 font-bold">Cant. sugerida ({planDays}d)</th>
+                    <th className="text-center p-2">Estado</th>
                   </tr>
-                );
-              })}
-              {!filtered.length && (
-                <tr><td colSpan={8} className="text-center p-8 text-muted-foreground">Sin resultados con los filtros aplicados</td></tr>
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {purchasePlan.map((p) => {
+                    const abcCls = p.clase_abc === 'A' ? 'bg-green-100 text-green-800' : p.clase_abc === 'B' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800';
+                    const estadoCls = p.estado === 'AGOTADO' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800';
+                    return (
+                      <tr key={p.product_id} className={`border-t hover:bg-muted/20 ${p.clase_abc === 'A' ? 'bg-yellow-50/40' : ''}`}>
+                        <td className="p-2">
+                          <p className="font-medium">{p.name}</p>
+                          <p className="text-muted-foreground font-mono">{p.sku}</p>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={`px-2 py-0.5 rounded font-bold ${abcCls}`}>{p.clase_abc}</span>
+                        </td>
+                        <td className="p-2 text-right font-bold">{p.stock}</td>
+                        <td className="p-2 text-right">{p.velocidad_diaria.toFixed(3)}</td>
+                        <td className="p-2 text-right">
+                          <span className={p.dias_cobertura !== null && p.dias_cobertura < planDays ? 'text-rose-600 font-bold' : ''}>
+                            {p.dias_cobertura !== null ? p.dias_cobertura : '∞'}
+                          </span>
+                        </td>
+                        <td className="p-2 text-right font-bold text-orange-700 text-sm">{p.qty_sugerida}</td>
+                        <td className="p-2 text-center">
+                          <span className={`px-2 py-0.5 rounded text-xs ${estadoCls}`}>{p.estado}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!purchasePlan.length && (
+                    <tr><td colSpan={7} className="text-center p-8 text-muted-foreground">✅ Sin productos que requieran compra en este período</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
-      </Card>
+      )}
     </div>
   );
 }
+

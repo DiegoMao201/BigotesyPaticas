@@ -89,6 +89,7 @@ export interface Product {
   description: string | null;
   brand_id: string | null;
   category_id: string | null;
+  category_name?: string | null;
   cost: string;
   price: string;
   compare_at_price: string | null;
@@ -110,12 +111,13 @@ export interface PaginatedProducts {
 }
 
 export const products = {
-  list: (params: { page?: number; page_size?: number; q?: string; is_published?: boolean } = {}) => {
+  list: (params: { page?: number; page_size?: number; q?: string; is_published?: boolean; category?: string } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
     if (params.page_size) qs.set('page_size', String(params.page_size));
     if (params.q) qs.set('q', params.q);
     if (params.is_published !== undefined) qs.set('is_published', String(params.is_published));
+    if (params.category) qs.set('category', params.category);
     return api<PaginatedProducts>(`/v1/products?${qs.toString()}`);
   },
   get: (id: string) => api<Product>(`/v1/products/${id}`),
@@ -727,4 +729,65 @@ export interface ParsedInvoice {
   total: number;
   items: ParsedItem[];
 }
+
+// ─── BI Analytics ──────────────────────────────────────────────────────────
+
+export interface ChannelBreakdown { channel: string; revenue: number; orders: number; pct: number }
+export interface MethodBreakdown { method: string; revenue: number; orders: number; pct: number }
+export interface MonthlyPoint { year_month: string; revenue: number; orders: number; avg_ticket: number }
+export interface TopCustomer { customer_id: string | null; name: string; orders: number; revenue: number; last_purchase: string | null }
+export interface CategoryRevenue { category: string; revenue: number; units: number; pct: number }
+export interface HeatmapCell { weekday: number; hour: number; orders: number }
+
+export interface BiFull {
+  period_start: string;
+  period_end: string;
+  revenue_total: number;
+  orders_total: number;
+  avg_ticket: number;
+  gross_margin_pct: number;
+  by_channel: ChannelBreakdown[];
+  by_method: MethodBreakdown[];
+  monthly_trend: MonthlyPoint[];
+  top_customers: TopCustomer[];
+  by_category: CategoryRevenue[];
+  heatmap: HeatmapCell[];
+  revenue: number;
+  cogs: number;
+  gross_profit: number;
+  expenses_total: number;
+  net_profit: number;
+  expenses_by_category: { category: string; total: number }[];
+}
+
+export interface SalesPeriodComparison {
+  current_revenue: number;
+  prev_revenue: number;
+  delta_pct: number;
+  current_orders: number;
+  prev_orders: number;
+  daily_current: DailySale[];
+  daily_prev: DailySale[];
+}
+
+// Re-export with extended analytics
+export const analyticsBI = {
+  full: (days = 90) => api<BiFull>(`/v1/analytics/bi?days=${days}`),
+  comparison: (days = 30) => api<SalesPeriodComparison>(`/v1/analytics/sales-comparison?days=${days}`),
+};
+
+// ─── Admin ETL ─────────────────────────────────────────────────────────────
+
+export const adminEtl = {
+  status: () => api<Record<string, number>>('/v1/admin/etl/status'),
+  runSheets: (tabs?: string[]) => api<{ reports: Record<string, unknown>; global_errors: string[] }>(
+    '/v1/admin/etl/sheets', { method: 'POST', body: JSON.stringify({ tabs }) }
+  ),
+  fixSalesDates: (dry_run = false) => api<{ total_orders: number; updated: number; skipped_no_date: number; skipped_already_ok: number; errors: string[]; sample_fixed: { order_number: string; from: string; to: string }[] }>(
+    '/v1/admin/etl/fix-sales-dates', { method: 'POST', body: JSON.stringify({ dry_run }) }
+  ),
+  bootstrapSuppliers: () => api<{ total_legacy: number; created: number; skipped: number; errors: string[] }>(
+    '/v1/admin/etl/bootstrap-suppliers', { method: 'POST', body: '{}' }
+  ),
+};
 

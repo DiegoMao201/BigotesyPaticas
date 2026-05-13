@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText, XCircle, ShoppingCart, Search, RefreshCw, Eye,
-  TrendingUp, DollarSign, Hash, MessageCircle,
+  TrendingUp, DollarSign, Hash, MessageCircle, AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { sales, API_BASE, type Order } from '@/lib/api';
+import { sales, adminEtl, API_BASE, type Order } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -186,6 +186,7 @@ function OrderDetailModal({ order, onClose, onCancelDone }: { order: Order; onCl
 
 export default function SalesPage() {
   const qc = useQueryClient();
+  const [showDateWarning, setShowDateWarning] = useState(true);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -194,6 +195,16 @@ export default function SalesPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
+
+  const fixDatesMut = useMutation({
+    mutationFn: () => adminEtl.fixSalesDates(false),
+    onSuccess: (res) => {
+      toast.success(`Fechas corregidas: ${res.updated} órdenes actualizadas`);
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      setShowDateWarning(false);
+    },
+    onError: (e: Error) => toast.error(`Error: ${e.message}`),
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['orders', page, search, statusFilter, paymentFilter, channelFilter, dateFrom, dateTo],
@@ -226,6 +237,36 @@ export default function SalesPage() {
           <RefreshCw className="w-4 h-4 mr-1" /> Actualizar
         </Button>
       </div>
+
+      {/* Date warning banner */}
+      {showDateWarning && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Ventas legadas con fecha incorrecta (2026-05-10)</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Las ventas importadas desde Sheets tienen la fecha de importación en lugar de la fecha real de venta.
+                Haz clic en "Corregir fechas" para restaurarlas desde Google Sheets.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-amber-400 text-amber-800 hover:bg-amber-100"
+              onClick={() => fixDatesMut.mutate()}
+              disabled={fixDatesMut.isPending}
+            >
+              {fixDatesMut.isPending ? 'Corrigiendo…' : 'Corregir fechas'}
+            </Button>
+            <button onClick={() => setShowDateWarning(false)} className="text-amber-500 hover:text-amber-700">
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CreditCard,
   Banknote, Smartphone, CheckCircle2, Printer, RotateCcw, X, XCircle,
-  FileText, MessageCircle, History, Eye, ChevronRight,
+  FileText, MessageCircle, History, Eye, ChevronRight, ScanLine, Zap,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -62,16 +62,53 @@ function buildWhatsAppMsg(order: Order, customerName?: string): string {
 // ─── Product Search ───────────────────────────────────────────────
 function ProductSearch({ onAdd }: { onAdd: (p: Product) => void }) {
   const [q, setQ] = useState('');
+  const [catFilter, setCatFilter] = useState<string | null>(null);
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const barcodeRef = useRef<HTMLInputElement>(null);
 
   const { data, isFetching } = useQuery({
-    queryKey: ['pos-products', q],
-    queryFn: () => products.list({ q: q || undefined, page_size: 12 }),
+    queryKey: ['pos-products', q, catFilter],
+    queryFn: () => products.list({ q: q || undefined, category: catFilter ?? undefined, page_size: 18 }),
     enabled: true,
     staleTime: 30_000,
   });
 
+  // Unique categories from current results
+  const cats = Array.from(new Set((data?.items ?? []).map((p) => p.category_name).filter(Boolean))) as string[];
+
+  function handleBarcodeKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && barcodeInput.trim()) {
+      const sku = barcodeInput.trim();
+      setBarcodeInput('');
+      // Search by exact SKU
+      products.list({ q: sku, page_size: 5 }).then((res) => {
+        const exact = res.items.find((p) => p.sku.toLowerCase() === sku.toLowerCase()) ?? res.items[0];
+        if (exact) {
+          onAdd(exact);
+        } else {
+          setQ(sku);
+        }
+      }).catch(() => setQ(sku));
+    }
+  }
+
   return (
     <div className="space-y-3">
+      {/* Barcode scanner input */}
+      <div className="relative">
+        <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-500" />
+        <input
+          ref={barcodeRef}
+          type="text"
+          placeholder="Escanear código de barras o SKU — Enter para agregar"
+          value={barcodeInput}
+          onChange={(e) => setBarcodeInput(e.target.value)}
+          onKeyDown={handleBarcodeKey}
+          className="w-full pl-9 pr-3 h-9 rounded-lg border-2 border-brand-300 bg-brand-50/30 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-brand-400"
+        />
+      </div>
+
+      {/* Text search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -81,6 +118,27 @@ function ProductSearch({ onAdd }: { onAdd: (p: Product) => void }) {
           onChange={(e) => setQ(e.target.value)}
         />
       </div>
+
+      {/* Category filter chips */}
+      {cats.length > 1 && (
+        <div className="flex gap-1 flex-wrap">
+          <button
+            onClick={() => setCatFilter(null)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${!catFilter ? 'bg-brand-500 text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+          >
+            Todos
+          </button>
+          {cats.map((c) => (
+            <button
+              key={c}
+              onClick={() => setCatFilter(catFilter === c ? null : c)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${catFilter === c ? 'bg-brand-500 text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 xl:grid-cols-3 gap-2 max-h-[340px] overflow-y-auto pr-1">
         {isFetching && !data && (
@@ -768,28 +826,53 @@ export default function POSPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {payments.map((pay, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <select
-                      value={pay.method}
-                      onChange={(e) => updatePayment(idx, 'method', e.target.value)}
-                      className="flex-1 h-9 px-2 text-sm rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-brand/50"
-                    >
-                      {PAYMENT_METHODS.map((m) => (
-                        <option key={m.key} value={m.key}>{m.label}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      placeholder="Monto"
-                      value={pay.amount}
-                      onChange={(e) => updatePayment(idx, 'amount', e.target.value)}
-                      onFocus={() => !pay.amount && idx === payments.length - 1 && fillAmount()}
-                      className="w-32 h-9 px-2 text-sm rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-brand/50 tabular-nums"
-                    />
-                    {payments.length > 1 && (
-                      <button onClick={() => removePayment(idx)} className="text-muted-foreground hover:text-destructive shrink-0">
-                        <X className="h-4 w-4" />
-                      </button>
+                  <div key={idx} className="space-y-1">
+                    <div className="flex gap-2 items-center">
+                      <select
+                        value={pay.method}
+                        onChange={(e) => updatePayment(idx, 'method', e.target.value)}
+                        className="flex-1 h-9 px-2 text-sm rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-brand/50"
+                      >
+                        {PAYMENT_METHODS.map((m) => (
+                          <option key={m.key} value={m.key}>{m.label}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        placeholder="Monto"
+                        value={pay.amount}
+                        onChange={(e) => updatePayment(idx, 'amount', e.target.value)}
+                        onFocus={() => !pay.amount && idx === payments.length - 1 && fillAmount()}
+                        className="w-32 h-9 px-2 text-sm rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-brand/50 tabular-nums"
+                      />
+                      {payments.length > 1 && (
+                        <button onClick={() => removePayment(idx)} className="text-muted-foreground hover:text-destructive shrink-0">
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    {/* Quick cash amounts for Efectivo */}
+                    {pay.method === 'Efectivo' && (
+                      <div className="flex gap-1 flex-wrap">
+                        {[5000, 10000, 20000, 50000, 100000].map((amt) => (
+                          <button
+                            key={amt}
+                            onClick={() => updatePayment(idx, 'amount', String(amt))}
+                            className="px-2 py-0.5 rounded border border-border text-xs hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 transition-colors tabular-nums"
+                          >
+                            ${(amt / 1000).toFixed(0)}k
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => {
+                            const remaining = grand - payments.slice(0, idx).reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+                            updatePayment(idx, 'amount', String(Math.max(0, Math.ceil(remaining))));
+                          }}
+                          className="px-2 py-0.5 rounded border border-brand-300 text-xs text-brand-600 hover:bg-brand-50 transition-colors font-medium"
+                        >
+                          Exacto
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
