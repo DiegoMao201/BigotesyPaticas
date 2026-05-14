@@ -61,12 +61,18 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
     if not payload.items:
         raise HTTPException(status_code=400, detail="La orden requiere al menos un ítem")
 
-    # Resolver location default
+    # Resolver location default (fallback: primera disponible si ninguna tiene is_default=1)
     loc = (
         await db.execute(
             select(StockLocation).where(StockLocation.is_default == 1).limit(1)
         )
     ).scalar_one_or_none()
+    if loc is None:
+        loc = (
+            await db.execute(
+                select(StockLocation).order_by(StockLocation.created_at).limit(1)
+            )
+        ).scalar_one_or_none()
     if loc is None:
         raise HTTPException(status_code=500, detail="No hay location default")
 
@@ -286,8 +292,12 @@ async def cancel_order(
 
     # Revertir stock para cada item
     default_loc = (await db.execute(
-        select(StockLocation).where(StockLocation.is_default == True).limit(1)
+        select(StockLocation).where(StockLocation.is_default == 1).limit(1)
     )).scalar_one_or_none()
+    if default_loc is None:
+        default_loc = (await db.execute(
+            select(StockLocation).order_by(StockLocation.created_at).limit(1)
+        )).scalar_one_or_none()
     location_id = default_loc.id if default_loc else None
 
     for item in o.items:

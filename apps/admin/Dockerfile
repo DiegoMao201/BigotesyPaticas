@@ -14,6 +14,9 @@ RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* vars must be baked in at build time for the browser bundle
+ARG NEXT_PUBLIC_API_BASE_URL=https://api.bigotesypaticas.com
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 RUN pnpm build
 
 FROM base AS runner
