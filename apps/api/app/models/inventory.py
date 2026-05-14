@@ -105,7 +105,13 @@ class CountSession(UUIDPKMixin, TimestampMixin, Base):
     applied_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
-    items: Mapped[list["CountItem"]] = relationship("CountItem", back_populates="session", lazy="selectin")
+    items: Mapped[list["CountItem"]] = relationship(
+        "CountItem",
+        back_populates="session",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class CountItem(UUIDPKMixin, TimestampMixin, Base):
