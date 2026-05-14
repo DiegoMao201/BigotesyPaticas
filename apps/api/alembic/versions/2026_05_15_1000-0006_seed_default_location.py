@@ -14,8 +14,8 @@ import uuid
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0006"
-down_revision = "0005"
+revision = "0006_seed_default_location"
+down_revision = "0005_fix_count_items_updated_at"
 branch_labels = None
 depends_on = None
 
