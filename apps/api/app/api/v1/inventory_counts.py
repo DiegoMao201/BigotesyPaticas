@@ -151,6 +151,14 @@ async def create_count_session(
     user: CurrentUser,
 ):
     """Crea una sesión de conteo con snapshot del stock actual de todos los productos activos."""
+    import traceback as _tb
+    try:
+        return await _do_create_count_session(payload, db, user)
+    except Exception as exc:
+        raise HTTPException(422, detail=f"{type(exc).__name__}: {exc}\n{_tb.format_exc()}")
+
+
+async def _do_create_count_session(payload, db, user):
     # Snapshot stock + products
     stock_sub = (
         select(
