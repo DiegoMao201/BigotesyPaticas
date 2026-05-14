@@ -48,16 +48,23 @@ class ParsedItem(BaseModel):
     match_score: float = 0
 
 
+class ParsedSupplier(BaseModel):
+    name: str | None = None
+    nit: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    matched_supplier_id: str | None = None
+
+
 class ParsedInvoice(BaseModel):
-    proveedor_nombre: str
-    proveedor_nit: str
-    proveedor_email: str | None = None
-    folio: str
-    fecha_emision: str | None = None
+    supplier: ParsedSupplier
+    folio: str | None = None
+    fecha: str | None = None
+    subtotal: float = 0
+    tax_amount: float = 0
     total: float
     moneda: str = "COP"
-    # Si encontramos el supplier en BD, devolvemos su id
-    supplier_id: str | None = None
     items: list[ParsedItem]
 
 
@@ -321,13 +328,21 @@ async def parse_invoice_xml(
         match = await _suggest_match(db, it, supplier_id_db, productos)
         items_out.append(ParsedItem(**it, **match))
 
+    # Calcular subtotal / tax desde los items
+    subtotal = sum(it.costo_base_unitario * it.cantidad for it in items_out)
+    tax_amount = sum(it.costo_base_unitario * it.cantidad * it.iva_pct / 100 for it in items_out)
+
     return ParsedInvoice(
-        proveedor_nombre=proveedor,
-        proveedor_nit=nit,
-        proveedor_email=email,
+        supplier=ParsedSupplier(
+            name=proveedor,
+            nit=nit,
+            email=email,
+            matched_supplier_id=str(supplier_id_db) if supplier_id_db else None,
+        ),
         folio=folio,
-        fecha_emision=fecha,
+        fecha=fecha,
+        subtotal=round(subtotal, 2),
+        tax_amount=round(tax_amount, 2),
         total=total,
-        supplier_id=str(supplier_id_db) if supplier_id_db else None,
         items=items_out,
     )

@@ -9,6 +9,7 @@ from app.api.v1 import (
     finance,
     health,
     inventory,
+    inventory_counts,
     products,
     purchases,
     purchases_xml,
@@ -24,6 +25,7 @@ api_router.include_router(products.router, prefix="/v1")
 api_router.include_router(products.brands_router, prefix="/v1")
 api_router.include_router(products.categories_router, prefix="/v1")
 api_router.include_router(inventory.router, prefix="/v1")
+api_router.include_router(inventory_counts.router, prefix="/v1")
 api_router.include_router(sales.router, prefix="/v1")
 api_router.include_router(analytics.router, prefix="/v1")
 api_router.include_router(customers.router, prefix="/v1")

@@ -287,26 +287,33 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
       let finalSupplierName = supplierName;
 
       if (createNewSupplier) {
+        if (!newSupplier.name.trim()) throw new Error('El nombre del proveedor es requerido');
         const created = await suppliersApi.create(newSupplier);
         finalSupplierId = created.id;
         finalSupplierName = created.name;
       }
 
-      const totalCost = items.reduce((s, it) => s + it.cantidad * it.costo_base_unitario, 0);
-      const transportPerUnit = totalCost > 0 ? transportCost / items.reduce((s, it) => s + it.cantidad, 0) : 0;
+      const effectiveName = finalSupplierName || newSupplier.name;
+      if (!effectiveName.trim()) throw new Error('Selecciona o crea un proveedor antes de guardar');
+
+      const matchedItems = items.filter((it) => it.suggested_product_id);
+      if (matchedItems.length === 0) throw new Error('Debes asociar al menos un producto antes de guardar');
+
+      const totalCost = matchedItems.reduce((s, it) => s + it.cantidad * it.costo_base_unitario, 0);
+      const totalUnits = matchedItems.reduce((s, it) => s + it.cantidad, 0);
+      const transportPerUnit = totalCost > 0 && totalUnits > 0 ? transportCost / totalUnits : 0;
 
       return purchases.create({
         folio: folio || undefined,
         supplier_id: finalSupplierId || undefined,
-        supplier_name: finalSupplierName || newSupplier.name,
-        items: items
-          .filter((it) => it.suggested_product_id)
+        supplier_name: effectiveName,
+        items: matchedItems
           .map((it) => ({
             product_id: it.suggested_product_id!,
             sku_proveedor: it.sku_proveedor || undefined,
             sku_interno: it.suggested_product_sku || undefined,
             product_name: it.suggested_product_name || it.descripcion,
-            quantity: it.cantidad,
+            quantity: Math.round(it.cantidad),
             factor_pack: it.factor_pack,
             unit_cost: it.costo_base_unitario + transportPerUnit,
             tax_pct: it.iva_pct,

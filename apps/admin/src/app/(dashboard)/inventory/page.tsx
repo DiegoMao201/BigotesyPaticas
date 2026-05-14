@@ -9,9 +9,10 @@ import {
   Boxes, AlertTriangle, Search, Package, History, ArrowUpDown,
   ArrowUp, ArrowDown, Edit2, Check, X, RefreshCw, TrendingUp,
   DollarSign, ShoppingBag, Plus, Minus, Sparkles, Download, ShoppingCart,
+  ClipboardList, Upload, ChevronRight, Trash2, PlayCircle, Eye, FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { api, inventory, analytics, type StockRow } from '@/lib/api';
+import { api, inventory, analytics, inventoryCounts, type StockRow, type CountSessionOut, type CountSessionDetail, type UploadPreviewRow } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -48,7 +49,7 @@ function SortTh({
 
 export default function InventoryPage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<'stock' | 'movements' | 'alerts' | 'analytics'>('stock');
+  const [tab, setTab] = useState<'stock' | 'movements' | 'alerts' | 'analytics' | 'conteo'>('stock');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<{ only_in_stock?: boolean; only_low_stock?: boolean }>({});
@@ -177,8 +178,8 @@ export default function InventoryPage() {
       </div>
 
       <div className="flex gap-1 border-b border-border overflow-x-auto">
-        {[{ id: 'stock', label: 'Stock & Precios', icon: Package }, { id: 'alerts', label: `Alertas (${critical.length + low.length})`, icon: AlertTriangle }, { id: 'movements', label: 'Movimientos', icon: History }, { id: 'analytics', label: 'Análisis IA', icon: Sparkles }].map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id as 'stock' | 'movements' | 'alerts' | 'analytics')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${tab === t.id ? 'border-brand-500 text-brand-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+        {[{ id: 'stock', label: 'Stock & Precios', icon: Package }, { id: 'alerts', label: `Alertas (${critical.length + low.length})`, icon: AlertTriangle }, { id: 'movements', label: 'Movimientos', icon: History }, { id: 'analytics', label: 'Análisis IA', icon: Sparkles }, { id: 'conteo', label: 'Conteo Físico', icon: ClipboardList }].map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id as 'stock' | 'movements' | 'alerts' | 'analytics' | 'conteo')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${tab === t.id ? 'border-brand-500 text-brand-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             <t.icon className="w-4 h-4" /> {t.label}
           </button>
         ))}
@@ -352,6 +353,8 @@ export default function InventoryPage() {
       )}
 
       {tab === 'analytics' && <AnalyticsTab />}
+
+      {tab === 'conteo' && <ConteoTab />}
 
       {adjustRow && (
         <Dialog open onClose={() => setAdjustRow(null)}>
@@ -684,6 +687,460 @@ function AnalyticsTab() {
           </Card>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Conteo Físico Tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+type ConteoView = 'list' | 'detail';
+
+function statusLabel(status: string) {
+  switch (status) {
+    case 'draft': return { label: 'Borrador', className: 'bg-muted text-muted-foreground' };
+    case 'in_progress': return { label: 'En progreso', className: 'bg-amber-100 text-amber-700' };
+    case 'applied': return { label: 'Aplicado', className: 'bg-emerald-100 text-emerald-700' };
+    case 'cancelled': return { label: 'Cancelado', className: 'bg-rose-100 text-rose-700' };
+    default: return { label: status, className: 'bg-muted text-muted-foreground' };
+  }
+}
+
+function ConteoTab() {
+  const qc = useQueryClient();
+  const [view, setView] = useState<ConteoView>('list');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newNotes, setNewNotes] = useState('');
+  const [previewRows, setPreviewRows] = useState<UploadPreviewRow[] | null>(null);
+  const [previewStats, setPreviewStats] = useState<{ matched: number; not_found: number; with_difference: number; total_value_impact: number } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const { data: sessionsData, isLoading } = useQuery({
+    queryKey: ['inventory-counts'],
+    queryFn: () => inventoryCounts.list(),
+    staleTime: 30_000,
+  });
+
+  const { data: detail, isLoading: loadingDetail } = useQuery({
+    queryKey: ['inventory-counts', selectedId],
+    queryFn: () => inventoryCounts.get(selectedId!),
+    enabled: !!selectedId && view === 'detail',
+    staleTime: 15_000,
+  });
+
+  const createMut = useMutation({
+    mutationFn: () => inventoryCounts.create({ name: newName.trim(), notes: newNotes.trim() || undefined }),
+    onSuccess: (session) => {
+      toast.success(`Sesión "${session.name}" creada con ${session.items_count} productos`);
+      qc.invalidateQueries({ queryKey: ['inventory-counts'] });
+      setCreating(false);
+      setNewName('');
+      setNewNotes('');
+      setSelectedId(session.id);
+      setView('detail');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: inventoryCounts.delete,
+    onSuccess: () => {
+      toast.success('Sesión eliminada');
+      qc.invalidateQueries({ queryKey: ['inventory-counts'] });
+      setView('list');
+      setSelectedId(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const applyMut = useMutation({
+    mutationFn: inventoryCounts.apply,
+    onSuccess: (res) => {
+      toast.success(
+        `Conteo aplicado: ${res.products_adjusted} productos ajustados · Impacto ${res.total_value_impact >= 0 ? '+' : ''}${formatCurrency(res.total_value_impact)}`
+      );
+      qc.invalidateQueries({ queryKey: ['inventory-counts'] });
+      qc.invalidateQueries({ queryKey: ['inventory-counts', selectedId] });
+      qc.invalidateQueries({ queryKey: ['inventory-stock'] });
+      setPreviewRows(null);
+      setPreviewStats(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const handleUpload = async (file: File) => {
+    if (!selectedId) return;
+    setUploading(true);
+    setPreviewRows(null);
+    setPreviewStats(null);
+    try {
+      const res = await inventoryCounts.uploadExcel(selectedId, file);
+      setPreviewRows(res.rows);
+      setPreviewStats({ matched: res.matched, not_found: res.not_found, with_difference: res.with_difference, total_value_impact: res.total_value_impact });
+      toast.success(`Excel procesado: ${res.matched} productos encontrados, ${res.with_difference} con diferencia`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ─── LIST VIEW ───────────────────────────────────────────────────────────
+
+  if (view === 'list') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2"><ClipboardList className="w-5 h-5 text-brand-600" /> Conteo Físico de Inventario</h2>
+            <p className="text-sm text-muted-foreground">Descarga plantilla Excel → llena cantidades → sube → aplica ajustes</p>
+          </div>
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="w-4 h-4 mr-1" /> Nueva sesión
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-16 bg-muted/40 rounded animate-pulse" />)}</div>
+        ) : sessionsData?.items.length === 0 ? (
+          <Card className="p-12 text-center text-muted-foreground">
+            <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-20" />
+            <p className="font-medium">No hay sesiones de conteo</p>
+            <p className="text-sm mt-1">Crea una nueva sesión para iniciar el conteo físico</p>
+            <Button className="mt-4" onClick={() => setCreating(true)}><Plus className="w-4 h-4 mr-1" /> Nueva sesión</Button>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {sessionsData?.items.map((s) => {
+              const st = statusLabel(s.status);
+              return (
+                <Card key={s.id} className="p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm">{s.name}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.className}`}>{st.label}</span>
+                        {s.status === 'applied' && (
+                          <span className="text-xs text-muted-foreground">por {s.applied_by} · {s.applied_at ? formatDate(s.applied_at) : ''}</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3 flex-wrap">
+                        <span>{s.items_count} productos</span>
+                        {s.status !== 'draft' && (
+                          <>
+                            <span className="text-emerald-600">+{s.total_positive_delta} sobrantes</span>
+                            <span className="text-rose-600">-{s.total_negative_delta} faltantes</span>
+                            <span className={s.total_value_impact >= 0 ? 'text-emerald-600 font-medium' : 'text-rose-600 font-medium'}>
+                              Impacto: {s.total_value_impact >= 0 ? '+' : ''}{formatCurrency(s.total_value_impact)}
+                            </span>
+                          </>
+                        )}
+                        <span>{formatDate(s.created_at)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {s.status === 'applied' && (
+                        <Button variant="outline" size="sm" onClick={() => inventoryCounts.downloadReport(s.id)} title="Descargar reporte">
+                          <FileSpreadsheet className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" onClick={() => { setSelectedId(s.id); setView('detail'); setPreviewRows(null); setPreviewStats(null); }}>
+                        <Eye className="w-4 h-4 mr-1" /> Abrir
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Create modal */}
+        {creating && (
+          <Dialog open onClose={() => setCreating(false)}>
+            <div className="p-6 space-y-4 max-w-md">
+              <h3 className="font-semibold text-lg flex items-center gap-2"><ClipboardList className="w-5 h-5" /> Nueva sesión de conteo</h3>
+              <p className="text-sm text-muted-foreground">Se tomará un snapshot del stock actual de todos los productos activos.</p>
+              <div>
+                <label className="text-xs font-medium uppercase mb-1 block">Nombre de la sesión *</label>
+                <Input
+                  autoFocus
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Ej: Conteo mensual Mayo 2026"
+                  onKeyDown={(e) => { if (e.key === 'Enter' && newName.trim().length >= 2) createMut.mutate(); }}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium uppercase mb-1 block">Notas (opcional)</label>
+                <Input value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="Bodega principal, turno mañana…" />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCreating(false)}>Cancelar</Button>
+                <Button onClick={() => createMut.mutate()} disabled={newName.trim().length < 2 || createMut.isPending}>
+                  {createMut.isPending ? 'Creando…' : 'Crear sesión'}
+                </Button>
+              </DialogFooter>
+            </div>
+          </Dialog>
+        )}
+      </div>
+    );
+  }
+
+  // ─── DETAIL VIEW ─────────────────────────────────────────────────────────
+
+  const st = detail ? statusLabel(detail.status) : null;
+  const canApply = detail?.status === 'in_progress' || (previewRows && detail?.status !== 'applied');
+  const canDelete = detail?.status === 'draft' || detail?.status === 'in_progress';
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button onClick={() => { setView('list'); setSelectedId(null); setPreviewRows(null); setPreviewStats(null); }} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+          <ClipboardList className="w-4 h-4" /> Conteos
+        </button>
+        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+        <span className="text-sm font-medium">{detail?.name ?? 'Cargando…'}</span>
+        {st && <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.className}`}>{st.label}</span>}
+      </div>
+
+      {loadingDetail && !detail ? (
+        <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-10 bg-muted/40 rounded animate-pulse" />)}</div>
+      ) : detail ? (
+        <>
+          {/* Summary cards */}
+          {detail.status !== 'draft' && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Card className="p-4">
+                <div className="text-xs text-muted-foreground uppercase mb-1">Contados</div>
+                <div className="text-2xl font-bold">{detail.total_products_counted}</div>
+              </Card>
+              <Card className="p-4">
+                <div className="text-xs text-muted-foreground uppercase mb-1">Con diferencia</div>
+                <div className="text-2xl font-bold text-amber-600">{detail.total_with_difference}</div>
+              </Card>
+              <Card className="p-4">
+                <div className="text-xs text-muted-foreground uppercase mb-1">Sobrantes / Faltantes</div>
+                <div className="text-lg font-bold">
+                  <span className="text-emerald-600">+{detail.total_positive_delta}</span>
+                  {' / '}
+                  <span className="text-rose-600">-{detail.total_negative_delta}</span>
+                </div>
+              </Card>
+              <Card className="p-4">
+                <div className="text-xs text-muted-foreground uppercase mb-1">Impacto valor</div>
+                <div className={`text-2xl font-bold ${detail.total_value_impact >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {detail.total_value_impact >= 0 ? '+' : ''}{formatCurrency(detail.total_value_impact)}
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* Actions bar */}
+          {detail.status !== 'applied' && (
+            <Card className="p-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">
+                    {detail.status === 'draft'
+                      ? '1️⃣ Descarga la plantilla → 2️⃣ Llena el conteo → 3️⃣ Sube el archivo → 4️⃣ Aplica ajustes'
+                      : '✅ Excel subido. Revisa las diferencias abajo y aplica los ajustes.'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => inventoryCounts.downloadTemplate(detail.id)}
+                  >
+                    <Download className="w-4 h-4 mr-1" /> Descargar plantilla
+                  </Button>
+
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) { handleUpload(f); e.target.value = ''; } }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploading}
+                  >
+                    <Upload className="w-4 h-4 mr-1" />
+                    {uploading ? 'Procesando…' : 'Subir conteo'}
+                  </Button>
+
+                  {canApply && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (!confirm('¿Aplicar ajustes al stock? Esta acción no se puede deshacer.')) return;
+                        applyMut.mutate(detail.id);
+                      }}
+                      disabled={applyMut.isPending}
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      <PlayCircle className="w-4 h-4 mr-1" />
+                      {applyMut.isPending ? 'Aplicando…' : 'Aplicar ajustes'}
+                    </Button>
+                  )}
+
+                  {canDelete && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { if (confirm('¿Eliminar esta sesión?')) deleteMut.mutate(detail.id); }}
+                      disabled={deleteMut.isPending}
+                      className="text-rose-600 hover:text-rose-700 border-rose-200 hover:border-rose-400"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {detail.status === 'applied' && (
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => inventoryCounts.downloadReport(detail.id)}>
+                <FileSpreadsheet className="w-4 h-4 mr-1" /> Descargar reporte
+              </Button>
+            </div>
+          )}
+
+          {/* Preview from upload */}
+          {previewRows && previewRows.length > 0 && previewStats && (
+            <Card className="overflow-hidden">
+              <div className="px-4 py-3 border-b border-border bg-amber-50 flex items-center gap-3 flex-wrap">
+                <span className="font-semibold text-sm text-amber-700">Vista previa de diferencias</span>
+                <span className="text-xs text-muted-foreground">{previewStats.matched} encontrados · {previewStats.not_found} no encontrados · {previewStats.with_difference} con diferencia</span>
+                <span className={`text-sm font-bold ml-auto ${previewStats.total_value_impact >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  Impacto: {previewStats.total_value_impact >= 0 ? '+' : ''}{formatCurrency(previewStats.total_value_impact)}
+                </span>
+              </div>
+              <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-xs uppercase text-muted-foreground sticky top-0">
+                    <tr>
+                      <th className="text-left px-4 py-2">SKU</th>
+                      <th className="text-left px-4 py-2">Producto</th>
+                      <th className="text-right px-4 py-2">Sistema</th>
+                      <th className="text-right px-4 py-2">Contado</th>
+                      <th className="text-right px-4 py-2">Diferencia</th>
+                      <th className="text-right px-4 py-2">Impacto $</th>
+                      <th className="text-center px-4 py-2">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewRows.map((row, i) => (
+                      <tr key={i} className={`border-t border-border ${row.status === 'surplus' ? 'bg-emerald-50/60' : row.status === 'shortage' ? 'bg-rose-50/60' : row.status === 'not_found' ? 'bg-amber-50/60' : ''}`}>
+                        <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{row.sku}</td>
+                        <td className="px-4 py-2 text-xs max-w-[200px] truncate">{row.product_name}</td>
+                        <td className="px-4 py-2 text-right">{row.system_qty}</td>
+                        <td className="px-4 py-2 text-right font-semibold">{row.counted_qty}</td>
+                        <td className={`px-4 py-2 text-right font-bold ${row.delta > 0 ? 'text-emerald-700' : row.delta < 0 ? 'text-rose-700' : 'text-muted-foreground'}`}>
+                          {row.delta > 0 ? '+' : ''}{row.delta}
+                        </td>
+                        <td className={`px-4 py-2 text-right text-xs ${row.value_impact >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {row.value_impact >= 0 ? '+' : ''}{formatCurrency(row.value_impact)}
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${row.status === 'ok' ? 'bg-muted text-muted-foreground' : row.status === 'surplus' ? 'bg-emerald-100 text-emerald-700' : row.status === 'shortage' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {row.status === 'ok' ? 'OK' : row.status === 'surplus' ? 'Sobrante' : row.status === 'shortage' ? 'Faltante' : 'No encontrado'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {/* Full items table (applied session) */}
+          {detail.status === 'applied' && detail.items.filter(i => i.counted_qty !== null).length > 0 && (
+            <Card className="overflow-hidden">
+              <div className="px-4 py-3 border-b border-border">
+                <span className="font-semibold text-sm">Detalle del conteo aplicado ({detail.items.filter(i => i.counted_qty !== null).length} productos)</span>
+              </div>
+              <div className="overflow-x-auto max-h-[450px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-xs uppercase text-muted-foreground sticky top-0">
+                    <tr>
+                      <th className="text-left px-4 py-2">SKU</th>
+                      <th className="text-left px-4 py-2">Producto</th>
+                      <th className="text-left px-4 py-2">Categoría</th>
+                      <th className="text-right px-4 py-2">Sistema</th>
+                      <th className="text-right px-4 py-2">Contado</th>
+                      <th className="text-right px-4 py-2">Delta</th>
+                      <th className="text-right px-4 py-2">Impacto $</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.items.filter(i => i.counted_qty !== null).map((item) => (
+                      <tr key={item.id} className={`border-t border-border ${(item.delta ?? 0) > 0 ? 'bg-emerald-50/40' : (item.delta ?? 0) < 0 ? 'bg-rose-50/40' : ''}`}>
+                        <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{item.sku}</td>
+                        <td className="px-4 py-2 text-xs">{item.product_name}</td>
+                        <td className="px-4 py-2 text-xs text-muted-foreground">{item.category_name ?? '—'}</td>
+                        <td className="px-4 py-2 text-right">{item.system_qty}</td>
+                        <td className="px-4 py-2 text-right font-semibold">{item.counted_qty}</td>
+                        <td className={`px-4 py-2 text-right font-bold text-xs ${(item.delta ?? 0) > 0 ? 'text-emerald-700' : (item.delta ?? 0) < 0 ? 'text-rose-700' : 'text-muted-foreground'}`}>
+                          {(item.delta ?? 0) > 0 ? '+' : ''}{item.delta ?? 0}
+                        </td>
+                        <td className={`px-4 py-2 text-right text-xs ${(item.value_impact ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {(item.value_impact ?? 0) >= 0 ? '+' : ''}{formatCurrency(item.value_impact ?? 0)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {/* Draft: show product snapshot */}
+          {detail.status === 'draft' && previewRows === null && (
+            <Card className="overflow-hidden">
+              <div className="px-4 py-3 border-b border-border">
+                <span className="font-semibold text-sm">Snapshot de productos ({detail.items.length})</span>
+                <span className="text-xs text-muted-foreground ml-2">Descarga la plantilla para ver con formato Excel</span>
+              </div>
+              <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-xs uppercase text-muted-foreground sticky top-0">
+                    <tr>
+                      <th className="text-left px-4 py-2">SKU</th>
+                      <th className="text-left px-4 py-2">Producto</th>
+                      <th className="text-left px-4 py-2">Categoría</th>
+                      <th className="text-right px-4 py-2">Stock al momento</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.items.map((item) => (
+                      <tr key={item.id} className="border-t border-border hover:bg-muted/20">
+                        <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{item.sku}</td>
+                        <td className="px-4 py-2 text-xs">{item.product_name}</td>
+                        <td className="px-4 py-2 text-xs text-muted-foreground">{item.category_name ?? '—'}</td>
+                        <td className="px-4 py-2 text-right font-semibold">{item.system_qty}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </>
+      ) : null}
     </div>
   );
 }

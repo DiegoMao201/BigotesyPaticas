@@ -791,3 +791,139 @@ export const adminEtl = {
   ),
 };
 
+// ─── Inventory Counts ──────────────────────────────────────────────────────
+
+export interface CountSessionOut {
+  id: string;
+  name: string;
+  status: 'draft' | 'in_progress' | 'applied' | 'cancelled';
+  notes: string | null;
+  total_products_counted: number;
+  total_with_difference: number;
+  total_positive_delta: number;
+  total_negative_delta: number;
+  total_value_impact: number;
+  applied_at: string | null;
+  applied_by: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  items_count: number;
+}
+
+export interface CountItemOut {
+  id: string;
+  product_id: string;
+  sku: string;
+  product_name: string;
+  category_name: string | null;
+  unit_cost: number;
+  system_qty: number;
+  counted_qty: number | null;
+  delta: number | null;
+  value_impact: number | null;
+  notes: string | null;
+}
+
+export interface CountSessionDetail extends CountSessionOut {
+  items: CountItemOut[];
+}
+
+export interface UploadPreviewRow {
+  sku: string;
+  product_name: string;
+  category_name: string | null;
+  system_qty: number;
+  counted_qty: number;
+  delta: number;
+  value_impact: number;
+  unit_cost: number;
+  status: 'ok' | 'surplus' | 'shortage' | 'not_found';
+}
+
+export interface UploadPreview {
+  matched: number;
+  not_found: number;
+  with_difference: number;
+  total_value_impact: number;
+  rows: UploadPreviewRow[];
+}
+
+export interface CountSessionsResponse {
+  items: CountSessionOut[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export const inventoryCounts = {
+  list: (page = 1) =>
+    api<CountSessionsResponse>(`/v1/inventory-counts?page=${page}&page_size=20`),
+
+  get: (id: string) =>
+    api<CountSessionDetail>(`/v1/inventory-counts/${id}`),
+
+  create: (payload: { name: string; notes?: string }) =>
+    api<CountSessionOut>('/v1/inventory-counts', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  delete: (id: string) =>
+    api(`/v1/inventory-counts/${id}`, { method: 'DELETE' }),
+
+  apply: (id: string) =>
+    api<{ status: string; products_counted: number; products_adjusted: number; total_positive_delta: number; total_negative_delta: number; total_value_impact: number }>(
+      `/v1/inventory-counts/${id}/apply`,
+      { method: 'POST', body: '{}' }
+    ),
+
+  downloadTemplate: (id: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('bp_admin_token') : null;
+    const url = `${API_BASE}/v1/inventory-counts/${id}/template`;
+    const a = document.createElement('a');
+    a.href = url;
+    // Attach auth via fetch + blob for proper download
+    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const burl = URL.createObjectURL(blob);
+        a.href = burl;
+        a.download = `conteo_${id.slice(0, 8)}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(burl);
+      });
+  },
+
+  downloadReport: (id: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('bp_admin_token') : null;
+    const url = `${API_BASE}/v1/inventory-counts/${id}/report`;
+    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const burl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = burl;
+        a.download = `reporte_conteo_${id.slice(0, 8)}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(burl);
+      });
+  },
+
+  uploadExcel: async (id: string, file: File): Promise<UploadPreview> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('bp_admin_token') : null;
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_BASE}/v1/inventory-counts/${id}/upload`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Error al procesar archivo' }));
+      throw new Error(err.detail || 'Error al procesar archivo');
+    }
+    return res.json();
+  },
+};
+
