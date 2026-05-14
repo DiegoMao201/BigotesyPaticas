@@ -175,8 +175,10 @@ async def list_stock(
         .where(Product.deleted_at.is_(None))
     )
     if q:
-        like = f"%{q}%"
-        stmt = stmt.where(or_(Product.name.ilike(like), Product.sku.ilike(like)))
+        # Multi-token AND: each word must appear in name or sku (order-independent)
+        for token in q.split():
+            like = f"%{token}%"
+            stmt = stmt.where(or_(Product.name.ilike(like), Product.sku.ilike(like)))
 
     rows = (await db.execute(stmt)).all()
     items = []

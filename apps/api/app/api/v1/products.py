@@ -41,10 +41,14 @@ async def list_products(
     count_stmt = select(func.count(Product.id)).where(Product.deleted_at.is_(None))
 
     if q:
-        like = f"%{q}%"
-        cond = or_(Product.name.ilike(like), Product.sku.ilike(like))
-        stmt = stmt.where(cond)
-        count_stmt = count_stmt.where(cond)
+        # Multi-token AND: each word must appear in name or sku (order-independent)
+        from sqlalchemy import and_
+        tokens = q.split()
+        for token in tokens:
+            like = f"%{token}%"
+            cond = or_(Product.name.ilike(like), Product.sku.ilike(like))
+            stmt = stmt.where(cond)
+            count_stmt = count_stmt.where(cond)
     if brand_id:
         stmt = stmt.where(Product.brand_id == brand_id)
         count_stmt = count_stmt.where(Product.brand_id == brand_id)
