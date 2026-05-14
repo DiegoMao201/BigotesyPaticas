@@ -9,7 +9,7 @@ import {
   Boxes, AlertTriangle, Search, Package, History, ArrowUpDown,
   ArrowUp, ArrowDown, Edit2, Check, X, RefreshCw, TrendingUp,
   DollarSign, ShoppingBag, Plus, Minus, Sparkles, Download, ShoppingCart,
-  ClipboardList, Upload, ChevronRight, Trash2, PlayCircle, Eye, FileSpreadsheet,
+  ClipboardList, Upload, ChevronRight, Trash2, PlayCircle, Eye, FileSpreadsheet, SlidersHorizontal,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, inventory, analytics, inventoryCounts, type StockRow, type CountSessionOut, type CountSessionDetail, type UploadPreviewRow } from '@/lib/api';
@@ -49,7 +49,7 @@ function SortTh({
 
 export default function InventoryPage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<'stock' | 'movements' | 'alerts' | 'analytics' | 'conteo'>('stock');
+  const [tab, setTab] = useState<'stock' | 'movements' | 'alerts' | 'analytics' | 'conteo' | 'ajustes'>('stock');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<{ only_in_stock?: boolean; only_low_stock?: boolean }>({});
@@ -178,8 +178,8 @@ export default function InventoryPage() {
       </div>
 
       <div className="flex gap-1 border-b border-border overflow-x-auto">
-        {[{ id: 'stock', label: 'Stock & Precios', icon: Package }, { id: 'alerts', label: `Alertas (${critical.length + low.length})`, icon: AlertTriangle }, { id: 'movements', label: 'Movimientos', icon: History }, { id: 'analytics', label: 'Análisis IA', icon: Sparkles }, { id: 'conteo', label: 'Conteo Físico', icon: ClipboardList }].map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id as 'stock' | 'movements' | 'alerts' | 'analytics' | 'conteo')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${tab === t.id ? 'border-brand-500 text-brand-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+        {[{ id: 'stock', label: 'Stock & Precios', icon: Package }, { id: 'alerts', label: `Alertas (${critical.length + low.length})`, icon: AlertTriangle }, { id: 'movements', label: 'Movimientos', icon: History }, { id: 'analytics', label: 'Análisis IA', icon: Sparkles }, { id: 'ajustes', label: 'Ajustes', icon: SlidersHorizontal }, { id: 'conteo', label: 'Conteo Físico', icon: ClipboardList }].map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id as 'stock' | 'movements' | 'alerts' | 'analytics' | 'conteo' | 'ajustes')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${tab === t.id ? 'border-brand-500 text-brand-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             <t.icon className="w-4 h-4" /> {t.label}
           </button>
         ))}
@@ -353,6 +353,8 @@ export default function InventoryPage() {
       )}
 
       {tab === 'analytics' && <AnalyticsTab />}
+
+      {tab === 'ajustes' && <AjustesTab />}
 
       {tab === 'conteo' && <ConteoTab />}
 
@@ -914,6 +916,28 @@ function ConteoTab() {
         <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-10 bg-muted/40 rounded animate-pulse" />)}</div>
       ) : detail ? (
         <>
+          {/* Progress bar (in_progress only) */}
+          {detail.status === 'in_progress' && (
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Progreso de conteo</span>
+                <span className="text-sm font-bold text-brand-600">
+                  {detail.items.filter(i => i.counted_qty !== null).length} / {detail.items.length} productos
+                  {' '}({detail.items.length > 0 ? Math.round(detail.items.filter(i => i.counted_qty !== null).length / detail.items.length * 100) : 0}%)
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2">
+                <div
+                  className="bg-brand-500 h-2 rounded-full transition-all"
+                  style={{ width: `${detail.items.length > 0 ? Math.round(detail.items.filter(i => i.counted_qty !== null).length / detail.items.length * 100) : 0}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Puedes subir múltiples lotes parciales — solo se ajustarán los productos con conteo registrado.
+              </p>
+            </Card>
+          )}
+
           {/* Summary cards */}
           {detail.status !== 'draft' && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -950,7 +974,7 @@ function ConteoTab() {
                   <p className="text-sm font-medium">
                     {detail.status === 'draft'
                       ? '1️⃣ Descarga la plantilla → 2️⃣ Llena el conteo → 3️⃣ Sube el archivo → 4️⃣ Aplica ajustes'
-                      : '✅ Excel subido. Revisa las diferencias abajo y aplica los ajustes.'}
+                      : '✅ Conteo en progreso. Puedes subir más lotes parciales. Solo se ajustan los productos con conteo registrado.'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
@@ -1108,6 +1132,44 @@ function ConteoTab() {
             </Card>
           )}
 
+          {/* In-progress: show already-counted items when no fresh preview */}
+          {detail.status === 'in_progress' && previewRows === null && detail.items.some(i => i.counted_qty !== null) && (
+            <Card className="overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                <span className="font-semibold text-sm">Productos ya contados en esta sesión</span>
+                <span className="text-xs text-muted-foreground">{detail.items.filter(i => i.counted_qty !== null).length} de {detail.items.length}</span>
+              </div>
+              <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-xs uppercase text-muted-foreground sticky top-0">
+                    <tr>
+                      <th className="text-left px-4 py-2">SKU</th>
+                      <th className="text-left px-4 py-2">Producto</th>
+                      <th className="text-left px-4 py-2">Categoría</th>
+                      <th className="text-right px-4 py-2">Sistema</th>
+                      <th className="text-right px-4 py-2">Contado</th>
+                      <th className="text-right px-4 py-2">Diferencia</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.items.filter(i => i.counted_qty !== null).sort((a, b) => (a.category_name ?? '').localeCompare(b.category_name ?? '') || a.product_name.localeCompare(b.product_name)).map((item) => (
+                      <tr key={item.id} className={`border-t border-border ${(item.delta ?? 0) > 0 ? 'bg-emerald-50/40' : (item.delta ?? 0) < 0 ? 'bg-rose-50/40' : ''}`}>
+                        <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{item.sku}</td>
+                        <td className="px-4 py-2 text-xs">{item.product_name}</td>
+                        <td className="px-4 py-2 text-xs text-muted-foreground">{item.category_name ?? '—'}</td>
+                        <td className="px-4 py-2 text-right text-muted-foreground">{item.system_qty}</td>
+                        <td className="px-4 py-2 text-right font-semibold">{item.counted_qty}</td>
+                        <td className={`px-4 py-2 text-right font-bold text-xs ${(item.delta ?? 0) > 0 ? 'text-emerald-700' : (item.delta ?? 0) < 0 ? 'text-rose-700' : 'text-muted-foreground'}`}>
+                          {(item.delta ?? 0) > 0 ? '+' : ''}{item.delta ?? 0}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
           {/* Draft: show product snapshot */}
           {detail.status === 'draft' && previewRows === null && (
             <Card className="overflow-hidden">
@@ -1141,6 +1203,241 @@ function ConteoTab() {
           )}
         </>
       ) : null}
+    </div>
+  );
+}
+
+function AjustesTab() {
+  const qc = useQueryClient();
+  const [searchQ, setSearchQ] = useState('');
+  const [selected, setSelected] = useState<StockRow | null>(null);
+  const [delta, setDelta] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const { data: searchData, isLoading: searching } = useQuery({
+    queryKey: ['inventory-search-ajuste', searchQ],
+    queryFn: () => inventory.list({ q: searchQ || undefined, page_size: 10, page: 1 }),
+    enabled: searchQ.length >= 2,
+    staleTime: 10_000,
+  });
+
+  const { data: adjHistory, isLoading: loadingHistory } = useQuery({
+    queryKey: ['inventory-adjustments'],
+    queryFn: () => inventory.movements({ movement_type: 'ADJUSTMENT', limit: 100 }),
+    staleTime: 30_000,
+  });
+
+  const adjustMut = useMutation({
+    mutationFn: inventory.adjust,
+    onSuccess: () => {
+      toast.success('Ajuste guardado');
+      qc.invalidateQueries({ queryKey: ['inventory-stock'] });
+      qc.invalidateQueries({ queryKey: ['inventory-movements'] });
+      qc.invalidateQueries({ queryKey: ['inventory-adjustments'] });
+      qc.invalidateQueries({ queryKey: ['stock-alerts'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      setDelta('');
+      setNotes('');
+      setSelected(null);
+      setSearchQ('');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deltaNum = parseInt(delta) || 0;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Form */}
+        <Card className="p-5 space-y-4">
+          <div>
+            <h2 className="font-semibold text-base flex items-center gap-2">
+              <SlidersHorizontal className="w-5 h-5 text-brand-600" /> Ajuste rápido de stock
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">Busca el producto, ingresa la cantidad y guarda. Queda registrado en el historial.</p>
+          </div>
+
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+            <Input
+              value={searchQ}
+              onChange={(e) => { setSearchQ(e.target.value); setSelected(null); }}
+              placeholder="Buscar por SKU o nombre…"
+              className="pl-9"
+            />
+          </div>
+
+          {searchQ.length >= 2 && !selected && (
+            <div className="border border-border rounded-lg overflow-hidden shadow-sm">
+              {searching ? (
+                <div className="p-3 text-sm text-muted-foreground text-center">Buscando…</div>
+              ) : (searchData?.items.length ?? 0) === 0 ? (
+                <div className="p-3 text-sm text-muted-foreground text-center">Sin resultados para "{searchQ}"</div>
+              ) : (
+                <div className="max-h-52 overflow-y-auto divide-y divide-border">
+                  {searchData?.items.map((s) => (
+                    <button
+                      key={s.product_id}
+                      className="w-full text-left px-4 py-2.5 hover:bg-muted/40 transition-colors flex items-center justify-between gap-2"
+                      onClick={() => { setSelected(s); setSearchQ(s.name); }}
+                    >
+                      <div>
+                        <div className="text-sm font-medium">{s.name}</div>
+                        <div className="text-xs text-muted-foreground font-mono">{s.sku}</div>
+                      </div>
+                      <Badge variant={s.quantity <= 0 ? 'danger' : s.quantity < 5 ? 'warning' : 'success'}>{s.quantity}</Badge>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {selected && (
+            <div className="bg-muted/40 rounded-lg p-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium text-sm truncate">{selected.name}</div>
+                <div className="text-xs text-muted-foreground font-mono">{selected.sku}</div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="text-right">
+                  <div className="text-xs text-muted-foreground">Stock actual</div>
+                  <div className="font-bold text-xl">{selected.quantity}</div>
+                </div>
+                <button onClick={() => { setSelected(null); setSearchQ(''); setDelta(''); }} className="p-1 text-muted-foreground hover:text-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {selected && (
+            <>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase mb-1.5 block">Cantidad (+ entrada / − salida)</label>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setDelta(String(deltaNum - 1))}><Minus className="w-3 h-3" /></Button>
+                  <Input type="number" value={delta} onChange={(e) => setDelta(e.target.value)} className="text-center" autoFocus placeholder="0" />
+                  <Button type="button" variant="outline" size="sm" onClick={() => setDelta(String(deltaNum + 1))}><Plus className="w-3 h-3" /></Button>
+                </div>
+                {deltaNum !== 0 && (
+                  <p className="text-xs mt-1.5 text-muted-foreground">
+                    Stock resultante: <strong className={deltaNum > 0 ? 'text-emerald-600' : 'text-rose-600'}>{selected.quantity + deltaNum}</strong> unidades
+                    <span className={`ml-1 ${deltaNum > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>({deltaNum > 0 ? '+' : ''}{deltaNum})</span>
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase mb-1.5 block">Motivo / Notas</label>
+                <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej: Merma, devolución, corrección…" />
+              </div>
+              <Button
+                className="w-full"
+                onClick={() => {
+                  if (!deltaNum) return toast.error('La cantidad no puede ser cero');
+                  adjustMut.mutate({ product_id: selected.product_id as any, quantity_delta: deltaNum, notes: notes || undefined });
+                }}
+                disabled={adjustMut.isPending || !deltaNum}
+              >
+                {adjustMut.isPending ? 'Guardando…' : 'Guardar ajuste'}
+              </Button>
+            </>
+          )}
+
+          {!selected && searchQ.length < 2 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <SlidersHorizontal className="w-10 h-10 mx-auto mb-2 opacity-20" />
+              <p className="text-sm">Escribe al menos 2 caracteres para buscar un producto</p>
+            </div>
+          )}
+        </Card>
+
+        {/* Stats */}
+        <Card className="p-5">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><History className="w-4 h-4 text-brand-600" /> Resumen de ajustes</h3>
+          {loadingHistory ? (
+            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-10 bg-muted/40 rounded animate-pulse" />)}</div>
+          ) : (() => {
+            const items = adjHistory?.items ?? [];
+            const entradas = items.filter(m => m.quantity_delta > 0);
+            const salidas = items.filter(m => m.quantity_delta < 0);
+            const totalEntrada = entradas.reduce((s, m) => s + m.quantity_delta, 0);
+            const totalSalida = salidas.reduce((s, m) => s + m.quantity_delta, 0);
+            return (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg">
+                  <span className="text-sm text-emerald-700">Entradas (+)</span>
+                  <span className="font-bold text-emerald-700">+{totalEntrada} uds · {entradas.length} ajustes</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-rose-50 rounded-lg">
+                  <span className="text-sm text-rose-700">Salidas (−)</span>
+                  <span className="font-bold text-rose-700">{totalSalida} uds · {salidas.length} ajustes</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
+                  <span className="text-sm text-muted-foreground">Total registrados</span>
+                  <span className="font-bold">{items.length} movimientos</span>
+                </div>
+              </div>
+            );
+          })()}
+        </Card>
+      </div>
+
+      {/* History table */}
+      <Card className="overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-3">
+          <span className="font-semibold text-sm">Historial de ajustes</span>
+          <span className="text-xs text-muted-foreground">Últimos 100 ajustes manuales</span>
+          <Button variant="outline" size="sm" className="ml-auto" onClick={() => qc.invalidateQueries({ queryKey: ['inventory-adjustments'] })}>
+            <RefreshCw className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="text-left px-4 py-3">Fecha</th>
+                <th className="text-left px-4 py-3">Producto</th>
+                <th className="text-right px-4 py-3">Delta</th>
+                <th className="text-right px-4 py-3">Stock resultante</th>
+                <th className="text-left px-4 py-3">Notas</th>
+                <th className="text-left px-4 py-3">Usuario</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadingHistory ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-t border-border">
+                    <td colSpan={6}><div className="h-8 bg-muted/40 animate-pulse mx-4 my-2 rounded" /></td>
+                  </tr>
+                ))
+              ) : (adjHistory?.items.length ?? 0) === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-muted-foreground">
+                    <SlidersHorizontal className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">No hay ajustes registrados aún</p>
+                  </td>
+                </tr>
+              ) : adjHistory?.items.map((m) => (
+                <tr key={m.id} className={`border-t border-border hover:bg-muted/20 ${m.quantity_delta > 0 ? 'bg-emerald-50/30' : 'bg-rose-50/30'}`}>
+                  <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">{formatDate(m.occurred_at)}</td>
+                  <td className="px-4 py-2">
+                    <div className="font-medium text-xs">{m.product_name}</div>
+                    <div className="text-xs text-muted-foreground font-mono">{m.product_sku}</div>
+                  </td>
+                  <td className={`px-4 py-2 text-right font-bold text-sm ${m.quantity_delta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {m.quantity_delta > 0 ? '+' : ''}{m.quantity_delta}
+                  </td>
+                  <td className="px-4 py-2 text-right text-muted-foreground">{m.quantity_after}</td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground max-w-xs truncate">{m.notes ?? '—'}</td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground">{m.created_by ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }
