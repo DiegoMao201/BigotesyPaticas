@@ -82,7 +82,9 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
     products: dict[uuid.UUID, Product] = {}
     for pid in product_ids:
         p = (
-            await db.execute(select(Product).where(Product.id == pid).with_for_update())
+            await db.execute(
+                select(Product).where(Product.id == pid).with_for_update(of=Product)
+            )
         ).scalar_one_or_none()
         if p is None or p.deleted_at is not None or not p.is_active:
             raise HTTPException(status_code=400, detail=f"Producto inválido: {pid}")
