@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User } from './api';
+import { clearAuth } from './api';
 
 interface AuthState {
   user: User | null;
@@ -17,7 +18,10 @@ export const useAuth = create<AuthState>()(
       user: null,
       token: null,
       setSession: (user, token) => set({ user, token }),
-      clear: () => set({ user: null, token: null }),
+      clear: () => {
+        clearAuth();
+        set({ user: null, token: null });
+      },
     }),
     { name: 'bp_admin_session' },
   ),

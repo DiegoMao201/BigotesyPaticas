@@ -1,6 +1,7 @@
 /**
  * Cliente HTTP tipado para el backend FastAPI.
  * Lee el token del localStorage en el cliente; en server components usar cookies.
+ * Incluye auto-refresh transparente de token + redirect a login si la sesión venció.
  */
 export const API_BASE =
   typeof window === 'undefined'
@@ -8,6 +9,7 @@ export const API_BASE =
     : process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
 const TOKEN_KEY = 'bp_admin_token';
+const REFRESH_TOKEN_KEY = 'bp_admin_refresh_token';
 
 export function setToken(token: string | null) {
   if (typeof window === 'undefined') return;
@@ -20,6 +22,22 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+export function setRefreshToken(token: string | null) {
+  if (typeof window === 'undefined') return;
+  if (token) localStorage.setItem(REFRESH_TOKEN_KEY, token);
+  else localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function clearAuth() {
+  setToken(null);
+  setRefreshToken(null);
+}
+
 export class ApiError extends Error {
   status: number;
   detail: unknown;
@@ -30,11 +48,37 @@ export class ApiError extends Error {
   }
 }
 
+// Singleton promise to avoid parallel refresh races
+let _refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) throw new Error('no_refresh_token');
+
+  const res = await fetch(`${API_BASE}/v1/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    clearAuth();
+    if (typeof window !== 'undefined') window.location.href = '/login';
+    throw new Error('session_expired');
+  }
+
+  const data = await res.json();
+  setToken(data.access_token);
+  if (data.refresh_token) setRefreshToken(data.refresh_token);
+  return data.access_token as string;
+}
+
 export async function api<T = unknown>(
   path: string,
-  init: RequestInit & { auth?: boolean } = {},
+  init: RequestInit & { auth?: boolean; _retry?: boolean } = {},
 ): Promise<T> {
-  const { auth = true, headers, ...rest } = init;
+  const { auth = true, _retry = false, headers, ...rest } = init;
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
   const token = auth ? getToken() : null;
   const finalHeaders: Record<string, string> = {
@@ -46,6 +90,22 @@ export async function api<T = unknown>(
   const res = await fetch(url, { ...rest, headers: finalHeaders, cache: 'no-store' });
   const ct = res.headers.get('content-type') || '';
   const data = ct.includes('application/json') ? await res.json() : await res.text();
+
+  // Auto-refresh on 401 (token expirado) — solo una vez para no entrar en loop
+  if (res.status === 401 && auth && !_retry) {
+    try {
+      if (!_refreshPromise) {
+        _refreshPromise = refreshAccessToken().finally(() => { _refreshPromise = null; });
+      }
+      await _refreshPromise;
+      // Retry with new token
+      return api<T>(path, { ...init, _retry: true });
+    } catch {
+      // clearAuth + redirect ya se hicieron en refreshAccessToken
+      throw new ApiError('Sesión expirada, por favor inicia sesión de nuevo', 401, null);
+    }
+  }
+
   if (!res.ok) {
     const detail = typeof data === 'object' ? (data as { detail?: string }).detail : data;
     throw new ApiError(typeof detail === 'string' ? detail : 'Error de API', res.status, data);

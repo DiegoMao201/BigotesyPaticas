@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     # JWT
     jwt_secret: str = "dev-only-change-me"
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 60
-    jwt_refresh_token_expire_days: int = 14
+    jwt_access_token_expire_minutes: int = 480   # 8 horas — jornada laboral completa
+    jwt_refresh_token_expire_days: int = 30      # 30 días — refresh dura un mes
 
     # Bootstrap admin
     admin_email: str = "admin@bigotesypaticas.com"

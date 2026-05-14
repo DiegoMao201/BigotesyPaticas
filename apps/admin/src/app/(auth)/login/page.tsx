@@ -8,7 +8,7 @@ import { Loader2, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { auth, setToken } from '@/lib/api';
+import { auth, setToken, setRefreshToken } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
 
 export default function LoginPage() {
@@ -24,6 +24,7 @@ export default function LoginPage() {
     try {
       const data = await auth.login(email, password);
       setToken(data.access_token);
+      setRefreshToken(data.refresh_token);
       setSession(data.user, data.access_token);
       toast.success(`Bienvenido, ${data.user.full_name}`);
       router.push('/dashboard');
