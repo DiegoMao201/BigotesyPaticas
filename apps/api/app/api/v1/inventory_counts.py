@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
 from app.deps import CurrentUser, DBSession, require_permission
-from app.models.catalog import Category, Product
+from app.models.catalog import Product
 from app.models.inventory import (
     CountItem,
     CountSession,
@@ -161,14 +161,15 @@ async def create_count_session(
         .subquery()
     )
 
+    # Note: Product has lazy="joined" on .category, so we do NOT add an explicit
+    # Category join here — that would create a duplicate join and a 500 error.
     rows = (
         await db.execute(
-            select(Product, stock_sub.c.qty, Category.name.label("cat_name"))
+            select(Product, stock_sub.c.qty)
             .outerjoin(stock_sub, stock_sub.c.product_id == Product.id)
-            .outerjoin(Category, Category.id == Product.category_id)
             .where(Product.deleted_at.is_(None))
             .where(Product.is_active == True)  # noqa: E712
-            .order_by(Category.name.nullsfirst(), Product.name)
+            .order_by(Product.name)
         )
     ).all()
 
@@ -187,11 +188,11 @@ async def create_count_session(
             product_id=p.id,
             sku=p.sku,
             product_name=p.name,
-            category_name=cat_name,
+            category_name=p.category.name if p.category else None,
             unit_cost=Decimal(str(p.cost or 0)),
             system_qty=int(qty or 0),
         )
-        for p, qty, cat_name in rows
+        for p, qty in rows
     ]
     db.add_all(count_items)
     await db.commit()
