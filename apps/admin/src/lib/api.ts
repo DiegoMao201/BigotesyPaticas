@@ -428,23 +428,39 @@ export const expenses = {
 
 export interface CashClosing {
   id: string;
-  legacy_id: string;
   fecha: string;
-  ventas_efectivo: number;
-  gastos_efectivo: number;
+  status: 'open' | 'closed';
   saldo_inicial: number;
-  saldo_final: number;
-  diferencia: number;
-  notas: string;
+  gastos_efectivo: number;
+  ventas_por_metodo: Record<string, number>;
+  creditos_por_metodo: Record<string, number>;
+  total_ventas: number;
+  order_count: number;
+  ventas_efectivo: number;
+  creditos_efectivo: number;
+  saldo_final_efectivo: number;
+  saldo_contado: number | null;
+  diferencia: number | null;
+  notas: string | null;
+  closed_at: string | null;
+  closed_by: string | null;
 }
 
 export const cashClosings = {
+  today: () => api<CashClosing>('/v1/cash-closings/today'),
   list: (params: { page?: number; page_size?: number } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
     if (params.page_size) qs.set('page_size', String(params.page_size));
     return api<{ items: CashClosing[]; total: number; page: number; page_size: number }>(`/v1/cash-closings?${qs.toString()}`);
   },
+  get: (id: string) => api<CashClosing>(`/v1/cash-closings/${id}`),
+  open: (payload: { fecha?: string; saldo_inicial?: number }) =>
+    api<CashClosing>('/v1/cash-closings', { method: 'POST', body: JSON.stringify(payload) }),
+  patch: (id: string, payload: { gastos_efectivo?: number; saldo_inicial?: number; notas?: string }) =>
+    api<CashClosing>(`/v1/cash-closings/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  close: (id: string, payload: { saldo_contado: number; gastos_efectivo?: number; notas?: string }) =>
+    api<CashClosing>(`/v1/cash-closings/${id}/close`, { method: 'POST', body: JSON.stringify(payload) }),
 };
 
 export interface SupplierRow {

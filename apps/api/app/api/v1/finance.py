@@ -1,19 +1,17 @@
-"""Endpoints financieros: gastos, cierres de caja, P&L, cash flow.
-
-Lee de `ops.legacy_id_map` (entidad 'gasto', 'cierre_caja', 'proveedor_sku')
-porque el ETL almacena estos registros como JSONB en `extra`.
-"""
+"""Endpoints financieros: gastos, cierres de caja, P&L, cash flow."""
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 
 from app.deps import CurrentUser, DBSession, require_permission
+from app.models.finance import CashClosing as CashClosingModel
 from app.models.ops import LegacyIdMap
 
 
@@ -49,14 +47,39 @@ class ExpenseCreate(BaseModel):
 
 class CashClosingOut(BaseModel):
     id: str
-    legacy_id: str
     fecha: str
-    ventas_efectivo: float = 0
-    gastos_efectivo: float = 0
-    saldo_inicial: float = 0
-    saldo_final: float = 0
-    diferencia: float = 0
-    notas: str = ""
+    status: str
+    saldo_inicial: float
+    gastos_efectivo: float
+    ventas_por_metodo: dict[str, float]
+    creditos_por_metodo: dict[str, float]
+    total_ventas: float
+    order_count: int
+    ventas_efectivo: float
+    creditos_efectivo: float
+    saldo_final_efectivo: float
+    saldo_contado: float | None
+    diferencia: float | None
+    notas: str | None
+    closed_at: str | None
+    closed_by: str | None
+
+
+class CashClosingOpenPayload(BaseModel):
+    fecha: date | None = None
+    saldo_inicial: float = Field(default=0, ge=0)
+
+
+class CashClosingClosePayload(BaseModel):
+    saldo_contado: float = Field(ge=0)
+    gastos_efectivo: float = Field(default=0, ge=0)
+    notas: str | None = None
+
+
+class CashClosingPatchPayload(BaseModel):
+    gastos_efectivo: float | None = Field(default=None, ge=0)
+    saldo_inicial: float | None = Field(default=None, ge=0)
+    notas: str | None = None
 
 
 class SupplierOut(BaseModel):
@@ -208,7 +231,113 @@ async def list_expense_categories(db: DBSession, user: CurrentUser):
     return sorted(cats.values(), key=lambda x: -x["total"])
 
 
-# ────────────────── Cash Closings ──────────────────────
+# ────────────────── Cash Closings (real — finance.cash_closings) ──────────────────────
+
+_TZ = "America/Bogota"
+
+
+async def _compute_live_totals(db: DBSession, fecha: date) -> dict[str, Any]:
+    """Calcula totales en vivo desde sales.payments para una fecha."""
+    method_rows = (await db.execute(
+        text("""
+            SELECT p.method, COALESCE(SUM(p.amount), 0) AS total
+            FROM sales.payments p
+            JOIN sales.orders o ON o.id = p.order_id
+            WHERE DATE(o.occurred_at AT TIME ZONE 'America/Bogota') = :fecha
+              AND o.status NOT IN ('cancelled')
+            GROUP BY p.method
+        """),
+        {"fecha": fecha},
+    )).all()
+    ventas_por_metodo: dict[str, float] = {r.method: float(r.total) for r in method_rows}
+    total_ventas = sum(ventas_por_metodo.values())
+
+    refund_rows = (await db.execute(
+        text("""
+            SELECT COALESCE(o.payment_method, 'Otro') AS method,
+                   COALESCE(SUM(o.grand_total), 0) AS total
+            FROM sales.orders o
+            WHERE DATE(o.occurred_at AT TIME ZONE 'America/Bogota') = :fecha
+              AND o.status = 'refunded'
+            GROUP BY o.payment_method
+        """),
+        {"fecha": fecha},
+    )).all()
+    creditos_por_metodo: dict[str, float] = {r.method: float(r.total) for r in refund_rows}
+
+    order_count = (await db.execute(
+        text("""
+            SELECT COUNT(*) FROM sales.orders
+            WHERE DATE(occurred_at AT TIME ZONE 'America/Bogota') = :fecha
+              AND status NOT IN ('cancelled')
+        """),
+        {"fecha": fecha},
+    )).scalar()
+
+    return {
+        "ventas_por_metodo": ventas_por_metodo,
+        "creditos_por_metodo": creditos_por_metodo,
+        "total_ventas": total_ventas,
+        "order_count": int(order_count or 0),
+    }
+
+
+def _build_closing_out(closing: CashClosingModel, live: dict[str, Any]) -> CashClosingOut:
+    ventas_pm = live["ventas_por_metodo"]
+    creditos_pm = live["creditos_por_metodo"]
+    ventas_efectivo = ventas_pm.get("Efectivo", 0.0)
+    creditos_efectivo = creditos_pm.get("Efectivo", 0.0)
+    saldo_final = float(closing.saldo_inicial) + ventas_efectivo - creditos_efectivo - float(closing.gastos_efectivo)
+    return CashClosingOut(
+        id=str(closing.id),
+        fecha=str(closing.fecha),
+        status=closing.status,
+        saldo_inicial=float(closing.saldo_inicial),
+        gastos_efectivo=float(closing.gastos_efectivo),
+        ventas_por_metodo=ventas_pm,
+        creditos_por_metodo=creditos_pm,
+        total_ventas=live["total_ventas"],
+        order_count=live["order_count"],
+        ventas_efectivo=ventas_efectivo,
+        creditos_efectivo=creditos_efectivo,
+        saldo_final_efectivo=saldo_final,
+        saldo_contado=float(closing.saldo_contado) if closing.saldo_contado is not None else None,
+        diferencia=float(closing.diferencia) if closing.diferencia is not None else None,
+        notas=closing.notas,
+        closed_at=closing.closed_at.isoformat() if closing.closed_at else None,
+        closed_by=closing.closed_by,
+    )
+
+
+@closings_router.get("/today", response_model=CashClosingOut)
+async def get_today_closing(db: DBSession, user: CurrentUser):
+    """Retorna el cierre de hoy (lo crea automáticamente si no existe)."""
+    today = date.today()
+    result = await db.execute(
+        select(CashClosingModel).where(CashClosingModel.fecha == today)
+    )
+    closing = result.scalar_one_or_none()
+    if not closing:
+        prev_result = await db.execute(
+            select(CashClosingModel)
+            .where(CashClosingModel.fecha < today, CashClosingModel.status == "closed")
+            .order_by(CashClosingModel.fecha.desc())
+        )
+        prev = prev_result.scalars().first()
+        saldo_inicial = float(prev.saldo_final_efectivo or 0) if prev else 0.0
+        closing = CashClosingModel(
+            fecha=today,
+            status="open",
+            saldo_inicial=Decimal(str(saldo_inicial)),
+            created_by=user.email,
+        )
+        db.add(closing)
+        await db.commit()
+        await db.refresh(closing)
+
+    live = await _compute_live_totals(db, today)
+    return _build_closing_out(closing, live)
+
 
 @closings_router.get("", response_model=dict)
 async def list_cash_closings(
@@ -217,34 +346,152 @@ async def list_cash_closings(
     page: int = Query(1, ge=1),
     page_size: int = Query(30, ge=1, le=200),
 ):
-    rows = (await db.execute(
-        select(LegacyIdMap).where(LegacyIdMap.entity == "cierre_caja")
-    )).scalars().all()
+    total_result = await db.execute(
+        text("SELECT COUNT(*) FROM finance.cash_closings")
+    )
+    total = int(total_result.scalar() or 0)
+
+    rows_result = await db.execute(
+        select(CashClosingModel)
+        .order_by(CashClosingModel.fecha.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    closings = rows_result.scalars().all()
 
     items = []
-    for r in rows:
-        e = r.extra or {}
-        f = str(e.get("fecha", ""))
-        items.append({
-            "id": str(r.id),
-            "legacy_id": r.legacy_id,
-            "fecha": f[:10] if f else "",
-            "ventas_efectivo": _f(e.get("ventas_efectivo")),
-            "gastos_efectivo": _f(e.get("gastos_efectivo")),
-            "saldo_inicial": _f(e.get("saldo_inicial")),
-            "saldo_final": _f(e.get("saldo_final")),
-            "diferencia": _f(e.get("diferencia")),
-            "notas": str(e.get("notas", "")),
-        })
-    items.sort(key=lambda x: x["fecha"], reverse=True)
-    total = len(items)
-    start_idx = (page - 1) * page_size
-    return {
-        "items": items[start_idx:start_idx + page_size],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-    }
+    for closing in closings:
+        if closing.status == "open":
+            live = await _compute_live_totals(db, closing.fecha)
+        else:
+            live = {
+                "ventas_por_metodo": closing.snap_ventas_por_metodo or {},
+                "creditos_por_metodo": closing.snap_creditos_por_metodo or {},
+                "total_ventas": float(closing.snap_total_ventas or 0),
+                "order_count": 0,
+            }
+        items.append(_build_closing_out(closing, live).model_dump())
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@closings_router.get("/{closing_id}", response_model=CashClosingOut)
+async def get_cash_closing(closing_id: uuid.UUID, db: DBSession, user: CurrentUser):
+    result = await db.execute(
+        select(CashClosingModel).where(CashClosingModel.id == closing_id)
+    )
+    closing = result.scalar_one_or_none()
+    if not closing:
+        raise HTTPException(status_code=404, detail="Cierre no encontrado")
+    if closing.status == "open":
+        live = await _compute_live_totals(db, closing.fecha)
+    else:
+        live = {
+            "ventas_por_metodo": closing.snap_ventas_por_metodo or {},
+            "creditos_por_metodo": closing.snap_creditos_por_metodo or {},
+            "total_ventas": float(closing.snap_total_ventas or 0),
+            "order_count": 0,
+        }
+    return _build_closing_out(closing, live)
+
+
+@closings_router.post("", response_model=CashClosingOut, dependencies=[Depends(require_permission("finance:write"))])
+async def open_cash_closing(
+    payload: CashClosingOpenPayload,
+    db: DBSession,
+    user: CurrentUser,
+):
+    """Abre un cierre de caja para una fecha (hoy por defecto)."""
+    target_date = payload.fecha or date.today()
+    existing = (await db.execute(
+        select(CashClosingModel).where(CashClosingModel.fecha == target_date)
+    )).scalar_one_or_none()
+    if existing:
+        live = await _compute_live_totals(db, target_date)
+        return _build_closing_out(existing, live)
+
+    closing = CashClosingModel(
+        fecha=target_date,
+        status="open",
+        saldo_inicial=Decimal(str(payload.saldo_inicial)),
+        created_by=user.email,
+    )
+    db.add(closing)
+    await db.commit()
+    await db.refresh(closing)
+    live = await _compute_live_totals(db, target_date)
+    return _build_closing_out(closing, live)
+
+
+@closings_router.patch("/{closing_id}", response_model=CashClosingOut, dependencies=[Depends(require_permission("finance:write"))])
+async def patch_cash_closing(
+    closing_id: uuid.UUID,
+    payload: CashClosingPatchPayload,
+    db: DBSession,
+    user: CurrentUser,
+):
+    """Actualiza gastos en efectivo, saldo inicial o notas de un cierre abierto."""
+    result = await db.execute(
+        select(CashClosingModel).where(CashClosingModel.id == closing_id)
+    )
+    closing = result.scalar_one_or_none()
+    if not closing:
+        raise HTTPException(status_code=404, detail="Cierre no encontrado")
+    if closing.status == "closed":
+        raise HTTPException(status_code=400, detail="El cierre ya está cerrado")
+    if payload.gastos_efectivo is not None:
+        closing.gastos_efectivo = Decimal(str(payload.gastos_efectivo))
+    if payload.saldo_inicial is not None:
+        closing.saldo_inicial = Decimal(str(payload.saldo_inicial))
+    if payload.notas is not None:
+        closing.notas = payload.notas
+    closing.updated_by = user.email
+    await db.commit()
+    await db.refresh(closing)
+    live = await _compute_live_totals(db, closing.fecha)
+    return _build_closing_out(closing, live)
+
+
+@closings_router.post("/{closing_id}/close", response_model=CashClosingOut, dependencies=[Depends(require_permission("finance:write"))])
+async def close_cash_closing(
+    closing_id: uuid.UUID,
+    payload: CashClosingClosePayload,
+    db: DBSession,
+    user: CurrentUser,
+):
+    """Finaliza el cierre: guarda saldo_contado, diferencia y snapshot de ventas."""
+    result = await db.execute(
+        select(CashClosingModel).where(CashClosingModel.id == closing_id)
+    )
+    closing = result.scalar_one_or_none()
+    if not closing:
+        raise HTTPException(status_code=404, detail="Cierre no encontrado")
+    if closing.status == "closed":
+        raise HTTPException(status_code=400, detail="El cierre ya está cerrado")
+
+    live = await _compute_live_totals(db, closing.fecha)
+
+    if payload.gastos_efectivo:
+        closing.gastos_efectivo = Decimal(str(payload.gastos_efectivo))
+    ventas_efectivo = live["ventas_por_metodo"].get("Efectivo", 0.0)
+    creditos_efectivo = live["creditos_por_metodo"].get("Efectivo", 0.0)
+    saldo_final = float(closing.saldo_inicial) + ventas_efectivo - creditos_efectivo - float(closing.gastos_efectivo)
+
+    closing.snap_ventas_por_metodo = live["ventas_por_metodo"]
+    closing.snap_creditos_por_metodo = live["creditos_por_metodo"]
+    closing.snap_total_ventas = Decimal(str(live["total_ventas"]))
+    closing.saldo_final_efectivo = Decimal(str(saldo_final))
+    closing.saldo_contado = Decimal(str(payload.saldo_contado))
+    closing.diferencia = Decimal(str(payload.saldo_contado)) - Decimal(str(saldo_final))
+    closing.notas = payload.notas
+    closing.status = "closed"
+    closing.closed_at = datetime.utcnow()
+    closing.closed_by = user.email
+    closing.updated_by = user.email
+
+    await db.commit()
+    await db.refresh(closing)
+    return _build_closing_out(closing, live)
 
 
 # ────────────────── Suppliers ──────────────────────
