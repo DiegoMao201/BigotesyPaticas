@@ -267,10 +267,56 @@ async def list_orders(
             pass
 
     total = (await db.execute(count_stmt)).scalar_one()
+
+    # Revenue aggregate (same filters, excludes cancelled)
+    rev_stmt = select(
+        func.coalesce(func.sum(Order.grand_total), 0).label("revenue"),
+        func.count().label("cnt"),
+    ).select_from(Order).where(Order.status != "cancelled")
+    if status_filter and status_filter != "cancelled":
+        rev_stmt = rev_stmt.where(Order.status == status_filter)
+    if channel:
+        rev_stmt = rev_stmt.where(Order.channel == channel)
+    if payment_status:
+        rev_stmt = rev_stmt.where(Order.payment_status == payment_status)
+    if q:
+        pattern = f"%{q}%"
+        cond = or_(
+            Order.order_number.ilike(pattern),
+            cast(Order.notes, String).ilike(pattern),
+        )
+        rev_stmt = rev_stmt.where(cond)
+    if date_from:
+        try:
+            d = dt_date.fromisoformat(date_from)
+            rev_stmt = rev_stmt.where(Order.occurred_at >= d)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            d = dt_date.fromisoformat(date_to)
+            from datetime import timedelta
+            d_end = d + timedelta(days=1)
+            rev_stmt = rev_stmt.where(Order.occurred_at < d_end)
+        except ValueError:
+            pass
+    rev_row = (await db.execute(rev_stmt)).one()
+    total_revenue = float(rev_row.revenue)
+    active_count = int(rev_row.cnt)
+    avg_ticket = total_revenue / active_count if active_count > 0 else 0.0
+
     offset = (page - 1) * page_size
     rows = (await db.execute(stmt.offset(offset).limit(page_size))).scalars().all()
 
-    return {"items": rows, "total": total, "page": page, "page_size": page_size}
+    return {
+        "items": rows,
+        "total": total,
+        "total_revenue": total_revenue,
+        "avg_ticket": avg_ticket,
+        "active_count": active_count,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.post(

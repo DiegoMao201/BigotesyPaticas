@@ -22,7 +22,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from app.deps import require_superadmin
+from app.deps import require_superadmin, DBSession
 
 router = APIRouter(prefix="/admin/etl", tags=["admin-etl"])
 
@@ -885,20 +885,65 @@ def _fix_dates_sync(sheet_id: str, creds_json_str: str, dry_run: bool) -> dict[s
 @router.post(
     "/fix-sales-dates",
     response_model=FixDatesResponse,
-    summary="Corregir fechas de ventas legadas desde Google Sheets",
+    summary="Corregir fechas de ventas legadas desde order_number",
 )
 async def fix_sales_dates(
     body: FixDatesRequest,
+    db: DBSession,
     _current_user=Depends(require_superadmin),
 ):
-    creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
-    if not creds_json:
-        raise HTTPException(503, "GOOGLE_SERVICE_ACCOUNT_JSON no configurada")
-    try:
-        result = await asyncio.to_thread(_fix_dates_sync, body.sheet_id, creds_json, body.dry_run)
-    except Exception as exc:
-        raise HTTPException(500, f"Error: {exc}")
-    return FixDatesResponse(**result)
+    """Extrae fechas reales directamente del order_number sin necesidad de Google Sheets.
+
+    - LEG-VEN-XXXXXXXXX → Unix timestamp embebido en el ID
+    - LEG-YYYYMMDDHHMMSS → fecha literal en el número de orden
+    """
+    from sqlalchemy import text as sa_text
+
+    if body.dry_run:
+        # Return preview without committing
+        result = await db.execute(sa_text("""
+            SELECT
+                COUNT(*) FILTER (WHERE order_number ~ '^LEG-VEN-[0-9]+$') AS ven_count,
+                COUNT(*) FILTER (WHERE order_number ~ '^LEG-[0-9]{14}$') AS ts_count
+            FROM sales.orders WHERE channel = 'STORE_LEGACY'
+        """))
+        row = result.one()
+        return FixDatesResponse(
+            total_orders=int(row.ven_count) + int(row.ts_count),
+            updated=0,
+            skipped_no_date=0,
+            skipped_already_ok=0,
+            errors=[],
+            sample_fixed=[{"dry_run": True, "ven_format": int(row.ven_count), "timestamp_format": int(row.ts_count)}],
+        )
+
+    # Fix LEG-VEN-XXXXXXXXX (Unix timestamp → UTC datetime)
+    r1 = await db.execute(sa_text("""
+        UPDATE sales.orders
+        SET occurred_at = to_timestamp(SUBSTRING(order_number FROM 9)::bigint) AT TIME ZONE 'UTC'
+        WHERE channel = 'STORE_LEGACY' AND order_number ~ '^LEG-VEN-[0-9]+$'
+    """))
+    updated_ven = r1.rowcount
+
+    # Fix LEG-YYYYMMDDHHMMSS (literal datetime in order number)
+    r2 = await db.execute(sa_text("""
+        UPDATE sales.orders
+        SET occurred_at = to_timestamp(SUBSTRING(order_number FROM 5 FOR 14), 'YYYYMMDDHH24MISS') AT TIME ZONE 'UTC'
+        WHERE channel = 'STORE_LEGACY' AND order_number ~ '^LEG-[0-9]{14}$'
+    """))
+    updated_ts = r2.rowcount
+
+    await db.commit()
+
+    total = updated_ven + updated_ts
+    return FixDatesResponse(
+        total_orders=total,
+        updated=total,
+        skipped_no_date=0,
+        skipped_already_ok=0,
+        errors=[],
+        sample_fixed=[{"ven_format_updated": updated_ven, "timestamp_format_updated": updated_ts}],
+    )
 
 
 # ── Bootstrap suppliers — crea purchasing.suppliers desde legado ──────────

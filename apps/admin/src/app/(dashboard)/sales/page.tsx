@@ -220,9 +220,8 @@ export default function SalesPage() {
     staleTime: 15_000,
   });
 
-  const totalRevenue = data?.items.filter((o) => o.status !== 'cancelled').reduce((s, o) => s + Number(o.grand_total), 0) ?? 0;
-  const avgTicket = data && data.items.filter((o) => o.status !== 'cancelled').length > 0
-    ? totalRevenue / data.items.filter((o) => o.status !== 'cancelled').length : 0;
+  const totalRevenue = (data as any)?.total_revenue ?? 0;
+  const avgTicket = (data as any)?.avg_ticket ?? 0;
 
   return (
     <div className="space-y-5">
@@ -246,8 +245,8 @@ export default function SalesPage() {
             <div>
               <p className="text-sm font-semibold text-amber-800">Ventas legadas con fecha incorrecta (2026-05-10)</p>
               <p className="text-xs text-amber-700 mt-0.5">
-                Las ventas importadas desde Sheets tienen la fecha de importación en lugar de la fecha real de venta.
-                Haz clic en "Corregir fechas" para restaurarlas desde Google Sheets.
+                Las ventas legadas tienen la fecha de importación en lugar de la fecha real de venta.
+                Haz clic en "Corregir fechas" para restaurarlas automáticamente.
               </p>
             </div>
           </div>
@@ -271,14 +270,14 @@ export default function SalesPage() {
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card className="p-4">
-          <div className="flex items-center justify-between mb-1"><span className="text-xs text-muted-foreground uppercase">Total (página)</span><DollarSign className="w-4 h-4 text-emerald-600" /></div>
+          <div className="flex items-center justify-between mb-1"><span className="text-xs text-muted-foreground uppercase">Total Ventas</span><DollarSign className="w-4 h-4 text-emerald-600" /></div>
           <div className="text-2xl font-bold font-display text-emerald-600">{formatCurrency(totalRevenue)}</div>
-          <div className="text-xs text-muted-foreground mt-1">Solo ventas activas</div>
+          <div className="text-xs text-muted-foreground mt-1">{(data as any)?.active_count ?? '…'} ventas activas</div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center justify-between mb-1"><span className="text-xs text-muted-foreground uppercase">Ticket promedio</span><TrendingUp className="w-4 h-4 text-brand-600" /></div>
           <div className="text-2xl font-bold font-display">{formatCurrency(avgTicket)}</div>
-          <div className="text-xs text-muted-foreground mt-1">Esta página</div>
+          <div className="text-xs text-muted-foreground mt-1">Con filtros actuales</div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center justify-between mb-1"><span className="text-xs text-muted-foreground uppercase">Órdenes</span><Hash className="w-4 h-4 text-muted-foreground" /></div>
