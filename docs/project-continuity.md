@@ -110,13 +110,18 @@
 	- Enriquecimiento de payload de velocidad + tipado frontend (`VelocityProduct`).
 	- Mejora UI en `inventory/page.tsx` con filtros y generador de mensaje OC.
 	- Reescritura de plantilla HTML de factura con estilos institucionales y referencia compacta.
+	- Commit y push a `main`: `74e0e83`.
+	- Deploys ejecutados en Coolify y finalizados (`finished`): API `hhc9xb2ufg82mt1l8ngxixpv`, Admin `wcssppm239qusdatmaxi713b`.
 - Impacto en producción:
-	- Funcionalmente listo para deploy; cambia respuesta de analytics y la presentación de comprobante.
+	- API en prod confirma versión nueva: `https://api.bigotesypaticas.com/version` → `git_sha: 74e0e83`.
+	- OpenAPI en prod ya refleja campos nuevos de IA (`supplier_name` etc.).
+	- Admin responde OK tras despliegue (`https://admin.bigotesypaticas.com` → HTTP 307 login redirect).
+	- Cambia respuesta de analytics y la presentación del comprobante.
 	- No introduce migraciones ni cambios de esquema.
 - Reversible: sí.
 	- Revertir commit del lote y redeploy de API/Admin.
 - Próximo paso:
-	- Deploy y smoke test en prod: venta en efectivo con cambio + cierre del día, IA con filtros y envío WhatsApp, descarga de comprobante nuevo.
+	- Smoke funcional con usuario autenticado: venta en efectivo con cambio + cierre del día, IA con filtros y envío WhatsApp, descarga de comprobante nuevo.
 
 ```
 ### YYYY-MM-DD — <título corto>
