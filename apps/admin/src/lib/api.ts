@@ -543,6 +543,35 @@ export interface SupplierIn {
   notes?: string;
 }
 
+export interface SupplierSkuInsight {
+  id: string;
+  sku_proveedor: string;
+  product_id: string;
+  product_sku: string;
+  product_name: string;
+  factor_pack: number;
+  last_unit_cost: number | null;
+  last_tax_pct: number | null;
+  last_seen_at: string | null;
+  stock_available: number;
+  avg_daily_sales: number;
+  days_cover: number | null;
+  reorder_qty_8d: number;
+  reorder_qty_15d: number;
+  reorder_qty_20d: number;
+  urgency: 'AGOTADO' | 'URGENTE_8D' | 'REPOSICION_15D' | 'MONITOREAR_20D' | 'OK';
+}
+
+export interface SupplierSkuSummary {
+  associated_products: number;
+  urgent_8d: number;
+  to_replenish_15d: number;
+  monitor_20d: number;
+  recommended_units_8d: number;
+  recommended_units_15d: number;
+  recommended_units_20d: number;
+}
+
 export const suppliers = {
   list: (params: { q?: string; is_active?: boolean; page?: number; page_size?: number } = {}) => {
     const qs = new URLSearchParams();
@@ -557,7 +586,12 @@ export const suppliers = {
   update: (id: string, payload: Partial<SupplierIn> & { is_active?: boolean }) =>
     api<Supplier>(`/v1/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   delete: (id: string) => api(`/v1/suppliers/${id}`, { method: 'DELETE' }),
-  listSkus: (id: string) => api<{ items: { sku_proveedor: string; product_id: string; product_sku: string; product_name: string; factor_pack: number; last_unit_cost: number; last_tax_pct: number; last_seen_at: string }[] }>(`/v1/suppliers/${id}/skus`),
+  listSkus: (id: string, params: { velocity_days?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.velocity_days) qs.set('velocity_days', String(params.velocity_days));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return api<{ items: SupplierSkuInsight[]; summary: SupplierSkuSummary }>(`/v1/suppliers/${id}/skus${suffix}`);
+  },
 };
 
 export interface FinanceSummary {

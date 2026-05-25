@@ -5,6 +5,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -234,6 +235,12 @@ async def list_expense_categories(db: DBSession, user: CurrentUser):
 # ────────────────── Cash Closings (real — finance.cash_closings) ──────────────────────
 
 _TZ = "America/Bogota"
+_TZINFO = ZoneInfo(_TZ)
+
+
+def _today_in_business_tz() -> date:
+    """Fecha de negocio en timezone local (no UTC del servidor)."""
+    return datetime.now(_TZINFO).date()
 
 
 async def _compute_live_totals(db: DBSession, fecha: date) -> dict[str, Any]:
@@ -312,7 +319,7 @@ def _build_closing_out(closing: CashClosingModel, live: dict[str, Any]) -> CashC
 @closings_router.get("/today", response_model=CashClosingOut)
 async def get_today_closing(db: DBSession, user: CurrentUser):
     """Retorna el cierre de hoy (lo crea automáticamente si no existe)."""
-    today = date.today()
+    today = _today_in_business_tz()
     result = await db.execute(
         select(CashClosingModel).where(CashClosingModel.fecha == today)
     )
@@ -402,7 +409,7 @@ async def open_cash_closing(
     user: CurrentUser,
 ):
     """Abre un cierre de caja para una fecha (hoy por defecto)."""
-    target_date = payload.fecha or date.today()
+    target_date = payload.fecha or _today_in_business_tz()
     existing = (await db.execute(
         select(CashClosingModel).where(CashClosingModel.fecha == target_date)
     )).scalar_one_or_none()

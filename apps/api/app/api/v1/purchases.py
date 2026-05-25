@@ -13,7 +13,7 @@ from sqlalchemy import func, or_, select
 from app.deps import CurrentUser, DBSession, require_permission
 from app.models.catalog import Product
 from app.models.inventory import Stock, StockLocation, StockMovement
-from app.models.purchasing import Purchase, PurchaseItem
+from app.models.purchasing import Purchase, PurchaseItem, SupplierSkuMap
 
 router = APIRouter(prefix="/purchases", tags=["purchases"])
 
@@ -193,6 +193,49 @@ async def _apply_stock_and_cost(
         db.add(movement)
 
 
+async def _upsert_supplier_sku_map(
+    db,
+    purchase: Purchase,
+    items: list[PurchaseItem],
+) -> None:
+    """Actualiza memoria SKU proveedor -> producto interno para auto-match futuro."""
+    if purchase.supplier_id is None:
+        return
+
+    for item in items:
+        sku_prov = (item.sku_proveedor or "").strip()
+        if not sku_prov or item.product_id is None:
+            continue
+
+        existing = (
+            await db.execute(
+                select(SupplierSkuMap).where(
+                    SupplierSkuMap.supplier_id == purchase.supplier_id,
+                    SupplierSkuMap.sku_proveedor == sku_prov,
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing is None:
+            db.add(
+                SupplierSkuMap(
+                    supplier_id=purchase.supplier_id,
+                    sku_proveedor=sku_prov,
+                    product_id=item.product_id,
+                    factor_pack=max(1, int(item.factor_pack or 1)),
+                    last_unit_cost=float(item.unit_cost),
+                    last_tax_pct=float(item.tax_pct),
+                    last_seen_at=purchase.purchased_at,
+                )
+            )
+        else:
+            existing.product_id = item.product_id
+            existing.factor_pack = max(1, int(item.factor_pack or 1))
+            existing.last_unit_cost = float(item.unit_cost)
+            existing.last_tax_pct = float(item.tax_pct)
+            existing.last_seen_at = purchase.purchased_at
+
+
 # ─── Endpoints ────────────────────────────────────────────────────
 
 @router.get(
@@ -359,6 +402,8 @@ async def create_purchase(
 
     if payload.receive_now:
         await _apply_stock_and_cost(db, purchase, items_db, user.email)
+
+    await _upsert_supplier_sku_map(db, purchase, items_db)
 
     await db.commit()
     await db.refresh(purchase)

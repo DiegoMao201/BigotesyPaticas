@@ -402,17 +402,25 @@ function AnalyticsTab() {
   const [daysLong, setDaysLong] = useState(90);
   const [filter, setFilter] = useState<'all' | 'comprar' | 'agotado' | 'sobrestock'>('comprar');
   const [classFilter, setClassFilter] = useState<'all' | 'A' | 'B' | 'C'>('all');
-  const [planDays, setPlanDays] = useState(15);
+  const [planDays, setPlanDays] = useState(8);
   const [subTab, setSubTab] = useState<'tabla' | 'velocidad' | 'plan'>('tabla');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['velocity-analysis', daysShort, daysLong],
     queryFn: () => inventory.velocityAnalysis(daysShort, daysLong),
     staleTime: 5 * 60_000,
   });
 
   if (isLoading) return <Card className="p-12 text-center text-muted-foreground">Calculando análisis IA…</Card>;
-  if (!data) return null;
+  if (isError) {
+    return (
+      <Card className="p-8 text-center space-y-3">
+        <p className="text-sm text-rose-600">No se pudo cargar el análisis IA: {(error as Error)?.message || 'error desconocido'}</p>
+        <Button size="sm" variant="outline" onClick={() => refetch()}>Reintentar</Button>
+      </Card>
+    );
+  }
+  if (!data) return <Card className="p-8 text-center text-muted-foreground">Sin datos de análisis por ahora.</Card>;
 
   const filtered = data.products.filter((p) => {
     if (filter === 'comprar' && !p.requiere_compra) return false;
@@ -616,11 +624,9 @@ function AnalyticsTab() {
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">Horizonte:</span>
               <select className="border rounded px-2 py-1 text-sm" value={planDays} onChange={(e) => setPlanDays(Number(e.target.value))}>
-                <option value={7}>7 días</option>
+                <option value={8}>8 días</option>
                 <option value={15}>15 días</option>
-                <option value={30}>30 días</option>
-                <option value={45}>45 días</option>
-                <option value={60}>60 días</option>
+                <option value={20}>20 días</option>
               </select>
             </div>
             <div className="flex gap-4">

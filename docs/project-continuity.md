@@ -76,6 +76,25 @@
 - Próximo paso:
 	- Ejecutar cierre funcional desde UI (con saldo contado) y validar que la fila del día pase a `closed` con snapshot y diferencia esperada.
 
+### 2026-05-25 — Hardening operativo: proveedores, análisis IA, XML y móvil
+- Qué cambió:
+	- `cash-closings/today` ahora usa fecha de negocio `America/Bogota` (no `date.today()` de servidor), corrigiendo ventas que no aparecían en cierre.
+	- `inventory/analytics/velocity` corregido para usar columnas reales de `inventory.stock_movements` (`movement_type`, `quantity_delta`), restaurando la pestaña de Análisis IA.
+	- `purchases/xml/parse` ajustado para inferir costo unitario sin dividir incorrectamente cuando `PriceAmount` ya viene unitario.
+	- `purchases` ahora hace upsert de `purchasing.supplier_sku_map` al registrar compras, vinculando SKU proveedor ↔ producto interno de forma automática.
+	- `suppliers/{id}/skus` ampliado con productos asociados + inteligencia de recompra (8/15/20 días): cobertura, velocidad diaria y cantidades sugeridas.
+	- Admin: ficha de proveedor robusta (sin crash por shape), mejoras de edición de clientes en UI, y navegación móvil con drawer para operación en celular.
+- Por qué:
+	- Había crash en `/suppliers`, Análisis IA vacío, costos de compra incorrectos en XML y desalineación de fecha entre ventas y cierre de caja.
+- Cómo se hizo:
+	- Correcciones en FastAPI y Next.js, validación con build de Admin (`next build`) y compilación Python de módulos API editados.
+- Impacto en producción:
+	- Al desplegar este lote, la app debe mostrar: análisis IA activo, proveedor con productos/recompra, costos XML correctos y ventas visibles en cierre del día local.
+- Reversible: sí.
+	- Revertir commits del lote y redeploy de API/Admin.
+- Próximo paso:
+	- Deploy API/Admin y smoke test guiado en prod: editar cliente, abrir ficha proveedor, importar XML, registrar venta y verificar reflejo inmediato en cierre de caja.
+
 ```
 ### YYYY-MM-DD — <título corto>
 - Qué cambió:

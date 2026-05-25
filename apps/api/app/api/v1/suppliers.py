@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
+from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
 from app.deps import CurrentUser, DBSession, require_permission
+from app.models.catalog import Product
+from app.models.inventory import Stock, StockMovement
 from app.models.purchasing import Supplier, SupplierSkuMap
 
 # Router montado en /v1/suppliers (reemplaza el legacy de finance.py).
@@ -195,18 +198,126 @@ class SkuMapOut(BaseModel):
 
 
 @router.get("/{supplier_id}/skus")
-async def list_supplier_skus(supplier_id: uuid.UUID, db: DBSession, user: CurrentUser):
-    rows = (await db.execute(
-        select(SupplierSkuMap).where(SupplierSkuMap.supplier_id == supplier_id)
-    )).scalars().all()
-    return [
-        {
-            "id": str(r.id),
-            "sku_proveedor": r.sku_proveedor,
-            "product_id": str(r.product_id),
-            "factor_pack": r.factor_pack,
-            "last_unit_cost": float(r.last_unit_cost) if r.last_unit_cost is not None else None,
-            "last_tax_pct": float(r.last_tax_pct) if r.last_tax_pct is not None else None,
-            "last_seen_at": r.last_seen_at.isoformat() if r.last_seen_at else None,
-        } for r in rows
-    ]
+async def list_supplier_skus(
+    supplier_id: uuid.UUID,
+    db: DBSession,
+    user: CurrentUser,
+    velocity_days: int = Query(30, ge=7, le=120),
+):
+    rows = (
+        await db.execute(
+            select(SupplierSkuMap, Product)
+            .join(Product, Product.id == SupplierSkuMap.product_id)
+            .where(SupplierSkuMap.supplier_id == supplier_id)
+            .order_by(Product.name)
+        )
+    ).all()
+
+    if not rows:
+        return {
+            "items": [],
+            "summary": {
+                "associated_products": 0,
+                "urgent_8d": 0,
+                "to_replenish_15d": 0,
+                "monitor_20d": 0,
+                "recommended_units_8d": 0,
+                "recommended_units_15d": 0,
+                "recommended_units_20d": 0,
+            },
+        }
+
+    product_ids = [prod.id for _, prod in rows]
+
+    stock_rows = (
+        await db.execute(
+            select(
+                Stock.product_id,
+                func.coalesce(func.sum(Stock.quantity - Stock.reserved), 0),
+            )
+            .where(Stock.product_id.in_(product_ids))
+            .group_by(Stock.product_id)
+        )
+    ).all()
+    stock_by_product = {pid: int(qty or 0) for pid, qty in stock_rows}
+
+    cutoff = datetime.now(UTC) - timedelta(days=velocity_days)
+    sales_rows = (
+        await db.execute(
+            select(
+                StockMovement.product_id,
+                func.coalesce(func.sum(func.abs(StockMovement.quantity_delta)), 0),
+            )
+            .where(
+                StockMovement.product_id.in_(product_ids),
+                StockMovement.movement_type == "SALE",
+                StockMovement.occurred_at >= cutoff,
+            )
+            .group_by(StockMovement.product_id)
+        )
+    ).all()
+    sold_by_product = {pid: float(units or 0) for pid, units in sales_rows}
+
+    items: list[dict] = []
+    summary = {
+        "associated_products": len(rows),
+        "urgent_8d": 0,
+        "to_replenish_15d": 0,
+        "monitor_20d": 0,
+        "recommended_units_8d": 0,
+        "recommended_units_15d": 0,
+        "recommended_units_20d": 0,
+    }
+
+    for sku_map, product in rows:
+        available = stock_by_product.get(product.id, 0)
+        sold_units = sold_by_product.get(product.id, 0.0)
+        avg_daily = sold_units / float(velocity_days)
+        days_cover = (available / avg_daily) if avg_daily > 0 else None
+
+        reorder_8d = max(0, ceil(avg_daily * 8 - available))
+        reorder_15d = max(0, ceil(avg_daily * 15 - available))
+        reorder_20d = max(0, ceil(avg_daily * 20 - available))
+
+        if available <= 0:
+            urgency = "AGOTADO"
+        elif reorder_8d > 0:
+            urgency = "URGENTE_8D"
+        elif reorder_15d > 0:
+            urgency = "REPOSICION_15D"
+        elif reorder_20d > 0:
+            urgency = "MONITOREAR_20D"
+        else:
+            urgency = "OK"
+
+        if urgency in ("AGOTADO", "URGENTE_8D"):
+            summary["urgent_8d"] += 1
+        elif urgency == "REPOSICION_15D":
+            summary["to_replenish_15d"] += 1
+        elif urgency == "MONITOREAR_20D":
+            summary["monitor_20d"] += 1
+
+        summary["recommended_units_8d"] += reorder_8d
+        summary["recommended_units_15d"] += reorder_15d
+        summary["recommended_units_20d"] += reorder_20d
+
+        items.append({
+            "id": str(sku_map.id),
+            "sku_proveedor": sku_map.sku_proveedor,
+            "product_id": str(product.id),
+            "product_sku": product.sku,
+            "product_name": product.name,
+            "factor_pack": sku_map.factor_pack,
+            "last_unit_cost": float(sku_map.last_unit_cost) if sku_map.last_unit_cost is not None else None,
+            "last_tax_pct": float(sku_map.last_tax_pct) if sku_map.last_tax_pct is not None else None,
+            "last_seen_at": sku_map.last_seen_at.isoformat() if sku_map.last_seen_at else None,
+            "stock_available": available,
+            "avg_daily_sales": round(avg_daily, 3),
+            "days_cover": round(days_cover, 1) if days_cover is not None else None,
+            "reorder_qty_8d": reorder_8d,
+            "reorder_qty_15d": reorder_15d,
+            "reorder_qty_20d": reorder_20d,
+            "urgency": urgency,
+        })
+
+    return {"items": items, "summary": summary}

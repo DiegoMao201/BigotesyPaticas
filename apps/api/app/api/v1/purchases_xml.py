@@ -135,12 +135,37 @@ def _resolver_costo_unitario(qty, price_amount, base_qty, line_extension, discou
     pa = _f(price_amount)
     le = _f(line_extension)
     disc = _f(discount_amount)
-    # PriceAmount es por base_qty unidades
+    line_before_discount = le + disc
+
+    # PriceAmount ya unitario (caso más común): qty * pa ~= total de línea
+    if pa > 0 and line_before_discount > 0:
+        est_total_from_pa = pa * qty
+        if abs(est_total_from_pa - line_before_discount) <= max(1.0, line_before_discount * 0.03):
+            return pa
+
+    # PriceAmount representa total de línea: pa ~= total
+    if pa > 0 and line_before_discount > 0:
+        if abs(pa - line_before_discount) <= max(1.0, line_before_discount * 0.03):
+            return pa / qty
+
+    # PriceAmount por base_qty unidades (cuando BaseQuantity viene en el XML)
     if pa > 0 and base_qty > 0:
-        return pa / base_qty
-    # Fallback: line_extension / qty
-    if le > 0 and qty > 0:
-        return (le + disc) / qty
+        est_unit = pa / base_qty
+        if line_before_discount > 0:
+            est_total_from_base = est_unit * qty
+            if abs(est_total_from_base - line_before_discount) <= max(1.0, line_before_discount * 0.03):
+                return est_unit
+        # Fallback conservador: preferir PriceAmount como unitario si no hay señal clara.
+        if base_qty == 1:
+            return pa
+
+    # Último fallback: total de línea / qty
+    if line_before_discount > 0 and qty > 0:
+        return line_before_discount / qty
+
+    # Sin datos suficientes
+    if pa > 0:
+        return pa
     return 0.0
 
 

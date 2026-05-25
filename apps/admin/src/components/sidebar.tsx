@@ -58,7 +58,13 @@ const NAV_GROUPS = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({
+  mobile = false,
+  onNavigate,
+}: {
+  mobile?: boolean;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const user = useAuth((s) => s.user);
@@ -67,14 +73,20 @@ export function Sidebar() {
   function logout() {
     setToken(null);
     clear();
+    onNavigate?.();
     router.push('/login');
   }
 
   return (
-    <aside className="w-64 shrink-0 border-r border-border bg-card/50 backdrop-blur-sm h-screen sticky top-0 flex flex-col">
+    <aside
+      className={cn(
+        'shrink-0 border-r border-border bg-card/95 backdrop-blur-sm flex flex-col',
+        mobile ? 'w-72 h-full' : 'hidden lg:flex w-64 h-screen sticky top-0',
+      )}
+    >
       {/* Logo */}
       <div className="p-5 border-b border-border/60">
-        <Link href="/dashboard" className="flex items-center gap-3 group">
+        <Link href="/dashboard" className="flex items-center gap-3 group" onClick={onNavigate}>
           <div className="w-9 h-9 rounded-xl gradient-brand flex items-center justify-center text-white text-lg shadow-elegant group-hover:shadow-glow transition-shadow">
             🐾
           </div>
@@ -100,6 +112,7 @@ export function Sidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={onNavigate}
                     className={cn(
                       'flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all group',
                       active

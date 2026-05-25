@@ -387,10 +387,10 @@ async def product_movements(
         "movements": [
             {
                 "id": str(m.id),
-                "type": m.type,
-                "quantity": m.quantity,
+                "type": m.movement_type,
+                "quantity": m.quantity_delta,
                 "occurred_at": m.occurred_at.isoformat(),
-                "reference": m.reference,
+                "reference": m.reference_type,
                 "notes": m.notes,
             } for m in rows
         ],
@@ -416,17 +416,17 @@ async def velocity_analysis(
 
     # SALE movements (negative qty) por producto
     short_q = await db.execute(text("""
-        SELECT product_id::text, SUM(ABS(quantity)) AS units
+        SELECT product_id::text, SUM(ABS(quantity_delta)) AS units
         FROM inventory.stock_movements
-        WHERE type = 'SALE' AND occurred_at >= :cutoff
+        WHERE movement_type = 'SALE' AND occurred_at >= :cutoff
         GROUP BY product_id
     """), {"cutoff": cutoff_short})
     short_map = {r[0]: float(r[1] or 0) for r in short_q.all()}
 
     long_q = await db.execute(text("""
-        SELECT product_id::text, SUM(ABS(quantity)) AS units
+        SELECT product_id::text, SUM(ABS(quantity_delta)) AS units
         FROM inventory.stock_movements
-        WHERE type = 'SALE' AND occurred_at >= :cutoff
+        WHERE movement_type = 'SALE' AND occurred_at >= :cutoff
         GROUP BY product_id
     """), {"cutoff": cutoff_long})
     long_map = {r[0]: float(r[1] or 0) for r in long_q.all()}

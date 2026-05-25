@@ -162,7 +162,7 @@ export default function CustomersPage() {
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, d }: { id: string; d: CustomerFormData }) => customers.update!(id, {
+    mutationFn: ({ id, d }: { id: string; d: CustomerFormData }) => customers.update(id, {
       ...d,
       email: d.email || undefined,
       phone: d.phone || undefined,
@@ -222,7 +222,7 @@ export default function CustomersPage() {
           ) : (
             <div className="divide-y divide-border/40">
               {data!.items.map((c: Customer) => (
-                <div key={c.id} className="flex items-center gap-4 px-4 py-3 hover:bg-accent/30 transition-colors group">
+                <div key={c.id} className="flex items-start sm:items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors group">
                   <div className="w-9 h-9 rounded-full gradient-brand flex items-center justify-center text-white text-sm font-bold shrink-0">
                     {(c.full_name ?? '?').charAt(0).toUpperCase()}
                   </div>
@@ -231,7 +231,7 @@ export default function CustomersPage() {
                       <span className="font-medium text-sm">{c.full_name}</span>
                       <RfmBadge segment={c.rfm_segment} />
                     </div>
-                    <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-3 mt-0.5 text-xs text-muted-foreground">
                       {c.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{c.email}</span>}
                       {c.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</span>}
                       {c.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{c.city}</span>}
@@ -239,14 +239,14 @@ export default function CustomersPage() {
                     </div>
                   </div>
                   {c.rfm_monetary != null && (
-                    <div className="text-right text-sm">
+                    <div className="text-right text-sm hidden sm:block">
                       <div className="font-semibold text-brand-700">{formatCurrency(c.rfm_monetary)}</div>
                       <div className="text-xs text-muted-foreground">acumulado</div>
                     </div>
                   )}
                   <button
                     onClick={() => setEditCustomer(c)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-muted text-muted-foreground transition-opacity"
+                    className="p-2 rounded border border-border hover:bg-muted text-muted-foreground transition-colors shrink-0"
                     title="Editar"
                   >
                     <Pencil className="w-3.5 h-3.5" />
