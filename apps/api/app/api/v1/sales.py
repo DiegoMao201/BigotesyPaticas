@@ -471,23 +471,35 @@ async def get_invoice_pdf(
             cust_name = c.full_name or "Consumidor Final"
             cust_doc = c.document_id or ""
 
+    def compact_ref(sku: str) -> str:
+        raw = (sku or "").strip()
+        if not raw:
+            return "-"
+        if len(raw) <= 16:
+            return raw
+        safe = "".join(ch for ch in raw if ch.isalnum())
+        return f"REF-{(safe or raw)[-6:].upper()}"
+
     items_rows = ""
     for item in o.items:
         total_line = float(item.unit_price) * item.quantity - float(item.discount)
-        disc_str = f"-${float(item.discount):,.0f}" if float(item.discount) > 0 else ""
+        disc_str = f"-${float(item.discount):,.0f}" if float(item.discount) > 0 else "-"
         items_rows += f"""
         <tr>
-          <td>{item.name_snapshot}</td>
-          <td class="center">{item.sku_snapshot}</td>
+          <td class="product-cell">
+            <div class="product-name">{item.name_snapshot}</div>
+          </td>
+          <td class="center"><span class="ref-chip">{compact_ref(item.sku_snapshot or "")}</span></td>
           <td class="right">{item.quantity}</td>
           <td class="right">${float(item.unit_price):,.0f}</td>
-          <td class="right red">{disc_str}</td>
+          <td class="right discount">{disc_str}</td>
           <td class="right bold">${total_line:,.0f}</td>
         </tr>"""
 
     payments_rows = ""
     for pay in o.payments:
-        payments_rows += f"<tr><td>{pay.method}</td><td class='right bold'>${float(pay.amount):,.0f}</td></tr>"
+        method = (pay.method or "").replace("_", " ").title()
+        payments_rows += f"<tr><td>{method}</td><td class='right bold'>${float(pay.amount):,.0f}</td></tr>"
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -495,90 +507,203 @@ async def get_invoice_pdf(
 <meta charset="utf-8">
 <title>Factura {o.order_number}</title>
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 12px; color: #1a1a1a; padding: 32px; background: white; }}
-  .header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; border-bottom: 3px solid #FF6B35; padding-bottom: 18px; }}
-  .logo {{ font-size: 22px; font-weight: 800; color: #FF6B35; }}
-  .logo span {{ color: #1a1a1a; }}
-  .invoice-info {{ text-align: right; }}
-  .invoice-number {{ font-size: 18px; font-weight: 700; color: #FF6B35; }}
-  .badge {{ display: inline-block; padding: 2px 10px; border-radius: 100px; font-size: 10px; font-weight: 700; text-transform: uppercase; background: #d1fae5; color: #065f46; }}
-  .badge.cancelled {{ background: #fee2e2; color: #991b1b; }}
-  .section {{ margin-bottom: 18px; }}
-  .section h3 {{ font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; margin-bottom: 6px; }}
-  table {{ width: 100%; border-collapse: collapse; }}
-  th {{ background: #fff7ed; color: #92400e; font-size: 10px; text-transform: uppercase; padding: 8px 10px; text-align: left; }}
-  td {{ padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }}
-  .right {{ text-align: right; }}
-  .center {{ text-align: center; }}
-  .bold {{ font-weight: 700; }}
-  .red {{ color: #ef4444; }}
-  .totals {{ margin-top: 10px; float: right; width: 240px; }}
-  .totals td {{ border: none; padding: 4px 10px; }}
-  .totals .grand {{ font-size: 15px; font-weight: 800; color: #FF6B35; border-top: 2px solid #FF6B35; padding-top: 8px; }}
-  .footer {{ margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; color: #9ca3af; font-size: 10px; text-align: center; }}
-  .two-col {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+        font-family: 'Avenir Next', 'Segoe UI', Tahoma, Geneva, sans-serif;
+        font-size: 12px;
+        color: #1f2937;
+        padding: 28px;
+        background: #f6fbfb;
+    }}
+    .sheet {{
+        background: #ffffff;
+        border: 1px solid #dbe7e6;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 20px 50px rgba(13, 74, 69, 0.08);
+    }}
+    .brand-strip {{
+        height: 10px;
+        background: linear-gradient(90deg, #0d4a45 0%, #187f77 50%, #f5a641 100%);
+    }}
+    .content {{ padding: 22px 24px 20px; }}
+    .header {{ display: flex; justify-content: space-between; gap: 16px; margin-bottom: 18px; }}
+    .brand {{ font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: #0d4a45; }}
+    .brand small {{ display: block; font-size: 11px; font-weight: 500; color: #4b5563; margin-top: 4px; }}
+    .invoice-card {{
+        min-width: 220px;
+        border-radius: 12px;
+        background: #edfaf9;
+        border: 1px solid #cbe9e6;
+        padding: 10px 12px;
+        text-align: right;
+    }}
+    .invoice-no {{ font-size: 19px; font-weight: 800; color: #0d4a45; }}
+    .muted {{ color: #6b7280; font-size: 11px; }}
+    .badge {{
+        display: inline-block;
+        margin-top: 6px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        background: #d1fae5;
+        color: #065f46;
+    }}
+    .badge.cancelled {{ background: #fee2e2; color: #991b1b; }}
+    .meta {{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin: 6px 0 18px;
+    }}
+    .meta-card {{
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 10px 12px;
+    }}
+    .meta-title {{ font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin-bottom: 5px; }}
+    .meta-value {{ font-size: 13px; font-weight: 600; color: #111827; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th {{
+        background: #fef3e0;
+        color: #7c3d0a;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 8px 10px;
+        text-align: left;
+    }}
+    td {{ padding: 8px 10px; border-bottom: 1px solid #edf2f7; }}
+    tbody tr:nth-child(odd) {{ background: #fcfdfd; }}
+    .right {{ text-align: right; }}
+    .center {{ text-align: center; }}
+    .bold {{ font-weight: 700; }}
+    .discount {{ color: #dc2626; }}
+    .product-cell {{ min-width: 220px; }}
+    .product-name {{ font-weight: 600; color: #0f172a; }}
+    .ref-chip {{
+        display: inline-block;
+        font-family: 'JetBrains Mono', 'Consolas', monospace;
+        font-size: 11px;
+        font-weight: 700;
+        color: #0d4a45;
+        background: #d4f5f3;
+        border: 1px solid #a3eeea;
+        border-radius: 999px;
+        padding: 2px 8px;
+    }}
+    .summary {{
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: 1fr 250px;
+        gap: 16px;
+        align-items: start;
+    }}
+    .payments-card {{
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #ffffff;
+    }}
+    .payments-title {{ font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin-bottom: 6px; font-weight: 700; }}
+    .totals {{
+        border: 1px solid #dbe7e6;
+        border-radius: 12px;
+        background: #f9fcfc;
+        padding: 8px;
+    }}
+    .totals td {{ border: none; padding: 4px 8px; }}
+    .totals .grand {{
+        font-size: 15px;
+        font-weight: 800;
+        color: #0d4a45;
+        border-top: 2px solid #187f77;
+        padding-top: 8px;
+    }}
+    .notes {{
+        margin-top: 14px;
+        border: 1px dashed #cbd5e1;
+        border-radius: 10px;
+        padding: 10px 12px;
+        color: #334155;
+        background: #f8fafc;
+    }}
+    .footer {{
+        margin-top: 18px;
+        padding-top: 12px;
+        border-top: 1px solid #e5e7eb;
+        color: #6b7280;
+        font-size: 10px;
+        text-align: center;
+    }}
 </style>
 </head>
 <body>
-<div class="header">
-  <div>
-    <div class="logo">🐾 Bigotes<span> y Paticas</span></div>
-    <div style="color:#6b7280; font-size:11px; margin-top:4px;">Tienda de mascotas · Dosquebradas, Colombia</div>
-    <div style="color:#6b7280; font-size:11px;">bigotesypaticasdosquebradas@gmail.com</div>
-  </div>
-  <div class="invoice-info">
-    <div class="invoice-number">{o.order_number}</div>
-    <div style="color:#6b7280; font-size:11px; margin-top:4px;">{o.occurred_at.strftime("%d/%m/%Y %H:%M")}</div>
-    <div style="margin-top:6px;"><span class="badge {'cancelled' if o.status=='cancelled' else ''}">{o.status.upper()}</span></div>
-  </div>
-</div>
+<div class="sheet">
+    <div class="brand-strip"></div>
+    <div class="content">
+        <div class="header">
+            <div>
+                <div class="brand">Bigotes y Paticas<small>Tienda de mascotas · Dosquebradas, Colombia · bigotesypaticasdosquebradas@gmail.com</small></div>
+            </div>
+            <div class="invoice-card">
+                <div class="invoice-no">{o.order_number}</div>
+                <div class="muted">{o.occurred_at.strftime("%d/%m/%Y %H:%M")}</div>
+                <span class="badge {'cancelled' if o.status == 'cancelled' else ''}">{o.status.upper()}</span>
+            </div>
+        </div>
 
-<div class="two-col">
-  <div class="section">
-    <h3>Cliente</h3>
-    <div class="bold">{cust_name}</div>
-    <div style="color:#6b7280">{cust_doc}</div>
-  </div>
-  <div class="section">
-    <h3>Canal · Pago</h3>
-    <div>{o.channel}</div>
-    <div class="bold">{o.payment_status}</div>
-  </div>
-</div>
+        <div class="meta">
+            <div class="meta-card">
+                <div class="meta-title">Cliente</div>
+                <div class="meta-value">{cust_name}</div>
+                <div class="muted">{cust_doc or 'Sin documento'}</div>
+            </div>
+            <div class="meta-card">
+                <div class="meta-title">Canal y estado de pago</div>
+                <div class="meta-value">{o.channel}</div>
+                <div class="muted">{o.payment_status}</div>
+            </div>
+        </div>
 
-<table>
-  <thead>
-    <tr>
-      <th>Producto</th><th class="center">SKU</th><th class="right">Cant.</th>
-      <th class="right">Precio</th><th class="right">Descuento</th><th class="right">Total</th>
-    </tr>
-  </thead>
-  <tbody>{items_rows}</tbody>
-</table>
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th class="center">Referencia</th>
+                    <th class="right">Cant.</th>
+                    <th class="right">Precio</th>
+                    <th class="right">Descuento</th>
+                    <th class="right">Total</th>
+                </tr>
+            </thead>
+            <tbody>{items_rows}</tbody>
+        </table>
 
-<div style="overflow:hidden; margin-top:16px;">
-  <table class="totals">
-    <tr><td>Subtotal</td><td class="right">${float(o.subtotal):,.0f}</td></tr>
-    {f'<tr><td style="color:#ef4444">Descuentos</td><td class="right" style="color:#ef4444">-${float(o.discount_total):,.0f}</td></tr>' if float(o.discount_total) > 0 else ''}
-    <tr class="grand"><td>TOTAL</td><td class="right">${float(o.grand_total):,.0f}</td></tr>
-  </table>
-</div>
+        <div class="summary">
+            <div class="payments-card">
+                <div class="payments-title">Pagos recibidos</div>
+                <table>
+                    <tbody>{payments_rows}</tbody>
+                </table>
+                {f'<div style="color:#059669; font-weight:700; margin-top:6px; font-size:12px;">Cambio entregado: ${float(o.paid_amount - o.grand_total):,.0f}</div>' if float(o.paid_amount) > float(o.grand_total) else ''}
+            </div>
+            <table class="totals">
+                <tr><td>Subtotal</td><td class="right">${float(o.subtotal):,.0f}</td></tr>
+                {f'<tr><td style="color:#dc2626">Descuentos</td><td class="right" style="color:#dc2626">-${float(o.discount_total):,.0f}</td></tr>' if float(o.discount_total) > 0 else ''}
+                <tr class="grand"><td>TOTAL</td><td class="right">${float(o.grand_total):,.0f}</td></tr>
+            </table>
+        </div>
 
-<div style="clear:both; margin-top:20px;">
-  <div class="section">
-    <h3>Pagos recibidos</h3>
-    <table style="max-width:280px">
-      <tbody>{payments_rows}</tbody>
-    </table>
-    {f'<div style="color:#059669; font-weight:700; margin-top:6px; font-size:13px;">Cambio: ${float(o.paid_amount - o.grand_total):,.0f}</div>' if float(o.paid_amount) > float(o.grand_total) else ''}
-  </div>
-</div>
+        {f'<div class="notes"><strong>Notas:</strong> {o.notes}</div>' if o.notes else ''}
 
-{f'<div class="section"><h3>Notas</h3><div>{o.notes}</div></div>' if o.notes else ''}
-
-<div class="footer">
-  Gracias por tu compra 🐾 · Este documento es un comprobante de venta · Bigotes y Paticas
+        <div class="footer">
+            Gracias por tu compra. Este documento es un comprobante de venta oficial de Bigotes y Paticas.
+        </div>
+    </div>
 </div>
 </body>
 </html>"""

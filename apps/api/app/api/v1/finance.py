@@ -247,12 +247,38 @@ async def _compute_live_totals(db: DBSession, fecha: date) -> dict[str, Any]:
     """Calcula totales en vivo desde sales.payments para una fecha."""
     method_rows = (await db.execute(
         text("""
-            SELECT p.method, COALESCE(SUM(p.amount), 0) AS total
-            FROM sales.payments p
-            JOIN sales.orders o ON o.id = p.order_id
-            WHERE DATE(o.occurred_at AT TIME ZONE 'America/Bogota') = :fecha
-              AND o.status NOT IN ('cancelled')
-            GROUP BY p.method
+            WITH base AS (
+                SELECT o.id AS order_id,
+                       o.grand_total::numeric AS grand_total,
+                       p.method AS method,
+                       COALESCE(SUM(p.amount), 0)::numeric AS method_paid
+                FROM sales.orders o
+                JOIN sales.payments p ON p.order_id = o.id
+                WHERE DATE(o.occurred_at AT TIME ZONE 'America/Bogota') = :fecha
+                  AND o.status NOT IN ('cancelled')
+                GROUP BY o.id, o.grand_total, p.method
+            ),
+            totals AS (
+                SELECT order_id,
+                       grand_total,
+                       COALESCE(SUM(method_paid), 0)::numeric AS total_paid
+                FROM base
+                GROUP BY order_id, grand_total
+            ),
+            normalized AS (
+                SELECT b.method,
+                       CASE
+                           WHEN t.total_paid <= 0 THEN 0::numeric
+                           WHEN t.total_paid <= t.grand_total THEN b.method_paid
+                           ELSE b.method_paid * (t.grand_total / t.total_paid)
+                       END AS effective_amount
+                FROM base b
+                JOIN totals t ON t.order_id = b.order_id
+            )
+            SELECT method,
+                   COALESCE(SUM(effective_amount), 0) AS total
+            FROM normalized
+            GROUP BY method
         """),
         {"fecha": fecha},
     )).all()

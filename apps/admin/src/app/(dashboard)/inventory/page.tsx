@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
@@ -10,6 +10,7 @@ import {
   ArrowUp, ArrowDown, Edit2, Check, X, RefreshCw, TrendingUp,
   DollarSign, ShoppingBag, Plus, Minus, Sparkles, Download, ShoppingCart,
   ClipboardList, Upload, ChevronRight, Trash2, PlayCircle, Eye, FileSpreadsheet, SlidersHorizontal,
+  Copy, MessageCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, inventory, analytics, inventoryCounts, type StockRow, type CountSessionOut, type CountSessionDetail, type UploadPreviewRow } from '@/lib/api';
@@ -402,6 +403,8 @@ function AnalyticsTab() {
   const [daysLong, setDaysLong] = useState(90);
   const [filter, setFilter] = useState<'all' | 'comprar' | 'agotado' | 'sobrestock'>('comprar');
   const [classFilter, setClassFilter] = useState<'all' | 'A' | 'B' | 'C'>('all');
+  const [supplierFilter, setSupplierFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [planDays, setPlanDays] = useState(8);
   const [subTab, setSubTab] = useState<'tabla' | 'velocidad' | 'plan'>('tabla');
 
@@ -422,16 +425,38 @@ function AnalyticsTab() {
   }
   if (!data) return <Card className="p-8 text-center text-muted-foreground">Sin datos de análisis por ahora.</Card>;
 
-  const filtered = data.products.filter((p) => {
+  const supplierOptions = useMemo(() => {
+    const vals = new Set<string>();
+    for (const p of data.products) {
+      vals.add(p.supplier_name || '__none__');
+    }
+    return Array.from(vals).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [data.products]);
+
+  const categoryOptions = useMemo(() => {
+    const vals = new Set<string>();
+    for (const p of data.products) {
+      vals.add(p.category_name || '__none__');
+    }
+    return Array.from(vals).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [data.products]);
+
+  const scopedProducts = data.products.filter((p) => {
+    if (classFilter !== 'all' && p.clase_abc !== classFilter) return false;
+    if (supplierFilter !== 'all' && (p.supplier_name || '__none__') !== supplierFilter) return false;
+    if (categoryFilter !== 'all' && (p.category_name || '__none__') !== categoryFilter) return false;
+    return true;
+  });
+
+  const filtered = scopedProducts.filter((p) => {
     if (filter === 'comprar' && !p.requiere_compra) return false;
     if (filter === 'agotado' && p.estado !== 'AGOTADO') return false;
     if (filter === 'sobrestock' && p.estado !== 'SOBRESTOCK') return false;
-    if (classFilter !== 'all' && p.clase_abc !== classFilter) return false;
     return true;
   });
 
   // Products that need purchasing for the plan
-  const purchasePlan = data.products
+  const purchasePlan = scopedProducts
     .filter((p) => p.requiere_compra || p.estado === 'AGOTADO')
     .map((p) => ({
       ...p,
@@ -441,12 +466,56 @@ function AnalyticsTab() {
     .filter((p) => p.qty_sugerida > 0)
     .sort((a, b) => (b.clase_abc === 'A' ? 1 : 0) - (a.clase_abc === 'A' ? 1 : 0) || b.qty_sugerida - a.qty_sugerida);
 
-  const topVelocity = [...data.products]
+  const topVelocity = [...scopedProducts]
     .sort((a, b) => b.velocidad_diaria - a.velocidad_diaria)
     .slice(0, 20);
 
   const totalPlanCost = purchasePlan.reduce((s, p) => s + (p.costo_estimado || 0), 0);
   const totalPlanUnits = purchasePlan.reduce((s, p) => s + p.qty_sugerida, 0);
+
+  const purchaseOrderMessage = useMemo(() => {
+    const today = new Date().toLocaleDateString('es-CO', { dateStyle: 'medium' });
+    if (!purchasePlan.length) {
+      return `Orden sugerida ${today}: no hay productos para recompra en horizonte de ${planDays} dias.`;
+    }
+
+    const grouped = new Map<string, typeof purchasePlan>();
+    for (const row of purchasePlan) {
+      const supplier = row.supplier_name || 'SIN PROVEEDOR ASIGNADO';
+      if (!grouped.has(supplier)) grouped.set(supplier, []);
+      grouped.get(supplier)!.push(row);
+    }
+
+    const lines: string[] = [];
+    lines.push('ORDEN DE COMPRA SUGERIDA - BIGOTES Y PATICAS');
+    lines.push(`Fecha: ${today}`);
+    lines.push(`Horizonte de planeacion: ${planDays} dias`);
+    lines.push('');
+
+    let grandUnits = 0;
+    let grandTotal = 0;
+    for (const [supplier, rows] of grouped.entries()) {
+      const supplierUnits = rows.reduce((acc, r) => acc + r.qty_sugerida, 0);
+      const supplierTotal = rows.reduce((acc, r) => acc + (r.costo_estimado || 0), 0);
+      grandUnits += supplierUnits;
+      grandTotal += supplierTotal;
+
+      lines.push(`Proveedor: ${supplier}`);
+      for (const row of rows) {
+        const compactSku = row.sku.length > 16
+          ? `REF-${row.sku.replace(/[^A-Za-z0-9]/g, '').slice(-6).toUpperCase()}`
+          : row.sku;
+        lines.push(`- ${compactSku} | ${row.name} | Cant: ${row.qty_sugerida} | Vr. est.: ${formatCurrency(row.costo_estimado || 0)}`);
+      }
+      lines.push(`Subtotal proveedor: ${supplierUnits} und | ${formatCurrency(supplierTotal)}`);
+      lines.push('');
+    }
+
+    lines.push(`TOTAL ORDEN: ${grandUnits} und | ${formatCurrency(grandTotal)}`);
+    lines.push('Por favor confirmar disponibilidad, tiempos de entrega y condiciones comerciales.');
+    lines.push('Gracias. Bigotes y Paticas.');
+    return lines.join('\n');
+  }, [purchasePlan, planDays]);
 
   const ESTADO_COLOR: Record<string, string> = {
     AGOTADO: '#ef4444', COMPRAR: '#f97316', SOBRESTOCK: '#3b82f6', OK: '#10b981',
@@ -506,6 +575,24 @@ function AnalyticsTab() {
             </Button>
           ))}
         </div>
+        <div className="flex items-center gap-2 ml-auto">
+          <span className="text-xs text-muted-foreground">Proveedor</span>
+          <select className="border rounded px-2 py-1 text-sm" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
+            <option value="all">Todos</option>
+            {supplierOptions.map((s) => (
+              <option key={s} value={s}>{s === '__none__' ? 'Sin proveedor' : s}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Categoria</span>
+          <select className="border rounded px-2 py-1 text-sm" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <option value="all">Todas</option>
+            {categoryOptions.map((c) => (
+              <option key={c} value={c}>{c === '__none__' ? 'Sin categoria' : c}</option>
+            ))}
+          </select>
+        </div>
       </Card>
 
       {/* Sub-tabs */}
@@ -560,6 +647,7 @@ function AnalyticsTab() {
                       <td className="p-2">
                         <p className="font-medium">{p.name}</p>
                         <p className="text-muted-foreground font-mono">{p.sku}</p>
+                        <p className="text-[11px] text-muted-foreground">{p.category_name || 'Sin categoria'} · {p.supplier_name || 'Sin proveedor'}</p>
                       </td>
                       <td className="p-2 text-center">
                         <span className={`px-2 py-0.5 rounded ${abcCls}`}>{p.clase_abc}</span>
@@ -643,6 +731,32 @@ function AnalyticsTab() {
                 <p className="text-xl font-bold text-emerald-700">{formatCurrency(totalPlanCost)}</p>
               </div>
             </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(purchaseOrderMessage);
+                  toast.success('Mensaje de orden copiado');
+                }}
+              >
+                <Copy className="w-4 h-4 mr-1" /> Copiar mensaje OC
+              </Button>
+              <a href={`https://wa.me/?text=${encodeURIComponent(purchaseOrderMessage)}`} target="_blank" rel="noopener noreferrer">
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                  <MessageCircle className="w-4 h-4 mr-1" /> Enviar por WhatsApp
+                </Button>
+              </a>
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <div className="text-sm font-semibold mb-2">Mensaje profesional de orden de compra</div>
+            <textarea
+              className="w-full min-h-[220px] rounded-md border border-border p-3 text-xs font-mono bg-background"
+              value={purchaseOrderMessage}
+              readOnly
+            />
           </Card>
 
           <Card className="overflow-hidden">
@@ -668,6 +782,7 @@ function AnalyticsTab() {
                         <td className="p-2">
                           <p className="font-medium">{p.name}</p>
                           <p className="text-muted-foreground font-mono">{p.sku}</p>
+                          <p className="text-[11px] text-muted-foreground">{p.category_name || 'Sin categoria'} · {p.supplier_name || 'Sin proveedor'}</p>
                         </td>
                         <td className="p-2 text-center">
                           <span className={`px-2 py-0.5 rounded font-bold ${abcCls}`}>{p.clase_abc}</span>

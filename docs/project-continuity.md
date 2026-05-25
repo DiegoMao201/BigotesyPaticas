@@ -95,6 +95,29 @@
 - Próximo paso:
 	- Deploy API/Admin y smoke test guiado en prod: editar cliente, abrir ficha proveedor, importar XML, registrar venta y verificar reflejo inmediato en cierre de caja.
 
+### 2026-05-25 — Ajuste fino operativo: cuadre de caja + IA con proveedores + comprobante premium
+- Qué cambió:
+	- `finance._compute_live_totals` ahora normaliza pagos por orden para no sobrecontar efectivo entregado cuando hay cambio (ej: pago 5,000 para venta 2,900 ya no infla caja a 5,000).
+	- `inventory/analytics/velocity` expone `category_name`, `supplier_id`, `supplier_name` por producto (join con categorías y proveedor preferente en `supplier_sku_map`).
+	- Admin inventario (Análisis IA): filtros nuevos por proveedor y categoría; el plan de compra ahora genera mensaje profesional totalizado por proveedor, con acciones directas de copiar y abrir WhatsApp.
+	- Comprobante de venta (`/v1/sales/orders/{id}/invoice`) rediseñado con paleta institucional teal/amber, layout más limpio y referencia compacta `REF-XXXXXX` para evitar SKU largos ilegibles.
+- Por qué:
+	- El cierre diario estaba mostrando más efectivo del realmente vendido cuando se ingresaba valor entregado con cambio.
+	- Operación necesitaba pasar de análisis IA a acción comercial real (orden de compra por WhatsApp) filtrando por proveedor/categoría.
+	- El comprobante debía reflejar estética institucional y mejorar lectura para cliente/equipo.
+- Cómo se hizo:
+	- Ajuste SQL en backend de finanzas para prorrateo/cap por `grand_total` por orden.
+	- Enriquecimiento de payload de velocidad + tipado frontend (`VelocityProduct`).
+	- Mejora UI en `inventory/page.tsx` con filtros y generador de mensaje OC.
+	- Reescritura de plantilla HTML de factura con estilos institucionales y referencia compacta.
+- Impacto en producción:
+	- Funcionalmente listo para deploy; cambia respuesta de analytics y la presentación de comprobante.
+	- No introduce migraciones ni cambios de esquema.
+- Reversible: sí.
+	- Revertir commit del lote y redeploy de API/Admin.
+- Próximo paso:
+	- Deploy y smoke test en prod: venta en efectivo con cambio + cierre del día, IA con filtros y envío WhatsApp, descarga de comprobante nuevo.
+
 ```
 ### YYYY-MM-DD — <título corto>
 - Qué cambió:

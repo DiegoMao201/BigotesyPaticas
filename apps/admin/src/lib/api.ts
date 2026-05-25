@@ -700,6 +700,9 @@ export interface VelocityProduct {
   product_id: string;
   sku: string;
   name: string;
+  category_name: string | null;
+  supplier_id: string | null;
+  supplier_name: string | null;
   stock: number;
   cost: number;
   price: number;

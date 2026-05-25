@@ -433,17 +433,36 @@ async def velocity_analysis(
 
     # Productos + stock + costo + precio
     rows = await db.execute(text("""
-        SELECT p.id::text, p.sku, p.name, p.cost::float, p.price::float,
+        WITH latest_supplier AS (
+            SELECT DISTINCT ON (m.product_id)
+                   m.product_id,
+                   s.id AS supplier_id,
+                   s.name AS supplier_name
+            FROM purchasing.supplier_sku_map m
+            JOIN purchasing.suppliers s ON s.id = m.supplier_id
+            WHERE s.is_active = true
+            ORDER BY m.product_id, m.last_seen_at DESC NULLS LAST, m.created_at DESC
+        )
+        SELECT p.id::text,
+               p.sku,
+               p.name,
+               p.cost::float,
+               p.price::float,
+               c.name AS category_name,
+               ls.supplier_id::text,
+               ls.supplier_name,
                COALESCE(SUM(s.quantity - s.reserved), 0) AS stock
         FROM catalog.products p
+        LEFT JOIN catalog.categories c ON c.id = p.category_id
+        LEFT JOIN latest_supplier ls ON ls.product_id = p.id
         LEFT JOIN inventory.stock s ON s.product_id = p.id
         WHERE p.deleted_at IS NULL AND p.is_active = true
-        GROUP BY p.id
+        GROUP BY p.id, c.name, ls.supplier_id, ls.supplier_name
     """))
 
     productos = []
     for r in rows.all():
-        pid, sku, name, cost, price, stock = r
+        pid, sku, name, cost, price, category_name, supplier_id, supplier_name, stock = r
         v_short = short_map.get(pid, 0)
         v_long = long_map.get(pid, 0)
         vel_short = v_short / days_short
@@ -478,6 +497,9 @@ async def velocity_analysis(
             "product_id": pid,
             "sku": sku,
             "name": name,
+            "category_name": category_name,
+            "supplier_id": supplier_id,
+            "supplier_name": supplier_name,
             "stock": int(stock or 0),
             "cost": cost or 0,
             "price": price or 0,
