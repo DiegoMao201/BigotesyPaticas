@@ -55,6 +55,27 @@
 
 ## PLANTILLA PARA NUEVAS ENTRADAS
 
+### 2026-05-25 — Cierre de caja operativo + ventas pendientes a pagadas + clientes con mascota
+- Qué cambió:
+	- API: nuevo endpoint `POST /v1/sales/orders/{order_id}/mark-paid` para convertir saldo pendiente en pago y dejar la orden en `Pagado`.
+	- API/CRM: alta y edición de clientes ahora incluye `address`, `pet_name`, `pet_type`, `pet_notes` (persistidos en `extra`).
+	- Admin: acción "Marcar como pagada" en detalle de venta, formulario de clientes ampliado, y limpieza del duplicado legacy en cash-closings.
+- Por qué:
+	- El usuario no podía cerrar operación diaria con confianza, no podía regularizar ventas pendientes y faltaban campos clave en clientes.
+- Cómo se hizo:
+	- Se corrigió código backend/frontend, se validó build de Admin y compilación Python, se hizo commit `97d6f52` y deploy real en Coolify (no solo restart).
+	- Deploys verificados `finished`: API `gggb92b2necl8s6i6r5dn68j`, Admin `alobuja2e123hjf0n010c8j0`.
+- Impacto en producción:
+	- OpenAPI en prod confirma rutas nuevas (`mark-paid`, `cash-closings/today`).
+	- UI en prod confirma versión nueva de cash-closings y sales.
+	- Verificación DB en contenedor PostgreSQL (`l0k0kck8cwck4goskcs0scsg`):
+		- 2026-05-23: 19 órdenes, ventas 1,623,700 y pagos 1,075,900 (saldo pendiente 547,800).
+		- `finance.cash_closings` contiene actualmente solo fila de 2026-05-25 en estado `open`.
+- Reversible: sí.
+	- Revertir commit `97d6f52` y redeploy de API/Admin.
+- Próximo paso:
+	- Ejecutar cierre funcional desde UI (con saldo contado) y validar que la fila del día pase a `closed` con snapshot y diferencia esperada.
+
 ```
 ### YYYY-MM-DD — <título corto>
 - Qué cambió:
