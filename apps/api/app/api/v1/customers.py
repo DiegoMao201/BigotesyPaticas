@@ -20,7 +20,12 @@ class CustomerOut(BaseModel):
     document_id: str | None
     email: str | None
     phone: str | None
+    address: str | None
     city: str | None
+    notes: str | None
+    pet_name: str | None
+    pet_type: str | None
+    pet_notes: str | None
     rfm_segment: str | None
     rfm_monetary: float | None
     last_purchase_at: str | None
@@ -28,13 +33,19 @@ class CustomerOut(BaseModel):
 
     @classmethod
     def from_orm(cls, c: Customer) -> "CustomerOut":
+        extra = c.extra or {}
         return cls(
             id=str(c.id),
             full_name=c.full_name,
             document_id=c.document_id,
             email=c.email,
             phone=c.phone,
+            address=c.address,
             city=c.city,
+            notes=c.notes,
+            pet_name=extra.get("pet_name"),
+            pet_type=extra.get("pet_type"),
+            pet_notes=extra.get("pet_notes"),
             rfm_segment=c.rfm_segment,
             rfm_monetary=float(c.rfm_monetary) if c.rfm_monetary else None,
             last_purchase_at=str(c.last_purchase_at) if c.last_purchase_at else None,
@@ -50,6 +61,9 @@ class CustomerCreate(BaseModel):
     address: str | None = None
     city: str | None = None
     notes: str | None = None
+    pet_name: str | None = None
+    pet_type: str | None = None
+    pet_notes: str | None = None
 
 
 class PaginatedCustomers(BaseModel):
@@ -120,6 +134,14 @@ async def get_customer(customer_id: uuid.UUID, db: DBSession) -> CustomerOut:
     dependencies=[Depends(require_permission("crm:write"))],
 )
 async def create_customer(payload: CustomerCreate, db: DBSession) -> CustomerOut:
+    extra: dict[str, str] = {}
+    if payload.pet_name:
+        extra["pet_name"] = payload.pet_name
+    if payload.pet_type:
+        extra["pet_type"] = payload.pet_type
+    if payload.pet_notes:
+        extra["pet_notes"] = payload.pet_notes
+
     c = Customer(
         full_name=payload.full_name,
         document_id=payload.document_id,
@@ -128,6 +150,7 @@ async def create_customer(payload: CustomerCreate, db: DBSession) -> CustomerOut
         address=payload.address,
         city=payload.city,
         notes=payload.notes,
+        extra=extra,
     )
     db.add(c)
     await db.commit()
@@ -143,6 +166,9 @@ class CustomerUpdate(BaseModel):
     address: str | None = None
     city: str | None = None
     notes: str | None = None
+    pet_name: str | None = None
+    pet_type: str | None = None
+    pet_notes: str | None = None
 
 
 @router.patch(
@@ -162,8 +188,21 @@ async def update_customer(
     ).scalar_one_or_none()
     if not c:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    extra = dict(c.extra or {})
+
+    for key in ["pet_name", "pet_type", "pet_notes"]:
+        if key in data:
+            value = data.pop(key)
+            if value:
+                extra[key] = value
+            else:
+                extra.pop(key, None)
+
+    for k, v in data.items():
         setattr(c, k, v)
+
+    c.extra = extra
     await db.commit()
     await db.refresh(c)
     return CustomerOut.from_orm(c)

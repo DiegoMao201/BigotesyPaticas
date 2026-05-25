@@ -33,8 +33,12 @@ type CustomerFormData = {
   full_name: string;
   email: string;
   phone: string;
+  address: string;
   city: string;
   document_id: string;
+  pet_name: string;
+  pet_type: string;
+  pet_notes: string;
   notes: string;
 };
 
@@ -51,8 +55,12 @@ function CustomerForm({
     full_name: initial?.full_name || '',
     email: initial?.email || '',
     phone: initial?.phone || '',
+    address: initial?.address || '',
     city: initial?.city || '',
     document_id: initial?.document_id || '',
+    pet_name: initial?.pet_name || '',
+    pet_type: initial?.pet_type || '',
+    pet_notes: initial?.pet_notes || '',
     notes: initial?.notes || '',
   });
   const set = (k: keyof CustomerFormData, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -83,8 +91,24 @@ function CustomerForm({
             <Input value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Dosquebradas" />
           </div>
           <div>
+            <label className="text-xs font-medium mb-1 block">Dirección</label>
+            <Input value={form.address} onChange={(e) => set('address', e.target.value)} placeholder="Cra 10 # 20-30" />
+          </div>
+          <div>
             <label className="text-xs font-medium mb-1 block">Documento (CC/NIT)</label>
             <Input value={form.document_id} onChange={(e) => set('document_id', e.target.value)} placeholder="1234567890" />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Mascota (nombre)</label>
+            <Input value={form.pet_name} onChange={(e) => set('pet_name', e.target.value)} placeholder="Luna" />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Tipo de mascota</label>
+            <Input value={form.pet_type} onChange={(e) => set('pet_type', e.target.value)} placeholder="Perro / Gato" />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs font-medium mb-1 block">Notas de mascota</label>
+            <Input value={form.pet_notes} onChange={(e) => set('pet_notes', e.target.value)} placeholder="Raza, edad, alergias..." />
           </div>
           <div className="col-span-2">
             <label className="text-xs font-medium mb-1 block">Notas</label>
@@ -121,13 +145,35 @@ export default function CustomersPage() {
   });
 
   const createMut = useMutation({
-    mutationFn: (d: CustomerFormData) => customers.create({ ...d, email: d.email || undefined, phone: d.phone || undefined, city: d.city || undefined, document_id: d.document_id || undefined, notes: d.notes || undefined }),
+    mutationFn: (d: CustomerFormData) => customers.create({
+      ...d,
+      email: d.email || undefined,
+      phone: d.phone || undefined,
+      address: d.address || undefined,
+      city: d.city || undefined,
+      document_id: d.document_id || undefined,
+      pet_name: d.pet_name || undefined,
+      pet_type: d.pet_type || undefined,
+      pet_notes: d.pet_notes || undefined,
+      notes: d.notes || undefined,
+    }),
     onSuccess: () => { toast.success('Cliente creado'); qc.invalidateQueries({ queryKey: ['customers'] }); setOpenCreate(false); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ id, d }: { id: string; d: CustomerFormData }) => customers.update!(id, { ...d, email: d.email || undefined, phone: d.phone || undefined, city: d.city || undefined, document_id: d.document_id || undefined, notes: d.notes || undefined }),
+    mutationFn: ({ id, d }: { id: string; d: CustomerFormData }) => customers.update!(id, {
+      ...d,
+      email: d.email || undefined,
+      phone: d.phone || undefined,
+      address: d.address || undefined,
+      city: d.city || undefined,
+      document_id: d.document_id || undefined,
+      pet_name: d.pet_name || undefined,
+      pet_type: d.pet_type || undefined,
+      pet_notes: d.pet_notes || undefined,
+      notes: d.notes || undefined,
+    }),
     onSuccess: () => { toast.success('Cliente actualizado'); qc.invalidateQueries({ queryKey: ['customers'] }); setEditCustomer(null); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -189,6 +235,7 @@ export default function CustomersPage() {
                       {c.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{c.email}</span>}
                       {c.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</span>}
                       {c.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{c.city}</span>}
+                      {c.pet_name && <span className="flex items-center gap-1">Mascota: {c.pet_name}{c.pet_type ? ` (${c.pet_type})` : ''}</span>}
                     </div>
                   </div>
                   {c.rfm_monetary != null && (

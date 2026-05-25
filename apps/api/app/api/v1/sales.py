@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import desc, func, select
 
 from app.deps import CurrentUser, DBSession, require_permission
@@ -17,6 +18,12 @@ from app.models.sales import Order, OrderItem, Payment
 from app.schemas.sales import OrderCreate, OrderOut
 
 router = APIRouter(prefix="/sales", tags=["sales"])
+
+
+class MarkPaidPayload(BaseModel):
+    method: str = "Efectivo"
+    reference: str | None = None
+    notes: str | None = None
 
 
 def _normalizar_estado_pago(saldo: Decimal, total: Decimal) -> str:
@@ -375,6 +382,70 @@ async def cancel_order(
     o.metadata_ = {**(o.metadata_ or {}), "cancelled_at": datetime.now(UTC).isoformat(), "cancelled_by": user.email, "cancel_reason": reason or ""}
     await db.commit()
     return {"ok": True, "order_number": o.order_number}
+
+
+@router.post(
+    "/orders/{order_id}/mark-paid",
+    dependencies=[Depends(require_permission("sales:write"))],
+)
+async def mark_order_paid(
+    order_id: uuid.UUID,
+    payload: MarkPaidPayload,
+    db: DBSession,
+    user: CurrentUser,
+):
+    """Marca una orden como pagada registrando el saldo pendiente como pago."""
+    o = (await db.execute(select(Order).where(Order.id == order_id))).scalar_one_or_none()
+    if o is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if o.status == "cancelled":
+        raise HTTPException(status_code=409, detail="No se puede pagar una orden anulada")
+    if o.status == "refunded":
+        raise HTTPException(status_code=409, detail="No se puede pagar una orden reembolsada")
+
+    pending = Decimal(str(o.balance_due or 0))
+    if pending <= 0:
+        if o.payment_status != "Pagado":
+            o.payment_status = "Pagado"
+            o.balance_due = Decimal("0")
+            o.updated_by = user.email
+            await db.commit()
+        return {
+            "ok": True,
+            "order_number": o.order_number,
+            "amount_applied": 0.0,
+            "payment_status": "Pagado",
+        }
+
+    pay = Payment(
+        order_id=o.id,
+        method=payload.method,
+        amount=pending,
+        received_at=datetime.now(UTC),
+        reference=payload.reference,
+        notes=payload.notes,
+        created_by=user.email,
+    )
+    db.add(pay)
+
+    o.paid_amount = Decimal(str(o.paid_amount or 0)) + pending
+    o.balance_due = Decimal("0")
+    o.payment_status = "Pagado"
+    o.payment_method = payload.method
+    o.metadata_ = {
+        **(o.metadata_ or {}),
+        "marked_paid_at": datetime.now(UTC).isoformat(),
+        "marked_paid_by": user.email,
+    }
+    o.updated_by = user.email
+
+    await db.commit()
+    return {
+        "ok": True,
+        "order_number": o.order_number,
+        "amount_applied": float(pending),
+        "payment_status": o.payment_status,
+    }
 
 
 @router.get("/orders/{order_id}/invoice")

@@ -7,7 +7,7 @@ import {
   TrendingUp, DollarSign, Hash, MessageCircle, AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { sales, adminEtl, API_BASE, type Order } from '@/lib/api';
+import { sales, adminEtl, API_BASE, type Order, type OrdersListResponse } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +37,7 @@ function buildWhatsAppMsg(order: Order): string {
   );
 }
 
-function OrderDetailModal({ order, onClose, onCancelDone }: { order: Order; onClose: () => void; onCancelDone: () => void }) {
+function OrderDetailModal({ order, onClose, onCancelDone, onPaymentDone }: { order: Order; onClose: () => void; onCancelDone: () => void; onPaymentDone: () => void }) {
   const token = useAuth((s) => s.token);
   const qc = useQueryClient();
   const [cancelReason, setCancelReason] = useState('');
@@ -51,6 +51,20 @@ function OrderDetailModal({ order, onClose, onCancelDone }: { order: Order; onCl
       qc.invalidateQueries({ queryKey: ['pos-history'] });
       qc.invalidateQueries({ queryKey: ['inventory-stock'] });
       onCancelDone();
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const markPaidMut = useMutation({
+    mutationFn: () => sales.markPaid(order.id, { method: order.payment_method || 'Efectivo', notes: 'Marcada como pagada desde Admin' }),
+    onSuccess: (res) => {
+      toast.success(`Pago aplicado: ${formatCurrency(res.amount_applied)}`);
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['pos-history'] });
+      qc.invalidateQueries({ queryKey: ['cash-closing-today'] });
+      qc.invalidateQueries({ queryKey: ['cash-closings'] });
+      onPaymentDone();
       onClose();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -171,6 +185,17 @@ function OrderDetailModal({ order, onClose, onCancelDone }: { order: Order; onCl
       <DialogFooter>
         <div className="flex justify-between w-full">
           <div>
+            {order.status !== 'cancelled' && order.payment_status !== 'Pagado' && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={markPaidMut.isPending}
+                onClick={() => markPaidMut.mutate()}
+                className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 mr-2"
+              >
+                {markPaidMut.isPending ? 'Aplicando pago…' : 'Marcar como pagada'}
+              </Button>
+            )}
             {order.status !== 'cancelled' && (
               <Button variant="outline" size="sm" onClick={() => setShowCancel(true)} className="text-rose-600 border-rose-200 hover:bg-rose-50">
                 <XCircle className="w-4 h-4 mr-1" /> Anular venta
@@ -206,7 +231,7 @@ export default function SalesPage() {
     onError: (e: Error) => toast.error(`Error: ${e.message}`),
   });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<OrdersListResponse>({
     queryKey: ['orders', page, search, statusFilter, paymentFilter, channelFilter, dateFrom, dateTo],
     queryFn: () => sales.list({
       page, page_size: 30,
@@ -220,8 +245,8 @@ export default function SalesPage() {
     staleTime: 15_000,
   });
 
-  const totalRevenue = (data as any)?.total_revenue ?? 0;
-  const avgTicket = (data as any)?.avg_ticket ?? 0;
+  const totalRevenue = data?.total_revenue ?? 0;
+  const avgTicket = data?.avg_ticket ?? 0;
 
   return (
     <div className="space-y-5">
@@ -272,7 +297,7 @@ export default function SalesPage() {
         <Card className="p-4">
           <div className="flex items-center justify-between mb-1"><span className="text-xs text-muted-foreground uppercase">Total Ventas</span><DollarSign className="w-4 h-4 text-emerald-600" /></div>
           <div className="text-2xl font-bold font-display text-emerald-600">{formatCurrency(totalRevenue)}</div>
-          <div className="text-xs text-muted-foreground mt-1">{(data as any)?.active_count ?? '…'} ventas activas</div>
+          <div className="text-xs text-muted-foreground mt-1">{data?.active_count ?? '…'} ventas activas</div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center justify-between mb-1"><span className="text-xs text-muted-foreground uppercase">Ticket promedio</span><TrendingUp className="w-4 h-4 text-brand-600" /></div>
@@ -394,6 +419,7 @@ export default function SalesPage() {
           order={detailOrder}
           onClose={() => setDetailOrder(null)}
           onCancelDone={() => setDetailOrder(null)}
+          onPaymentDone={() => setDetailOrder(null)}
         />
       )}
     </div>

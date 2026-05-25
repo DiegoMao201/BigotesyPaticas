@@ -231,6 +231,16 @@ export interface Order {
   payments: PaymentOut[];
 }
 
+export interface OrdersListResponse {
+  items: Order[];
+  total: number;
+  total_revenue: number;
+  avg_ticket: number;
+  active_count: number;
+  page: number;
+  page_size: number;
+}
+
 export const sales = {
   list: (params: { page?: number; page_size?: number; q?: string; status?: string; payment_status?: string; channel?: string; date_from?: string; date_to?: string } = {}) => {
     const qs = new URLSearchParams();
@@ -242,9 +252,14 @@ export const sales = {
     if (params.channel) qs.set('channel', params.channel);
     if (params.date_from) qs.set('date_from', params.date_from);
     if (params.date_to) qs.set('date_to', params.date_to);
-    return api<{ items: Order[]; total: number; page: number; page_size: number }>(`/v1/sales/orders?${qs.toString()}`);
+    return api<OrdersListResponse>(`/v1/sales/orders?${qs.toString()}`);
   },
   get: (id: string) => api<Order>(`/v1/sales/orders/${id}`),
+  markPaid: (id: string, payload: { method?: string; reference?: string; notes?: string } = {}) =>
+    api<{ ok: boolean; order_number: string; amount_applied: number; payment_status: string }>(`/v1/sales/orders/${id}/mark-paid`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   cancel: (id: string, reason?: string) =>
     api<{ ok: boolean; order_number: string }>(`/v1/sales/orders/${id}/cancel`, {
       method: 'POST',
@@ -310,8 +325,12 @@ export interface Customer {
   document_id: string | null;
   email: string | null;
   phone: string | null;
+  address: string | null;
   city: string | null;
   notes: string | null;
+  pet_name: string | null;
+  pet_type: string | null;
+  pet_notes: string | null;
   rfm_segment: string | null;
   rfm_monetary: number | null;
   last_purchase_at: string | null;
@@ -340,8 +359,12 @@ export const customers = {
     document_id?: string;
     email?: string;
     phone?: string;
+    address?: string;
     city?: string;
     notes?: string;
+    pet_name?: string;
+    pet_type?: string;
+    pet_notes?: string;
   }) =>
     api<Customer>('/v1/customers', {
       method: 'POST',
@@ -352,8 +375,12 @@ export const customers = {
     document_id?: string;
     email?: string;
     phone?: string;
+    address?: string;
     city?: string;
     notes?: string;
+    pet_name?: string;
+    pet_type?: string;
+    pet_notes?: string;
   }) =>
     api<Customer>(`/v1/customers/${id}`, {
       method: 'PATCH',
