@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Brain, RefreshCw, MessageCircle, Phone, AlertTriangle, Clock,
-  TrendingDown, PackageX, Users, Target, DollarSign, Repeat,
+  TrendingDown, PackageX, Users, Target, DollarSign, Repeat, PawPrint, Cake, Syringe,
 } from 'lucide-react';
-import { intelligence, type IntelligenceData } from '@/lib/api';
+import { intelligence, type IntelligenceData, type PetCareData } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -55,7 +55,7 @@ function WhatsAppButton({ url, phone }: { url: string | null; phone: string | nu
   );
 }
 
-type Tab = 'recompra' | 'riesgo' | 'capital';
+type Tab = 'recompra' | 'riesgo' | 'capital' | 'mascotas';
 
 export default function IntelligencePage() {
   const [tab, setTab] = useState<Tab>('recompra');
@@ -64,8 +64,14 @@ export default function IntelligencePage() {
     queryFn: () => intelligence.overview(),
     staleTime: 5 * 60_000,
   });
+  const petQc = useQuery({
+    queryKey: ['pet-care'],
+    queryFn: () => intelligence.petCare(),
+    staleTime: 5 * 60_000,
+  });
 
   const data: IntelligenceData | undefined = qc.data;
+  const petData: PetCareData | undefined = petQc.data;
 
   return (
     <div className="space-y-5">
@@ -121,6 +127,7 @@ export default function IntelligencePage() {
           { id: 'recompra', label: 'Recompra', icon: Repeat, count: data?.summary.repurchase_due },
           { id: 'riesgo', label: 'En riesgo', icon: AlertTriangle, count: data?.summary.at_risk_count },
           { id: 'capital', label: 'Capital atrapado', icon: PackageX, count: data?.summary.dead_stock_count },
+          { id: 'mascotas', label: 'Mascotas', icon: PawPrint, count: petData ? petData.summary.birthdays_this_month + petData.summary.deworming_due : undefined },
         ] as { id: Tab; label: string; icon: React.FC<{ className?: string }>; count?: number }[]).map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
@@ -157,6 +164,70 @@ export default function IntelligencePage() {
       {data && tab === 'recompra' && <RepurchaseTab data={data} />}
       {data && tab === 'riesgo' && <AtRiskTab data={data} />}
       {data && tab === 'capital' && <DeadStockTab data={data} />}
+      {tab === 'mascotas' && <PetCareTab data={petData} loading={petQc.isLoading} />}
+    </div>
+  );
+}
+
+function PetReminderCard({ r, icon }: { r: PetCareData['birthdays'][number]; icon: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border hover:bg-muted/30">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="shrink-0 text-brand-600">{icon}</span>
+        <div className="min-w-0">
+          <div className="font-medium truncate">{r.customer_name}</div>
+          <div className="text-xs text-muted-foreground truncate">
+            {r.pet_name ? `${r.pet_name}${r.pet_type ? ` (${r.pet_type})` : ''} · ` : ''}{r.detail}
+          </div>
+        </div>
+      </div>
+      <WhatsAppButton url={r.whatsapp_url} phone={r.phone} />
+    </div>
+  );
+}
+
+function PetCareTab({ data, loading }: { data?: PetCareData; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="text-center py-16 text-muted-foreground">
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" /> Revisando cumpleaños y desparasitaciones…
+      </div>
+    );
+  }
+  if (!data) return null;
+  const empty = data.birthdays.length === 0 && data.deworming_due.length === 0;
+  if (empty) {
+    return (
+      <Card className="p-10 text-center text-muted-foreground">
+        <PawPrint className="w-8 h-8 mx-auto mb-2 opacity-50" />
+        No hay recordatorios de mascotas para hoy. Agrega cumpleaños y desparasitación en la ficha del cliente.
+      </Card>
+    );
+  }
+  return (
+    <div className="grid lg:grid-cols-2 gap-4">
+      <Card className="p-4">
+        <div className="flex items-center gap-2 font-semibold mb-3">
+          <Cake className="w-4 h-4 text-pink-500" /> Cumpleaños este mes
+          <Badge className="bg-pink-100 text-pink-800">{data.birthdays.length}</Badge>
+        </div>
+        <div className="space-y-2">
+          {data.birthdays.length === 0
+            ? <p className="text-sm text-muted-foreground py-4 text-center">Sin cumpleaños este mes.</p>
+            : data.birthdays.map((r) => <PetReminderCard key={r.customer_id + r.reason} r={r} icon={<Cake className="w-4 h-4" />} />)}
+        </div>
+      </Card>
+      <Card className="p-4">
+        <div className="flex items-center gap-2 font-semibold mb-3">
+          <Syringe className="w-4 h-4 text-sky-500" /> Desparasitación pendiente
+          <Badge className="bg-sky-100 text-sky-800">{data.deworming_due.length}</Badge>
+        </div>
+        <div className="space-y-2">
+          {data.deworming_due.length === 0
+            ? <p className="text-sm text-muted-foreground py-4 text-center">Todo al día.</p>
+            : data.deworming_due.map((r) => <PetReminderCard key={r.customer_id + r.reason} r={r} icon={<Syringe className="w-4 h-4" />} />)}
+        </div>
+      </Card>
     </div>
   );
 }

@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, Package, Pencil, Eye, EyeOff, Star, Filter } from 'lucide-react';
+import { Search, Plus, Package, Pencil, Eye, EyeOff, Star, Filter, Truck, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { products, type Product } from '@/lib/api';
+import { products, suppliers, type Product } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,26 +14,51 @@ import { Pagination } from '@/components/ui/pagination';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/utils';
 
+// P4: margen real y alerta de venta por debajo del costo
+function renderMargin(p: Product) {
+  const cost = Number(p.cost) || 0;
+  const price = Number(p.price) || 0;
+  if (price <= 0) return <span className="text-xs text-muted-foreground">—</span>;
+  const marginPct = ((price - cost) / price) * 100;
+  if (cost > 0 && price <= cost) {
+    return (
+      <Badge variant="danger" className="gap-1">
+        <AlertTriangle className="w-3 h-3" /> Bajo costo
+      </Badge>
+    );
+  }
+  const cls = marginPct < 15 ? 'text-amber-600' : marginPct < 30 ? 'text-foreground' : 'text-emerald-600';
+  return <span className={`text-sm font-semibold ${cls}`}>{marginPct.toFixed(0)}%</span>;
+}
+
 export default function ProductsPage() {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [filterPublished, setFilterPublished] = useState<string>('all');
+  const [filterSupplier, setFilterSupplier] = useState<string>('all');
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [openCreate, setOpenCreate] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['products', q, page, filterPublished],
+    queryKey: ['products', q, page, filterPublished, filterSupplier],
     queryFn: () => products.list({
       q: q || undefined,
       page,
       page_size: 50,
       is_published: filterPublished === 'all' ? undefined : filterPublished === 'published',
+      supplier_id: filterSupplier !== 'all' && filterSupplier !== 'none' ? filterSupplier : undefined,
+      without_supplier: filterSupplier === 'none' ? true : undefined,
     }),
   });
 
   const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: products.brands });
   const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: products.categories });
+  const { data: suppliersData } = useQuery({
+    queryKey: ['suppliers-all'],
+    queryFn: () => suppliers.list({ is_active: true, page_size: 200 }),
+  });
+  const supplierList = suppliersData?.items ?? [];
 
   const createMut = useMutation({
     mutationFn: (p: Parameters<typeof products.create>[0]) => products.create(p),
@@ -85,6 +110,11 @@ export default function ProductsPage() {
           <option value="published">Publicados</option>
           <option value="draft">Borradores</option>
         </Select>
+        <Select value={filterSupplier} onChange={(e) => { setFilterSupplier(e.target.value); setPage(1); }} className="w-52">
+          <option value="all">Todos los proveedores</option>
+          <option value="none">⚠️ Sin proveedor</option>
+          {supplierList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </Select>
       </div>
 
       {isLoading && <div className="text-center py-12 text-muted-foreground">Cargando…</div>}
@@ -104,8 +134,10 @@ export default function ProductsPage() {
                 <tr>
                   <th className="text-left p-4">Producto</th>
                   <th className="text-left p-4">SKU</th>
+                  <th className="text-left p-4">Proveedor</th>
                   <th className="text-right p-4">Costo</th>
                   <th className="text-right p-4">Precio</th>
+                  <th className="text-center p-4">Margen</th>
                   <th className="text-center p-4">Estado</th>
                   <th className="text-center p-4">Acciones</th>
                 </tr>
@@ -133,8 +165,20 @@ export default function ProductsPage() {
                       </div>
                     </td>
                     <td className="p-4 font-mono text-xs">{p.sku}</td>
+                    <td className="p-4">
+                      {p.supplier_name ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                          <Truck className="w-3 h-3" /> {p.supplier_name}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+                          <AlertTriangle className="w-3 h-3" /> Sin proveedor
+                        </span>
+                      )}
+                    </td>
                     <td className="p-4 text-right text-muted-foreground">{formatCurrency(p.cost)}</td>
                     <td className="p-4 text-right font-semibold">{formatCurrency(p.price)}</td>
+                    <td className="p-4 text-center">{renderMargin(p)}</td>
                     <td className="p-4 text-center">
                       <Badge variant={p.is_published ? 'success' : 'neutral'}>
                         {p.is_published ? 'Publicado' : 'Borrador'}
@@ -181,6 +225,7 @@ export default function ProductsPage() {
         <ProductForm
           brands={brands || []}
           categories={categories || []}
+          suppliers={supplierList}
           onSubmit={(p) => createMut.mutate(p as any)}
           loading={createMut.isPending}
         />
@@ -193,6 +238,7 @@ export default function ProductsPage() {
             initial={editProduct}
             brands={brands || []}
             categories={categories || []}
+            suppliers={supplierList}
             onSubmit={(p) => updateMut.mutate({ id: editProduct.id, payload: p })}
             loading={updateMut.isPending}
           />
@@ -206,11 +252,12 @@ type ProductFormProps = {
   initial?: Product;
   brands: { id: string; name: string }[];
   categories: { id: string; name: string }[];
+  suppliers: { id: string; name: string }[];
   onSubmit: (p: Partial<Product> & { sku?: string; name?: string }) => void;
   loading: boolean;
 };
 
-function ProductForm({ initial, brands, categories, onSubmit, loading }: ProductFormProps) {
+function ProductForm({ initial, brands, categories, suppliers, onSubmit, loading }: ProductFormProps) {
   const initialAttrs = (initial?.attributes ?? {}) as Record<string, unknown>;
   const [form, setForm] = useState({
     sku: initial?.sku || '',
@@ -229,6 +276,7 @@ function ProductForm({ initial, brands, categories, onSubmit, loading }: Product
     tags: initial?.tags?.join(', ') || '',
     tax_pct: initialAttrs.tax_pct != null ? String(initialAttrs.tax_pct) : '19',
     pet_type: (initialAttrs.pet_type as string) || '',
+    supplier_id: initial?.supplier_id || '',
   });
 
   const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
@@ -257,6 +305,10 @@ function ProductForm({ initial, brands, categories, onSubmit, loading }: Product
         pet_type: form.pet_type || null,
       },
     };
+    // Proveedor: solo enviar si cambia o se asigna (vincula via supplier_sku_map)
+    if (form.supplier_id) {
+      payload.supplier_id = form.supplier_id;
+    }
     onSubmit(payload);
   }
 
@@ -316,6 +368,14 @@ function ProductForm({ initial, brands, categories, onSubmit, loading }: Product
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </div>
+        </div>
+        <div>
+          <label className="text-xs font-medium mb-1 block">Proveedor</label>
+          <Select value={form.supplier_id} onChange={(e) => set('supplier_id', e.target.value)}>
+            <option value="">Sin proveedor</option>
+            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </Select>
+          <p className="text-[11px] text-muted-foreground mt-1">Proveedor principal de este producto (para compras y reabastecimiento).</p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>

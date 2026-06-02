@@ -48,7 +48,8 @@ const NAV_GROUPS = [
     label: 'Compras',
     items: [
       { href: '/purchases', label: 'Compras', icon: ReceiptText },
-      { href: '/suppliers', label: 'Proveedores', icon: Truck },
+      { href: '/replenishment', label: 'Reabastecimiento', icon: Truck, highlight: true },
+      { href: '/suppliers', label: 'Proveedores', icon: Building2 },
     ],
   },
   {

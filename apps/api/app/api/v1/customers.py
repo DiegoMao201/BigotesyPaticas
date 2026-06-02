@@ -26,6 +26,8 @@ class CustomerOut(BaseModel):
     pet_name: str | None
     pet_type: str | None
     pet_notes: str | None
+    pet_birthday: str | None
+    last_deworming: str | None
     rfm_segment: str | None
     rfm_monetary: float | None
     last_purchase_at: str | None
@@ -46,6 +48,8 @@ class CustomerOut(BaseModel):
             pet_name=extra.get("pet_name"),
             pet_type=extra.get("pet_type"),
             pet_notes=extra.get("pet_notes"),
+            pet_birthday=extra.get("pet_birthday"),
+            last_deworming=extra.get("last_deworming"),
             rfm_segment=c.rfm_segment,
             rfm_monetary=float(c.rfm_monetary) if c.rfm_monetary else None,
             last_purchase_at=str(c.last_purchase_at) if c.last_purchase_at else None,
@@ -64,6 +68,8 @@ class CustomerCreate(BaseModel):
     pet_name: str | None = None
     pet_type: str | None = None
     pet_notes: str | None = None
+    pet_birthday: str | None = None
+    last_deworming: str | None = None
 
 
 class PaginatedCustomers(BaseModel):
@@ -141,6 +147,10 @@ async def create_customer(payload: CustomerCreate, db: DBSession) -> CustomerOut
         extra["pet_type"] = payload.pet_type
     if payload.pet_notes:
         extra["pet_notes"] = payload.pet_notes
+    if payload.pet_birthday:
+        extra["pet_birthday"] = payload.pet_birthday
+    if payload.last_deworming:
+        extra["last_deworming"] = payload.last_deworming
 
     c = Customer(
         full_name=payload.full_name,
@@ -169,6 +179,8 @@ class CustomerUpdate(BaseModel):
     pet_name: str | None = None
     pet_type: str | None = None
     pet_notes: str | None = None
+    pet_birthday: str | None = None
+    last_deworming: str | None = None
 
 
 @router.patch(
@@ -191,7 +203,7 @@ async def update_customer(
     data = payload.model_dump(exclude_unset=True)
     extra = dict(c.extra or {})
 
-    for key in ["pet_name", "pet_type", "pet_notes"]:
+    for key in ["pet_name", "pet_type", "pet_notes", "pet_birthday", "last_deworming"]:
         if key in data:
             value = data.pop(key)
             if value:

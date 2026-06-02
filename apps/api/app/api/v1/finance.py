@@ -773,3 +773,115 @@ async def finance_summary(
         revenue_by_method=revenue_by_method,
         daily_cashflow=daily_sorted,
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  META DIARIA (P5) — objetivo inteligente auto-calculado
+# ═══════════════════════════════════════════════════════════════
+
+class DailyGoalOut(BaseModel):
+    fecha: str
+    target: float            # meta del día (auto o manual)
+    achieved: float          # vendido hoy
+    progress_pct: float      # % de avance
+    remaining: float         # falta para la meta
+    orders_today: int
+    projection_eod: float    # proyección al cierre según ritmo del día
+    status: str              # "logrado" | "en_camino" | "atrasado"
+    target_source: str       # "manual" | "auto_weekday"
+    weekday_avg: float       # promedio histórico de ese día de semana
+
+
+@router.get(
+    "/daily-goal",
+    response_model=DailyGoalOut,
+    dependencies=[Depends(require_permission("finance:read"))],
+)
+async def daily_goal(
+    db: DBSession,
+    fecha: date | None = Query(None, description="Día a evaluar (default: hoy en Colombia)"),
+    target: float | None = Query(None, description="Meta manual; si se omite, se auto-calcula"),
+    uplift: float = Query(1.10, ge=0.5, le=3.0, description="Factor sobre el promedio histórico"),
+) -> DailyGoalOut:
+    if fecha is None:
+        fecha = datetime.now(_TZINFO).date()
+
+    # Vendido hoy (TZ Colombia)
+    achieved_row = (await db.execute(
+        text(
+            """
+            SELECT COALESCE(SUM(o.grand_total), 0) AS total, COUNT(*) AS cnt
+            FROM sales.orders o
+            WHERE DATE(o.occurred_at AT TIME ZONE 'America/Bogota') = :fecha
+              AND COALESCE(o.status, '') NOT IN ('cancelled', 'refunded')
+            """
+        ),
+        {"fecha": fecha},
+    )).one()
+    achieved = float(achieved_row.total or 0)
+    orders_today = int(achieved_row.cnt or 0)
+
+    # Promedio del mismo día de semana en las últimas 8 semanas
+    weekday = fecha.weekday()  # 0=lunes
+    since = fecha - timedelta(days=70)
+    hist_rows = (await db.execute(
+        text(
+            """
+            SELECT DATE(o.occurred_at AT TIME ZONE 'America/Bogota') AS d,
+                   SUM(o.grand_total) AS total
+            FROM sales.orders o
+            WHERE DATE(o.occurred_at AT TIME ZONE 'America/Bogota') >= :since
+              AND DATE(o.occurred_at AT TIME ZONE 'America/Bogota') < :fecha
+              AND COALESCE(o.status, '') NOT IN ('cancelled', 'refunded')
+            GROUP BY DATE(o.occurred_at AT TIME ZONE 'America/Bogota')
+            """
+        ),
+        {"since": since, "fecha": fecha},
+    )).all()
+    same_weekday = [float(r.total or 0) for r in hist_rows if r.d.weekday() == weekday]
+    weekday_avg = sum(same_weekday) / len(same_weekday) if same_weekday else 0.0
+    if weekday_avg <= 0 and hist_rows:
+        # Sin histórico de ese weekday: usar promedio general
+        weekday_avg = sum(float(r.total or 0) for r in hist_rows) / len(hist_rows)
+
+    if target is not None and target > 0:
+        the_target = float(target)
+        source = "manual"
+    else:
+        the_target = round(weekday_avg * uplift, -2) if weekday_avg > 0 else 0.0
+        source = "auto_weekday"
+
+    # Proyección al cierre según hora local
+    now_local = datetime.now(_TZINFO)
+    if fecha == now_local.date():
+        # fracción del horario comercial transcurrido (8:00–20:00)
+        open_h, close_h = 8.0, 20.0
+        cur_h = now_local.hour + now_local.minute / 60.0
+        frac = min(max((cur_h - open_h) / (close_h - open_h), 0.05), 1.0)
+        projection = achieved / frac if frac > 0 else achieved
+    else:
+        projection = achieved
+
+    remaining = max(the_target - achieved, 0.0)
+    progress = round(achieved / the_target * 100, 1) if the_target > 0 else 0.0
+    if the_target <= 0:
+        status = "en_camino"
+    elif achieved >= the_target:
+        status = "logrado"
+    elif projection >= the_target * 0.95:
+        status = "en_camino"
+    else:
+        status = "atrasado"
+
+    return DailyGoalOut(
+        fecha=fecha.isoformat(),
+        target=round(the_target, 2),
+        achieved=round(achieved, 2),
+        progress_pct=progress,
+        remaining=round(remaining, 2),
+        orders_today=orders_today,
+        projection_eod=round(projection, 2),
+        status=status,
+        target_source=source,
+        weekday_avg=round(weekday_avg, 2),
+    )

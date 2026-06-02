@@ -11,6 +11,7 @@ from sqlalchemy import func, or_, select
 from app.deps import DBSession, require_permission
 from app.models.catalog import Brand, Category, Product
 from app.models.inventory import Stock
+from app.models.purchasing import Supplier, SupplierSkuMap
 from app.schemas.catalog import (
     BrandOut,
     CategoryOut,
@@ -25,6 +26,79 @@ brands_router = APIRouter(prefix="/brands", tags=["catalog"])
 categories_router = APIRouter(prefix="/categories", tags=["catalog"])
 
 
+async def _supplier_map(db: DBSession, product_ids: list) -> dict:
+    """Devuelve {product_id: (supplier_id_str, supplier_name)} usando el ultimo
+    proveedor asociado en purchasing.supplier_sku_map (por last_seen_at)."""
+    if not product_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(
+                SupplierSkuMap.product_id,
+                SupplierSkuMap.supplier_id,
+                Supplier.name,
+                SupplierSkuMap.last_seen_at,
+                SupplierSkuMap.created_at,
+            )
+            .join(Supplier, Supplier.id == SupplierSkuMap.supplier_id)
+            .where(SupplierSkuMap.product_id.in_(product_ids))
+            .where(Supplier.is_active == True)  # noqa: E712
+        )
+    ).all()
+    from datetime import datetime, timezone
+
+    _MIN = datetime.min.replace(tzinfo=timezone.utc)
+
+    def _norm(dt):
+        if dt is None:
+            return _MIN
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+    best: dict = {}
+    for pid, sid, sname, last_seen, created in rows:
+        key = _norm(last_seen or created)
+        cur = best.get(pid)
+        if cur is None or key >= cur[0]:
+            best[pid] = (key, sid, sname)
+    return {pid: (str(v[1]), v[2]) for pid, v in best.items()}
+
+
+async def _upsert_product_supplier(db: DBSession, product: Product, supplier_id) -> None:
+    """Asocia (o reasocia) un producto a un proveedor manualmente.
+
+    Crea/actualiza una fila en supplier_sku_map usando el SKU interno como
+    sku_proveedor por defecto, para que la derivacion de proveedor lo detecte.
+    """
+    from datetime import UTC, datetime
+
+    if supplier_id is None:
+        return
+    sup = (await db.execute(select(Supplier).where(Supplier.id == supplier_id))).scalar_one_or_none()
+    if sup is None:
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+    existing = (
+        await db.execute(
+            select(SupplierSkuMap)
+            .where(SupplierSkuMap.supplier_id == supplier_id)
+            .where(SupplierSkuMap.product_id == product.id)
+        )
+    ).scalar_one_or_none()
+    now = datetime.now(UTC)
+    if existing is not None:
+        existing.last_seen_at = now
+    else:
+        db.add(
+            SupplierSkuMap(
+                supplier_id=supplier_id,
+                sku_proveedor=product.sku,
+                product_id=product.id,
+                factor_pack=1,
+                last_unit_cost=product.cost,
+                last_seen_at=now,
+            )
+        )
+
+
 # ----------------------------- Products -------------------------------------
 @router.get("", response_model=ProductListResponse)
 async def list_products(
@@ -32,6 +106,8 @@ async def list_products(
     q: str | None = Query(None, description="Búsqueda por nombre/sku"),
     brand_id: uuid.UUID | None = None,
     category_id: uuid.UUID | None = None,
+    supplier_id: uuid.UUID | None = Query(None, description="Filtrar por proveedor asociado"),
+    without_supplier: bool = Query(False, description="Solo productos sin proveedor"),
     is_published: bool | None = None,
     is_featured: bool | None = None,
     page: int = Query(1, ge=1),
@@ -62,6 +138,16 @@ async def list_products(
         stmt = stmt.where(Product.is_featured == is_featured)
         count_stmt = count_stmt.where(Product.is_featured == is_featured)
 
+    # Filtros por proveedor (vía supplier_sku_map)
+    if supplier_id is not None:
+        sub = select(SupplierSkuMap.product_id).where(SupplierSkuMap.supplier_id == supplier_id)
+        stmt = stmt.where(Product.id.in_(sub))
+        count_stmt = count_stmt.where(Product.id.in_(sub))
+    if without_supplier:
+        sub_all = select(SupplierSkuMap.product_id).distinct()
+        stmt = stmt.where(Product.id.notin_(sub_all))
+        count_stmt = count_stmt.where(Product.id.notin_(sub_all))
+
     total = (await db.execute(count_stmt)).scalar_one()
     stmt = stmt.order_by(Product.created_at.desc()).offset((page - 1) * per_page).limit(per_page)
     rows = (await db.execute(stmt)).scalars().all()
@@ -77,11 +163,17 @@ async def list_products(
         )).all()
         stock_map = {r.product_id: int(r.qty or 0) for r in stock_rows}
 
+    supplier_map = await _supplier_map(db, product_ids)
+
     items = []
     for r in rows:
         p_out = ProductOut.model_validate(r)
         p_out.stock_qty = stock_map.get(r.id, 0)
         p_out.in_stock = p_out.stock_qty > 0
+        sup = supplier_map.get(r.id)
+        if sup:
+            p_out.supplier_id = sup[0]
+            p_out.supplier_name = sup[1]
         items.append(p_out)
 
     return ProductListResponse(
@@ -104,6 +196,11 @@ async def get_product(product_id: uuid.UUID, db: DBSession):
     )).scalar_one()
     p_out.stock_qty = int(stock_rows or 0)
     p_out.in_stock = p_out.stock_qty > 0
+    supplier_map = await _supplier_map(db, [p.id])
+    sup = supplier_map.get(p.id)
+    if sup:
+        p_out.supplier_id = sup[0]
+        p_out.supplier_name = sup[1]
     return p_out
 
 
@@ -130,12 +227,23 @@ async def get_product_by_slug(slug: str, db: DBSession):
     dependencies=[Depends(require_permission("catalog:write"))],
 )
 async def create_product(payload: ProductCreate, db: DBSession):
+    data = payload.model_dump()
+    supplier_id = data.pop("supplier_id", None)
     slug = slugify(payload.name)
-    p = Product(slug=slug, **payload.model_dump())
+    p = Product(slug=slug, **data)
     db.add(p)
+    await db.flush()
+    if supplier_id is not None:
+        await _upsert_product_supplier(db, p, supplier_id)
     await db.commit()
     await db.refresh(p)
-    return p
+    out = ProductOut.model_validate(p)
+    if supplier_id is not None:
+        sup = (await _supplier_map(db, [p.id])).get(p.id)
+        if sup:
+            out.supplier_id = sup[0]
+            out.supplier_name = sup[1]
+    return out
 
 
 @router.patch(
@@ -147,11 +255,20 @@ async def update_product(product_id: uuid.UUID, payload: ProductUpdate, db: DBSe
     p = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one_or_none()
     if p is None:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    supplier_id = data.pop("supplier_id", None)
+    for k, v in data.items():
         setattr(p, k, v)
+    if supplier_id is not None:
+        await _upsert_product_supplier(db, p, supplier_id)
     await db.commit()
     await db.refresh(p)
-    return p
+    out = ProductOut.model_validate(p)
+    sup = (await _supplier_map(db, [p.id])).get(p.id)
+    if sup:
+        out.supplier_id = sup[0]
+        out.supplier_name = sup[1]
+    return out
 
 
 # ----------------------------- Brands ---------------------------------------

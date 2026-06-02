@@ -161,6 +161,8 @@ export interface Product {
   tags: string[];
   attributes: Record<string, unknown>;
   margin_pct?: string;
+  supplier_id?: string | null;
+  supplier_name?: string | null;
   stock_qty: number;
   in_stock: boolean;
 }
@@ -173,13 +175,15 @@ export interface PaginatedProducts {
 }
 
 export const products = {
-  list: (params: { page?: number; page_size?: number; q?: string; is_published?: boolean; category?: string } = {}) => {
+  list: (params: { page?: number; page_size?: number; q?: string; is_published?: boolean; category?: string; supplier_id?: string; without_supplier?: boolean } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
     if (params.page_size) qs.set('page_size', String(params.page_size));
     if (params.q) qs.set('q', params.q);
     if (params.is_published !== undefined) qs.set('is_published', String(params.is_published));
     if (params.category) qs.set('category', params.category);
+    if (params.supplier_id) qs.set('supplier_id', params.supplier_id);
+    if (params.without_supplier) qs.set('without_supplier', 'true');
     return api<PaginatedProducts>(`/v1/products?${qs.toString()}`);
   },
   get: (id: string) => api<Product>(`/v1/products/${id}`),
@@ -333,6 +337,8 @@ export interface Customer {
   pet_name: string | null;
   pet_type: string | null;
   pet_notes: string | null;
+  pet_birthday?: string | null;
+  last_deworming?: string | null;
   rfm_segment: string | null;
   rfm_monetary: number | null;
   last_purchase_at: string | null;
@@ -367,6 +373,8 @@ export const customers = {
     pet_name?: string;
     pet_type?: string;
     pet_notes?: string;
+    pet_birthday?: string;
+    last_deworming?: string;
   }) =>
     api<Customer>('/v1/customers', {
       method: 'POST',
@@ -383,6 +391,8 @@ export const customers = {
     pet_name?: string;
     pet_type?: string;
     pet_notes?: string;
+    pet_birthday?: string;
+    last_deworming?: string;
   }) =>
     api<Customer>(`/v1/customers/${id}`, {
       method: 'PATCH',
@@ -987,6 +997,131 @@ export const intelligence = {
     if (params.dead_stock_days) qs.set('dead_stock_days', String(params.dead_stock_days));
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     return api<IntelligenceData>(`/v1/intelligence/overview${suffix}`);
+  },
+  frequentlyBought: (productIds: string[], limit = 6) => {
+    const qs = new URLSearchParams({ product_ids: productIds.join(','), limit: String(limit) });
+    return api<ComboSuggestion[]>(`/v1/intelligence/frequently-bought?${qs.toString()}`);
+  },
+  stockoutForecast: (params: { velocity_days?: number; target_days?: number; horizon_days?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.velocity_days) qs.set('velocity_days', String(params.velocity_days));
+    if (params.target_days) qs.set('target_days', String(params.target_days));
+    if (params.horizon_days) qs.set('horizon_days', String(params.horizon_days));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return api<StockoutForecastData>(`/v1/intelligence/stockout-forecast${suffix}`);
+  },
+  replenishment: (params: { velocity_days?: number; target_days?: number; coverage_threshold_days?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.velocity_days) qs.set('velocity_days', String(params.velocity_days));
+    if (params.target_days) qs.set('target_days', String(params.target_days));
+    if (params.coverage_threshold_days) qs.set('coverage_threshold_days', String(params.coverage_threshold_days));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return api<ReplenishmentData>(`/v1/intelligence/replenishment${suffix}`);
+  },
+  petCare: (params: { deworming_interval_days?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.deworming_interval_days) qs.set('deworming_interval_days', String(params.deworming_interval_days));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return api<PetCareData>(`/v1/intelligence/pet-care${suffix}`);
+  },
+};
+
+export interface ComboSuggestion {
+  product_id: string;
+  sku: string;
+  name: string;
+  price: number;
+  times_together: number;
+  stock: number;
+}
+
+export interface StockoutItem {
+  product_id: string;
+  sku: string;
+  name: string;
+  available: number;
+  velocity: number;
+  days_cover: number | null;
+  stockout_date: string | null;
+  suggested_reorder: number;
+  supplier_name: string | null;
+  level: 'agotado' | 'critico' | 'bajo' | 'ok';
+}
+
+export interface StockoutForecastData {
+  generated_at: string;
+  target_days: number;
+  summary: { at_risk: number; agotado: number; critico: number; bajo: number };
+  items: StockoutItem[];
+}
+
+export interface ReplenishLine {
+  product_id: string;
+  sku: string;
+  name: string;
+  available: number;
+  velocity: number;
+  days_cover: number | null;
+  suggested_qty: number;
+  unit_cost: number;
+  line_cost: number;
+}
+
+export interface ReplenishSupplier {
+  supplier_id: string | null;
+  supplier_name: string;
+  supplier_phone: string | null;
+  lines: ReplenishLine[];
+  total_units: number;
+  total_cost: number;
+  whatsapp_url: string | null;
+}
+
+export interface ReplenishmentData {
+  generated_at: string;
+  target_days: number;
+  total_cost: number;
+  suppliers: ReplenishSupplier[];
+}
+
+export interface PetReminder {
+  customer_id: string;
+  customer_name: string;
+  phone: string | null;
+  pet_name: string | null;
+  pet_type: string | null;
+  reason: 'cumple' | 'desparasitacion' | 'vacuna';
+  detail: string;
+  whatsapp_url: string | null;
+}
+
+export interface PetCareData {
+  generated_at: string;
+  summary: { birthdays_this_month: number; deworming_due: number };
+  birthdays: PetReminder[];
+  deworming_due: PetReminder[];
+}
+
+export interface DailyGoalData {
+  fecha: string;
+  target: number;
+  achieved: number;
+  progress_pct: number;
+  remaining: number;
+  orders_today: number;
+  projection_eod: number;
+  status: 'logrado' | 'en_camino' | 'atrasado';
+  target_source: 'manual' | 'auto_weekday';
+  weekday_avg: number;
+}
+
+export const dailyGoal = {
+  get: (params: { fecha?: string; target?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.fecha) qs.set('fecha', params.fecha);
+    if (params.target) qs.set('target', String(params.target));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return api<DailyGoalData>(`/v1/finance/daily-goal${suffix}`);
   },
 };
 

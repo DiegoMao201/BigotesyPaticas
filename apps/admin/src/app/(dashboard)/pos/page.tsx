@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
-import { products, customers, pos, sales, API_BASE, type Product, type Customer, type Order } from '@/lib/api';
+import { products, customers, pos, sales, intelligence, API_BASE, type Product, type Customer, type Order } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
 import { toast } from 'sonner';
 
@@ -583,6 +583,38 @@ function SuccessScreen({ order, customer, onNew }: { order: Order; customer: Cus
   );
 }
 
+// ─── Combos / "se vende junto con" (P1) ───────────────────────────
+function ComboSuggestions({ cartIds, onAdd }: { cartIds: string[]; onAdd: (p: Product) => void }) {
+  const { data } = useQuery({
+    queryKey: ['combos', cartIds],
+    queryFn: () => intelligence.frequentlyBought(cartIds, 6),
+    enabled: cartIds.length > 0,
+    staleTime: 60_000,
+  });
+  if (!cartIds.length || !data || data.length === 0) return null;
+  return (
+    <div className="px-3 py-3 border-t border-border/40 bg-brand/5">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-700 mb-2">
+        <Zap className="h-3.5 w-3.5" /> Se vende junto con
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        {data.map((s) => (
+          <button
+            key={s.product_id}
+            onClick={() => onAdd({ id: s.product_id, sku: s.sku, name: s.name, price: String(s.price) } as Product)}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-brand/30 bg-background hover:bg-brand/10 transition-colors"
+            title={`Comprado junto ${s.times_together} veces · Stock ${s.stock}`}
+          >
+            <Plus className="h-3 w-3 text-brand-600" />
+            <span className="font-medium max-w-[160px] truncate">{s.name}</span>
+            <span className="text-muted-foreground">{formatCurrency(s.price)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── POS Main ─────────────────────────────────────────────────────
 export default function POSPage() {
   const qc = useQueryClient();
@@ -803,6 +835,9 @@ export default function POSPage() {
                   </div>
                 )}
               </CardContent>
+              {cart.length > 0 && (
+                <ComboSuggestions cartIds={cart.map((i) => i.product.id)} onAdd={addProduct} />
+              )}
             </Card>
           </div>
 

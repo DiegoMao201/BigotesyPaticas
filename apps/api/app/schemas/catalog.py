@@ -51,7 +51,7 @@ class ProductBase(BaseModel):
 
 
 class ProductCreate(ProductBase):
-    pass
+    supplier_id: uuid.UUID | None = None
 
 
 class ProductUpdate(BaseModel):
@@ -71,6 +71,7 @@ class ProductUpdate(BaseModel):
     images: list[str] | None = None
     attributes: dict | None = None
     tags: list[str] | None = None
+    supplier_id: uuid.UUID | None = None
 
 
 class ProductOut(ProductBase):
@@ -79,6 +80,8 @@ class ProductOut(ProductBase):
     slug: str
     brand: BrandOut | None = None
     category: CategoryOut | None = None
+    supplier_id: uuid.UUID | None = None
+    supplier_name: str | None = None
     stock_qty: int = 0
     in_stock: bool = True
 

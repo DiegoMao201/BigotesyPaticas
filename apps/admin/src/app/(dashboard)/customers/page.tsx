@@ -39,6 +39,8 @@ type CustomerFormData = {
   pet_name: string;
   pet_type: string;
   pet_notes: string;
+  pet_birthday: string;
+  last_deworming: string;
   notes: string;
 };
 
@@ -61,6 +63,8 @@ function CustomerForm({
     pet_name: initial?.pet_name || '',
     pet_type: initial?.pet_type || '',
     pet_notes: initial?.pet_notes || '',
+    pet_birthday: initial?.pet_birthday || '',
+    last_deworming: initial?.last_deworming || '',
     notes: initial?.notes || '',
   });
   const set = (k: keyof CustomerFormData, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -105,6 +109,14 @@ function CustomerForm({
           <div>
             <label className="text-xs font-medium mb-1 block">Tipo de mascota</label>
             <Input value={form.pet_type} onChange={(e) => set('pet_type', e.target.value)} placeholder="Perro / Gato" />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Cumpleaños mascota</label>
+            <Input type="date" value={form.pet_birthday} onChange={(e) => set('pet_birthday', e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Última desparasitación</label>
+            <Input type="date" value={form.last_deworming} onChange={(e) => set('last_deworming', e.target.value)} />
           </div>
           <div className="col-span-2">
             <label className="text-xs font-medium mb-1 block">Notas de mascota</label>
@@ -155,6 +167,8 @@ export default function CustomersPage() {
       pet_name: d.pet_name || undefined,
       pet_type: d.pet_type || undefined,
       pet_notes: d.pet_notes || undefined,
+      pet_birthday: d.pet_birthday || undefined,
+      last_deworming: d.last_deworming || undefined,
       notes: d.notes || undefined,
     }),
     onSuccess: () => { toast.success('Cliente creado'); qc.invalidateQueries({ queryKey: ['customers'] }); setOpenCreate(false); },
@@ -172,6 +186,8 @@ export default function CustomersPage() {
       pet_name: d.pet_name || undefined,
       pet_type: d.pet_type || undefined,
       pet_notes: d.pet_notes || undefined,
+      pet_birthday: d.pet_birthday || undefined,
+      last_deworming: d.last_deworming || undefined,
       notes: d.notes || undefined,
     }),
     onSuccess: () => { toast.success('Cliente actualizado'); qc.invalidateQueries({ queryKey: ['customers'] }); setEditCustomer(null); },

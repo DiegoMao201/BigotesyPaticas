@@ -7,7 +7,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn, formatCurrency } from '@/lib/utils';
-import { analytics, type DashboardData } from '@/lib/api';
+import { analytics, dailyGoal, type DashboardData } from '@/lib/api';
 
 // ── KPI card ──────────────────────────────────────────────────────
 interface KpiProps {
@@ -81,6 +81,54 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-rose-100 text-rose-800',
 };
 
+// ── Meta diaria con semáforo (P5) ─────────────────────────────────
+function DailyGoalBanner() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['daily-goal'],
+    queryFn: () => dailyGoal.get(),
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });
+  if (isLoading || !data) {
+    return <div className="h-24 rounded-xl bg-muted/30 animate-pulse" />;
+  }
+  const pct = Math.min(data.progress_pct, 100);
+  const palette = data.status === 'logrado'
+    ? { bar: 'bg-emerald-500', text: 'text-emerald-700', bg: 'from-emerald-500/10 to-emerald-500/0', label: '🎯 ¡Meta lograda!' }
+    : data.status === 'en_camino'
+    ? { bar: 'bg-blue-500', text: 'text-blue-700', bg: 'from-blue-500/10 to-blue-500/0', label: '🟢 En camino' }
+    : { bar: 'bg-amber-500', text: 'text-amber-700', bg: 'from-amber-500/10 to-amber-500/0', label: '🟡 Vamos atrasados' };
+  return (
+    <Card className={cn('overflow-hidden relative bg-gradient-to-br', palette.bg)}>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+          <div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Meta de hoy</div>
+            <div className="text-2xl font-display font-bold mt-0.5">
+              {formatCurrency(data.achieved)} <span className="text-base text-muted-foreground font-normal">/ {formatCurrency(data.target)}</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className={cn('text-sm font-bold', palette.text)}>{palette.label}</div>
+            <div className="text-xs text-muted-foreground">
+              {data.orders_today} ventas · proyección {formatCurrency(data.projection_eod)}
+            </div>
+          </div>
+        </div>
+        <div className="h-3 rounded-full bg-muted/60 overflow-hidden">
+          <div className={cn('h-full rounded-full transition-all', palette.bar)} style={{ width: `${pct}%` }} />
+        </div>
+        <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+          <span>{data.progress_pct.toFixed(0)}% de la meta</span>
+          {data.remaining > 0
+            ? <span>Faltan {formatCurrency(data.remaining)}</span>
+            : <span className="text-emerald-600 font-medium">Meta superada 🎉</span>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DashboardPage() {
   const { data, isLoading, isError } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
@@ -112,6 +160,9 @@ export default function DashboardPage() {
           No se pudo conectar con el API. Verifica que el servicio esté en línea.
         </div>
       )}
+
+      {/* Meta diaria */}
+      <DailyGoalBanner />
 
       {/* KPIs */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
