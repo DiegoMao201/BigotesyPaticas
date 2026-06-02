@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Package, ShoppingCart, Boxes, Users, BarChart3,
   Settings, LogOut, AlertTriangle, TrendingUp, CreditCard, Tag,
-  Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText,
+  Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-store';
@@ -18,6 +18,7 @@ const NAV_GROUPS = [
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/analytics', label: 'Analítica', icon: BarChart3 },
+      { href: '/intelligence', label: 'Inteligencia', icon: Brain, highlight: true },
     ],
   },
   {

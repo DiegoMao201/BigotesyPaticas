@@ -924,6 +924,72 @@ export const analyticsBI = {
   comparison: (days = 30) => api<SalesPeriodComparison>(`/v1/analytics/sales-comparison?days=${days}`),
 };
 
+// ─── Inteligencia (recompra predictiva, retención, capital atrapado) ────────
+
+export interface RepurchaseItem {
+  customer_id: string;
+  name: string;
+  phone: string | null;
+  last_purchase: string | null;
+  days_since: number;
+  avg_interval_days: number;
+  days_overdue: number;
+  orders: number;
+  monetary: number;
+  favorite_product: string | null;
+  urgency: 'vencido' | 'hoy' | 'proximo';
+  whatsapp_url: string | null;
+}
+
+export interface AtRiskItem {
+  customer_id: string;
+  name: string;
+  phone: string | null;
+  last_purchase: string | null;
+  days_since: number;
+  orders: number;
+  monetary: number;
+  segment: string | null;
+  whatsapp_url: string | null;
+}
+
+export interface DeadStockItem {
+  product_id: string;
+  sku: string;
+  name: string;
+  available: number;
+  unit_cost: number;
+  trapped_capital: number;
+  days_no_sale: number | null;
+}
+
+export interface IntelligenceData {
+  generated_at: string;
+  summary: {
+    customers_total: number;
+    customers_active_90d: number;
+    repurchase_due: number;
+    repurchase_revenue_opportunity: number;
+    at_risk_count: number;
+    at_risk_value: number;
+    dead_stock_count: number;
+    trapped_capital: number;
+  };
+  repurchase: RepurchaseItem[];
+  at_risk: AtRiskItem[];
+  dead_stock: DeadStockItem[];
+}
+
+export const intelligence = {
+  overview: (params: { at_risk_days?: number; dead_stock_days?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.at_risk_days) qs.set('at_risk_days', String(params.at_risk_days));
+    if (params.dead_stock_days) qs.set('dead_stock_days', String(params.dead_stock_days));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return api<IntelligenceData>(`/v1/intelligence/overview${suffix}`);
+  },
+};
+
 // ─── Admin ETL ─────────────────────────────────────────────────────────────
 
 export const adminEtl = {

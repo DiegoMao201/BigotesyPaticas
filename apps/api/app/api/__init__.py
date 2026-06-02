@@ -8,6 +8,7 @@ from app.api.v1 import (
     customers,
     finance,
     health,
+    intelligence,
     inventory,
     inventory_counts,
     products,
@@ -28,6 +29,7 @@ api_router.include_router(inventory.router, prefix="/v1")
 api_router.include_router(inventory_counts.router, prefix="/v1")
 api_router.include_router(sales.router, prefix="/v1")
 api_router.include_router(analytics.router, prefix="/v1")
+api_router.include_router(intelligence.router, prefix="/v1")
 api_router.include_router(customers.router, prefix="/v1")
 api_router.include_router(admin_etl.router, prefix="/v1")
 api_router.include_router(finance.router, prefix="/v1")
