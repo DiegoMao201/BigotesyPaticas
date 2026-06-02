@@ -372,6 +372,58 @@ async def get_today_closing(db: DBSession, user: CurrentUser):
     return _build_closing_out(closing, live)
 
 
+@closings_router.get("/by-date", response_model=CashClosingOut)
+async def get_closing_by_date(
+    db: DBSession,
+    user: CurrentUser,
+    fecha: date = Query(..., description="Fecha del cierre (zona horaria Colombia)"),
+):
+    """Retorna el cierre de una fecha específica SIN crearlo.
+
+    Permite cuadrar la caja de días pasados. Si no existe un cierre persistido
+    para esa fecha, devuelve un cierre 'virtual' (id vacío) con los totales en
+    vivo calculados en zona horaria de Colombia y el saldo inicial heredado del
+    último cierre cerrado anterior. El frontend usa el id vacío para ofrecer
+    'Abrir caja de este día'.
+    """
+    result = await db.execute(
+        select(CashClosingModel).where(CashClosingModel.fecha == fecha)
+    )
+    closing = result.scalar_one_or_none()
+
+    if closing:
+        if closing.status == "open":
+            live = await _compute_live_totals(db, closing.fecha)
+        else:
+            live = {
+                "ventas_por_metodo": closing.snap_ventas_por_metodo or {},
+                "creditos_por_metodo": closing.snap_creditos_por_metodo or {},
+                "total_ventas": float(closing.snap_total_ventas or 0),
+                "order_count": 0,
+            }
+        return _build_closing_out(closing, live)
+
+    # Cierre virtual (no persistido): carry-over del último cierre cerrado previo
+    prev_result = await db.execute(
+        select(CashClosingModel)
+        .where(CashClosingModel.fecha < fecha, CashClosingModel.status == "closed")
+        .order_by(CashClosingModel.fecha.desc())
+    )
+    prev = prev_result.scalars().first()
+    saldo_inicial = float(prev.saldo_final_efectivo or 0) if prev else 0.0
+
+    virtual = CashClosingModel(
+        fecha=fecha,
+        status="open",
+        saldo_inicial=Decimal(str(saldo_inicial)),
+        gastos_efectivo=Decimal("0"),
+    )
+    live = await _compute_live_totals(db, fecha)
+    out = _build_closing_out(virtual, live)
+    out.id = ""  # Señal de "no persistido" para el frontend
+    return out
+
+
 @closings_router.get("", response_model=dict)
 async def list_cash_closings(
     db: DBSession,

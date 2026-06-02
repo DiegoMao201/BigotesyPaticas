@@ -118,6 +118,119 @@ async def adjust_stock(payload: AdjustmentIn, db: DBSession, user: CurrentUser):
     )
 
 
+class BatchAdjustmentItem(BaseModel):
+    product_id: uuid.UUID
+    quantity_delta: int = Field(description="Positivo o negativo, distinto de 0")
+    notes: str | None = None
+
+
+class BatchAdjustmentIn(BaseModel):
+    location_id: uuid.UUID | None = None
+    notes: str | None = Field(default=None, description="Nota común para todo el lote")
+    items: list[BatchAdjustmentItem] = Field(min_length=1)
+
+
+class BatchAdjustmentResultItem(BaseModel):
+    product_id: uuid.UUID
+    quantity_delta: int
+    quantity_after: int
+
+
+class BatchAdjustmentOut(BaseModel):
+    applied: int
+    total_delta: int
+    items: list[BatchAdjustmentResultItem]
+
+
+@router.post(
+    "/adjust/batch",
+    response_model=BatchAdjustmentOut,
+    dependencies=[Depends(require_permission("inventory:adjust"))],
+)
+async def adjust_stock_batch(payload: BatchAdjustmentIn, db: DBSession, user: CurrentUser):
+    """Aplica varios ajustes de stock en una sola transacción (atómico).
+
+    Si algún producto queda con stock negativo, se revierte TODO el lote.
+    """
+    # Resolver location default una sola vez
+    location_id = payload.location_id
+    if location_id is None:
+        loc = (
+            await db.execute(
+                select(StockLocation).where(StockLocation.is_default == 1).limit(1)
+            )
+        ).scalar_one_or_none()
+        if loc is None:
+            raise HTTPException(status_code=400, detail="No hay location default configurada")
+        location_id = loc.id
+
+    # Validar que no se repita el mismo producto en el lote
+    seen: set[uuid.UUID] = set()
+    for it in payload.items:
+        if it.quantity_delta == 0:
+            raise HTTPException(status_code=400, detail="Hay un ajuste con cantidad 0")
+        if it.product_id in seen:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Producto repetido en el lote: {it.product_id}",
+            )
+        seen.add(it.product_id)
+
+    results: list[BatchAdjustmentResultItem] = []
+    total_delta = 0
+    now = datetime.now(UTC)
+
+    for it in payload.items:
+        stock = (
+            await db.execute(
+                select(Stock)
+                .where(Stock.product_id == it.product_id)
+                .where(Stock.location_id == location_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+
+        if stock is None:
+            if it.quantity_delta < 0:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Sin stock para descontar en producto {it.product_id}",
+                )
+            stock = Stock(product_id=it.product_id, location_id=location_id, quantity=0)
+            db.add(stock)
+
+        new_qty = stock.quantity + it.quantity_delta
+        if new_qty < 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Stock insuficiente en {it.product_id}: "
+                    f"actual={stock.quantity}, delta={it.quantity_delta}"
+                ),
+            )
+        stock.quantity = new_qty
+        total_delta += it.quantity_delta
+
+        db.add(StockMovement(
+            product_id=it.product_id,
+            location_id=location_id,
+            movement_type="ADJUSTMENT",
+            quantity_delta=it.quantity_delta,
+            quantity_after=new_qty,
+            notes=it.notes or payload.notes,
+            occurred_at=now,
+            created_by=user.email,
+        ))
+        results.append(BatchAdjustmentResultItem(
+            product_id=it.product_id,
+            quantity_delta=it.quantity_delta,
+            quantity_after=new_qty,
+        ))
+
+    await db.commit()
+    return BatchAdjustmentOut(applied=len(results), total_delta=total_delta, items=results)
+
+
 # ─────────────── List all stock with product info (for inventory page) ────────────
 
 class StockRowOut(BaseModel):

@@ -41,8 +41,8 @@ function getMethodIcon(method: string) {
   return METHOD_ICON[method] ?? <DollarSign className="w-4 h-4" />;
 }
 
-// ─── Panel del Cierre de Hoy ──────────────────────────────────────────────────
-function TodayPanel() {
+// ─── Panel del Cierre de un Día (hoy o pasado) ────────────────────────────────
+function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
   const qc = useQueryClient();
   const [showClose, setShowClose] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -54,17 +54,33 @@ function TodayPanel() {
   const [editNotas, setEditNotas] = useState('');
 
   const { data: today, isLoading, refetch } = useQuery({
-    queryKey: ['cash-closing-today'],
-    queryFn: () => cashClosings.today(),
-    refetchInterval: 30_000, // auto-refresh cada 30s
+    queryKey: ['cash-closing-day', fecha],
+    queryFn: () => (isToday ? cashClosings.today() : cashClosings.byDate(fecha)),
+    refetchInterval: isToday ? 30_000 : false, // auto-refresh solo el día de hoy
+  });
+
+  // Un cierre "virtual" (día pasado sin registro) llega con id vacío.
+  const isVirtual = !!today && today.id === '';
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['cash-closing-day'] });
+    qc.invalidateQueries({ queryKey: ['cash-closings'] });
+  };
+
+  const openMutation = useMutation({
+    mutationFn: () => cashClosings.open({ fecha, saldo_inicial: today?.saldo_inicial }),
+    onSuccess: () => {
+      invalidate();
+      toast.success('Caja del día abierta');
+    },
+    onError: () => toast.error('Error al abrir la caja'),
   });
 
   const patchMutation = useMutation({
     mutationFn: (p: { gastos_efectivo?: number; saldo_inicial?: number; notas?: string }) =>
       cashClosings.patch(today!.id, p),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cash-closing-today'] });
-      qc.invalidateQueries({ queryKey: ['cash-closings'] });
+      invalidate();
       setShowEdit(false);
       toast.success('Cierre actualizado');
     },
@@ -75,8 +91,7 @@ function TodayPanel() {
     mutationFn: (p: { saldo_contado: number; gastos_efectivo?: number; notas?: string }) =>
       cashClosings.close(today!.id, p),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cash-closing-today'] });
-      qc.invalidateQueries({ queryKey: ['cash-closings'] });
+      invalidate();
       setShowClose(false);
       toast.success('Cierre de caja cerrado exitosamente');
     },
@@ -119,7 +134,9 @@ function TodayPanel() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {isOpen ? (
+            {isVirtual ? (
+              <Badge variant="danger" className="gap-1"><AlertCircle className="w-3 h-3" /> Sin abrir</Badge>
+            ) : isOpen ? (
               <Badge variant="warning" className="gap-1"><AlertCircle className="w-3 h-3" /> Abierto</Badge>
             ) : (
               <Badge variant="success" className="gap-1"><CheckCircle2 className="w-3 h-3" /> Cerrado</Badge>
@@ -135,6 +152,16 @@ function TodayPanel() {
         </div>
 
         <div className="p-6 space-y-6">
+          {isVirtual && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3">
+              <p className="text-sm text-amber-800">
+                Este día aún no tiene caja registrada. Los totales mostrados son en vivo (zona horaria Colombia). Ábrela para poder cuadrarla y cerrarla.
+              </p>
+              <Button size="sm" onClick={() => openMutation.mutate()} disabled={openMutation.isPending} className="bg-brand-600 hover:bg-brand-700 text-white shrink-0">
+                {openMutation.isPending ? 'Abriendo…' : 'Abrir caja de este día'}
+              </Button>
+            </div>
+          )}
           {/* KPI Efectivo row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="rounded-lg border bg-white p-4">
@@ -152,7 +179,7 @@ function TodayPanel() {
             <div className="rounded-lg border bg-white p-4">
               <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1"><TrendingDown className="w-3 h-3 text-red-500" /> Gastos efectivo</div>
               <div className="text-xl font-bold text-red-600">{formatCurrency(today.gastos_efectivo)}</div>
-              {isOpen && (
+              {isOpen && !isVirtual && (
                 <button onClick={() => { setEditGastos(String(today.gastos_efectivo)); setShowEdit(true); }} className="text-xs text-brand-600 hover:underline mt-1">editar</button>
               )}
             </div>
@@ -214,7 +241,7 @@ function TodayPanel() {
           )}
 
           {/* Actions */}
-          {isOpen && (
+          {isOpen && !isVirtual && (
             <div className="flex gap-3 pt-2">
               <Button variant="outline" size="sm" onClick={() => { setEditGastos(String(today.gastos_efectivo)); setEditSaldoInicial(String(today.saldo_inicial)); setEditNotas(today.notas ?? ''); setShowEdit(true); }}>
                 Ajustar gastos / saldo inicial
@@ -337,7 +364,7 @@ function TodayPanel() {
 }
 
 // ─── Fila histórico ───────────────────────────────────────────────────────────
-function HistoryRow({ c }: { c: CashClosing }) {
+function HistoryRow({ c, onSelect }: { c: CashClosing; onSelect: (fecha: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const isOpen = c.status === 'open';
   const diff = c.diferencia;
@@ -362,13 +389,22 @@ function HistoryRow({ c }: { c: CashClosing }) {
           {diff !== null ? formatCurrency(diff) : '—'}
         </td>
         <td className="px-4 py-3">
-          {isOpen ? (
-            <Badge variant="warning" className="gap-1"><AlertCircle className="w-3 h-3" /> Abierto</Badge>
-          ) : diff !== null && Math.abs(diff) < 1000 ? (
-            <Badge variant="success" className="gap-1"><CheckCircle2 className="w-3 h-3" /> Cuadrado</Badge>
-          ) : (
-            <Badge variant="danger" className="gap-1"><AlertCircle className="w-3 h-3" /> Revisar</Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {isOpen ? (
+              <Badge variant="warning" className="gap-1"><AlertCircle className="w-3 h-3" /> Abierto</Badge>
+            ) : diff !== null && Math.abs(diff) < 1000 ? (
+              <Badge variant="success" className="gap-1"><CheckCircle2 className="w-3 h-3" /> Cuadrado</Badge>
+            ) : (
+              <Badge variant="danger" className="gap-1"><AlertCircle className="w-3 h-3" /> Revisar</Badge>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelect(c.fecha); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              className="text-xs text-brand-600 hover:underline whitespace-nowrap"
+              title="Abrir este día en el panel superior"
+            >
+              Cuadrar
+            </button>
+          </div>
         </td>
       </tr>
       {expanded && (
@@ -404,8 +440,15 @@ function HistoryRow({ c }: { c: CashClosing }) {
 }
 
 // ─── Página principal ─────────────────────────────────────────────────────────
+// Fecha "hoy" en zona horaria de Colombia (YYYY-MM-DD)
+function colombiaToday(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+}
+
 export default function CashClosingsPage() {
   const [page, setPage] = useState(1);
+  const todayCO = colombiaToday();
+  const [selectedDate, setSelectedDate] = useState(todayCO);
   const { data, isLoading } = useQuery({
     queryKey: ['cash-closings', page],
     queryFn: () => cashClosings.list({ page, page_size: 30 }),
@@ -415,17 +458,46 @@ export default function CashClosingsPage() {
   const totalEfectivo = data?.items.reduce((s, c) => s + c.ventas_efectivo, 0) || 0;
   const totalGastos = data?.items.reduce((s, c) => s + c.gastos_efectivo, 0) || 0;
 
+  // Ayer en zona horaria Colombia
+  const yesterdayCO = (() => {
+    const d = new Date(`${todayCO}T12:00:00`);
+    d.setDate(d.getDate() - 1);
+    return d.toLocaleDateString('en-CA');
+  })();
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold font-display flex items-center gap-2">
           <ReceiptText className="w-6 h-6 text-brand-600" /> Cierres de Caja
         </h1>
-        <p className="text-sm text-muted-foreground">Cuadre diario por método de pago con carry-over automático de efectivo</p>
+        <p className="text-sm text-muted-foreground">Cuadre diario por método de pago con carry-over automático de efectivo — zona horaria Colombia</p>
       </div>
 
-      {/* Cierre de hoy */}
-      <TodayPanel />
+      {/* Selector de día — permite cuadrar hoy o días pasados */}
+      <Card className="p-4 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-brand-600" />
+          <span className="text-sm font-medium">Día a cuadrar:</span>
+        </div>
+        <Input
+          type="date"
+          value={selectedDate}
+          max={todayCO}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="w-auto"
+        />
+        <div className="flex gap-1">
+          <Button size="sm" variant={selectedDate === todayCO ? 'default' : 'outline'} onClick={() => setSelectedDate(todayCO)}>Hoy</Button>
+          <Button size="sm" variant={selectedDate === yesterdayCO ? 'default' : 'outline'} onClick={() => setSelectedDate(yesterdayCO)}>Ayer</Button>
+        </div>
+        {selectedDate !== todayCO && (
+          <span className="text-xs text-amber-600">Estás cuadrando un día pasado</span>
+        )}
+      </Card>
+
+      {/* Panel del día seleccionado */}
+      <DayPanel key={selectedDate} fecha={selectedDate} isToday={selectedDate === todayCO} />
 
       {/* KPIs histórico */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -473,7 +545,7 @@ export default function CashClosingsPage() {
               ) : data?.items.length === 0 ? (
                 <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Sin cierres registrados</td></tr>
               ) : (
-                data?.items.map((c) => <HistoryRow key={c.id} c={c} />)
+                data?.items.map((c) => <HistoryRow key={c.id} c={c} onSelect={setSelectedDate} />)
               )}
             </tbody>
           </table>

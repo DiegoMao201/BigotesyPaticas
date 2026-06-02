@@ -159,6 +159,8 @@ export interface Product {
   primary_image_url: string | null;
   images: string[];
   tags: string[];
+  attributes: Record<string, unknown>;
+  margin_pct?: string;
   stock_qty: number;
   in_stock: boolean;
 }
@@ -475,6 +477,7 @@ export interface CashClosing {
 
 export const cashClosings = {
   today: () => api<CashClosing>('/v1/cash-closings/today'),
+  byDate: (fecha: string) => api<CashClosing>(`/v1/cash-closings/by-date?fecha=${fecha}`),
   list: (params: { page?: number; page_size?: number } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
@@ -680,6 +683,11 @@ export const inventory = {
   },
   adjust: (payload: { product_id: string; quantity_delta: number; notes?: string; location_id?: string }) =>
     api('/v1/inventory/adjust', { method: 'POST', body: JSON.stringify(payload) }),
+  adjustBatch: (payload: { items: { product_id: string; quantity_delta: number; notes?: string }[]; notes?: string; location_id?: string }) =>
+    api<{ applied: number; total_delta: number; items: { product_id: string; quantity_delta: number; quantity_after: number }[] }>(
+      '/v1/inventory/adjust/batch',
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
   updatePricing: (product_id: string, payload: { cost?: number; price?: number }) =>
     api(`/v1/inventory/stock/${product_id}/pricing`, { method: 'PATCH', body: JSON.stringify(payload) }),
   movementsByProduct: (product_id: string, days = 30) =>

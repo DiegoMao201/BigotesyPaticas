@@ -211,6 +211,7 @@ type ProductFormProps = {
 };
 
 function ProductForm({ initial, brands, categories, onSubmit, loading }: ProductFormProps) {
+  const initialAttrs = (initial?.attributes ?? {}) as Record<string, unknown>;
   const [form, setForm] = useState({
     sku: initial?.sku || '',
     name: initial?.name || '',
@@ -226,6 +227,8 @@ function ProductForm({ initial, brands, categories, onSubmit, loading }: Product
     is_published: initial?.is_published ?? false,
     is_featured: initial?.is_featured ?? false,
     tags: initial?.tags?.join(', ') || '',
+    tax_pct: initialAttrs.tax_pct != null ? String(initialAttrs.tax_pct) : '19',
+    pet_type: (initialAttrs.pet_type as string) || '',
   });
 
   const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
@@ -247,6 +250,12 @@ function ProductForm({ initial, brands, categories, onSubmit, loading }: Product
       is_published: form.is_published,
       is_featured: form.is_featured,
       tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
+      // IVA y tipo de mascota se guardan en attributes (JSONB) preservando lo previo
+      attributes: {
+        ...initialAttrs,
+        tax_pct: form.tax_pct !== '' ? Number(form.tax_pct) : 0,
+        pet_type: form.pet_type || null,
+      },
     };
     onSubmit(payload);
   }
@@ -306,6 +315,27 @@ function ProductForm({ initial, brands, categories, onSubmit, loading }: Product
               <option value="">Sin categoría</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium mb-1 block">IVA del producto</label>
+            <Select value={form.tax_pct} onChange={(e) => set('tax_pct', e.target.value)}>
+              <option value="0">0% (Excluido / Exento)</option>
+              <option value="5">5%</option>
+              <option value="19">19% (General)</option>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">Tarifa de IVA aplicable a este producto.</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">¿Para qué mascota?</label>
+            <Select value={form.pet_type} onChange={(e) => set('pet_type', e.target.value)}>
+              <option value="">Sin especificar</option>
+              <option value="perro">🐶 Perro</option>
+              <option value="gato">🐱 Gato</option>
+              <option value="mixto">🐾 Mixto (perro y gato)</option>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">Define la especie objetivo del producto.</p>
           </div>
         </div>
         <div>

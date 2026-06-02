@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CreditCard,
   Banknote, Smartphone, CheckCircle2, Printer, RotateCcw, X, XCircle,
-  FileText, MessageCircle, History, Eye, ChevronRight, ScanLine, Zap,
+  FileText, MessageCircle, History, Eye, ChevronRight, ScanLine, Zap, MapPin,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -189,18 +189,45 @@ function CustomerSelector({
   });
 
   if (value) {
+    const hasAddress = Boolean(value.address || value.city);
+    const mapsQuery = encodeURIComponent([value.address, value.city].filter(Boolean).join(', '));
     return (
-      <div className="flex items-center justify-between p-3 rounded-lg border border-brand/30 bg-brand/5">
-        <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-brand-600" />
-          <div>
-            <div className="font-medium text-sm">{value.full_name}</div>
-            {value.phone && <div className="text-xs text-muted-foreground">{value.phone}</div>}
+      <div className="rounded-lg border border-brand/30 bg-brand/5 p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <User className="h-4 w-4 text-brand-600 shrink-0" />
+            <div className="min-w-0">
+              <div className="font-medium text-sm truncate">{value.full_name}</div>
+              {value.phone && <div className="text-xs text-muted-foreground">{value.phone}</div>}
+            </div>
           </div>
+          <button onClick={() => onChange(null)} className="text-muted-foreground hover:text-foreground shrink-0">
+            <X className="h-4 w-4" />
+          </button>
         </div>
-        <button onClick={() => onChange(null)} className="text-muted-foreground hover:text-foreground">
-          <X className="h-4 w-4" />
-        </button>
+        {/* Dirección para domicilio — visible al facturar */}
+        <div className={cn(
+          'flex items-start gap-2 rounded-md px-2.5 py-2 text-xs',
+          hasAddress ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800',
+        )}>
+          <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          {hasAddress ? (
+            <div className="min-w-0 flex-1">
+              <div className="font-medium leading-snug">{value.address || 'Sin dirección registrada'}</div>
+              {value.city && <div className="opacity-80">{value.city}</div>}
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 mt-1 text-emerald-700 hover:underline font-medium"
+              >
+                <MapPin className="h-3 w-3" /> Ver en mapa para domicilio
+              </a>
+            </div>
+          ) : (
+            <span>Cliente sin dirección registrada — pídela para el domicilio.</span>
+          )}
+        </div>
       </div>
     );
   }
@@ -229,9 +256,11 @@ function CustomerSelector({
               <div className="w-7 h-7 rounded-full gradient-brand flex items-center justify-center text-white text-xs font-bold shrink-0">
                 {(c.full_name ?? '?').charAt(0)}
               </div>
-              <div>
-                <div className="font-medium">{c.full_name}</div>
-                {c.phone && <div className="text-xs text-muted-foreground">{c.phone}</div>}
+              <div className="min-w-0">
+                <div className="font-medium truncate">{c.full_name}</div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {[c.phone, c.address || c.city].filter(Boolean).join(' · ') || 'Sin contacto'}
+                </div>
               </div>
             </button>
           ))}

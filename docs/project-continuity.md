@@ -124,6 +124,26 @@
 	- Smoke funcional con usuario autenticado: venta en efectivo con cambio + cierre del día, IA con filtros y envío WhatsApp, descarga de comprobante nuevo.
 
 ```
+
+### 2026-06-02 — Mejoras operativas admin: domicilio en POS, IVA/mascota en productos, ajustes en lote, cuadre por día e IA arreglada
+- Qué cambió (todo en `apps/admin` salvo donde se indica):
+	- POS (`pos/page.tsx`): al seleccionar cliente para facturar ahora se muestra la dirección y ciudad para el domicilio, con enlace a Google Maps; el dropdown de búsqueda también muestra teléfono/dirección.
+	- Productos (`products/page.tsx` + `lib/api.ts`): el formulario de creación/edición permite definir el **IVA** del producto (0/5/19%) y el **tipo de mascota** (perro/gato/mixto). Se guardan en `catalog.products.attributes` (JSONB) — sin migración. Se añadió `attributes` y `margin_pct` al tipo `Product`.
+	- Ajustes de inventario (`inventory/page.tsx` tab Ajustes): nuevo flujo por **lote** (añadir varios productos a una lista y aplicar todos juntos). Backend: nuevo endpoint atómico `POST /v1/inventory/adjust/batch` (`api/v1/inventory.py`) que valida todo el lote y revierte si algún producto queda negativo. Cliente `inventory.adjustBatch`.
+	- Cuadre de caja por día (`cash-closings/page.tsx` + `api/v1/finance.py`): selector de fecha (hoy/ayer/cualquier día pasado) para cuadrar días ya pasados. Nuevo endpoint `GET /v1/cash-closings/by-date` que NO crea el cierre: devuelve totales en vivo (zona horaria Colombia) y un cierre "virtual" (id vacío) con carry-over; el panel ofrece "Abrir caja de este día" y luego permite cerrarla. Las filas del histórico tienen botón "Cuadrar".
+	- IA de inventario (`inventory/page.tsx` `AnalyticsTab`): **arreglada la carga infinita** — los `useMemo` estaban después de `return` condicionales (violación de Rules of Hooks) y rompían el componente al cargar datos; se movieron todos los hooks antes de los early-returns. Además se corrigió el costo del plan de compra (usaba `costo_unitario` inexistente → siempre $0; ahora usa `cost`) y se mejoró la priorización por rotación (AGOTADO → baja cobertura → clase ABC) con columnas de Prioridad y Costo estimado.
+- Por qué:
+	- Necesidades operativas del negocio: saber a dónde despachar domicilios, capturar IVA/especie por producto, agilizar ajustes masivos, cuadrar caja de días anteriores con la fecha correcta de Colombia, y tener sugerencias de compra inteligentes confiables.
+- Cómo se hizo:
+	- Cambios principalmente de frontend; backend sólo añadió 2 endpoints (batch adjust y cash-closing by-date), sin migraciones ni cambios de esquema (IVA/mascota van en `attributes` JSONB existente).
+	- Validado: `py_compile` OK en `inventory.py`/`finance.py`; `pnpm type-check` del admin OK.
+- Impacto en producción:
+	- Aditivo y retrocompatible. No hay migraciones. Pendiente deploy en Coolify (API + Admin).
+- Reversible: sí — revertir el commit del lote y redeploy de API/Admin.
+- Próximo paso:
+	- Deploy en Coolify y smoke con usuario autenticado: facturar con cliente y ver domicilio, crear producto con IVA/mascota, ajuste por lote, cuadrar "ayer", y abrir tab "Análisis IA" (ya no debe quedarse cargando).
+
+```
 ### YYYY-MM-DD — <título corto>
 - Qué cambió:
 - Por qué:

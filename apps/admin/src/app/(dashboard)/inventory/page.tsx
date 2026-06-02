@@ -414,61 +414,71 @@ function AnalyticsTab() {
     staleTime: 5 * 60_000,
   });
 
-  if (isLoading) return <Card className="p-12 text-center text-muted-foreground">Calculando análisis IA…</Card>;
-  if (isError) {
-    return (
-      <Card className="p-8 text-center space-y-3">
-        <p className="text-sm text-rose-600">No se pudo cargar el análisis IA: {(error as Error)?.message || 'error desconocido'}</p>
-        <Button size="sm" variant="outline" onClick={() => refetch()}>Reintentar</Button>
-      </Card>
-    );
-  }
-  if (!data) return <Card className="p-8 text-center text-muted-foreground">Sin datos de análisis por ahora.</Card>;
+  // IMPORTANTE: todos los hooks (useMemo) deben ejecutarse SIEMPRE en el mismo
+  // orden y ANTES de cualquier return condicional. Por eso derivamos de un
+  // arreglo seguro y dejamos los early-returns más abajo.
+  const allProducts = data?.products ?? [];
 
   const supplierOptions = useMemo(() => {
     const vals = new Set<string>();
-    for (const p of data.products) {
+    for (const p of allProducts) {
       vals.add(p.supplier_name || '__none__');
     }
     return Array.from(vals).sort((a, b) => a.localeCompare(b, 'es'));
-  }, [data.products]);
+  }, [allProducts]);
 
   const categoryOptions = useMemo(() => {
     const vals = new Set<string>();
-    for (const p of data.products) {
+    for (const p of allProducts) {
       vals.add(p.category_name || '__none__');
     }
     return Array.from(vals).sort((a, b) => a.localeCompare(b, 'es'));
-  }, [data.products]);
+  }, [allProducts]);
 
-  const scopedProducts = data.products.filter((p) => {
+  const scopedProducts = useMemo(() => allProducts.filter((p) => {
     if (classFilter !== 'all' && p.clase_abc !== classFilter) return false;
     if (supplierFilter !== 'all' && (p.supplier_name || '__none__') !== supplierFilter) return false;
     if (categoryFilter !== 'all' && (p.category_name || '__none__') !== categoryFilter) return false;
     return true;
-  });
+  }), [allProducts, classFilter, supplierFilter, categoryFilter]);
 
-  const filtered = scopedProducts.filter((p) => {
+  const filtered = useMemo(() => scopedProducts.filter((p) => {
     if (filter === 'comprar' && !p.requiere_compra) return false;
     if (filter === 'agotado' && p.estado !== 'AGOTADO') return false;
     if (filter === 'sobrestock' && p.estado !== 'SOBRESTOCK') return false;
     return true;
-  });
+  }), [scopedProducts, filter]);
 
-  // Products that need purchasing for the plan
-  const purchasePlan = scopedProducts
+  // Plan de compra basado en ROTACIÓN: cubre `planDays` de venta + un colchón de
+  // seguridad, descuenta el stock actual y prioriza por urgencia real
+  // (agotados y baja cobertura) y por clase ABC (los productos A primero).
+  const ABC_RANK: Record<string, number> = { A: 0, B: 1, C: 2 };
+  const purchasePlan = useMemo(() => scopedProducts
     .filter((p) => p.requiere_compra || p.estado === 'AGOTADO')
-    .map((p) => ({
-      ...p,
-      qty_sugerida: Math.max(0, Math.ceil(p.velocidad_diaria * planDays - p.stock)),
-      costo_estimado: Math.max(0, Math.ceil(p.velocidad_diaria * planDays - p.stock)) * ((p as any).costo_unitario ?? 0),
-    }))
+    .map((p) => {
+      // Objetivo de cobertura = días de horizonte + lead time implícito de seguridad
+      const objetivo = Math.max(p.stock_objetivo, p.velocidad_diaria * planDays);
+      const qty_sugerida = Math.max(0, Math.ceil(objetivo - p.stock));
+      const costo_estimado = qty_sugerida * (p.cost ?? 0);
+      // Prioridad: AGOTADO = 0 (máxima); si no, según días de cobertura restantes
+      const prioridad = p.estado === 'AGOTADO'
+        ? 0
+        : (p.dias_cobertura ?? 999) <= planDays
+          ? 1
+          : 2;
+      return { ...p, qty_sugerida, costo_estimado, prioridad };
+    })
     .filter((p) => p.qty_sugerida > 0)
-    .sort((a, b) => (b.clase_abc === 'A' ? 1 : 0) - (a.clase_abc === 'A' ? 1 : 0) || b.qty_sugerida - a.qty_sugerida);
+    .sort((a, b) =>
+      a.prioridad - b.prioridad ||
+      (ABC_RANK[a.clase_abc] ?? 3) - (ABC_RANK[b.clase_abc] ?? 3) ||
+      (a.dias_cobertura ?? 9999) - (b.dias_cobertura ?? 9999) ||
+      b.qty_sugerida - a.qty_sugerida,
+    ), [scopedProducts, planDays]);
 
-  const topVelocity = [...scopedProducts]
+  const topVelocity = useMemo(() => [...scopedProducts]
     .sort((a, b) => b.velocidad_diaria - a.velocidad_diaria)
-    .slice(0, 20);
+    .slice(0, 20), [scopedProducts]);
 
   const totalPlanCost = purchasePlan.reduce((s, p) => s + (p.costo_estimado || 0), 0);
   const totalPlanUnits = purchasePlan.reduce((s, p) => s + p.qty_sugerida, 0);
@@ -520,6 +530,18 @@ function AnalyticsTab() {
   const ESTADO_COLOR: Record<string, string> = {
     AGOTADO: '#ef4444', COMPRAR: '#f97316', SOBRESTOCK: '#3b82f6', OK: '#10b981',
   };
+
+  // Early-returns DESPUÉS de declarar todos los hooks (cumple Rules of Hooks).
+  if (isLoading) return <Card className="p-12 text-center text-muted-foreground">Calculando análisis IA…</Card>;
+  if (isError) {
+    return (
+      <Card className="p-8 text-center space-y-3">
+        <p className="text-sm text-rose-600">No se pudo cargar el análisis IA: {(error as Error)?.message || 'error desconocido'}</p>
+        <Button size="sm" variant="outline" onClick={() => refetch()}>Reintentar</Button>
+      </Card>
+    );
+  }
+  if (!data) return <Card className="p-8 text-center text-muted-foreground">Sin datos de análisis por ahora.</Card>;
 
   return (
     <div className="space-y-4">
@@ -765,11 +787,13 @@ function AnalyticsTab() {
                 <thead className="bg-muted/50 sticky top-0">
                   <tr>
                     <th className="text-left p-2">Producto</th>
+                    <th className="text-center p-2">Prioridad</th>
                     <th className="text-center p-2">ABC</th>
                     <th className="text-right p-2">Stock actual</th>
                     <th className="text-right p-2">V/día</th>
                     <th className="text-right p-2">Días cob.</th>
                     <th className="text-right p-2 text-orange-700 font-bold">Cant. sugerida ({planDays}d)</th>
+                    <th className="text-right p-2">Costo est.</th>
                     <th className="text-center p-2">Estado</th>
                   </tr>
                 </thead>
@@ -777,12 +801,17 @@ function AnalyticsTab() {
                   {purchasePlan.map((p) => {
                     const abcCls = p.clase_abc === 'A' ? 'bg-green-100 text-green-800' : p.clase_abc === 'B' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800';
                     const estadoCls = p.estado === 'AGOTADO' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800';
+                    const prioCls = p.prioridad === 0 ? 'bg-red-100 text-red-800' : p.prioridad === 1 ? 'bg-orange-100 text-orange-800' : 'bg-slate-100 text-slate-700';
+                    const prioLabel = p.prioridad === 0 ? '🔴 Crítica' : p.prioridad === 1 ? '🟠 Alta' : '🟡 Normal';
                     return (
                       <tr key={p.product_id} className={`border-t hover:bg-muted/20 ${p.clase_abc === 'A' ? 'bg-yellow-50/40' : ''}`}>
                         <td className="p-2">
                           <p className="font-medium">{p.name}</p>
                           <p className="text-muted-foreground font-mono">{p.sku}</p>
                           <p className="text-[11px] text-muted-foreground">{p.category_name || 'Sin categoria'} · {p.supplier_name || 'Sin proveedor'}</p>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${prioCls}`}>{prioLabel}</span>
                         </td>
                         <td className="p-2 text-center">
                           <span className={`px-2 py-0.5 rounded font-bold ${abcCls}`}>{p.clase_abc}</span>
@@ -795,6 +824,7 @@ function AnalyticsTab() {
                           </span>
                         </td>
                         <td className="p-2 text-right font-bold text-orange-700 text-sm">{p.qty_sugerida}</td>
+                        <td className="p-2 text-right text-emerald-700 font-medium">{formatCurrency(p.costo_estimado || 0)}</td>
                         <td className="p-2 text-center">
                           <span className={`px-2 py-0.5 rounded text-xs ${estadoCls}`}>{p.estado}</span>
                         </td>
@@ -802,7 +832,7 @@ function AnalyticsTab() {
                     );
                   })}
                   {!purchasePlan.length && (
-                    <tr><td colSpan={7} className="text-center p-8 text-muted-foreground">✅ Sin productos que requieran compra en este período</td></tr>
+                    <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">✅ Sin productos que requieran compra en este período</td></tr>
                   )}
                 </tbody>
               </table>
@@ -1334,6 +1364,7 @@ function AjustesTab() {
   const [selected, setSelected] = useState<StockRow | null>(null);
   const [delta, setDelta] = useState('');
   const [notes, setNotes] = useState('');
+  const [batch, setBatch] = useState<{ product_id: string; name: string; sku: string; current: number; delta: number; notes: string }[]>([]);
 
   const { data: searchData, isLoading: searching } = useQuery({
     queryKey: ['inventory-search-ajuste', searchQ],
@@ -1348,15 +1379,19 @@ function AjustesTab() {
     staleTime: 30_000,
   });
 
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ['inventory-stock'] });
+    qc.invalidateQueries({ queryKey: ['inventory-movements'] });
+    qc.invalidateQueries({ queryKey: ['inventory-adjustments'] });
+    qc.invalidateQueries({ queryKey: ['stock-alerts'] });
+    qc.invalidateQueries({ queryKey: ['dashboard'] });
+  };
+
   const adjustMut = useMutation({
     mutationFn: inventory.adjust,
     onSuccess: () => {
       toast.success('Ajuste guardado');
-      qc.invalidateQueries({ queryKey: ['inventory-stock'] });
-      qc.invalidateQueries({ queryKey: ['inventory-movements'] });
-      qc.invalidateQueries({ queryKey: ['inventory-adjustments'] });
-      qc.invalidateQueries({ queryKey: ['stock-alerts'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      invalidateAll();
       setDelta('');
       setNotes('');
       setSelected(null);
@@ -1365,7 +1400,43 @@ function AjustesTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const batchMut = useMutation({
+    mutationFn: () => inventory.adjustBatch({
+      items: batch.map((b) => ({ product_id: b.product_id, quantity_delta: b.delta, notes: b.notes || undefined })),
+    }),
+    onSuccess: (res) => {
+      toast.success(`${res.applied} ajuste${res.applied !== 1 ? 's' : ''} aplicado${res.applied !== 1 ? 's' : ''}`);
+      invalidateAll();
+      setBatch([]);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const deltaNum = parseInt(delta) || 0;
+
+  const addToBatch = () => {
+    if (!selected) return;
+    if (!deltaNum) { toast.error('La cantidad no puede ser cero'); return; }
+    setBatch((prev) => {
+      const idx = prev.findIndex((b) => b.product_id === selected.product_id);
+      const entry = {
+        product_id: selected.product_id,
+        name: selected.name,
+        sku: selected.sku,
+        current: selected.quantity,
+        delta: deltaNum,
+        notes,
+      };
+      if (idx >= 0) { const copy = [...prev]; copy[idx] = entry; return copy; }
+      return [...prev, entry];
+    });
+    setSelected(null);
+    setSearchQ('');
+    setDelta('');
+    setNotes('');
+  };
+
+  const batchTotalDelta = batch.reduce((s, b) => s + b.delta, 0);
 
   return (
     <div className="space-y-5">
@@ -1374,9 +1445,9 @@ function AjustesTab() {
         <Card className="p-5 space-y-4">
           <div>
             <h2 className="font-semibold text-base flex items-center gap-2">
-              <SlidersHorizontal className="w-5 h-5 text-brand-600" /> Ajuste rápido de stock
+              <SlidersHorizontal className="w-5 h-5 text-brand-600" /> Ajustes de stock por lote
             </h2>
-            <p className="text-sm text-muted-foreground mt-1">Busca el producto, ingresa la cantidad y guarda. Queda registrado en el historial.</p>
+            <p className="text-sm text-muted-foreground mt-1">Agrega varios productos a la lista y aplica todos los ajustes de una sola vez. Quedan registrados en el historial.</p>
           </div>
 
           <div className="relative">
@@ -1453,23 +1524,67 @@ function AjustesTab() {
                 <label className="text-xs font-medium text-muted-foreground uppercase mb-1.5 block">Motivo / Notas</label>
                 <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej: Merma, devolución, corrección…" />
               </div>
-              <Button
-                className="w-full"
-                onClick={() => {
-                  if (!deltaNum) return toast.error('La cantidad no puede ser cero');
-                  adjustMut.mutate({ product_id: selected.product_id as any, quantity_delta: deltaNum, notes: notes || undefined });
-                }}
-                disabled={adjustMut.isPending || !deltaNum}
-              >
-                {adjustMut.isPending ? 'Guardando…' : 'Guardar ajuste'}
-              </Button>
+              <div className="flex gap-2">
+                <Button className="flex-1" onClick={addToBatch} disabled={!deltaNum}>
+                  <Plus className="w-4 h-4 mr-1" /> Añadir a la lista
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!deltaNum) return toast.error('La cantidad no puede ser cero');
+                    adjustMut.mutate({ product_id: selected.product_id as any, quantity_delta: deltaNum, notes: notes || undefined });
+                  }}
+                  disabled={adjustMut.isPending || !deltaNum}
+                  title="Aplicar solo este ajuste de inmediato"
+                >
+                  {adjustMut.isPending ? 'Guardando…' : 'Guardar ahora'}
+                </Button>
+              </div>
             </>
           )}
 
-          {!selected && searchQ.length < 2 && (
+          {!selected && searchQ.length < 2 && batch.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <SlidersHorizontal className="w-10 h-10 mx-auto mb-2 opacity-20" />
               <p className="text-sm">Escribe al menos 2 caracteres para buscar un producto</p>
+            </div>
+          )}
+
+          {/* Lista de ajustes pendientes (lote) */}
+          {batch.length > 0 && (
+            <div className="border-t border-border pt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold flex items-center gap-1.5">
+                  <ClipboardList className="w-4 h-4 text-brand-600" /> Lista de ajustes ({batch.length})
+                </span>
+                <button onClick={() => setBatch([])} className="text-xs text-muted-foreground hover:text-rose-600">Vaciar lista</button>
+              </div>
+              <div className="max-h-64 overflow-y-auto divide-y divide-border border border-border rounded-lg">
+                {batch.map((b) => (
+                  <div key={b.product_id} className="flex items-center gap-2 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium truncate">{b.name}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{b.sku} · {b.current} → {b.current + b.delta}</div>
+                      {b.notes && <div className="text-[11px] text-muted-foreground truncate">📝 {b.notes}</div>}
+                    </div>
+                    <span className={`font-bold text-sm ${b.delta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{b.delta > 0 ? '+' : ''}{b.delta}</span>
+                    <button
+                      onClick={() => setBatch((prev) => prev.filter((x) => x.product_id !== b.product_id))}
+                      className="p-1 text-muted-foreground hover:text-rose-600"
+                      title="Quitar"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Neto del lote:</span>
+                <span className={`font-bold ${batchTotalDelta >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{batchTotalDelta > 0 ? '+' : ''}{batchTotalDelta} uds</span>
+              </div>
+              <Button className="w-full" onClick={() => batchMut.mutate()} disabled={batchMut.isPending}>
+                {batchMut.isPending ? 'Aplicando…' : `Aplicar ${batch.length} ajuste${batch.length !== 1 ? 's' : ''}`}
+              </Button>
             </div>
           )}
         </Card>
