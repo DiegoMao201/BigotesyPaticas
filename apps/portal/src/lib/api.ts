@@ -98,7 +98,18 @@ export interface Pet {
   health_records: HealthRecord[];
 }
 
-export type PetCreate = Omit<Pet, 'id' | 'created_at' | 'age_years' | 'age_months' | 'health_records'>;
+export type PetCreate = {
+  name: string;
+  species: string;
+  color_theme: Pet['color_theme'];
+  breed?: string | null;
+  birth_date?: string | null;
+  weight_kg?: number | null;
+  food_brand?: string | null;
+  food_freq_days?: number | null;
+  photo_url?: string | null;
+  notes?: string | null;
+};
 
 export const pets = {
   list: () => request<Pet[]>('/pets'),
