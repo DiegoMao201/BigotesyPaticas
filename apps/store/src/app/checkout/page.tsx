@@ -11,7 +11,7 @@ export default function CheckoutPage() {
           Mientras tanto, contáctanos por WhatsApp para finalizar tu pedido.
         </p>
         <a
-          href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP || '573001234567'}`}
+          href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP || '573206876633'}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-block mt-4"

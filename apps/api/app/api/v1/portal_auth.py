@@ -122,6 +122,94 @@ class AcceptTermsRequest(BaseModel):
 
 # ── endpoints ─────────────────────────────────────────────────────────
 
+class SignupRequest(BaseModel):
+    full_name: str
+    document_id: str
+    phone: str
+    email: str | None = None
+    pet_name: str | None = None
+    pet_species: str | None = None
+    accept_terms: bool = True
+
+
+@router.post("/signup", response_model=LoginResponse)
+async def signup(payload: SignupRequest, response: Response, db: DBSession) -> LoginResponse:
+    """Auto-registro de cliente nuevo desde la tienda o el portal."""
+    from sqlalchemy import or_
+    doc   = payload.document_id.strip()
+    phone = _normalize_phone(payload.phone.strip())
+
+    existing = (
+        await db.execute(
+            select(Customer).where(
+                and_(Customer.document_id == doc, Customer.deleted_at == None)  # noqa: E711
+            )
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail="Ya tienes una cuenta. Ingresa con tu cédula y teléfono.",
+        )
+
+    now = datetime.now(UTC)
+    customer = Customer(
+        full_name=payload.full_name.strip(),
+        document_id=doc,
+        phone=phone,
+        email=payload.email,
+        extra={},
+        terms_accepted_at=now if payload.accept_terms else None,
+        data_consent_at=now if payload.accept_terms else None,
+        consent_version="1.0",
+    )
+    db.add(customer)
+    await db.flush()
+
+    customer.referral_code = _generate_referral_code(customer.full_name)
+
+    has_pets = False
+    pet_name_out: str | None = None
+    if payload.pet_name and payload.pet_name.strip():
+        from app.models.portal import Pet
+        pet = Pet(
+            customer_id=customer.id,
+            name=payload.pet_name.strip(),
+            species=(payload.pet_species or "perro").lower(),
+            color_theme="teal",
+        )
+        db.add(pet)
+        has_pets = True
+        pet_name_out = payload.pet_name.strip()
+
+    await db.commit()
+    await db.refresh(customer)
+
+    token = secrets.token_urlsafe(48)
+    expires = datetime.now(UTC) + timedelta(days=SESSION_TTL_DAYS)
+    db.add(PortalSession(customer_id=customer.id, token=token, expires_at=expires))
+    await db.commit()
+
+    response.set_cookie(
+        key=_COOKIE,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=SESSION_TTL_DAYS * 86400,
+        secure=True,
+    )
+
+    return LoginResponse(
+        status="new",
+        customer_id=str(customer.id),
+        full_name=customer.full_name,
+        has_pets=has_pets,
+        pet_name=pet_name_out,
+        rfm_segment=None,
+    )
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(payload: LoginRequest, response: Response, db: DBSession) -> LoginResponse:
     doc = payload.document_id.strip()

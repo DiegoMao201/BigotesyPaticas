@@ -8,6 +8,7 @@ const nextConfig = {
       { protocol: 'https', hostname: '**.bigotesypaticas.com' },
       { protocol: 'https', hostname: 'cdn.bigotesypaticas.com' },
       { protocol: 'https', hostname: '**.digitaloceanspaces.com' },
+      { protocol: 'https', hostname: 'catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
     ],
   },

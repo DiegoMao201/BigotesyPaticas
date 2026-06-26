@@ -21,8 +21,8 @@ export const metadata: Metadata = {
     template: '%s · Bigotes y Paticas',
   },
   description:
-    'Tienda premium de productos para perros y gatos. Comida, accesorios, juguetes y cuidado, seleccionados con cariño.',
-  keywords: ['mascotas', 'perros', 'gatos', 'comida premium', 'accesorios mascotas', 'Colombia'],
+    'Tienda premium de productos para perros y gatos en Pereira y Dosquebradas. Comida, accesorios, juguetes y cuidado, entregados en 24-72h.',
+  keywords: ['mascotas', 'perros', 'gatos', 'comida premium', 'accesorios mascotas', 'Dosquebradas', 'Pereira', 'Risaralda', 'Colombia'],
   openGraph: {
     title: 'Bigotes y Paticas',
     description: 'Productos premium para mascotas',

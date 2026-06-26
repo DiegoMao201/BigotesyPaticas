@@ -80,12 +80,12 @@ export default function CartPage() {
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Envío</span>
-            <span>{subtotal >= 150000 ? 'Gratis' : formatCurrency(15000)}</span>
+            <span>{subtotal >= 30000 ? 'Gratis 🎉' : formatCurrency(8000)}</span>
           </div>
           <div className="border-t border-border pt-4 flex justify-between font-bold">
             <span>Total</span>
             <span className="text-gradient text-xl">
-              {formatCurrency(subtotal + (subtotal >= 150000 ? 0 : 15000))}
+              {formatCurrency(subtotal + (subtotal >= 30000 ? 0 : 8000))}
             </span>
           </div>
           <Link href="/checkout">

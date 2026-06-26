@@ -250,13 +250,8 @@ function LoginPageInner() {
 
                 <p className="text-center text-xs text-gray-400 mt-1">
                   ¿Primera vez?{' '}
-                  <a
-                    href={`https://wa.me/573206876633?text=${encodeURIComponent('Hola! Quiero registrarme en el portal de Bigotes y Paticas')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary-700 font-semibold"
-                  >
-                    Escríbenos por WhatsApp
+                  <a href="/registro" className="text-primary-700 font-semibold">
+                    Crear cuenta gratis
                   </a>
                 </p>
               </motion.form>
