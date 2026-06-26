@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -85,6 +86,9 @@ class ProductOut(ProductBase):
     stock_qty: int = 0
     in_stock: bool = True
     image_url: str | None = None  # alias de primary_image_url para portal/store
+    enriched_content: dict | None = None
+    enriched_at: datetime | None = None
+    enriched_model: str | None = None
 
     @model_validator(mode="after")
     def _sync_image_url(self) -> "ProductOut":

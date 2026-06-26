@@ -1,6 +1,7 @@
 """Modelos del bounded context `catalog` — productos, categorías, marcas, variantes."""
 from __future__ import annotations
 
+import datetime
 import uuid
 
 from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, Index
@@ -98,6 +99,11 @@ class Product(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     # Atributos extensibles (peso, tamaño, especie, etc.)
     attributes: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     tags: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+
+    # Enriquecimiento IA (columnas añadidas via ALTER TABLE IF NOT EXISTS)
+    enriched_content: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=None)
+    enriched_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True, default=None)
+    enriched_model: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
 
     brand: Mapped[Brand | None] = relationship(Brand, lazy="joined")
     category: Mapped[Category | None] = relationship(Category, lazy="joined")

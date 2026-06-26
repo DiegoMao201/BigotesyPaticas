@@ -9,6 +9,7 @@ type Tab = (typeof TABS)[number];
 export function ProductTabs({ product }: { product: Product }) {
   const [active, setActive] = useState<Tab>('Descripción');
   const attrs = (product.attributes ?? {}) as Record<string, unknown>;
+  const ai = product.enriched_content;
 
   return (
     <div>
@@ -31,20 +32,78 @@ export function ProductTabs({ product }: { product: Product }) {
 
       {/* Tab content */}
       <div className="py-8">
+
+        {/* ── Descripción ── */}
         {active === 'Descripción' && (
-          <div className="prose prose-sm max-w-none text-foreground">
-            {product.description ? (
-              <p className="leading-relaxed whitespace-pre-line">{product.description}</p>
-            ) : product.short_description ? (
-              <p className="leading-relaxed">{product.short_description}</p>
-            ) : (
-              <p className="text-muted-foreground italic">
-                Descripción detallada disponible próximamente.
-              </p>
+          <div className="space-y-6">
+            {/* Beneficios IA */}
+            {ai?.beneficios && ai.beneficios.length > 0 && (
+              <div className="grid sm:grid-cols-3 gap-3">
+                {ai.beneficios.map((b, i) => (
+                  <div key={i} className="flex items-start gap-2.5 p-4 rounded-2xl bg-teal-50 border border-teal-100">
+                    <span className="text-teal-600 font-bold text-base flex-shrink-0">✓</span>
+                    <span className="text-sm text-teal-800 leading-snug">
+                      {b.replace(/^✓\s*/, '')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Descripción IA o fallback del catálogo */}
+            <div className="prose prose-sm max-w-none text-foreground">
+              {ai?.descripcion ? (
+                <p className="leading-relaxed whitespace-pre-line">{ai.descripcion}</p>
+              ) : product.description ? (
+                <p className="leading-relaxed whitespace-pre-line">{product.description}</p>
+              ) : product.short_description ? (
+                <p className="leading-relaxed">{product.short_description}</p>
+              ) : (
+                <p className="text-muted-foreground italic">
+                  Descripción detallada disponible próximamente.
+                </p>
+              )}
+            </div>
+
+            {/* Recomendado para */}
+            {ai?.recomendado_para && ai.recomendado_para.length > 0 && (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                  Recomendado para
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {ai.recomendado_para.map((r, i) => (
+                    <span
+                      key={i}
+                      className="text-xs px-3 py-1.5 rounded-full bg-amber-50 border border-amber-100 text-amber-800 font-medium"
+                    >
+                      {r}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Advertencias */}
+            {ai?.advertencias && ai.advertencias.length > 0 && (
+              <div className="rounded-2xl bg-red-50 border border-red-100 p-4">
+                <p className="text-xs font-bold uppercase tracking-widest text-red-600 mb-2">
+                  Advertencias
+                </p>
+                <ul className="space-y-1">
+                  {ai.advertencias.map((a, i) => (
+                    <li key={i} className="text-sm text-red-700 flex items-start gap-1.5">
+                      <span className="flex-shrink-0 mt-0.5">⚠️</span>
+                      {a}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         )}
 
+        {/* ── Detalles ── */}
         {active === 'Detalles' && (
           <div className="overflow-hidden rounded-2xl border border-border">
             <table className="min-w-full divide-y divide-border text-sm">
@@ -65,6 +124,38 @@ export function ProductTabs({ product }: { product: Product }) {
                     <td className="py-3 px-5 text-muted-foreground">{product.category.name}</td>
                   </tr>
                 )}
+                {/* Detalles técnicos IA */}
+                {ai?.detalles_tecnicos?.presentacion && (
+                  <tr className="hover:bg-muted/30 transition-colors">
+                    <td className="py-3 px-5 font-medium text-foreground">Presentación</td>
+                    <td className="py-3 px-5 text-muted-foreground">{ai.detalles_tecnicos.presentacion}</td>
+                  </tr>
+                )}
+                {ai?.detalles_tecnicos?.principio_activo && (
+                  <tr className="hover:bg-muted/30 transition-colors">
+                    <td className="py-3 px-5 font-medium text-foreground">Principio activo</td>
+                    <td className="py-3 px-5 text-muted-foreground">{ai.detalles_tecnicos.principio_activo}</td>
+                  </tr>
+                )}
+                {ai?.detalles_tecnicos?.ingredientes_principales && (
+                  <tr className="hover:bg-muted/30 transition-colors">
+                    <td className="py-3 px-5 font-medium text-foreground">Ingredientes</td>
+                    <td className="py-3 px-5 text-muted-foreground">{ai.detalles_tecnicos.ingredientes_principales}</td>
+                  </tr>
+                )}
+                {ai?.detalles_tecnicos?.edad_recomendada && (
+                  <tr className="hover:bg-muted/30 transition-colors">
+                    <td className="py-3 px-5 font-medium text-foreground">Edad</td>
+                    <td className="py-3 px-5 text-muted-foreground capitalize">{ai.detalles_tecnicos.edad_recomendada}</td>
+                  </tr>
+                )}
+                {ai?.detalles_tecnicos?.tamano_recomendado && (
+                  <tr className="hover:bg-muted/30 transition-colors">
+                    <td className="py-3 px-5 font-medium text-foreground">Tamaño</td>
+                    <td className="py-3 px-5 text-muted-foreground capitalize">{ai.detalles_tecnicos.tamano_recomendado}</td>
+                  </tr>
+                )}
+                {/* Atributos del catálogo (species, etc.) */}
                 {Object.entries(attrs).map(([k, v]) => (
                   <tr key={k} className="hover:bg-muted/30 transition-colors">
                     <td className="py-3 px-5 font-medium text-foreground capitalize">
@@ -78,9 +169,14 @@ export function ProductTabs({ product }: { product: Product }) {
           </div>
         )}
 
+        {/* ── Modo de uso ── */}
         {active === 'Modo de uso' && (
           <div className="space-y-4">
-            {(attrs.uso || attrs.modo_de_uso) ? (
+            {ai?.modo_de_uso ? (
+              <p className="leading-relaxed text-muted-foreground whitespace-pre-line max-w-2xl">
+                {ai.modo_de_uso}
+              </p>
+            ) : (attrs.uso || attrs.modo_de_uso) ? (
               <p className="leading-relaxed text-muted-foreground whitespace-pre-line">
                 {String(attrs.uso ?? attrs.modo_de_uso)}
               </p>
@@ -96,6 +192,7 @@ export function ProductTabs({ product }: { product: Product }) {
           </div>
         )}
 
+        {/* ── Reseñas ── */}
         {active === 'Reseñas' && (
           <div className="text-center py-10">
             <div className="text-5xl mb-4">⭐</div>
@@ -106,6 +203,7 @@ export function ProductTabs({ product }: { product: Product }) {
           </div>
         )}
 
+        {/* ── Envío ── */}
         {active === 'Envío' && (
           <div className="space-y-4 max-w-lg">
             <div className="flex items-start gap-4 p-5 rounded-2xl bg-teal-50 border border-teal-100">
@@ -137,6 +235,7 @@ export function ProductTabs({ product }: { product: Product }) {
             </div>
           </div>
         )}
+
       </div>
     </div>
   );

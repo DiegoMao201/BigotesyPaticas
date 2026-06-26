@@ -43,6 +43,25 @@ export interface Product {
   is_featured: boolean;
   stock_qty: number;
   in_stock: boolean;
+  enriched_content?: EnrichedContent | null;
+  enriched_at?: string | null;
+  enriched_model?: string | null;
+}
+
+export interface EnrichedContent {
+  descripcion_corta?: string;
+  descripcion?: string;
+  beneficios?: string[];
+  detalles_tecnicos?: {
+    presentacion?: string | null;
+    principio_activo?: string | null;
+    ingredientes_principales?: string | null;
+    edad_recomendada?: string | null;
+    tamano_recomendado?: string | null;
+  };
+  modo_de_uso?: string;
+  recomendado_para?: string[];
+  advertencias?: string[];
 }
 
 export interface ProductsPage {
