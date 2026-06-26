@@ -253,7 +253,7 @@ export interface PublicProduct {
   slug: string;
   price: number;
   image_url: string | null;
-  category: string | null;
+  category: { id: string; name: string; slug: string } | string | null;
   species_tag: string | null;
 }
 
@@ -312,6 +312,35 @@ export const intelligence = {
       method: 'PATCH',
       body: JSON.stringify({ [field]: value }),
     });
+  },
+};
+
+// ── Referidos ─────────────────────────────────────────────────────────
+
+export interface ReferralCode {
+  referral_code: string;
+}
+
+export const referral = {
+  getCode: () => request<ReferralCode>('/auth/referral-code'),
+};
+
+// ── Service Status ────────────────────────────────────────────────────
+
+export interface ServiceStatus {
+  now_co: string;
+  is_delivery_day: boolean;
+  is_delivery_hour: boolean;
+  next_delivery_window: string;
+  min_order_amount: number;
+  delivery_cities: string[];
+  message: string | null;
+}
+
+export const serviceStatus = {
+  get: () => {
+    return fetch('/api/v1/portal/service-status', { credentials: 'include' })
+      .then((r) => r.json()) as Promise<ServiceStatus>;
   },
 };
 

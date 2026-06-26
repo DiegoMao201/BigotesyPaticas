@@ -104,7 +104,11 @@ export default function NewOrderPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-foreground text-sm leading-snug">{product.name}</p>
                   {product.category && (
-                    <p className="text-xs text-muted">{product.category}</p>
+                    <p className="text-xs text-muted">
+                      {typeof product.category === 'object'
+                        ? (product.category as { name: string })?.name
+                        : product.category}
+                    </p>
                   )}
                 </div>
                 <div className="text-right shrink-0">

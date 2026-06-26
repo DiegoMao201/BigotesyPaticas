@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import secrets
+import unicodedata
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -18,9 +19,21 @@ router = APIRouter(prefix="/portal/auth", tags=["portal"])
 
 SESSION_TTL_DAYS = 30
 _COOKIE = "bp_portal_token"
+_REFERRAL_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
 
 # ── helpers ──────────────────────────────────────────────────────────
+
+def _generate_referral_code(full_name: str) -> str:
+    """Genera un código de referido único tipo BP-NOM-XXX."""
+    clean = unicodedata.normalize("NFKD", full_name or "USR").encode("ASCII", "ignore").decode()
+    parts = clean.split()
+    prefix_raw = parts[0][:3] if parts else "USR"
+    initials = "".join(c for c in prefix_raw if c.isalpha())
+    initials = (initials[:3] or "USR").upper().ljust(3, "X")
+    suffix = "".join(secrets.choice(_REFERRAL_ALPHABET) for _ in range(3))
+    return f"BP-{initials}-{suffix}"
+
 
 def _normalize_phone(phone: str) -> str:
     return re.sub(r"\D", "", phone).lstrip("0")
@@ -98,6 +111,7 @@ class MeResponse(BaseModel):
     legacy_pet_type: str | None
     terms_accepted_at: str | None = None
     data_consent_at: str | None = None
+    referral_code: str | None = None
 
 
 class AcceptTermsRequest(BaseModel):
@@ -220,12 +234,28 @@ def _me_response(customer: Customer) -> MeResponse:
         legacy_pet_type=extra.get("pet_type"),
         terms_accepted_at=customer.terms_accepted_at.isoformat() if customer.terms_accepted_at else None,
         data_consent_at=customer.data_consent_at.isoformat() if customer.data_consent_at else None,
+        referral_code=customer.referral_code,
     )
 
 
 @router.get("/me", response_model=MeResponse)
-async def me(customer: Customer = PortalUser) -> MeResponse:
+async def me(db: DBSession, customer: Customer = PortalUser) -> MeResponse:
+    # Auto-generar código de referido si no existe
+    if not customer.referral_code:
+        customer.referral_code = _generate_referral_code(customer.full_name or "")
+        await db.commit()
+        await db.refresh(customer)
     return _me_response(customer)
+
+
+@router.get("/referral-code")
+async def get_referral_code(db: DBSession, customer: Customer = PortalUser) -> dict:
+    """Retorna el código de referido del cliente, generándolo si no existe."""
+    if not customer.referral_code:
+        customer.referral_code = _generate_referral_code(customer.full_name or "")
+        await db.commit()
+        await db.refresh(customer)
+    return {"referral_code": customer.referral_code}
 
 
 @router.patch("/me", response_model=MeResponse)

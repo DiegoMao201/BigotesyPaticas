@@ -3,6 +3,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     admin_etl,
+    admin_portal,
     analytics,
     auth,
     customers,
@@ -19,6 +20,7 @@ from app.api.v1 import (
     portal_notifications,
     portal_orders,
     portal_pets,
+    portal_service_status,
     products,
     purchases,
     purchases_xml,
@@ -58,3 +60,5 @@ api_router.include_router(portal_monitor.router, prefix="/v1")
 api_router.include_router(portal_intelligence.router, prefix="/v1")
 api_router.include_router(portal_notifications.router, prefix="/v1")
 api_router.include_router(portal_notifications.admin_router, prefix="/v1")
+api_router.include_router(portal_service_status.router, prefix="/v1")
+api_router.include_router(admin_portal.router, prefix="/v1")
