@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import uuid
 from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, select, update
@@ -222,6 +223,28 @@ async def portal_events(customer: Customer = PortalUser):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── Endpoint interno para alertas del sistema (llamado por cron del servidor) ───
+
+@router.post("/internal/disk-alert")
+async def disk_alert_internal(request: Request, db: DBSession) -> dict:
+    """Solo accesible con X-Internal-Secret. Usado por cron de monitoreo del disco."""
+    configured = os.getenv("INTERNAL_ALERT_SECRET", "")
+    received = request.headers.get("X-Internal-Secret", "")
+    if not configured or received != configured:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    usage = request.headers.get("X-Disk-Usage", "?")
+    await notify_admins(
+        db,
+        notif_type="general",
+        title="⚠️ Disco al 75%+ en el servidor",
+        body=f"Uso actual: {usage}%. Ejecuta limpieza de Docker para liberar espacio.",
+        data={"disk_usage_pct": usage, "mount": "/mnt/docker_data"},
+    )
+    await db.commit()
+    return {"ok": True, "usage": usage}
 
 
 # ── SSE para admin ─────────────────────────────────────────────────────────────

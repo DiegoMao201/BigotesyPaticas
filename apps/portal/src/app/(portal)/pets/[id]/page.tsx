@@ -9,10 +9,12 @@ import {
   ArrowLeft, Download, Plus, AlertCircle,
   CheckCircle, Clock, ChevronDown, ChevronUp
 } from 'lucide-react';
+import Image from 'next/image';
 import { pets, type HealthRecord } from '@/lib/api';
 import { PET_THEME_COLORS } from '@/lib/pet-store';
 import { getSpeciesEmoji, formatDate, formatRelativeDate, cn } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { PetPhotoUploader } from '@/components/portal/PetPhotoUploader';
 
 export default function PetDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -85,10 +87,20 @@ export default function PetDetailPage() {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="h-20 w-20 rounded-2xl bg-white/20 flex items-center justify-center text-4xl">
-            {getSpeciesEmoji(pet.species)}
+          {/* Avatar: foto real o emoji */}
+          <div className="h-20 w-20 rounded-2xl bg-white/20 flex items-center justify-center text-4xl shrink-0 overflow-hidden relative">
+            {pet.photo_url ? (
+              <Image
+                src={pet.photo_url}
+                alt={`Foto de ${pet.name}`}
+                fill
+                className="object-cover"
+              />
+            ) : (
+              <span>{getSpeciesEmoji(pet.species)}</span>
+            )}
           </div>
-          <div className="text-white">
+          <div className="text-white flex-1 min-w-0">
             <p className="text-white/80 text-sm capitalize">
               {pet.species}{pet.breed ? ` • ${pet.breed}` : ''}
             </p>
@@ -108,6 +120,17 @@ export default function PetDetailPage() {
 
       {/* Body */}
       <div className="p-4 flex flex-col gap-5">
+        {/* Foto de mascota */}
+        <div>
+          <h2 className="font-display font-bold text-foreground mb-3">Foto de {pet.name}</h2>
+          <PetPhotoUploader
+            petId={pet.id}
+            currentPhotoUrl={pet.photo_url}
+            petName={pet.name}
+            accentColor={theme.primary}
+          />
+        </div>
+
         {/* Registro de salud */}
         <div>
           <div className="flex items-center justify-between mb-3">
