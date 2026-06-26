@@ -9,6 +9,9 @@ import { useAuthStore } from '@/lib/auth-store';
 import { usePetStore } from '@/lib/pet-store';
 import { formatCOP, formatRelativeDate, getSpeciesEmoji } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+
+const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
+  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
 import { SmartCards } from '@/components/portal/SmartCards';
 import { ProfileCompletion } from '@/components/portal/ProfileCompletion';
 import { ServiceStatusBanner } from '@/components/portal/ServiceStatusBanner';
@@ -177,7 +180,8 @@ export default function DashboardPage() {
           animate={{ opacity: 1 }}
           className="card-glass flex flex-col items-center gap-3 py-8 text-center"
         >
-          <div className="text-5xl">🐾</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={LOGO_URL} alt="" className="w-20 h-20 object-contain" />
           <p className="font-display font-semibold text-foreground">Registra tu primera mascota</p>
           <p className="text-muted text-sm">Lleva el control de su salud y alimentación.</p>
           <Link href="/pets/new" className="btn-primary">Agregar mascota</Link>

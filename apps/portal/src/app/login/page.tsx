@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils';
 const VIDEO_MP4  = process.env.NEXT_PUBLIC_LOGIN_VIDEO_MP4  ?? '';
 const VIDEO_WEBM = process.env.NEXT_PUBLIC_LOGIN_VIDEO_WEBM ?? '';
 const VIDEO_POSTER = process.env.NEXT_PUBLIC_LOGIN_POSTER   ?? '';
+const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
+  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
 
 type Step = 'login' | 'onboarding';
 
@@ -143,11 +145,12 @@ function LoginPageInner() {
             transition={{ duration: 0.55 }}
           >
             <motion.div
-              className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-xl border border-white/30 flex items-center justify-center text-4xl mb-4 shadow-lg shadow-black/20"
+              className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-xl border border-white/30 flex items-center justify-center mb-4 shadow-lg shadow-black/20 overflow-hidden p-2"
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
             >
-              🐾
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={LOGO_URL} alt="Bigotes y Paticas" className="w-full h-full object-contain" />
             </motion.div>
             <h1 className="text-white text-3xl font-semibold tracking-tight drop-shadow-lg">
               Bigotes y Paticas

@@ -9,6 +9,8 @@ import { auth } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 
 const TERMS_VERSION = '1.0';
+const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
+  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
 
 export function TermsModal() {
   const { customer, setCustomer } = useAuthStore();
@@ -49,7 +51,8 @@ export function TermsModal() {
             className="flex flex-col items-center gap-2 py-6 px-6 text-center"
             style={{ background: 'linear-gradient(135deg, #187f77, #085041)' }}
           >
-            <span className="text-4xl">🐾</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGO_URL} alt="Bigotes y Paticas" className="w-16 h-16 object-contain" />
             <p className="text-white/80 text-sm">Bienvenido a tu espacio</p>
             <h2 className="font-display font-bold text-white text-2xl leading-tight">
               Bigotes y Paticas

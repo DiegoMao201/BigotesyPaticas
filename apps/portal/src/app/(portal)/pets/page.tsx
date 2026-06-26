@@ -9,6 +9,9 @@ import { PET_THEME_COLORS } from '@/lib/pet-store';
 import { getSpeciesEmoji } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
+const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
+  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
+
 export default function PetsPage() {
   const { data: petsData, isLoading } = useQuery({
     queryKey: ['portal-pets'],
@@ -28,7 +31,8 @@ export default function PetsPage() {
 
       {petsData?.length === 0 && (
         <div className="card flex flex-col items-center gap-4 py-12 text-center">
-          <div className="text-5xl">🐾</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={LOGO_URL} alt="" className="w-20 h-20 object-contain" />
           <p className="font-semibold text-foreground">Aún no tienes mascotas registradas</p>
           <Link href="/pets/new" className="btn-primary">Registrar mascota</Link>
         </div>

@@ -7,6 +7,9 @@ import { Camera, ImagePlus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { pets } from '@/lib/api';
 
+const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
+  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
+
 interface PetPhotoUploaderProps {
   petId: string;
   currentPhotoUrl: string | null;
@@ -80,12 +83,15 @@ export function PetPhotoUploader({
             className="flex flex-col items-center gap-2"
           >
             <div
-              className="h-16 w-16 rounded-2xl flex items-center justify-center text-4xl"
+              className="h-16 w-16 rounded-2xl flex items-center justify-center"
               style={{ background: `${accentColor}18` }}
             >
               {isPending ? (
                 <Loader2 className="h-8 w-8 animate-spin" style={{ color: accentColor }} />
-              ) : '🐾'}
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={LOGO_URL} alt="" className="w-10 h-10 object-contain" />
+              )}
             </div>
             <p className="font-semibold text-foreground text-sm">
               {isPending ? 'Subiendo...' : 'Toca para subir foto'}
