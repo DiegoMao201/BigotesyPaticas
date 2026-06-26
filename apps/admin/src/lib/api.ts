@@ -1125,6 +1125,68 @@ export const dailyGoal = {
   },
 };
 
+// ─── Admin Portal (pet-monitor v2) ────────────────────────────────────────
+
+export interface PortalKPIs {
+  active_sessions_24h: number;
+  orders_pending: number;
+  appointments_today: number;
+  loyalty_points_30d: number;
+  as_of: string;
+}
+
+export interface PortalOrder {
+  id: string;
+  customer_name: string | null;
+  pet_name: string | null;
+  product_name: string;
+  quantity: number;
+  unit_price: number | null;
+  status: string;
+  invoice_number: string | null;
+  notes: string | null;
+  created_at: string;
+  delivered_at: string | null;
+  points_awarded: number;
+}
+
+export interface PortalAppointment {
+  id: string;
+  customer_name: string | null;
+  pet_name: string | null;
+  service_type: string;
+  scheduled_at: string;
+  duration_min: number;
+  status: string;
+  price: number | null;
+  notes: string | null;
+  confirmed_at: string | null;
+  completed_at: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+}
+
+export const adminPortal = {
+  overview: () => api<PortalKPIs>('/v1/admin/portal/overview'),
+  orders: (status?: string) =>
+    api<PortalOrder[]>(`/v1/admin/portal/orders${status ? `?status=${status}` : ''}`),
+  updateOrder: (id: string, body: { status: string; notes?: string; cancel_reason?: string }) =>
+    api<{ ok: boolean; id: string; status: string }>(
+      `/v1/admin/portal/orders/${id}`, { method: 'PATCH', body: JSON.stringify(body) }
+    ),
+  appointments: (opts?: { date_from?: string; date_to?: string; status?: string }) => {
+    const p = new URLSearchParams();
+    if (opts?.date_from) p.set('date_from', opts.date_from);
+    if (opts?.date_to) p.set('date_to', opts.date_to);
+    if (opts?.status) p.set('status', opts.status);
+    return api<PortalAppointment[]>(`/v1/admin/portal/appointments?${p}`);
+  },
+  updateAppointment: (id: string, body: { status: string; cancel_reason?: string }) =>
+    api<{ ok: boolean; id: string; status: string }>(
+      `/v1/admin/portal/appointments/${id}`, { method: 'PATCH', body: JSON.stringify(body) }
+    ),
+};
+
 // ─── Admin ETL ─────────────────────────────────────────────────────────────
 
 export const adminEtl = {
