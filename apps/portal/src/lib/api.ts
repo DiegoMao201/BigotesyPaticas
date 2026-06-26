@@ -197,7 +197,7 @@ export const appointments = {
   list: (upcomingOnly = false) =>
     request<Appointment[]>(`/appointments?upcoming_only=${upcomingOnly}`),
   get: (id: string) => request<Appointment>(`/appointments/${id}`),
-  create: (data: { pet_id: string; service_type: string; scheduled_at: string; notes?: string }) =>
+  create: (data: { pet_id: string; service_type: string; scheduled_at: string; duration_min?: number; notes?: string }) =>
     request<Appointment>('/appointments', { method: 'POST', body: JSON.stringify(data) }),
   cancel: (id: string) =>
     request<Appointment>(`/appointments/${id}/cancel`, { method: 'PATCH' }),
