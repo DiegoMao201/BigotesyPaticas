@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class BrandOut(BaseModel):
@@ -84,6 +84,13 @@ class ProductOut(ProductBase):
     supplier_name: str | None = None
     stock_qty: int = 0
     in_stock: bool = True
+    image_url: str | None = None  # alias de primary_image_url para portal/store
+
+    @model_validator(mode="after")
+    def _sync_image_url(self) -> "ProductOut":
+        if self.image_url is None:
+            self.image_url = self.primary_image_url
+        return self
 
 
 class ProductListResponse(BaseModel):
