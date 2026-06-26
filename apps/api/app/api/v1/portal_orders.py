@@ -222,7 +222,7 @@ async def top_products(
                 "id": str(p.id),
                 "name": p.name,
                 "price": float(p.price) if p.price else 0,
-                "image_url": p.image_url,
+                "image_url": p.primary_image_url,
                 "sku": p.sku,
             })
     return result
