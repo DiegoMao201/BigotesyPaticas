@@ -11,6 +11,7 @@ import { formatCOP, formatRelativeDate, getSpeciesEmoji } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { SmartCards } from '@/components/portal/SmartCards';
 import { ProfileCompletion } from '@/components/portal/ProfileCompletion';
+import { ServiceStatusBanner } from '@/components/portal/ServiceStatusBanner';
 
 // Mapa de colores por tema — referencia visual del mockup
 const THEME: Record<string, { accent: string; light: string; dark: string; text: string; grad: string }> = {
@@ -272,6 +273,9 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
+      {/* ── Banner horario/delivery ──────────────────────────────────── */}
+      <ServiceStatusBanner />
+
       {/* ── Smart Cards ───────────────────────────────────────────────── */}
       <SmartCards max={3} />
 
@@ -289,6 +293,7 @@ export default function DashboardPage() {
           { href: '/pets', emoji: '🐾', label: 'Mascotas' },
           { href: '/orders/new', emoji: '📦', label: 'Pedir' },
           { href: '/appointments/new', emoji: '📅', label: 'Cita' },
+          { href: '/dashboard/invitar', emoji: '🎁', label: 'Invitar' },
         ].map(({ href, emoji, label }, i) => (
           <motion.div
             key={href}

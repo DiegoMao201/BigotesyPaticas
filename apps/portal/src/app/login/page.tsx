@@ -1,21 +1,23 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Phone, CreditCard, ArrowRight, Loader2 } from 'lucide-react';
-import { auth, pets, type LoginResponse } from '@/lib/api';
+import { auth, pets, referral as referralApi, type LoginResponse } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { cn } from '@/lib/utils';
 
 type Step = 'login' | 'onboarding';
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
   const qc = useQueryClient();
   const { setCustomer } = useAuthStore();
+  const searchParams = useSearchParams();
+  const refCode = searchParams.get('ref') ?? null;
 
   const [step, setStep] = useState<Step>('login');
   const [loginData, setLoginData] = useState<LoginResponse | null>(null);
@@ -46,6 +48,11 @@ export default function LoginPage() {
       const me = await auth.me();
       setCustomer(me);
       qc.setQueryData(['portal-me'], me);
+
+      // Aplicar código de referido si vino por ?ref=
+      if (refCode && resp.status === 'new') {
+        referralApi.applyCode(refCode).catch(() => {});
+      }
 
       // Si no tiene nombre → mostrar onboarding
       if (!me.full_name) {
@@ -168,6 +175,14 @@ export default function LoginPage() {
         </AnimatePresence>
       </motion.div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
   );
 }
 
