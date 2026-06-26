@@ -39,7 +39,7 @@ export function getSpeciesEmoji(species: string): string {
     perro: '🐶', dog: '🐶',
     gato: '🐱', cat: '🐱',
     conejo: '🐰', rabbit: '🐰',
-    hamster: '🐹', hamster: '🐹',
+    hamster: '🐹', conejillo: '🐹',
     ave: '🐦', bird: '🐦',
     pez: '🐟', fish: '🐟',
   };

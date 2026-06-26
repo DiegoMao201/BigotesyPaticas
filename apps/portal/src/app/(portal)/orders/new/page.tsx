@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { ArrowLeft, Search, ShoppingCart, Loader2, Star } from 'lucide-react';
+import Image from 'next/image';
 import { orders, pets, catalog, type PublicProduct, type Pet } from '@/lib/api';
 import { formatCOP, getSpeciesEmoji } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -95,7 +96,7 @@ export default function NewOrderPage() {
               >
                 <div className="h-14 w-14 rounded-xl bg-primary-50 flex items-center justify-center text-2xl shrink-0 overflow-hidden">
                   {product.image_url ? (
-                    <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
+                    <Image src={product.image_url} alt={product.name} width={56} height={56} className="h-full w-full object-cover" />
                   ) : (
                     '📦'
                   )}
