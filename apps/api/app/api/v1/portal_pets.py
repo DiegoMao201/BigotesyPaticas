@@ -37,6 +37,19 @@ class PetIn(BaseModel):
     notes: str | None = None
 
 
+class PetUpdate(BaseModel):
+    name: str | None = None
+    species: str | None = None
+    breed: str | None = None
+    birth_date: str | None = None
+    weight_kg: float | None = None
+    food_brand: str | None = None
+    food_freq_days: int | None = None
+    color_theme: str | None = None
+    photo_url: str | None = None
+    notes: str | None = None
+
+
 class HealthRecordIn(BaseModel):
     record_type: str
     name: str
@@ -212,12 +225,12 @@ async def get_pet(
 @router.patch("/{pet_id}", response_model=PetOut)
 async def update_pet(
     pet_id: uuid.UUID,
-    payload: PetIn,
+    payload: PetUpdate,
     db: DBSession,
     customer: Customer = PortalUser,
 ) -> PetOut:
     pet = await _get_own_pet(pet_id, customer, db)
-    if payload.color_theme not in COLOR_THEMES:
+    if payload.color_theme is not None and payload.color_theme not in COLOR_THEMES:
         raise HTTPException(status_code=422, detail=f"color_theme inválido. Opciones: {COLOR_THEMES}")
     for field, value in payload.model_dump(exclude_unset=True).items():
         if field == "birth_date" and value:
