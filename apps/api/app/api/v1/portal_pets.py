@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import io
+import os
 import uuid
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
@@ -281,6 +283,27 @@ async def add_health_record(
     )
 
 
+# ── color por tema ────────────────────────────────────────────────────
+
+_THEME_COLORS = {
+    "teal":   {"accent": "#187f77", "bg_light": "#edfaf9", "text_dark": "#085041"},
+    "coral":  {"accent": "#D85A30", "bg_light": "#FAECE7", "text_dark": "#712B13"},
+    "amber":  {"accent": "#BA7517", "bg_light": "#FAEEDA", "text_dark": "#633806"},
+    "purple": {"accent": "#534AB7", "bg_light": "#EEEDFE", "text_dark": "#3C3489"},
+    "pink":   {"accent": "#D4537E", "bg_light": "#FBEAF0", "text_dark": "#72243E"},
+    "green":  {"accent": "#639922", "bg_light": "#EAF3DE", "text_dark": "#27500A"},
+}
+
+_SPECIES_EMOJI = {
+    "perro": "🐶", "dog": "🐶",
+    "gato": "🐱", "cat": "🐱",
+    "conejo": "🐰", "rabbit": "🐰",
+    "hamster": "🐹", "conejillo": "🐹",
+    "ave": "🐦", "bird": "🐦",
+    "pez": "🐟", "fish": "🐟",
+}
+
+
 # ── PDF carnet ────────────────────────────────────────────────────────
 
 @router.get("/{pet_id}/carnet.pdf")
@@ -289,113 +312,164 @@ async def carnet_pdf(
     db: DBSession,
     customer: Customer = PortalUser,
 ) -> Response:
-    """Genera un PDF A4 con el carnet de vacunación / salud de la mascota."""
+    """Genera un PDF A5 horizontal con el carnet de salud de la mascota."""
     pet = await _get_own_pet(pet_id, customer, db)
 
+    # Intentar WeasyPrint primero (mejor diseño), fallback a reportlab
     try:
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import cm
-        from reportlab.platypus import (
-            Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
-        )
-    except ImportError:
-        raise HTTPException(
-            status_code=503,
-            detail="reportlab no está instalado. Agrega 'reportlab' a requirements.txt",
-        )
+        return await _carnet_weasyprint(pet, customer)
+    except Exception:
+        return _carnet_reportlab(pet, customer)
+
+
+async def _carnet_weasyprint(pet: Pet, customer: Customer) -> Response:
+    from jinja2 import Environment, FileSystemLoader
+    from weasyprint import HTML  # type: ignore[import]
+
+    templates_dir = Path(__file__).parent.parent.parent.parent / "templates"
+    env = Environment(loader=FileSystemLoader(str(templates_dir)))
+    tmpl = env.get_template("carnet_pet.html")
+
+    theme = _THEME_COLORS.get(pet.color_theme, _THEME_COLORS["teal"])
+    today = date.today()
+
+    records = sorted(pet.health_records or [], key=lambda r: str(r.applied_at), reverse=True)
+    has_action_required = any(
+        getattr(r, "next_due_at", None) and
+        (r.next_due_at if isinstance(r.next_due_at, date) else r.next_due_at.date()) <= today + timedelta(days=7)
+        for r in records
+    )
+
+    # Construir lista de records con alert_level calculado
+    record_list = []
+    for hr in records[:8]:
+        nd = hr.next_due_at
+        if nd:
+            nd_date = nd if isinstance(nd, date) else nd.date()
+            days = (nd_date - today).days
+            alert = "overdue" if days < 0 else ("soon" if days <= 30 else "ok")
+        else:
+            alert = None
+        record_list.append({
+            "record_type": hr.record_type,
+            "name": hr.name,
+            "applied_at": str(hr.applied_at if isinstance(hr.applied_at, date) else hr.applied_at.date()),
+            "next_due_at": str(nd if isinstance(nd, date) else nd.date()) if nd else None,
+            "vet_name": hr.vet_name,
+            "alert_level": alert,
+        })
+
+    class _PetCtx:
+        pass
+
+    pet_ctx = _PetCtx()
+    pet_ctx.id = str(pet.id)
+    pet_ctx.name = pet.name
+    pet_ctx.species = pet.species
+    pet_ctx.breed = pet.breed
+    pet_ctx.birth_date = str(pet.birth_date) if pet.birth_date else None
+    pet_ctx.weight_kg = float(pet.weight_kg) if pet.weight_kg else None
+    pet_ctx.food_brand = pet.food_brand
+    pet_ctx.food_freq_days = pet.food_freq_days
+    pet_ctx.photo_url = pet.photo_url
+    pet_ctx.age_years = None
+    if pet.birth_date:
+        bd = pet.birth_date if isinstance(pet.birth_date, date) else pet.birth_date.date()
+        pet_ctx.age_years = (today - bd).days // 365
+
+    html_str = tmpl.render(
+        pet=pet_ctx,
+        owner=customer,
+        records=record_list,
+        emoji=_SPECIES_EMOJI.get(pet.species.lower(), "🐾"),
+        today=today.strftime("%d/%m/%Y"),
+        has_action_required=has_action_required,
+        accent=theme["accent"],
+        bg_light=theme["bg_light"],
+        text_dark=theme["text_dark"],
+    )
+
+    pdf_bytes = HTML(string=html_str).write_pdf()
+    filename = f"carnet_{pet.name.lower().replace(' ', '_')}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+def _carnet_reportlab(pet: Pet, customer: Customer) -> Response:
+    """Fallback PDF con reportlab cuando WeasyPrint no está disponible."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A5, landscape
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    theme = _THEME_COLORS.get(pet.color_theme, _THEME_COLORS["teal"])
+    BRAND = colors.HexColor(theme["accent"])
+    BG = colors.HexColor(theme["bg_light"])
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        rightMargin=2 * cm, leftMargin=2 * cm,
-        topMargin=2 * cm, bottomMargin=2 * cm,
+        buf, pagesize=landscape(A5),
+        rightMargin=1.5 * cm, leftMargin=1.5 * cm,
+        topMargin=1.2 * cm, bottomMargin=1.2 * cm,
     )
-
-    BRAND = colors.HexColor("#187f77")
-    ACCENT = colors.HexColor("#f5a641")
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "title", parent=styles["Heading1"],
-        textColor=BRAND, fontSize=22, spaceAfter=4,
-    )
-    sub_style = ParagraphStyle(
-        "sub", parent=styles["Normal"],
-        textColor=colors.HexColor("#262730"), fontSize=11, spaceAfter=2,
-    )
-    label_style = ParagraphStyle(
-        "label", parent=styles["Normal"],
-        textColor=BRAND, fontSize=9, fontName="Helvetica-Bold",
-    )
+    title_st = ParagraphStyle("t", parent=styles["Heading1"], textColor=BRAND, fontSize=18, spaceAfter=3)
+    sub_st = ParagraphStyle("s", parent=styles["Normal"], fontSize=9, spaceAfter=2)
+    foot_st = ParagraphStyle("f", parent=styles["Normal"], fontSize=7, textColor=colors.HexColor("#9ca3af"))
 
     story = []
-
-    # Header
-    story.append(Paragraph("🐾 Bigotes y Paticas", title_style))
-    story.append(Paragraph("Carnet de Salud", sub_style))
+    story.append(Paragraph(f"🐾 {pet.name} — Carnet de Salud", title_st))
+    story.append(Paragraph(f"Bigotes y Paticas · {pet.species.capitalize()}", sub_st))
     story.append(Spacer(1, 0.3 * cm))
 
-    # Info mascota
     bd = str(pet.birth_date) if pet.birth_date else "—"
-    pet_data = [
-        ["Nombre", pet.name, "Especie", pet.species.capitalize()],
-        ["Raza", pet.breed or "—", "Fecha nac.", bd],
+    data = [
+        ["Raza", pet.breed or "—", "Nacimiento", bd],
         ["Peso", f"{pet.weight_kg} kg" if pet.weight_kg else "—", "Alimento", pet.food_brand or "—"],
         ["Dueño", customer.full_name or "—", "Teléfono", customer.phone or "—"],
     ]
-    pet_table = Table(pet_data, colWidths=[3 * cm, 6 * cm, 3 * cm, 5 * cm])
-    pet_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#edfaf9")),
-        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#edfaf9")),
+    t = Table(data, colWidths=[2.5 * cm, 5 * cm, 2.5 * cm, 5 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), BG),
+        ("BACKGROUND", (2, 0), (2, -1), BG),
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
         ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#c4c8db")),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e5e7eb")),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
-    story.append(pet_table)
-    story.append(Spacer(1, 0.5 * cm))
-
-    # Registros de salud
-    story.append(Paragraph("Historial de Salud", title_style))
-    story.append(Spacer(1, 0.2 * cm))
+    story.append(t)
+    story.append(Spacer(1, 0.4 * cm))
 
     records = sorted(pet.health_records or [], key=lambda r: str(r.applied_at), reverse=True)
     if records:
-        hr_data = [["Tipo", "Nombre / Detalle", "Aplicado", "Próxima dosis", "Veterinario"]]
-        for hr in records:
+        story.append(Paragraph("Historial de Salud", title_st))
+        hr_data = [["Tipo", "Detalle", "Aplicado", "Próxima dosis", "Vet."]]
+        for hr in records[:6]:
             nd = str(hr.next_due_at) if hr.next_due_at else "—"
-            hr_data.append([
-                hr.record_type.capitalize(),
-                hr.name,
-                str(hr.applied_at),
-                nd,
-                hr.vet_name or "—",
-            ])
-        hr_table = Table(hr_data, colWidths=[2.5 * cm, 6 * cm, 2.5 * cm, 2.8 * cm, 3.2 * cm])
-        hr_table.setStyle(TableStyle([
+            hr_data.append([hr.record_type.capitalize(), hr.name, str(hr.applied_at), nd, hr.vet_name or "—"])
+        ht = Table(hr_data, colWidths=[2 * cm, 5.5 * cm, 2.2 * cm, 2.5 * cm, 2.8 * cm])
+        ht.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), BRAND),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f0f2f9")]),
-            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#c4c8db")),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, BG]),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#e5e7eb")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ]))
-        story.append(hr_table)
-    else:
-        story.append(Paragraph("Sin registros de salud aún.", sub_style))
+        story.append(ht)
 
-    story.append(Spacer(1, 0.8 * cm))
+    story.append(Spacer(1, 0.5 * cm))
     story.append(Paragraph(
-        f"Generado el {date.today().strftime('%d/%m/%Y')} — mi.bigotesypaticas.com",
-        ParagraphStyle("footer", parent=styles["Normal"], fontSize=7,
-                       textColor=colors.HexColor("#7a7f99")),
+        f"Generado el {date.today().strftime('%d/%m/%Y')} · mi.bigotesypaticas.com", foot_st,
     ))
 
     doc.build(story)
@@ -404,5 +478,5 @@ async def carnet_pdf(
     return Response(
         content=buf.read(),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )

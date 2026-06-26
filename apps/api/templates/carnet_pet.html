@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page {
+    size: A5 landscape;
+    margin: 0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    background: #fdfbf7;
+    width: 210mm;
+    height: 148mm;
+    overflow: hidden;
+    display: flex;
+  }
+
+  /* Banda lateral de color */
+  .sidebar {
+    width: 48px;
+    background: {{ accent }};
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .sidebar-text {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+  .sidebar-paw {
+    color: white;
+    font-size: 18px;
+    opacity: 0.6;
+  }
+
+  /* Contenido principal */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 16px 10px;
+    gap: 10px;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid {{ accent }};
+    padding-bottom: 8px;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .pet-avatar {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: {{ bg_light }};
+    border: 3px solid {{ accent }};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .pet-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .header-title h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: {{ text_dark }};
+    line-height: 1.1;
+  }
+  .header-title .species {
+    font-size: 11px;
+    color: {{ accent }};
+    font-weight: 600;
+    margin-top: 1px;
+  }
+  .header-right {
+    text-align: right;
+  }
+  .header-right .label {
+    font-size: 8px;
+    color: #9ca3af;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+  }
+  .header-right .value {
+    font-size: 16px;
+    font-weight: 800;
+    color: {{ accent }};
+  }
+  .carnet-badge {
+    background: {{ accent }};
+    color: white;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 20px;
+    margin-top: 3px;
+    display: inline-block;
+  }
+
+  /* Grid de datos */
+  .data-section {
+    display: flex;
+    gap: 10px;
+    flex: 1;
+  }
+  .data-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .data-card {
+    background: white;
+    border-radius: 8px;
+    padding: 7px 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    border: 1px solid #f0ece4;
+  }
+  .data-card-title {
+    font-size: 8px;
+    font-weight: 700;
+    color: {{ accent }};
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 4px;
+  }
+  .data-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px;
+  }
+  .data-item {}
+  .data-item .lbl {
+    font-size: 7.5px;
+    color: #9ca3af;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .data-item .val {
+    font-size: 10px;
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  /* Tabla de salud */
+  .health-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8px;
+  }
+  .health-table thead tr th {
+    background: {{ accent }};
+    color: white;
+    font-weight: 700;
+    padding: 4px 6px;
+    text-align: left;
+    font-size: 7.5px;
+    letter-spacing: 0.3px;
+  }
+  .health-table tbody tr:nth-child(even) td {
+    background: #faf9f6;
+  }
+  .health-table tbody tr td {
+    padding: 3px 6px;
+    border-bottom: 1px solid #f0ece4;
+    color: #374151;
+    font-size: 8px;
+  }
+  .badge-urgent {
+    background: #fef2f2;
+    color: #b91c1c;
+    font-size: 7px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 10px;
+    border: 1px solid #fecaca;
+  }
+  .badge-ok {
+    background: #f0fdf4;
+    color: #166534;
+    font-size: 7px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 10px;
+  }
+
+  /* Sello ACCIÓN REQUERIDA */
+  .action-required {
+    display: inline-block;
+    background: #dc2626;
+    color: white;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 3px;
+    transform: rotate(-2deg);
+    box-shadow: 0 2px 6px rgba(220,38,38,0.3);
+  }
+
+  /* Footer */
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 6px;
+    margin-top: auto;
+  }
+  .footer-text {
+    font-size: 7px;
+    color: #9ca3af;
+  }
+  .footer-brand {
+    font-size: 8px;
+    font-weight: 700;
+    color: {{ accent }};
+  }
+
+  /* Empty state */
+  .empty-state {
+    font-size: 9px;
+    color: #9ca3af;
+    font-style: italic;
+    padding: 8px 6px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Banda lateral -->
+<div class="sidebar">
+  <span class="sidebar-paw">🐾</span>
+  <span class="sidebar-text">Bigotes y Paticas</span>
+  <span class="sidebar-paw">🐾</span>
+</div>
+
+<!-- Contenido principal -->
+<div class="main">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="pet-avatar">
+        {% if pet.photo_url %}
+          <img src="{{ pet.photo_url }}" alt="{{ pet.name }}" />
+        {% else %}
+          {{ emoji }}
+        {% endif %}
+      </div>
+      <div class="header-title">
+        <h1>{{ pet.name }}</h1>
+        <div class="species">{{ pet.species | capitalize }}
+          {% if pet.breed %} · {{ pet.breed }}{% endif %}
+          {% if pet.age_years %} · {{ pet.age_years }} año{% if pet.age_years != 1 %}s{% endif %}{% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="label">CARNET DE SALUD</div>
+      <div class="carnet-badge">Bigotes &amp; Paticas</div>
+      {% if has_action_required %}
+      <div style="margin-top:4px">
+        <span class="action-required">⚠ ACCIÓN REQUERIDA</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Data section -->
+  <div class="data-section">
+
+    <!-- Columna izquierda: datos mascota + dueño -->
+    <div class="data-col" style="flex: 0 0 45%">
+      <div class="data-card">
+        <div class="data-card-title">Datos de la mascota</div>
+        <div class="data-grid">
+          <div class="data-item">
+            <div class="lbl">Especie</div>
+            <div class="val">{{ pet.species | capitalize }}</div>
+          </div>
+          <div class="data-item">
+            <div class="lbl">Raza</div>
+            <div class="val">{{ pet.breed or "—" }}</div>
+          </div>
+          <div class="data-item">
+            <div class="lbl">Nacimiento</div>
+            <div class="val">{{ pet.birth_date or "—" }}</div>
+          </div>
+          <div class="data-item">
+            <div class="lbl">Peso</div>
+            <div class="val">{{ pet.weight_kg ~ " kg" if pet.weight_kg else "—" }}</div>
+          </div>
+          <div class="data-item">
+            <div class="lbl">Alimento</div>
+            <div class="val">{{ pet.food_brand or "—" }}</div>
+          </div>
+          <div class="data-item">
+            <div class="lbl">Frecuencia</div>
+            <div class="val">{{ pet.food_freq_days ~ " días" if pet.food_freq_days else "—" }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="data-card">
+        <div class="data-card-title">Propietario</div>
+        <div class="data-grid">
+          <div class="data-item" style="grid-column: span 2">
+            <div class="lbl">Nombre</div>
+            <div class="val">{{ owner.full_name or "—" }}</div>
+          </div>
+          <div class="data-item">
+            <div class="lbl">Cédula</div>
+            <div class="val">{{ owner.document_id or "—" }}</div>
+          </div>
+          <div class="data-item">
+            <div class="lbl">Teléfono</div>
+            <div class="val">{{ owner.phone or "—" }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Columna derecha: historial de salud -->
+    <div class="data-col">
+      <div class="data-card" style="flex: 1">
+        <div class="data-card-title">Historial de salud</div>
+        {% if records %}
+        <table class="health-table">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Detalle</th>
+              <th>Aplicado</th>
+              <th>Próxima dosis</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in records %}
+            <tr>
+              <td>{{ r.record_type | capitalize }}</td>
+              <td>{{ r.name }}</td>
+              <td>{{ r.applied_at }}</td>
+              <td>{{ r.next_due_at or "—" }}</td>
+              <td>
+                {% if r.alert_level == "overdue" %}
+                  <span class="badge-urgent">Vencida</span>
+                {% elif r.alert_level == "soon" %}
+                  <span class="badge-urgent">Pronto</span>
+                {% else %}
+                  <span class="badge-ok">OK</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">Sin registros de salud.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-text">Generado el {{ today }} · mi.bigotesypaticas.com/pets/{{ pet.id }}</div>
+    <div class="footer-brand">🐾 Bigotes y Paticas · Dosquebradas, Colombia</div>
+  </div>
+
+</div>
+</body>
+</html>

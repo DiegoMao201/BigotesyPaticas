@@ -29,7 +29,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   if (!data) return null;
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen pb-24" style={{ background: 'transparent' }}>
       {children}
       <BottomNav />
       <WhatsAppButton />

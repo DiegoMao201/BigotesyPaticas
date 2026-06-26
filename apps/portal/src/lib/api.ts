@@ -212,4 +212,51 @@ export const catalog = {
   },
 };
 
+// ── Inteligencia — Smart Cards + Completion ───────────────────────────
+
+export interface SmartCard {
+  type: 'reorder' | 'vaccine_due' | 'appointment' | 'birthday' | 'loyalty';
+  pet_id: string | null;
+  pet_name: string | null;
+  color_theme: string;
+  title: string;
+  subtitle: string;
+  cta: string;
+  action_url: string;
+  urgency: 'high' | 'medium' | 'low';
+  badge: string | null;
+}
+
+export interface MissingField {
+  entity: 'customer' | 'pet';
+  entity_id: string | null;
+  field: string;
+  label: string;
+  reason: string;
+  points_reward: number;
+  priority: number;
+}
+
+export interface CompletionResponse {
+  percentage: number;
+  missing_fields: MissingField[];
+}
+
+export const intelligence = {
+  smartCards: () => request<SmartCard[]>('/me/smart-cards'),
+  completion: () => request<CompletionResponse>('/me/completion'),
+  updateField: (entity: string, entityId: string | null, field: string, value: unknown) => {
+    if (entity === 'customer') {
+      return request<MeResponse>('/auth/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ [field]: value }),
+      });
+    }
+    return request<Pet>(`/pets/${entityId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ [field]: value }),
+    });
+  },
+};
+
 export { ApiError };

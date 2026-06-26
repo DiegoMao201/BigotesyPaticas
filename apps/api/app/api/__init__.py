@@ -13,6 +13,7 @@ from app.api.v1 import (
     inventory_counts,
     portal_appointments,
     portal_auth,
+    portal_intelligence,
     portal_loyalty,
     portal_monitor,
     portal_orders,
@@ -53,3 +54,4 @@ api_router.include_router(portal_orders.router, prefix="/v1")
 api_router.include_router(portal_appointments.router, prefix="/v1")
 api_router.include_router(portal_loyalty.router, prefix="/v1")
 api_router.include_router(portal_monitor.router, prefix="/v1")
+api_router.include_router(portal_intelligence.router, prefix="/v1")

@@ -136,7 +136,7 @@ export default function NewOrderPage() {
           <div className="card flex items-center gap-4 py-3 border-2 border-primary-700">
             <div className="h-14 w-14 rounded-xl bg-primary-50 flex items-center justify-center text-2xl shrink-0 overflow-hidden">
               {selected.image_url ? (
-                <img src={selected.image_url} alt={selected.name} className="h-full w-full object-cover" />
+                <Image src={selected.image_url} alt={selected.name} width={56} height={56} className="h-full w-full object-cover" />
               ) : '📦'}
             </div>
             <div className="flex-1 min-w-0">
