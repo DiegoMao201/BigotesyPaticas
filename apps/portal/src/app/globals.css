@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --pet-color: #187f77;
+    --pet-color-light: #edfaf9;
+    --pet-color-dark: #125e58;
+    --radius: 0.75rem;
+  }
+
+  /* Temas dinámicos por mascota */
+  [data-pet-theme="teal"]   { --pet-color: #187f77; --pet-color-light: #edfaf9; --pet-color-dark: #125e58; }
+  [data-pet-theme="coral"]  { --pet-color: #e05252; --pet-color-light: #fef2f2; --pet-color-dark: #b91c1c; }
+  [data-pet-theme="amber"]  { --pet-color: #f5a641; --pet-color-light: #fff8ed; --pet-color-dark: #b45309; }
+  [data-pet-theme="purple"] { --pet-color: #7c3aed; --pet-color-light: #f5f3ff; --pet-color-dark: #5b21b6; }
+  [data-pet-theme="pink"]   { --pet-color: #db2777; --pet-color-light: #fdf2f8; --pet-color-dark: #9d174d; }
+  [data-pet-theme="green"]  { --pet-color: #16a34a; --pet-color-light: #f0fdf4; --pet-color-dark: #166534; }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    /* Móvil-first: ancho máximo como app */
+    @apply scroll-smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    /* Safe area para dispositivos con notch */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary-700 px-5 py-3
+           text-sm font-semibold text-white shadow-sm transition-all
+           hover:bg-primary-800 active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-primary-700 px-5 py-3
+           text-sm font-semibold text-primary-700 transition-all
+           hover:bg-primary-50 active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .card {
+    @apply rounded-2xl bg-card p-4 shadow-card;
+  }
+
+  .pet-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold;
+    background: var(--pet-color-light);
+    color: var(--pet-color-dark);
+  }
+
+  /* Bottom nav segura */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Input estilo portal */
+  .input-field {
+    @apply w-full rounded-xl border border-border bg-white px-4 py-3 text-sm
+           placeholder:text-muted outline-none ring-0
+           focus:border-primary-700 focus:ring-2 focus:ring-primary-700/20
+           transition-all;
+  }
+}
+
+/* Ocultar scrollbar en listados horizontales */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar { display: none; }

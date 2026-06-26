@@ -26,7 +26,7 @@ def include_object(obj, name, type_, reflected, compare_to):
     """Sólo gestionamos los schemas que nos pertenecen."""
     managed_schemas = {
         "catalog", "inventory", "sales", "purchasing", "crm",
-        "finance", "auth", "ops", "analytics", "public",
+        "finance", "auth", "ops", "analytics", "portal", "public",
     }
     if type_ == "table":
         return obj.schema in managed_schemas or obj.schema is None

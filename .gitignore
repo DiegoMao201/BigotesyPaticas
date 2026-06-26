@@ -64,3 +64,6 @@ pnpm-lock.yaml
 # Local assets (no subir a github, migrar a DO Spaces)
 local-assets/
 
+# Contexto técnico local — no va al repo
+CONTEXT.md
+

@@ -44,3 +44,6 @@ orjson==3.10.11
 # Excel exports
 xlsxwriter==3.2.0
 openpyxl==3.1.5
+
+# PDF generation (carnet de mascotas en portal)
+reportlab==4.2.5

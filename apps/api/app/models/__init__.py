@@ -6,6 +6,10 @@ from app.models.crm import Customer  # noqa
 from app.models.finance import CashClosing  # noqa
 from app.models.inventory import Stock, StockLocation, StockMovement  # noqa
 from app.models.ops import AuditLog, LegacyIdMap  # noqa
+from app.models.portal import (  # noqa
+    Appointment, HealthRecord, LoyaltyPoint, Pet,
+    PortalNotification, PortalOrder, PortalSession,
+)
 from app.models.purchasing import Purchase, PurchaseItem, Supplier, SupplierSkuMap  # noqa
 from app.models.sales import Order, OrderItem, Payment  # noqa
 
@@ -19,4 +23,7 @@ __all__ = [
     "Purchase", "PurchaseItem",
     "Supplier", "SupplierSkuMap",
     "LegacyIdMap", "AuditLog",
+    "CashClosing",
+    "Pet", "HealthRecord", "Appointment", "PortalOrder",
+    "PortalSession", "LoyaltyPoint", "PortalNotification",
 ]

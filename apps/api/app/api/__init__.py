@@ -11,6 +11,12 @@ from app.api.v1 import (
     intelligence,
     inventory,
     inventory_counts,
+    portal_appointments,
+    portal_auth,
+    portal_loyalty,
+    portal_monitor,
+    portal_orders,
+    portal_pets,
     products,
     purchases,
     purchases_xml,
@@ -40,3 +46,10 @@ api_router.include_router(finance.closings_router, prefix="/v1")
 api_router.include_router(suppliers.router, prefix="/v1")
 api_router.include_router(purchases.router, prefix="/v1")
 api_router.include_router(purchases_xml.router, prefix="/v1")
+# Portal de fidelización — rutas bajo /v1/portal/...
+api_router.include_router(portal_auth.router, prefix="/v1")
+api_router.include_router(portal_pets.router, prefix="/v1")
+api_router.include_router(portal_orders.router, prefix="/v1")
+api_router.include_router(portal_appointments.router, prefix="/v1")
+api_router.include_router(portal_loyalty.router, prefix="/v1")
+api_router.include_router(portal_monitor.router, prefix="/v1")
