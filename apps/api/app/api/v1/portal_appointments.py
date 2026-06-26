@@ -4,6 +4,9 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
+
+_TZ_CO = ZoneInfo("America/Bogota")
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
@@ -102,7 +105,8 @@ async def get_availability(
     all_slots = am_slots + pm_slots
 
     # Contar citas existentes por slot (pending o confirmed)
-    day_start = datetime(target_date.year, target_date.month, target_date.day, 0, 0, tzinfo=UTC)
+    # Usar inicio/fin del día en hora Colombia (UTC-5) para la query
+    day_start = datetime(target_date.year, target_date.month, target_date.day, 0, 0, tzinfo=_TZ_CO)
     day_end = day_start + timedelta(days=1)
 
     existing = (
@@ -119,7 +123,9 @@ async def get_availability(
 
     booked: dict[str, int] = {}
     for a in existing:
-        slot = a.scheduled_at.strftime("%H:00")
+        # Convertir a hora Colombia antes de extraer el slot
+        local_dt = a.scheduled_at.astimezone(_TZ_CO)
+        slot = local_dt.strftime("%H:00")
         booked[slot] = booked.get(slot, 0) + 1
 
     slots = [

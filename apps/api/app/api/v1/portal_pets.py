@@ -286,8 +286,9 @@ async def upload_pet_photo(
         img.save(buf, format="JPEG", quality=85, optimize=True)
         data = buf.getvalue()
         ext = "jpg"
-    except ImportError:
-        # Pillow no instalado — guardar original con la extensión original
+    except (ImportError, Exception):
+        # Pillow no disponible o imagen no válida — guardar original
+        thumb_data = None
         data = contents
         ext = (file.filename or "photo.jpg").rsplit(".", 1)[-1].lower()
         if ext not in {"jpg", "jpeg", "png", "webp"}:
