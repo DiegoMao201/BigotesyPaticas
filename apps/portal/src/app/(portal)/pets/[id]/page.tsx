@@ -9,7 +9,6 @@ import {
   ArrowLeft, Download, Plus, AlertCircle,
   CheckCircle, Clock, ChevronDown, ChevronUp
 } from 'lucide-react';
-import Image from 'next/image';
 import { pets, type HealthRecord } from '@/lib/api';
 import { PET_THEME_COLORS } from '@/lib/pet-store';
 import { getSpeciesEmoji, formatDate, formatRelativeDate, cn } from '@/lib/utils';
@@ -88,13 +87,13 @@ export default function PetDetailPage() {
 
         <div className="flex items-center gap-4">
           {/* Avatar: foto real o emoji */}
-          <div className="h-20 w-20 rounded-2xl bg-white/20 flex items-center justify-center text-4xl shrink-0 overflow-hidden relative">
+          <div className="h-20 w-20 rounded-2xl bg-white/20 flex items-center justify-center text-4xl shrink-0 overflow-hidden">
             {pet.photo_url ? (
-              <Image
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
                 src={pet.photo_url}
                 alt={`Foto de ${pet.name}`}
-                fill
-                className="object-cover"
+                className="h-full w-full object-cover"
               />
             ) : (
               <span>{getSpeciesEmoji(pet.species)}</span>

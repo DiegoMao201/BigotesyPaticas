@@ -5,7 +5,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Camera, ImagePlus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import Image from 'next/image';
 import { pets } from '@/lib/api';
 
 interface PetPhotoUploaderProps {
@@ -63,11 +62,11 @@ export function PetPhotoUploader({
       >
         {displayPhoto ? (
           <div className="relative h-32 w-32 rounded-2xl overflow-hidden">
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={displayPhoto}
               alt={`Foto de ${petName}`}
-              fill
-              className="object-cover"
+              className="h-full w-full object-cover"
             />
             {isPending && (
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
