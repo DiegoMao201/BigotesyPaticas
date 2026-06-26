@@ -104,8 +104,8 @@ function LoginPageInner() {
         {VIDEO_MP4  && <source src={VIDEO_MP4}  type="video/mp4"  />}
       </video>
 
-      {/* Overlay sutil — el video manda */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#187f77]/20 via-transparent to-[#0d4a45]/50" />
+      {/* Overlay teal con atmósfera */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#187f77]/45 via-[#187f77]/35 to-[#0d4a45]/70" />
 
       {/* Mute */}
       <button
@@ -143,16 +143,16 @@ function LoginPageInner() {
             transition={{ duration: 0.55 }}
           >
             <motion.div
-              className="w-16 h-16 rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center text-3xl mb-3 shadow-xl"
+              className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-xl border border-white/30 flex items-center justify-center text-4xl mb-4 shadow-lg shadow-black/20"
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
             >
               🐾
             </motion.div>
-            <h1 className="text-white text-2xl font-bold tracking-tight drop-shadow-lg">
+            <h1 className="text-white text-3xl font-semibold tracking-tight drop-shadow-lg">
               Bigotes y Paticas
             </h1>
-            <p className="text-white/65 text-sm mt-1">Tu portal de mascotas</p>
+            <p className="text-white/90 text-sm mt-1 drop-shadow-md">Tu portal de mascotas</p>
           </motion.div>
         )}
       </AnimatePresence>
