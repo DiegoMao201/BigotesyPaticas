@@ -12,7 +12,10 @@ const nextConfig = {
   },
   async rewrites() {
     const api = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
-    return [{ source: '/api/v1/:path*', destination: `${api}/v1/:path*` }];
+    return [
+      { source: '/api/v1/:path*', destination: `${api}/v1/:path*` },
+      { source: '/media/:path*', destination: `${api}/media/:path*` },
+    ];
   },
   async headers() {
     return [

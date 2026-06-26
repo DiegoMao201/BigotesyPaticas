@@ -349,7 +349,7 @@ export default function SalesPage() {
           </div>
           <div className="flex gap-2">
             <span className="text-xs font-medium text-muted-foreground self-center">Canal:</span>
-            {['', 'POS', 'STORE', 'STORE_LEGACY'].map((s) => (
+            {['', 'POS', 'STORE', 'STORE_LEGACY', 'PORTAL'].map((s) => (
               <Button key={s} variant={channelFilter === s ? 'default' : 'outline'} size="sm" onClick={() => { setChannelFilter(s); setPage(1); }}>
                 {s === '' ? 'Todos' : s}
               </Button>

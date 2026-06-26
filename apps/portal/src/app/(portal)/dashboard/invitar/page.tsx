@@ -9,9 +9,10 @@ import { ArrowLeft, Copy, Share2, Check, Gift, Users, Star } from 'lucide-react'
 import { auth, referral } from '@/lib/api';
 
 const WHATSAPP_MSG = (code: string, name: string) =>
-  `¡Hola! Te comparto el código de ${name} para que descubras *Bigotes y Paticas* 🐾\n\n` +
-  `Usa el código *${code}* al registrarte en el portal y gana *50 puntos de fidelidad* de regalo.\n\n` +
-  `👉 https://mi.bigotesypaticas.com`;
+  `¡Hola! 🐾 Te recomiendo Bigotes y Paticas, donde compro todo para mi mascota.\n\n` +
+  `Tienen una app para pedir, agendar baños, llevar el carnet médico y ganar puntos.\n\n` +
+  `Usa mi código *${code}* al registrarte y los dos ganamos puntos 🎁\n\n` +
+  `👉 https://mi.bigotesypaticas.com/?ref=${code}`;
 
 export default function InvitarPage() {
   const router = useRouter();

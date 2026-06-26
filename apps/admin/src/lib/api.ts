@@ -1144,6 +1144,7 @@ export interface PortalOrder {
   unit_price: number | null;
   status: string;
   invoice_number: string | null;
+  sales_order_id: string | null;
   notes: string | null;
   created_at: string;
   delivered_at: string | null;

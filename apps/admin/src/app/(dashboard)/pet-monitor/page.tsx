@@ -247,6 +247,11 @@ export default function PetMonitorPage() {
                       {order.invoice_number && (
                         <span className="text-xs text-purple-600 font-mono">{order.invoice_number}</span>
                       )}
+                      {order.sales_order_id && (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-700 font-semibold px-1.5 py-0.5 rounded-full">
+                          ✓ En ventas
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {order.customer_name ?? 'Cliente'}{order.pet_name ? ` · ${order.pet_name}` : ''} · ×{order.quantity}

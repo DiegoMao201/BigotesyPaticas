@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 
 from app.api.v1.portal_auth import PortalUser
 from app.api.v1.portal_loyalty import award_points
@@ -150,3 +150,79 @@ async def get_order(
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     return _order_out(order)
+
+
+# ── top products ────────────────────────────────────────────────────────
+
+@router.get("/me/top-products")
+async def top_products(
+    db: DBSession,
+    customer: Customer = PortalUser,
+    limit: int = Query(5, ge=1, le=20),
+) -> list[dict]:
+    """Top productos del cliente (por frecuencia en pedidos portal).
+    Fallback a los más pedidos en general si el cliente es nuevo."""
+
+    # Productos más pedidos por este cliente en el portal
+    personal = (
+        await db.execute(
+            select(
+                PortalOrder.product_id,
+                func.count().label("freq"),
+            )
+            .where(
+                PortalOrder.customer_id == customer.id,
+                PortalOrder.product_id.is_not(None),
+            )
+            .group_by(PortalOrder.product_id)
+            .order_by(func.count().desc())
+            .limit(limit)
+        )
+    ).all()
+
+    product_ids = [r.product_id for r in personal]
+
+    if len(product_ids) < limit:
+        # Fallback: productos más pedidos en general (excluyendo los ya encontrados)
+        popular = (
+            await db.execute(
+                select(
+                    PortalOrder.product_id,
+                    func.count().label("freq"),
+                )
+                .where(
+                    PortalOrder.product_id.is_not(None),
+                    PortalOrder.product_id.not_in(product_ids) if product_ids else True,
+                )
+                .group_by(PortalOrder.product_id)
+                .order_by(func.count().desc())
+                .limit(limit - len(product_ids))
+            )
+        ).all()
+        product_ids += [r.product_id for r in popular]
+
+    if not product_ids:
+        return []
+
+    products_rows = (
+        await db.execute(
+            select(Product).where(
+                Product.id.in_(product_ids),
+                Product.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+
+    prod_map = {p.id: p for p in products_rows}
+    result = []
+    for pid in product_ids:
+        p = prod_map.get(pid)
+        if p:
+            result.append({
+                "id": str(p.id),
+                "name": p.name,
+                "price": float(p.price) if p.price else 0,
+                "image_url": p.image_url,
+                "sku": p.sku,
+            })
+    return result

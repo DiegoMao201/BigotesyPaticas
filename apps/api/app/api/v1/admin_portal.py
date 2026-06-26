@@ -20,6 +20,7 @@ from app.models.portal import (
     PortalReferral,
     PortalSession,
 )
+from app.models.sales import Order as SalesOrder, OrderItem as SalesOrderItem
 
 router = APIRouter(prefix="/admin/portal", tags=["admin-portal"])
 
@@ -130,6 +131,7 @@ async def list_portal_orders(
             "unit_price": float(order.unit_price) if order.unit_price else None,
             "status": order.status,
             "invoice_number": order.invoice_number,
+            "sales_order_id": str(order.sales_order_id) if order.sales_order_id else None,
             "notes": order.notes,
             "created_at": order.created_at.isoformat(),
             "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
@@ -185,11 +187,46 @@ async def update_portal_order(
         )
 
     elif new_status == "invoiced":
-        # Generar número de factura reutilizando la función de Sales
         from app.api.v1.sales import _next_order_number
         invoice_num = await _next_order_number(db)
+        total = float(order.unit_price or 0) * order.quantity
+
+        # Crear venta REAL en sales.orders con channel='PORTAL'
+        sales_order = SalesOrder(
+            order_number=invoice_num,
+            channel="PORTAL",
+            customer_id=order.customer_id,
+            grand_total=total,
+            subtotal=total,
+            tax_total=0,
+            discount_total=0,
+            shipping_total=0,
+            payment_status="Pendiente",
+            status="confirmed",
+            occurred_at=now,
+            notes=f"Pedido portal #{str(order.id)[:8]}",
+            metadata={"portal_order_id": str(order.id)},
+        )
+        db.add(sales_order)
+        await db.flush()
+
+        # Crear ítem de la venta
+        item = SalesOrderItem(
+            order_id=sales_order.id,
+            product_id=order.product_id,
+            sku_snapshot="",
+            name_snapshot=order.product_name,
+            quantity=order.quantity,
+            unit_price=order.unit_price or 0,
+            unit_cost=0,
+            discount=0,
+            line_total=total,
+        )
+        db.add(item)
+
         order.invoice_number = invoice_num
         order.invoiced_at = now
+        order.sales_order_id = sales_order.id
         if payload.notes:
             order.processed_by = payload.notes
         await notify_customer(

@@ -162,11 +162,20 @@ export interface Order {
   points_earned: number | null;
 }
 
+export interface TopProduct {
+  id: string;
+  name: string;
+  price: number;
+  image_url: string | null;
+  sku: string | null;
+}
+
 export const orders = {
   list: (page = 1) => request<Order[]>(`/orders?page=${page}`),
   get: (id: string) => request<Order>(`/orders/${id}`),
   create: (data: { product_id: string; pet_id?: string; quantity?: number; notes?: string }) =>
     request<Order>('/orders', { method: 'POST', body: JSON.stringify(data) }),
+  topProducts: (limit = 5) => request<TopProduct[]>(`/orders/me/top-products?limit=${limit}`),
 };
 
 // ── Appointments ──────────────────────────────────────────────────────
@@ -260,12 +269,11 @@ export interface PublicProduct {
 }
 
 export const catalog = {
-  list: (search?: string, species?: string) => {
-    const params = new URLSearchParams();
-    if (search) params.set('search', search);
-    if (species) params.set('species', species);
-    // Productos públicos — va al endpoint del store, no al portal
-    return fetch(`/api/v1/products?${params}&published=true&limit=100`)
+  list: (search?: string, categoryId?: string) => {
+    const params = new URLSearchParams({ is_published: 'true', per_page: '100' });
+    if (search) params.set('q', search);
+    if (categoryId) params.set('category_id', categoryId);
+    return fetch(`/api/v1/products?${params}`)
       .then((r) => r.json()) as Promise<{ items: PublicProduct[] }>;
   },
 };
