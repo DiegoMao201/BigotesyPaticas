@@ -31,9 +31,9 @@ export function ProfileCompletion() {
     staleTime: 2 * 60 * 1000,
   });
 
-  const { mutate: saveField, isPending } = useMutation({
+  const { mutate: saveField, isPending } = useMutation<unknown, Error, MissingField>({
     mutationFn: ({ field, entity, entity_id }: MissingField) =>
-      intelligence.updateField(entity, entity_id, field, inputVal || null),
+      intelligence.updateField(entity, entity_id, field, inputVal || null) as Promise<unknown>,
     onSuccess: () => {
       setShowSuccess(true);
       toast.success(`+${activeField?.points_reward} puntos ganados 🎉`);
