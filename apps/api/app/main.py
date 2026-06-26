@@ -1,9 +1,13 @@
 """Bigotes y Paticas API — entrypoint FastAPI."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.api import api_router
@@ -38,6 +42,11 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(api_router)
+
+    # Servir archivos de media (fotos de mascotas, facturas)
+    _media_root = Path(os.getenv("PORTAL_UPLOADS_PATH", "/data/portal-uploads"))
+    _media_root.mkdir(parents=True, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=str(_media_root)), name="media")
 
     @app.on_event("startup")
     async def _startup() -> None:

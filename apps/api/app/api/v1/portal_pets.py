@@ -71,6 +71,7 @@ class PetOut(BaseModel):
     food_freq_days: int | None
     color_theme: str
     photo_url: str | None
+    thumb_url: str | None = None
     notes: str | None
     created_at: str
     age_years: int | None
@@ -131,6 +132,7 @@ def _pet_out(pet: Pet) -> PetOut:
         food_freq_days=pet.food_freq_days,
         color_theme=pet.color_theme,
         photo_url=pet.photo_url,
+        thumb_url=getattr(pet, 'thumb_url', None),
         notes=pet.notes,
         created_at=pet.created_at.isoformat(),
         age_years=age_y,
@@ -241,7 +243,7 @@ async def delete_pet(
 
 # ── foto de mascota (upload nativo) ──────────────────────────────────
 
-_UPLOAD_DIR = Path(os.getenv("PORTAL_UPLOADS_PATH", "/data/portal-uploads/pets"))
+_UPLOAD_DIR = Path(os.getenv("PORTAL_UPLOADS_PATH", "/data/portal-uploads"))
 _ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
 _MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 
@@ -265,10 +267,20 @@ async def upload_pet_photo(
 
     # Comprimir con Pillow si está disponible; si no, guardar original
     ext = "jpg"
+    thumb_data: bytes | None = None
     try:
         from PIL import Image as PILImage
 
         img = PILImage.open(io.BytesIO(contents)).convert("RGB")
+
+        # Thumbnail 150x150
+        thumb = img.copy()
+        thumb.thumbnail((150, 150), PILImage.LANCZOS)
+        tbuf = io.BytesIO()
+        thumb.save(tbuf, format="JPEG", quality=80, optimize=True)
+        thumb_data = tbuf.getvalue()
+
+        # Imagen principal 800x800
         img.thumbnail((800, 800), PILImage.LANCZOS)
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=85, optimize=True)
@@ -285,11 +297,20 @@ async def upload_pet_photo(
 
     # Guardar en disco
     _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    dest = _UPLOAD_DIR / f"{pet_id}.{ext}"
+    dest = _UPLOAD_DIR / f"pets/{pet_id}.{ext}"
+    dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(data)
+
+    thumb_url: str | None = None
+    if thumb_data:
+        thumb_dest = _UPLOAD_DIR / f"pets/{pet_id}_thumb.jpg"
+        thumb_dest.write_bytes(thumb_data)
+        thumb_url = f"/media/pets/{pet_id}_thumb.jpg"
 
     # Actualizar URL en DB (servida por StaticFiles bajo /media/pets/)
     pet.photo_url = f"/media/pets/{pet_id}.{ext}"
+    if thumb_url:
+        pet.thumb_url = thumb_url
     await db.commit()
     await db.refresh(pet)
     return _pet_out(pet)

@@ -184,6 +184,23 @@ async def update_portal_order(
             data={"order_id": str(order.id)},
         )
 
+    elif new_status == "invoiced":
+        # Generar número de factura reutilizando la función de Sales
+        from app.api.v1.sales import _next_order_number
+        invoice_num = await _next_order_number(db)
+        order.invoice_number = invoice_num
+        order.invoiced_at = now
+        if payload.notes:
+            order.processed_by = payload.notes
+        await notify_customer(
+            db,
+            order.customer_id,
+            notif_type="order_invoiced",
+            title="Pedido facturado",
+            body=f"Tu pedido fue facturado — {invoice_num} 🧾",
+            data={"order_id": str(order.id), "invoice_number": invoice_num},
+        )
+
     elif new_status == "ready":
         await notify_customer(
             db,

@@ -273,6 +273,106 @@ async def update_me(
     return _me_response(customer)
 
 
+@router.post("/me/apply-referral")
+async def apply_referral(
+    payload: dict,
+    db: DBSession,
+    customer: Customer = PortalUser,
+) -> dict:
+    """Aplica un código de referido al cliente actual (solo si no tiene uno ya)."""
+    if customer.referred_by_code:
+        return {"ok": True, "already_applied": True}
+
+    code = (payload.get("referral_code") or "").strip().upper()
+    if not code:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="Código requerido")
+
+    # Buscar al referidor
+    referrer = (await db.execute(
+        select(Customer).where(Customer.referral_code == code)
+    )).scalar_one_or_none()
+
+    if not referrer or referrer.id == customer.id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Código no válido")
+
+    from app.models.portal import PortalReferral
+    from app.api.v1.portal_loyalty import POINTS_REFERRAL_SIGNUP, award_points
+
+    customer.referred_by_code = code
+    customer.referred_by_customer_id = referrer.id
+
+    # Registrar en tabla de referidos
+    referral = PortalReferral(
+        referrer_customer_id=referrer.id,
+        referred_customer_id=customer.id,
+        referral_code=code,
+    )
+    db.add(referral)
+    await db.flush()
+
+    # Dar 50 puntos al nuevo cliente por usar el código
+    signup_pts = 50
+    from app.models.portal import LoyaltyPoint
+    from datetime import timedelta
+    now = datetime.now(UTC)
+    lp = LoyaltyPoint(
+        customer_id=customer.id,
+        points=signup_pts,
+        reason="referral_signup",
+        reference_type="referral",
+        reference_id=referral.id,
+        description=f"Bienvenida por usar código de referido {code}",
+        expires_at=now + timedelta(days=365),
+    )
+    db.add(lp)
+
+    from app.api.v1.portal_notifications import notify_customer
+    await notify_customer(
+        db, customer.id,
+        notif_type="referral_signup",
+        title=f"¡Bienvenida! Tienes {signup_pts} puntos de regalo",
+        body=f"Usaste el código de {referrer.full_name or 'un amigo'} y ganaste {signup_pts} puntos 🎉",
+        data={"points": signup_pts, "referral_code": code},
+    )
+
+    await db.commit()
+    return {"ok": True, "points_awarded": signup_pts, "referrer_name": referrer.full_name}
+
+
+@router.get("/me/referrals")
+async def my_referrals(
+    db: DBSession,
+    customer: Customer = PortalUser,
+) -> dict:
+    """Lista de personas que el cliente ha referido + estado de recompensas."""
+    from app.models.portal import PortalReferral
+
+    rows = (await db.execute(
+        select(PortalReferral, Customer.full_name.label("referred_name"))
+        .join(Customer, PortalReferral.referred_customer_id == Customer.id)
+        .where(PortalReferral.referrer_customer_id == customer.id)
+        .order_by(PortalReferral.signed_up_at.desc())
+    )).all()
+
+    referrals = []
+    for ref, referred_name in rows:
+        referrals.append({
+            "id": str(ref.id),
+            "referred_name": referred_name,
+            "signed_up_at": ref.signed_up_at.isoformat(),
+            "first_purchase_at": ref.first_purchase_at.isoformat() if ref.first_purchase_at else None,
+            "reward_paid_at": ref.reward_paid_at.isoformat() if ref.reward_paid_at else None,
+        })
+
+    return {
+        "referral_code": customer.referral_code,
+        "total_referrals": len(referrals),
+        "referrals": referrals,
+    }
+
+
 @router.post("/me/accept-terms", response_model=MeResponse)
 async def accept_terms(
     payload: AcceptTermsRequest,

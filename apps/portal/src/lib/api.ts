@@ -53,6 +53,7 @@ export interface MeResponse {
   legacy_pet_type: string | null;
   terms_accepted_at: string | null;
   data_consent_at: string | null;
+  referral_code: string | null;
 }
 
 export const auth = {
@@ -98,6 +99,7 @@ export interface Pet {
   food_freq_days: number | null;
   color_theme: 'teal' | 'coral' | 'amber' | 'purple' | 'pink' | 'green';
   photo_url: string | null;
+  thumb_url: string | null;
   notes: string | null;
   created_at: string;
   age_years: number | null;
@@ -321,8 +323,28 @@ export interface ReferralCode {
   referral_code: string;
 }
 
+export interface ReferralEntry {
+  id: string;
+  referred_name: string;
+  signed_up_at: string;
+  first_purchase_at: string | null;
+  reward_paid_at: string | null;
+}
+
+export interface MyReferrals {
+  referral_code: string | null;
+  total_referrals: number;
+  referrals: ReferralEntry[];
+}
+
 export const referral = {
   getCode: () => request<ReferralCode>('/auth/referral-code'),
+  applyCode: (code: string) =>
+    request<{ ok: boolean; points_awarded: number; referrer_name: string | null }>(
+      '/auth/me/apply-referral',
+      { method: 'POST', body: JSON.stringify({ referral_code: code }) }
+    ),
+  myReferrals: () => request<MyReferrals>('/auth/me/referrals'),
 };
 
 // ── Service Status ────────────────────────────────────────────────────
