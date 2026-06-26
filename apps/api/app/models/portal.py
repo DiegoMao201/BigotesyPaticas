@@ -201,7 +201,9 @@ class PortalNotification(UUIDPKMixin, Base):
     __tablename__ = "notifications"
     __table_args__ = (
         CheckConstraint(
-            "type IN ('health_reminder','order_update','loyalty','appointment','birthday','general')",
+            "type IN ('health_reminder','order_update','loyalty','appointment','birthday','general',"
+            "'new_order','new_appointment','new_customer','order_confirmed','order_ready',"
+            "'order_delivered','appt_confirmed','appt_rescheduled','appt_cancelled')",
             name="ck_notif_type",
         ),
         {"schema": "portal"},
@@ -210,12 +212,13 @@ class PortalNotification(UUIDPKMixin, Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default="now()", nullable=False
     )
-    customer_id: Mapped[uuid.UUID] = mapped_column(
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("crm.customers.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
+    is_admin: Mapped[bool] = mapped_column(default=False, nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)

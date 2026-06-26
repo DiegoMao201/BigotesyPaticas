@@ -51,6 +51,8 @@ export interface MeResponse {
   rfm_monetary: number | null;
   legacy_pet_name: string | null;
   legacy_pet_type: string | null;
+  terms_accepted_at: string | null;
+  data_consent_at: string | null;
 }
 
 export const auth = {
@@ -63,6 +65,11 @@ export const auth = {
   me: () => request<MeResponse>('/auth/me'),
   updateMe: (data: Partial<MeResponse>) =>
     request<MeResponse>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
+  acceptTerms: (version = '1.0') =>
+    request<MeResponse>('/auth/me/accept-terms', {
+      method: 'POST',
+      body: JSON.stringify({ terms: true, data_consent: true, version }),
+    }),
 };
 
 // ── Pets ──────────────────────────────────────────────────────────────
@@ -121,6 +128,20 @@ export const pets = {
   delete: (id: string) => request<{ ok: boolean }>(`/pets/${id}`, { method: 'DELETE' }),
   addHealthRecord: (petId: string, data: Omit<HealthRecord, 'id' | 'created_at' | 'days_until_due' | 'alert_level'>) =>
     request<HealthRecord>(`/pets/${petId}/health`, { method: 'POST', body: JSON.stringify(data) }),
+  uploadPhoto: async (petId: string, file: File): Promise<Pet> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE}/pets/${petId}/photo`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new ApiError(res.status, body.detail ?? 'Error al subir foto');
+    }
+    return res.json() as Promise<Pet>;
+  },
   carnetUrl: (petId: string) => `${BASE}/pets/${petId}/carnet.pdf`,
 };
 
@@ -160,6 +181,18 @@ export interface Appointment {
   created_at: string;
 }
 
+export interface AvailabilitySlot {
+  time: string;
+  available: boolean;
+  reason: string | null;
+}
+
+export interface AvailabilityResponse {
+  date: string;
+  service: string;
+  slots: AvailabilitySlot[];
+}
+
 export const appointments = {
   list: (upcomingOnly = false) =>
     request<Appointment[]>(`/appointments?upcoming_only=${upcomingOnly}`),
@@ -168,6 +201,29 @@ export const appointments = {
     request<Appointment>('/appointments', { method: 'POST', body: JSON.stringify(data) }),
   cancel: (id: string) =>
     request<Appointment>(`/appointments/${id}/cancel`, { method: 'PATCH' }),
+  availability: (date: string, service: string) =>
+    request<AvailabilityResponse>(`/appointments/availability?date=${date}&service=${encodeURIComponent(service)}`),
+};
+
+// ── Notifications ─────────────────────────────────────────────────────────
+
+export interface PortalNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  is_admin: boolean;
+  read_at: string | null;
+  created_at: string;
+  data: Record<string, unknown>;
+}
+
+export const notifications = {
+  list: (unreadOnly = false) =>
+    request<PortalNotification[]>(`/notifications${unreadOnly ? '?unread_only=true' : ''}`),
+  unreadCount: () => request<{ unread: number }>('/notifications/unread-count'),
+  markAllRead: () => request<{ ok: boolean }>('/notifications/read-all', { method: 'POST' }),
+  eventsUrl: () => `${BASE}/notifications/events`,
 };
 
 // ── Loyalty ───────────────────────────────────────────────────────────

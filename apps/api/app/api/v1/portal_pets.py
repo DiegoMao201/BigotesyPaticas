@@ -7,7 +7,7 @@ import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import and_, select
 
@@ -237,6 +237,62 @@ async def delete_pet(
     pet.deleted_at = datetime.utcnow()
     await db.commit()
     return {"ok": True}
+
+
+# ── foto de mascota (upload nativo) ──────────────────────────────────
+
+_UPLOAD_DIR = Path(os.getenv("PORTAL_UPLOADS_PATH", "/data/portal-uploads/pets"))
+_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
+_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+@router.post("/{pet_id}/photo", response_model=PetOut)
+async def upload_pet_photo(
+    pet_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: DBSession = None,
+    customer: Customer = PortalUser,
+) -> PetOut:
+    """Sube una foto para la mascota: valida tipo + tamaño, comprime con Pillow y guarda."""
+    pet = await _get_own_pet(pet_id, customer, db)
+
+    if file.content_type not in _ALLOWED_TYPES:
+        raise HTTPException(status_code=422, detail="Solo se aceptan imágenes JPEG, PNG o WebP")
+
+    contents = await file.read()
+    if len(contents) > _MAX_BYTES:
+        raise HTTPException(status_code=413, detail="La imagen no debe superar 5 MB")
+
+    # Comprimir con Pillow si está disponible; si no, guardar original
+    ext = "jpg"
+    try:
+        from PIL import Image as PILImage
+
+        img = PILImage.open(io.BytesIO(contents)).convert("RGB")
+        img.thumbnail((800, 800), PILImage.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85, optimize=True)
+        data = buf.getvalue()
+        ext = "jpg"
+    except ImportError:
+        # Pillow no instalado — guardar original con la extensión original
+        data = contents
+        ext = (file.filename or "photo.jpg").rsplit(".", 1)[-1].lower()
+        if ext not in {"jpg", "jpeg", "png", "webp"}:
+            ext = "jpg"
+        if ext == "jpeg":
+            ext = "jpg"
+
+    # Guardar en disco
+    _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    dest = _UPLOAD_DIR / f"{pet_id}.{ext}"
+    dest.write_bytes(data)
+
+    # Actualizar URL en DB (servida por StaticFiles bajo /media/pets/)
+    pet.photo_url = f"/media/pets/{pet_id}.{ext}"
+    await db.commit()
+    await db.refresh(pet)
+    return _pet_out(pet)
 
 
 # ── health records ────────────────────────────────────────────────────

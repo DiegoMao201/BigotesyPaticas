@@ -49,3 +49,6 @@ openpyxl==3.1.5
 reportlab==4.2.5
 weasyprint==62.3
 jinja2==3.1.4
+
+# Imagen — upload de foto de mascota (try/except si no está disponible)
+Pillow==10.4.0

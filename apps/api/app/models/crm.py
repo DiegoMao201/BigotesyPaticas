@@ -1,7 +1,9 @@
 """Modelos del bounded context `crm` (clientes)."""
 from __future__ import annotations
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import CITEXT, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -36,3 +38,8 @@ class Customer(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     last_purchase_at: Mapped["Date | None"] = mapped_column(Date, nullable=True)  # type: ignore[name-defined]
 
     extra: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+
+    # Consentimiento legal Ley 1581 de 2012
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    data_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    consent_version: Mapped[str | None] = mapped_column(String(10), nullable=True)

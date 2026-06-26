@@ -211,7 +211,7 @@ export default function DashboardPage() {
                     {activePet.age_years ? ` · ${activePet.age_years} año${activePet.age_years !== 1 ? 's' : ''}` : ''}
                   </p>
                   {/* Alertas de salud inline */}
-                  {activePet.health_records
+                  {(activePet.health_records ?? [])
                     .filter((hr) => hr.alert_level === 'overdue' || hr.alert_level === 'soon')
                     .slice(0, 2)
                     .map((hr) => (

@@ -94,9 +94,16 @@ class MeResponse(BaseModel):
     city: str | None
     rfm_segment: str | None
     rfm_monetary: float | None
-    # datos de mascota legacy (puede estar en extra)
     legacy_pet_name: str | None
     legacy_pet_type: str | None
+    terms_accepted_at: str | None = None
+    data_consent_at: str | None = None
+
+
+class AcceptTermsRequest(BaseModel):
+    terms: bool = True
+    data_consent: bool = True
+    version: str = "1.0"
 
 
 # ── endpoints ─────────────────────────────────────────────────────────
@@ -197,8 +204,7 @@ async def logout(
     return {"ok": True}
 
 
-@router.get("/me", response_model=MeResponse)
-async def me(customer: Customer = PortalUser) -> MeResponse:
+def _me_response(customer: Customer) -> MeResponse:
     extra = customer.extra or {}
     return MeResponse(
         customer_id=str(customer.id),
@@ -212,7 +218,14 @@ async def me(customer: Customer = PortalUser) -> MeResponse:
         rfm_monetary=float(customer.rfm_monetary) if customer.rfm_monetary else None,
         legacy_pet_name=extra.get("pet_name"),
         legacy_pet_type=extra.get("pet_type"),
+        terms_accepted_at=customer.terms_accepted_at.isoformat() if customer.terms_accepted_at else None,
+        data_consent_at=customer.data_consent_at.isoformat() if customer.data_consent_at else None,
     )
+
+
+@router.get("/me", response_model=MeResponse)
+async def me(customer: Customer = PortalUser) -> MeResponse:
+    return _me_response(customer)
 
 
 @router.patch("/me", response_model=MeResponse)
@@ -227,17 +240,22 @@ async def update_me(
             setattr(customer, k, v)
     await db.commit()
     await db.refresh(customer)
-    extra = customer.extra or {}
-    return MeResponse(
-        customer_id=str(customer.id),
-        full_name=customer.full_name,
-        document_id=customer.document_id,
-        phone=customer.phone,
-        email=customer.email,
-        address=customer.address,
-        city=customer.city,
-        rfm_segment=customer.rfm_segment,
-        rfm_monetary=float(customer.rfm_monetary) if customer.rfm_monetary else None,
-        legacy_pet_name=extra.get("pet_name"),
-        legacy_pet_type=extra.get("pet_type"),
-    )
+    return _me_response(customer)
+
+
+@router.post("/me/accept-terms", response_model=MeResponse)
+async def accept_terms(
+    payload: AcceptTermsRequest,
+    db: DBSession,
+    customer: Customer = PortalUser,
+) -> MeResponse:
+    if not payload.terms or not payload.data_consent:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Debes aceptar los términos y el tratamiento de datos")
+    now = datetime.now(UTC)
+    customer.terms_accepted_at = now
+    customer.data_consent_at = now
+    customer.consent_version = payload.version
+    await db.commit()
+    await db.refresh(customer)
+    return _me_response(customer)
