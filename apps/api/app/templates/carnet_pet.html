@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page {
+      size: 148mm 210mm;
+      margin: 0;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Georgia', 'Times New Roman', serif;
+      color: #ffffff;
+      width: 148mm;
+      height: 210mm;
+      background: linear-gradient(175deg, #187f77 0%, #0f5c55 55%, #0a3d39 100%);
+      padding: 8mm 9mm 30mm 9mm;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Círculo decorativo fondo */
+    body::before {
+      content: '';
+      position: absolute;
+      top: -20mm;
+      right: -20mm;
+      width: 60mm;
+      height: 60mm;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.04);
+    }
+    body::after {
+      content: '';
+      position: absolute;
+      bottom: 25mm;
+      left: -15mm;
+      width: 45mm;
+      height: 45mm;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.03);
+    }
+
+    /* ── HEADER ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 5mm;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 2.5mm;
+    }
+
+    .brand-logo {
+      width: 11mm;
+      height: 11mm;
+      object-fit: contain;
+    }
+
+    .brand-name {
+      font-family: Georgia, serif;
+      font-size: 10pt;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .card-badge {
+      font-family: system-ui, sans-serif;
+      font-size: 6.5pt;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      background: rgba(245,166,65,0.2);
+      border: 0.3mm solid rgba(245,166,65,0.6);
+      color: #f5d08a;
+      padding: 1mm 2.5mm;
+      border-radius: 1mm;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      height: 0.3mm;
+      background: linear-gradient(to right, transparent, rgba(255,255,255,0.25), transparent);
+      margin: 3.5mm 0;
+    }
+
+    /* ── MASCOTA ── */
+    .pet-section {
+      display: flex;
+      align-items: center;
+      gap: 5mm;
+      margin-bottom: 2mm;
+    }
+
+    .pet-photo-wrap {
+      flex-shrink: 0;
+      width: 28mm;
+      height: 28mm;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.12);
+      padding: 1mm;
+      box-shadow: 0 2mm 8mm rgba(0,0,0,0.25);
+    }
+
+    .pet-photo-wrap img,
+    .pet-photo-placeholder {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .pet-photo-placeholder {
+      background: rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18pt;
+      line-height: 1;
+    }
+
+    .pet-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .pet-name {
+      font-family: Georgia, serif;
+      font-size: 20pt;
+      font-weight: 700;
+      letter-spacing: -0.3pt;
+      line-height: 1.1;
+    }
+
+    .pet-meta {
+      font-family: system-ui, sans-serif;
+      font-size: 8pt;
+      color: rgba(255,255,255,0.75);
+      margin-top: 1.5mm;
+      line-height: 1.5;
+    }
+
+    .pet-meta strong {
+      color: rgba(255,255,255,0.9);
+    }
+
+    /* ── SECCIÓN ── */
+    .section {
+      margin-bottom: 0.5mm;
+    }
+
+    .section-title {
+      font-family: system-ui, sans-serif;
+      font-size: 6.5pt;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #f5a641;
+      font-weight: 600;
+      margin-bottom: 1.5mm;
+    }
+
+    .data-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.8mm 3mm;
+    }
+
+    .data-item {
+      font-family: system-ui, sans-serif;
+    }
+
+    .data-label {
+      font-size: 6.5pt;
+      color: rgba(255,255,255,0.6);
+      line-height: 1;
+      margin-bottom: 0.3mm;
+    }
+
+    .data-value {
+      font-size: 8pt;
+      font-weight: 500;
+      color: rgba(255,255,255,0.95);
+      line-height: 1.2;
+    }
+
+    /* ── TABLA SALUD ── */
+    .health-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: system-ui, sans-serif;
+      font-size: 7.5pt;
+    }
+
+    .health-table th {
+      text-align: left;
+      color: rgba(255,255,255,0.55);
+      font-weight: 500;
+      font-size: 6.5pt;
+      padding: 0 0 1mm 0;
+      border-bottom: 0.3mm solid rgba(255,255,255,0.12);
+    }
+
+    .health-table th:last-child,
+    .health-table td:last-child {
+      text-align: right;
+    }
+
+    .health-table td {
+      padding: 1mm 0;
+      color: rgba(255,255,255,0.9);
+      border-bottom: 0.2mm solid rgba(255,255,255,0.06);
+    }
+
+    .health-table td:first-child {
+      font-weight: 500;
+    }
+
+    .due-soon {
+      color: #f5a641 !important;
+    }
+
+    /* ── ALERTA ── */
+    .alert-box {
+      background: rgba(245,166,65,0.12);
+      border-left: 1mm solid #f5a641;
+      padding: 1.5mm 2.5mm;
+      border-radius: 0 1mm 1mm 0;
+      margin-top: 1.5mm;
+      font-family: system-ui, sans-serif;
+      font-size: 7pt;
+      color: #f5d08a;
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 4mm 9mm 5mm;
+      background: rgba(0,0,0,0.18);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .footer-text {
+      font-family: system-ui, sans-serif;
+      font-size: 6.5pt;
+      color: rgba(255,255,255,0.65);
+      line-height: 1.55;
+    }
+
+    .footer-text strong {
+      color: rgba(255,255,255,0.9);
+      font-size: 7.5pt;
+    }
+
+    .qr-wrap {
+      background: white;
+      padding: 1.5mm;
+      border-radius: 1.5mm;
+      box-shadow: 0 1mm 4mm rgba(0,0,0,0.3);
+    }
+
+    .qr-wrap img {
+      width: 17mm;
+      height: 17mm;
+      display: block;
+    }
+
+    .no-records {
+      font-family: system-ui, sans-serif;
+      font-size: 7.5pt;
+      color: rgba(255,255,255,0.4);
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="brand">
+      {% if logo_b64 %}
+      <img src="data:image/png;base64,{{ logo_b64 }}" alt="Bigotes y Paticas" class="brand-logo">
+      {% endif %}
+      <span class="brand-name">Bigotes y Paticas</span>
+    </div>
+    <span class="card-badge">Carnet de Salud</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- MASCOTA -->
+  <div class="pet-section">
+    <div class="pet-photo-wrap">
+      {% if photo_b64 %}
+      <img src="data:image/jpeg;base64,{{ photo_b64 }}" alt="{{ pet.name }}">
+      {% else %}
+      <div class="pet-photo-placeholder">{{ emoji }}</div>
+      {% endif %}
+    </div>
+    <div class="pet-info">
+      <div class="pet-name">{{ pet.name }}</div>
+      <div class="pet-meta">
+        {% if pet.species %}<strong>{{ pet.species|title }}</strong>{% endif %}
+        {% if pet.breed %} · {{ pet.breed }}{% endif %}
+        {% if pet.age_display %}<br>{{ pet.age_display }}{% endif %}
+        {% if pet.weight_kg %} · {{ pet.weight_kg }} kg{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- DATOS BÁSICOS -->
+  {% if pet.birth_date or pet.food_brand %}
+  <div class="divider"></div>
+  <div class="section">
+    <div class="section-title">Datos básicos</div>
+    <div class="data-grid">
+      {% if pet.birth_date %}
+      <div class="data-item">
+        <div class="data-label">Nacimiento</div>
+        <div class="data-value">{{ pet.birth_date|format_date }}</div>
+      </div>
+      {% endif %}
+      {% if pet.weight_kg %}
+      <div class="data-item">
+        <div class="data-label">Peso</div>
+        <div class="data-value">{{ pet.weight_kg }} kg</div>
+      </div>
+      {% endif %}
+      {% if pet.food_brand %}
+      <div class="data-item">
+        <div class="data-label">Alimento</div>
+        <div class="data-value">{{ pet.food_brand }}</div>
+      </div>
+      {% endif %}
+      {% if pet.food_freq_days %}
+      <div class="data-item">
+        <div class="data-label">Frecuencia reposición</div>
+        <div class="data-value">Cada {{ pet.food_freq_days }} días</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- VACUNAS -->
+  <div class="divider"></div>
+  <div class="section">
+    <div class="section-title">Vacunación</div>
+    {% if vaccines %}
+    <table class="health-table">
+      <tr>
+        <th>Vacuna</th>
+        <th>Aplicada</th>
+        <th>Próxima dosis</th>
+      </tr>
+      {% for v in vaccines %}
+      <tr>
+        <td>{{ v.name }}</td>
+        <td>{{ v.applied_at|format_date }}</td>
+        <td class="{% if v.is_due_soon %}due-soon{% endif %}">
+          {{ v.next_due_at|format_date if v.next_due_at else '—' }}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% set alerts = vaccines|selectattr('is_due_soon')|list %}
+    {% for v in alerts %}
+    <div class="alert-box">
+      ⚠ {{ v.name }} — próxima dosis antes de {{ v.next_due_at|format_date }}
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="no-records">Sin vacunas registradas</div>
+    {% endif %}
+  </div>
+
+  <!-- DESPARASITACIÓN -->
+  {% if dewormings %}
+  <div class="divider"></div>
+  <div class="section">
+    <div class="section-title">Desparasitación</div>
+    <table class="health-table">
+      <tr>
+        <th>Producto</th>
+        <th>Aplicado</th>
+        <th>Próxima</th>
+      </tr>
+      {% for d in dewormings %}
+      <tr>
+        <td>{{ d.name }}</td>
+        <td>{{ d.applied_at|format_date }}</td>
+        <td class="{% if d.is_due_soon %}due-soon{% endif %}">
+          {{ d.next_due_at|format_date if d.next_due_at else '—' }}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- OTRAS CONSULTAS (máx 2) -->
+  {% if other_records %}
+  <div class="divider"></div>
+  <div class="section">
+    <div class="section-title">Otras consultas</div>
+    <table class="health-table">
+      {% for r in other_records %}
+      <tr>
+        <td>{{ r.record_type|title }}</td>
+        <td>{{ r.name }}</td>
+        <td>{{ r.applied_at|format_date }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-text">
+      <strong>{{ customer.full_name or '—' }}</strong><br>
+      {% if customer.phone %}📱 {{ customer.phone }}<br>{% endif %}
+      Bigotes y Paticas · Dosquebradas<br>
+      Emitido {{ today }}
+    </div>
+    {% if qr_b64 %}
+    <div class="qr-wrap">
+      <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Carnet">
+    </div>
+    {% endif %}
+  </div>
+
+</body>
+</html>

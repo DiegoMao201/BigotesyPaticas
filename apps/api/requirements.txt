@@ -52,3 +52,7 @@ jinja2==3.1.4
 
 # Imagen — upload de foto de mascota (try/except si no está disponible)
 Pillow==10.4.0
+
+# PDF carnet — QR + cálculo edad relativa
+qrcode[pil]==7.4.2
+python-dateutil==2.9.0

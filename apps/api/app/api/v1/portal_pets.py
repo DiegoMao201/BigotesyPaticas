@@ -414,70 +414,131 @@ async def carnet_pdf(
 
 
 async def _carnet_weasyprint(pet: Pet, customer: Customer) -> Response:
+    import base64
     from jinja2 import Environment, FileSystemLoader
     from weasyprint import HTML  # type: ignore[import]
 
-    templates_dir = Path(__file__).parent.parent.parent.parent / "templates"
+    templates_dir = Path(__file__).parent.parent.parent / "templates"
     env = Environment(loader=FileSystemLoader(str(templates_dir)))
+
+    def _fmt_date(d: object) -> str:
+        if not d:
+            return "—"
+        if isinstance(d, str):
+            try:
+                from datetime import datetime as dt
+                d = dt.fromisoformat(d).date()
+            except Exception:
+                return str(d)
+        try:
+            return d.strftime("%d/%m/%Y")  # type: ignore[attr-defined]
+        except Exception:
+            return str(d)
+
+    env.filters["format_date"] = _fmt_date
     tmpl = env.get_template("carnet_pet.html")
 
-    theme = _THEME_COLORS.get(pet.color_theme, _THEME_COLORS["teal"])
     today = date.today()
 
-    records = sorted(pet.health_records or [], key=lambda r: str(r.applied_at), reverse=True)
-    has_action_required = any(
-        getattr(r, "next_due_at", None) and
-        (r.next_due_at if isinstance(r.next_due_at, date) else r.next_due_at.date()) <= today + timedelta(days=7)
-        for r in records
-    )
+    # ── Logo en base64 ──────────────────────────────────────────────────
+    logo_b64 = ""
+    logo_path = Path(__file__).parent.parent.parent.parent.parent / "BigotesyPaticas.png"
+    if logo_path.exists():
+        logo_b64 = base64.b64encode(logo_path.read_bytes()).decode()
+    else:
+        try:
+            import httpx
+            cdn = "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png"
+            resp = httpx.get(cdn, timeout=4)
+            if resp.status_code == 200:
+                logo_b64 = base64.b64encode(resp.content).decode()
+        except Exception:
+            pass
 
-    # Construir lista de records con alert_level calculado
-    record_list = []
-    for hr in records[:8]:
-        nd = hr.next_due_at
-        if nd:
-            nd_date = nd if isinstance(nd, date) else nd.date()
-            days = (nd_date - today).days
-            alert = "overdue" if days < 0 else ("soon" if days <= 30 else "ok")
-        else:
-            alert = None
-        record_list.append({
-            "record_type": hr.record_type,
-            "name": hr.name,
-            "applied_at": str(hr.applied_at if isinstance(hr.applied_at, date) else hr.applied_at.date()),
-            "next_due_at": str(nd if isinstance(nd, date) else nd.date()) if nd else None,
-            "vet_name": hr.vet_name,
-            "alert_level": alert,
-        })
+    # ── Foto mascota en base64 ──────────────────────────────────────────
+    photo_b64 = ""
+    if pet.photo_url:
+        try:
+            photo_path = _UPLOAD_DIR / pet.photo_url.lstrip("/media/")
+            if photo_path.exists():
+                photo_b64 = base64.b64encode(photo_path.read_bytes()).decode()
+        except Exception:
+            pass
 
+    # ── QR code en base64 ──────────────────────────────────────────────
+    qr_b64 = ""
+    try:
+        import qrcode
+        public_url = f"https://mi.bigotesypaticas.com/pets/{pet.id}"
+        qr_img = qrcode.make(public_url, box_size=4, border=1)
+        buf = io.BytesIO()
+        qr_img.save(buf, format="PNG")
+        qr_b64 = base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        pass
+
+    # ── Edad legible ────────────────────────────────────────────────────
+    age_display = ""
+    if pet.birth_date:
+        try:
+            from dateutil.relativedelta import relativedelta
+            bd = pet.birth_date if isinstance(pet.birth_date, date) else pet.birth_date.date()
+            diff = relativedelta(today, bd)
+            parts = []
+            if diff.years:
+                parts.append(f"{diff.years} año{'s' if diff.years != 1 else ''}")
+            if diff.months:
+                parts.append(f"{diff.months} mes{'es' if diff.months != 1 else ''}")
+            age_display = " y ".join(parts) if parts else "< 1 mes"
+        except Exception:
+            pass
+
+    # ── Context mascota ─────────────────────────────────────────────────
     class _PetCtx:
         pass
 
     pet_ctx = _PetCtx()
-    pet_ctx.id = str(pet.id)
     pet_ctx.name = pet.name
     pet_ctx.species = pet.species
     pet_ctx.breed = pet.breed
-    pet_ctx.birth_date = str(pet.birth_date) if pet.birth_date else None
+    pet_ctx.birth_date = pet.birth_date
     pet_ctx.weight_kg = float(pet.weight_kg) if pet.weight_kg else None
     pet_ctx.food_brand = pet.food_brand
     pet_ctx.food_freq_days = pet.food_freq_days
-    pet_ctx.photo_url = pet.photo_url
-    pet_ctx.age_years = None
-    if pet.birth_date:
-        bd = pet.birth_date if isinstance(pet.birth_date, date) else pet.birth_date.date()
-        pet_ctx.age_years = (today - bd).days // 365
+    pet_ctx.age_display = age_display
+
+    # ── Separar registros por tipo ──────────────────────────────────────
+    class _RecordCtx:
+        pass
+
+    def _build_record(hr: object) -> _RecordCtx:
+        r = _RecordCtx()
+        r.name = hr.name  # type: ignore[attr-defined]
+        r.record_type = hr.record_type  # type: ignore[attr-defined]
+        r.applied_at = hr.applied_at  # type: ignore[attr-defined]
+        nd = getattr(hr, "next_due_at", None)
+        r.next_due_at = nd
+        days = (nd.date() - today).days if nd else None  # type: ignore[union-attr]
+        r.is_due_soon = days is not None and days < 30
+        return r
+
+    all_records = sorted(pet.health_records or [], key=lambda h: str(h.applied_at), reverse=True)
+    vaccines     = [_build_record(h) for h in all_records if h.record_type == "vacuna"]
+    dewormings   = [_build_record(h) for h in all_records if h.record_type == "desparasitacion"]
+    other_records = [_build_record(h) for h in all_records
+                     if h.record_type not in {"vacuna", "desparasitacion"}][:3]
 
     html_str = tmpl.render(
         pet=pet_ctx,
-        owner=customer,
-        records=record_list,
+        customer=customer,
+        vaccines=vaccines,
+        dewormings=dewormings,
+        other_records=other_records,
         emoji=_SPECIES_EMOJI.get(pet.species.lower(), "🐾"),
         today=today.strftime("%d/%m/%Y"),
-        has_action_required=has_action_required,
-        accent=theme["accent"],
-        bg_light=theme["bg_light"],
-        text_dark=theme["text_dark"],
+        logo_b64=logo_b64,
+        photo_b64=photo_b64,
+        qr_b64=qr_b64,
     )
 
     pdf_bytes = HTML(string=html_str).write_pdf()

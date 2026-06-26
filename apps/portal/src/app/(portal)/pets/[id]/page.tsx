@@ -65,55 +65,66 @@ export default function PetDetailPage() {
   return (
     <div data-pet-theme={pet.color_theme} className="flex flex-col">
       {/* Header con color de mascota */}
-      <div className="p-4 pt-6 pb-6" style={{ backgroundColor: theme.primary }}>
-        <div className="flex items-center gap-3 mb-4">
+      <div className="px-4 pt-10 pb-8 rounded-b-3xl" style={{ backgroundColor: theme.primary }}>
+        {/* Barra superior: atrás + descargar */}
+        <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => router.back()}
             className="p-2 rounded-xl bg-white/20 text-white"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="font-display text-xl font-bold text-white">{pet.name}</h1>
           <a
             href={pets.carnetUrl(pet.id)}
             target="_blank"
             rel="noopener noreferrer"
-            className="ml-auto p-2 rounded-xl bg-white/20 text-white"
+            className="p-2 rounded-xl bg-white/20 text-white"
             title="Descargar carnet PDF"
           >
             <Download className="h-5 w-5" />
           </a>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Avatar: foto real o emoji */}
-          <div className="h-20 w-20 rounded-2xl bg-white/20 flex items-center justify-center text-4xl shrink-0 overflow-hidden">
-            {pet.photo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={pet.photo_url}
-                alt={`Foto de ${pet.name}`}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span>{getSpeciesEmoji(pet.species)}</span>
-            )}
+        {/* Avatar centrado + nombre */}
+        <div className="flex flex-col items-center text-center">
+          <div className="relative w-28 h-28 mb-4">
+            {/* Halo exterior */}
+            <div className="absolute inset-0 rounded-full bg-white/15 backdrop-blur-sm" />
+            {/* Contenedor foto */}
+            <div className="absolute inset-1.5 rounded-full overflow-hidden ring-2 ring-white/35 shadow-xl">
+              {pet.photo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={pet.photo_url}
+                  alt={`Foto de ${pet.name}`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-4xl bg-white/10">
+                  {getSpeciesEmoji(pet.species)}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="text-white flex-1 min-w-0">
-            <p className="text-white/80 text-sm capitalize">
-              {pet.species}{pet.breed ? ` • ${pet.breed}` : ''}
-            </p>
-            {pet.age_years != null && (
-              <p className="font-semibold">
-                {pet.age_years} año{pet.age_years !== 1 ? 's' : ''}
-                {pet.age_months ? ` y ${pet.age_months} mes${pet.age_months !== 1 ? 'es' : ''}` : ''}
-              </p>
-            )}
-            {pet.weight_kg && <p className="text-white/80 text-sm">{pet.weight_kg} kg</p>}
-            {pet.food_brand && (
-              <p className="text-white/80 text-sm">🍖 {pet.food_brand}</p>
-            )}
-          </div>
+
+          <h1 className="font-display text-3xl font-semibold text-white tracking-tight drop-shadow-lg">
+            {pet.name}
+          </h1>
+
+          <p className="text-white/80 text-sm mt-1.5">
+            {[
+              pet.species,
+              pet.breed,
+              pet.age_years != null
+                ? `${pet.age_years} año${pet.age_years !== 1 ? 's' : ''}${pet.age_months ? ` y ${pet.age_months} mes${pet.age_months !== 1 ? 'es' : ''}` : ''}`
+                : null,
+              pet.weight_kg ? `${pet.weight_kg} kg` : null,
+            ].filter(Boolean).join(' · ')}
+          </p>
+
+          {pet.food_brand && (
+            <p className="text-white/65 text-xs mt-1.5">🍖 {pet.food_brand}</p>
+          )}
         </div>
       </div>
 
