@@ -20,12 +20,12 @@ export default async function CategoryPage({ params }: { params: { slug: string 
             href={`/producto/${p.slug}`}
             className="group rounded-2xl overflow-hidden border border-border bg-card transition-all hover:shadow-elegant hover:-translate-y-1"
           >
-            <div className="aspect-square bg-secondary relative">
+            <div className="aspect-square bg-white flex items-center justify-center relative p-3">
               {p.primary_image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.primary_image_url} alt={p.name} className="w-full h-full object-cover" />
+                <img src={p.primary_image_url} alt={p.name} className="w-full h-full object-contain drop-shadow-sm group-hover:scale-105 transition-transform duration-300" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-6xl">🐾</div>
+                <div className="text-6xl">🐾</div>
               )}
               <div className={`absolute top-2 left-2 text-xs font-medium px-2 py-0.5 rounded-full ${
                 p.in_stock

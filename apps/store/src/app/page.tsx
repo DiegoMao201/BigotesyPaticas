@@ -150,13 +150,13 @@ export default async function HomePage() {
                 href={`/producto/${p.slug}`}
                 className="group rounded-3xl overflow-hidden border border-border bg-card transition-all hover:shadow-warm hover:-translate-y-2 duration-300"
               >
-                <div className="aspect-square bg-secondary relative overflow-hidden">
+                <div className="aspect-square bg-white flex items-center justify-center overflow-hidden relative p-3">
                   {p.primary_image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={p.primary_image_url}
                       alt={p.name}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110 drop-shadow-sm"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-orange-50 to-amber-50">🐾</div>

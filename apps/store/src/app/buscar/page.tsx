@@ -68,15 +68,15 @@ function SearchResults() {
             href={`/producto/${p.slug}`}
             className="group rounded-2xl border border-border bg-card hover:border-brand/30 hover:shadow-elegant transition-all overflow-hidden"
           >
-            <div className="aspect-square bg-muted/20 flex items-center justify-center overflow-hidden relative">
+            <div className="aspect-square bg-white flex items-center justify-center overflow-hidden relative p-3">
               {p.primary_image_url ? (
                 <img
                   src={p.primary_image_url}
                   alt={p.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-sm"
                 />
               ) : (
-                <span className="text-5xl">📦</span>
+                <span className="text-5xl">🐾</span>
               )}
               <div className={`absolute top-2 left-2 text-xs font-medium px-2 py-0.5 rounded-full ${
                 p.in_stock

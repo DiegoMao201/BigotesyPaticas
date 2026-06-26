@@ -12,12 +12,16 @@ export default async function ProductPage({ params }: { params: { slug: string }
 
   return (
     <div className="container-wide py-12 grid lg:grid-cols-2 gap-12">
-      <div className="aspect-square bg-secondary rounded-3xl overflow-hidden">
+      <div className="aspect-square bg-white rounded-3xl overflow-hidden flex items-center justify-center p-6 border border-gray-100 shadow-sm">
         {product.primary_image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={product.primary_image_url} alt={product.name} className="w-full h-full object-cover" />
+          <img
+            src={product.primary_image_url}
+            alt={product.name}
+            className="w-full h-full object-contain drop-shadow-md"
+          />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[12rem]">🐾</div>
+          <div className="text-[12rem] leading-none select-none">🐾</div>
         )}
       </div>
 
