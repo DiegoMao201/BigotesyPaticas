@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,6 +9,10 @@ import { Phone, CreditCard, ArrowRight, Loader2 } from 'lucide-react';
 import { auth, pets, referral as referralApi, type LoginResponse } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { cn } from '@/lib/utils';
+
+const VIDEO_MP4 = process.env.NEXT_PUBLIC_LOGIN_VIDEO_MP4 ?? '/videos/login-bg.mp4';
+const VIDEO_WEBM = process.env.NEXT_PUBLIC_LOGIN_VIDEO_WEBM ?? '';
+const VIDEO_POSTER = process.env.NEXT_PUBLIC_LOGIN_POSTER ?? '';
 
 type Step = 'login' | 'onboarding';
 
@@ -29,10 +33,12 @@ function LoginPageInner() {
   const { setCustomer } = useAuthStore();
   const searchParams = useSearchParams();
   const refCode = searchParams.get('ref') ?? null;
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const [step, setStep] = useState<Step>('login');
   const [loginData, setLoginData] = useState<LoginResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [muted, setMuted] = useState(true);
 
   const [doc, setDoc] = useState('');
   const [phone, setPhone] = useState('');
@@ -76,17 +82,34 @@ function LoginPageInner() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-teal-900">
-      {/* VIDEO de fondo */}
+      {/* VIDEO de fondo desde CDN */}
       <video
+        ref={videoRef}
         autoPlay
         muted
         loop
         playsInline
-        preload="auto"
+        preload="metadata"
+        poster={VIDEO_POSTER || undefined}
         className="absolute inset-0 w-full h-full object-cover opacity-70"
       >
-        <source src="/videos/login-bg.mp4" type="video/mp4" />
+        {VIDEO_WEBM && <source src={VIDEO_WEBM} type="video/webm" />}
+        <source src={VIDEO_MP4} type="video/mp4" />
       </video>
+
+      {/* Botón mute/unmute */}
+      <button
+        onClick={() => {
+          if (videoRef.current) {
+            videoRef.current.muted = !muted;
+            setMuted(!muted);
+          }
+        }}
+        className="absolute top-4 right-4 z-20 w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-lg"
+        aria-label={muted ? 'Activar sonido' : 'Silenciar'}
+      >
+        {muted ? '🔇' : '🔊'}
+      </button>
 
       {/* Overlay degradado teal */}
       <div className="absolute inset-0 bg-gradient-to-b from-teal-900/50 via-teal-800/30 to-teal-950/80" />
