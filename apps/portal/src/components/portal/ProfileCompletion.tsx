@@ -18,6 +18,16 @@ const FIELD_TYPES: Record<string, { type: string; placeholder: string }> = {
   food_brand: { type: 'text',   placeholder: 'Ej: Pro Plan, Hills...' },
 };
 
+const NUMBER_FIELDS = new Set(['weight_kg', 'food_freq_days']);
+
+function parseFieldValue(field: string, raw: string): unknown {
+  if (NUMBER_FIELDS.has(field)) {
+    const n = parseFloat(raw);
+    return isNaN(n) ? null : n;
+  }
+  return raw || null;
+}
+
 export function ProfileCompletion() {
   const qc = useQueryClient();
   const [dismissed, setDismissed] = useState(false);
@@ -33,7 +43,7 @@ export function ProfileCompletion() {
 
   const { mutate: saveField, isPending } = useMutation<unknown, Error, MissingField>({
     mutationFn: ({ field, entity, entity_id }: MissingField) =>
-      intelligence.updateField(entity, entity_id, field, inputVal || null) as Promise<unknown>,
+      intelligence.updateField(entity, entity_id, field, parseFieldValue(field, inputVal)) as Promise<unknown>,
     onSuccess: () => {
       setShowSuccess(true);
       toast.success(`+${activeField?.points_reward} puntos ganados 🎉`);

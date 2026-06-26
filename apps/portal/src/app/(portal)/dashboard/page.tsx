@@ -368,14 +368,16 @@ export default function DashboardPage() {
 
           {/* Repetir último pedido CTA */}
           {recentOrders[0] && (
+            <motion.div whileTap={{ scale: 0.97 }} transition={{ type: 'spring', damping: 15 }}>
             <Link
               href="/orders/new"
-              className="mt-3 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95"
+              className="mt-3 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
               style={{ background: theme.light, color: theme.dark }}
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Repetir: {recentOrders[0].product_name.split(' ').slice(0, 3).join(' ')}
             </Link>
+            </motion.div>
           )}
         </motion.div>
       )}

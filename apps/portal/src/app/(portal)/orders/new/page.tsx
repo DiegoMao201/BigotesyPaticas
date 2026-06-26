@@ -127,7 +127,7 @@ export default function NewOrderPage() {
                 alt={(selected as any).name}
                 width={56}
                 height={56}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-contain p-1"
               />
             ) : (
               '📦'
@@ -301,7 +301,7 @@ export default function NewOrderPage() {
                             alt={prod.name}
                             width={80}
                             height={80}
-                            className="h-full w-full object-cover"
+                            className="h-full w-full object-contain p-1"
                           />
                         ) : (
                           <span className="text-3xl">📦</span>
@@ -368,7 +368,7 @@ export default function NewOrderPage() {
                         alt={product.name}
                         width={48}
                         height={48}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-contain p-1"
                       />
                     ) : (
                       '📦'

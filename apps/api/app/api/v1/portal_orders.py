@@ -14,6 +14,7 @@ from app.deps import DBSession
 from app.models.catalog import Product
 from app.models.crm import Customer
 from app.models.portal import PortalOrder
+from app.models.sales import Order as SalesOrder, OrderItem as SalesOrderItem
 
 router = APIRouter(prefix="/portal/orders", tags=["portal"])
 
@@ -160,22 +161,24 @@ async def top_products(
     customer: Customer = PortalUser,
     limit: int = Query(5, ge=1, le=20),
 ) -> list[dict]:
-    """Top productos del cliente (por frecuencia en pedidos portal).
-    Fallback a los más pedidos en general si el cliente es nuevo."""
+    """Top productos del cliente leyendo TODO el historial de sales.orders.
+    Fallback a más populares globalmente si el cliente tiene poca historia."""
 
-    # Productos más pedidos por este cliente en el portal
+    # Historial completo del cliente en sales.orders
     personal = (
         await db.execute(
             select(
-                PortalOrder.product_id,
+                SalesOrderItem.product_id,
                 func.count().label("freq"),
+                func.max(SalesOrder.occurred_at).label("last_at"),
             )
+            .join(SalesOrder, SalesOrderItem.order_id == SalesOrder.id)
             .where(
-                PortalOrder.customer_id == customer.id,
-                PortalOrder.product_id.is_not(None),
+                SalesOrder.customer_id == customer.id,
+                SalesOrderItem.product_id.is_not(None),
             )
-            .group_by(PortalOrder.product_id)
-            .order_by(func.count().desc())
+            .group_by(SalesOrderItem.product_id)
+            .order_by(func.count().desc(), func.max(SalesOrder.occurred_at).desc())
             .limit(limit)
         )
     ).all()
@@ -183,22 +186,23 @@ async def top_products(
     product_ids = [r.product_id for r in personal]
 
     if len(product_ids) < limit:
-        # Fallback: productos más pedidos en general (excluyendo los ya encontrados)
-        popular = (
-            await db.execute(
-                select(
-                    PortalOrder.product_id,
-                    func.count().label("freq"),
-                )
-                .where(
-                    PortalOrder.product_id.is_not(None),
-                    PortalOrder.product_id.not_in(product_ids) if product_ids else True,
-                )
-                .group_by(PortalOrder.product_id)
-                .order_by(func.count().desc())
-                .limit(limit - len(product_ids))
+        # Fallback: más pedidos globalmente (excluye los ya encontrados)
+        popular_q = (
+            select(SalesOrderItem.product_id, func.count().label("freq"))
+            .join(SalesOrder, SalesOrderItem.order_id == SalesOrder.id)
+            .join(Product, SalesOrderItem.product_id == Product.id)
+            .where(
+                SalesOrderItem.product_id.is_not(None),
+                Product.deleted_at.is_(None),
+                Product.is_published == True,  # noqa: E712
             )
-        ).all()
+            .group_by(SalesOrderItem.product_id)
+            .order_by(func.count().desc())
+            .limit(limit - len(product_ids))
+        )
+        if product_ids:
+            popular_q = popular_q.where(SalesOrderItem.product_id.not_in(product_ids))
+        popular = (await db.execute(popular_q)).all()
         product_ids += [r.product_id for r in popular]
 
     if not product_ids:

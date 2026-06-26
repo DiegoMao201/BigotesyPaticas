@@ -12,6 +12,17 @@ import { cn } from '@/lib/utils';
 
 type Step = 'login' | 'onboarding';
 
+const PAWS = [
+  { left: '8%',  top: '18%', delay: 0,   size: 18 },
+  { left: '78%', top: '12%', delay: 0.8, size: 14 },
+  { left: '22%', top: '55%', delay: 1.6, size: 22 },
+  { left: '88%', top: '42%', delay: 0.4, size: 16 },
+  { left: '55%', top: '28%', delay: 2.2, size: 12 },
+  { left: '40%', top: '70%', delay: 1.1, size: 20 },
+  { left: '65%', top: '62%', delay: 2.8, size: 14 },
+  { left: '12%', top: '80%', delay: 3.4, size: 16 },
+];
+
 function LoginPageInner() {
   const router = useRouter();
   const qc = useQueryClient();
@@ -23,7 +34,6 @@ function LoginPageInner() {
   const [loginData, setLoginData] = useState<LoginResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Login form
   const [doc, setDoc] = useState('');
   const [phone, setPhone] = useState('');
 
@@ -38,23 +48,19 @@ function LoginPageInner() {
       const resp = await auth.login(doc.trim(), phone.trim());
       setLoginData(resp);
 
-      // Si es cliente existente con datos de mascota en el JSONB (legacy) → onboarding
       if (resp.has_pets && !resp.full_name) {
         setStep('onboarding');
         return;
       }
 
-      // Cargar /me para hidratar el store
       const me = await auth.me();
       setCustomer(me);
       qc.setQueryData(['portal-me'], me);
 
-      // Aplicar código de referido si vino por ?ref=
       if (refCode && resp.status === 'new') {
         referralApi.applyCode(refCode).catch(() => {});
       }
 
-      // Si no tiene nombre → mostrar onboarding
       if (!me.full_name) {
         setStep('onboarding');
         return;
@@ -69,35 +75,65 @@ function LoginPageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-primary-700 flex flex-col">
-      {/* Header splash */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 pt-16 pb-8 text-white gap-4">
+    <div className="relative min-h-screen overflow-hidden bg-teal-900">
+      {/* VIDEO de fondo */}
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        className="absolute inset-0 w-full h-full object-cover opacity-70"
+      >
+        <source src="/videos/login-bg.mp4" type="video/mp4" />
+      </video>
+
+      {/* Overlay degradado teal */}
+      <div className="absolute inset-0 bg-gradient-to-b from-teal-900/50 via-teal-800/30 to-teal-950/80" />
+
+      {/* Huellas flotantes */}
+      {PAWS.map((p, i) => (
+        <motion.span
+          key={i}
+          className="absolute pointer-events-none select-none text-white"
+          style={{ left: p.left, top: p.top, fontSize: p.size, opacity: 0 }}
+          animate={{ opacity: [0, 0.35, 0.35, 0], y: [0, -35, -70, -110] }}
+          transition={{ duration: 7, delay: p.delay, repeat: Infinity, ease: 'easeOut' }}
+        >
+          🐾
+        </motion.span>
+      ))}
+
+      {/* Logo + título */}
+      <motion.div
+        className="relative z-10 flex flex-col items-center pt-16 pb-4"
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7 }}
+      >
         <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', duration: 0.6 }}
-          className="text-6xl"
+          className="w-20 h-20 rounded-3xl bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center text-4xl mb-4 shadow-2xl"
+          animate={{ y: [0, -7, 0] }}
+          transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
         >
           🐾
         </motion.div>
-        <motion.div
-          initial={{ y: 16, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.2, duration: 0.5 }}
-          className="text-center"
-        >
-          <h1 className="font-display text-3xl font-bold">Bigotes y Paticas</h1>
-          <p className="mt-1 text-primary-100 text-sm">Tu portal de mascotas</p>
-        </motion.div>
-      </div>
+        <h1 className="text-white text-3xl font-bold tracking-tight drop-shadow-lg">
+          Bigotes y Paticas
+        </h1>
+        <p className="text-white/70 text-sm mt-1">Tu portal de mascotas</p>
+      </motion.div>
 
-      {/* Card */}
+      {/* Card glass deslizante desde abajo */}
       <motion.div
-        initial={{ y: 40, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.3, duration: 0.5 }}
-        className="bg-background rounded-t-3xl px-6 pt-8 pb-12 shadow-2xl"
+        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] px-6 pt-7 pb-12 shadow-2xl z-10"
+        initial={{ y: 340 }}
+        animate={{ y: 0 }}
+        transition={{ delay: 0.2, type: 'spring', damping: 26, stiffness: 220 }}
       >
+        {/* Handle indicator */}
+        <div className="w-10 h-1 rounded-full bg-gray-200 mx-auto mb-6" />
+
         <AnimatePresence mode="wait">
           {step === 'login' ? (
             <motion.div
@@ -106,16 +142,16 @@ function LoginPageInner() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
             >
-              <h2 className="font-display text-xl font-bold text-foreground mb-1">
+              <h2 className="font-display text-2xl font-bold text-gray-900 mb-1">
                 ¡Hola! Ingresa aquí
               </h2>
-              <p className="text-muted text-sm mb-6">
+              <p className="text-gray-400 text-sm mb-6">
                 Usa tu cédula y teléfono registrado en la tienda.
               </p>
 
               <form onSubmit={handleLogin} className="flex flex-col gap-4">
                 <div className="relative">
-                  <CreditCard className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+                  <CreditCard className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="text"
                     inputMode="numeric"
@@ -128,7 +164,7 @@ function LoginPageInner() {
                 </div>
 
                 <div className="relative">
-                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="tel"
                     inputMode="tel"
@@ -140,7 +176,14 @@ function LoginPageInner() {
                   />
                 </div>
 
-                <button type="submit" disabled={loading} className="btn-primary mt-2">
+                <motion.button
+                  type="submit"
+                  disabled={loading}
+                  className="btn-primary mt-1"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ type: 'spring', damping: 15 }}
+                >
                   {loading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
@@ -149,10 +192,10 @@ function LoginPageInner() {
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
-                </button>
+                </motion.button>
               </form>
 
-              <p className="mt-6 text-center text-xs text-muted">
+              <p className="mt-6 text-center text-xs text-gray-400">
                 ¿Primera vez?{' '}
                 <a
                   href={`https://wa.me/573206876633?text=${encodeURIComponent('Hola! Quiero registrarme en el portal de Bigotes y Paticas')}`}
@@ -186,7 +229,7 @@ export default function LoginPage() {
   );
 }
 
-// ── Onboarding: leer datos legacy + registrar mascota ─────────────────
+// ── Onboarding ─────────────────────────────────────────────────────────
 
 interface OnboardingProps {
   loginData: LoginResponse | null;
@@ -211,28 +254,22 @@ function OnboardingStep({ loginData, onComplete, setCustomer, qc }: OnboardingPr
   ];
 
   const THEMES = [
-    { value: 'teal', color: '#187f77', label: 'Teal' },
-    { value: 'coral', color: '#e05252', label: 'Coral' },
-    { value: 'amber', color: '#f5a641', label: 'Ámbar' },
-    { value: 'purple', color: '#7c3aed', label: 'Violeta' },
-    { value: 'pink', color: '#db2777', label: 'Rosa' },
-    { value: 'green', color: '#16a34a', label: 'Verde' },
+    { value: 'teal', color: '#187f77' },
+    { value: 'coral', color: '#e05252' },
+    { value: 'amber', color: '#f5a641' },
+    { value: 'purple', color: '#7c3aed' },
+    { value: 'pink', color: '#db2777' },
+    { value: 'green', color: '#16a34a' },
   ];
 
   async function handleComplete() {
     setLoading(true);
     try {
-      // Actualizar nombre si no lo tiene
       if (fullName.trim()) {
         await auth.updateMe({ full_name: fullName.trim() });
       }
-      // Crear mascota (tomando datos del legacy JSONB)
       if (petName.trim()) {
-        await pets.create({
-          name: petName.trim(),
-          species: petSpecies,
-          color_theme: petTheme as any,
-        });
+        await pets.create({ name: petName.trim(), species: petSpecies, color_theme: petTheme as any });
       }
       const me = await auth.me();
       setCustomer(me);
@@ -259,9 +296,7 @@ function OnboardingStep({ loginData, onComplete, setCustomer, qc }: OnboardingPr
           <div className="text-center py-4">
             <div className="text-5xl mb-3">👋</div>
             <h2 className="font-display text-xl font-bold text-foreground">
-              {loginData?.pet_name
-                ? `¡Encontramos a ${loginData.pet_name}!`
-                : '¡Bienvenido al portal!'}
+              {loginData?.pet_name ? `¡Encontramos a ${loginData.pet_name}!` : '¡Bienvenido al portal!'}
             </h2>
             <p className="text-muted text-sm mt-2">
               {loginData?.pet_name
@@ -269,17 +304,19 @@ function OnboardingStep({ loginData, onComplete, setCustomer, qc }: OnboardingPr
                 : 'Cuéntanos un poco sobre ti y tu mascota.'}
             </p>
           </div>
-          <button onClick={() => setStep('name')} className="btn-primary">
+          <motion.button
+            onClick={() => setStep('name')}
+            className="btn-primary"
+            whileTap={{ scale: 0.97 }}
+          >
             Empezar <ArrowRight className="h-4 w-4" />
-          </button>
+          </motion.button>
         </>
       )}
 
       {step === 'name' && (
         <>
-          <h2 className="font-display text-xl font-bold text-foreground">
-            ¿Cómo te llamas?
-          </h2>
+          <h2 className="font-display text-xl font-bold text-foreground">¿Cómo te llamas?</h2>
           <input
             type="text"
             placeholder="Tu nombre completo"
@@ -288,79 +325,62 @@ function OnboardingStep({ loginData, onComplete, setCustomer, qc }: OnboardingPr
             className="input-field"
             autoFocus
           />
-          <button onClick={() => setStep('pet')} className="btn-primary">
+          <motion.button onClick={() => setStep('pet')} className="btn-primary" whileTap={{ scale: 0.97 }}>
             Siguiente <ArrowRight className="h-4 w-4" />
-          </button>
+          </motion.button>
         </>
       )}
 
       {step === 'pet' && (
         <>
-          <h2 className="font-display text-xl font-bold text-foreground">
-            Tu mascota
-          </h2>
-
-          <div>
-            <label className="text-xs font-semibold text-muted uppercase tracking-wide mb-1.5 block">
-              Nombre
-            </label>
-            <input
-              type="text"
-              placeholder="Nombre de tu mascota"
-              value={petName}
-              onChange={(e) => setPetName(e.target.value)}
-              className="input-field"
-            />
+          <h2 className="font-display text-xl font-bold text-foreground">Tu mascota</h2>
+          <input
+            type="text"
+            placeholder="Nombre de tu mascota"
+            value={petName}
+            onChange={(e) => setPetName(e.target.value)}
+            className="input-field"
+          />
+          <div className="grid grid-cols-4 gap-2">
+            {SPECIES.map((s) => (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => setPetSpecies(s.value)}
+                className={cn(
+                  'flex flex-col items-center gap-1 rounded-xl p-2.5 border-2 text-xs font-medium transition-all',
+                  petSpecies === s.value
+                    ? 'border-primary-700 bg-primary-50 text-primary-700'
+                    : 'border-border bg-white text-muted'
+                )}
+              >
+                <span className="text-2xl">{s.emoji}</span>
+                {s.label}
+              </button>
+            ))}
           </div>
-
-          <div>
-            <label className="text-xs font-semibold text-muted uppercase tracking-wide mb-1.5 block">
-              Especie
-            </label>
-            <div className="grid grid-cols-4 gap-2">
-              {SPECIES.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => setPetSpecies(s.value)}
-                  className={cn(
-                    'flex flex-col items-center gap-1 rounded-xl p-2.5 border-2 text-xs font-medium transition-all',
-                    petSpecies === s.value
-                      ? 'border-primary-700 bg-primary-50 text-primary-700'
-                      : 'border-border bg-white text-muted'
-                  )}
-                >
-                  <span className="text-2xl">{s.emoji}</span>
-                  {s.label}
-                </button>
-              ))}
-            </div>
+          <div className="flex gap-2 flex-wrap">
+            {THEMES.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setPetTheme(t.value)}
+                className={cn(
+                  'h-9 w-9 rounded-full border-4 transition-all',
+                  petTheme === t.value ? 'border-foreground scale-110' : 'border-transparent'
+                )}
+                style={{ backgroundColor: t.color }}
+              />
+            ))}
           </div>
-
-          <div>
-            <label className="text-xs font-semibold text-muted uppercase tracking-wide mb-1.5 block">
-              Color de tema
-            </label>
-            <div className="flex gap-2 flex-wrap">
-              {THEMES.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setPetTheme(t.value)}
-                  title={t.label}
-                  className={cn(
-                    'h-9 w-9 rounded-full border-4 transition-all',
-                    petTheme === t.value ? 'border-foreground scale-110' : 'border-transparent'
-                  )}
-                  style={{ backgroundColor: t.color }}
-                />
-              ))}
-            </div>
-          </div>
-
-          <button onClick={handleComplete} disabled={loading} className="btn-primary mt-2">
+          <motion.button
+            onClick={handleComplete}
+            disabled={loading}
+            className="btn-primary mt-2"
+            whileTap={{ scale: 0.97 }}
+          >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : '¡Listo! Ir al portal'}
-          </button>
+          </motion.button>
         </>
       )}
     </motion.div>

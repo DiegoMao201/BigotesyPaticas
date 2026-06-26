@@ -13,12 +13,30 @@ import { getSpeciesEmoji, cn } from '@/lib/utils';
 import 'react-day-picker/dist/style.css';
 
 const SERVICES = [
-  { value: 'baño', label: '🛁 Baño', duration: 60 },
-  { value: 'grooming', label: '✂️ Grooming', duration: 90 },
-  { value: 'peluqueria', label: '✂️ Peluquería', duration: 120 },
-  { value: 'consulta', label: '🩺 Consulta vet.', duration: 30 },
-  { value: 'vacuna', label: '💉 Vacunación', duration: 20 },
-  { value: 'otro', label: '📋 Otro', duration: 60 },
+  {
+    value: 'grooming',
+    icon: '🛁',
+    label: 'Grooming',
+    sublabel: 'Baño + peluquería completos',
+    description: 'Baño con shampoo, secado, corte de uñas y peluquería opcional',
+    duration: 120,
+  },
+  {
+    value: 'consulta_vet',
+    icon: '🩺',
+    label: 'Consulta veterinaria',
+    sublabel: 'Revisión médica general',
+    description: 'Consulta con el veterinario para chequeo de salud',
+    duration: 30,
+  },
+  {
+    value: 'vacunacion',
+    icon: '💉',
+    label: 'Vacunación',
+    sublabel: 'Aplicación de vacunas',
+    description: 'Aplicación de vacuna según calendario de tu mascota',
+    duration: 20,
+  },
 ];
 
 function formatLocalDate(d: Date): string {
@@ -43,7 +61,7 @@ export default function NewAppointmentPage() {
   const dateStr = selectedDay ? formatLocalDate(selectedDay) : '';
   const { data: availability, isLoading: loadingSlots } = useQuery({
     queryKey: ['availability', dateStr, service],
-    queryFn: () => appointments.availability(dateStr, service || 'baño'),
+    queryFn: () => appointments.availability(dateStr, service || 'grooming'),
     enabled: !!dateStr && !!service,
     staleTime: 60 * 1000,
   });
@@ -114,21 +132,33 @@ export default function NewAppointmentPage() {
           <span className="h-5 w-5 rounded-full bg-primary-700 text-white text-[10px] font-bold flex items-center justify-center shrink-0">2</span>
           Tipo de servicio
         </p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-3 md:flex-row">
           {SERVICES.map((svc) => (
-            <button
+            <motion.button
               key={svc.value}
               onClick={() => { setService(svc.value); setSelectedSlot(''); }}
+              whileTap={{ scale: 0.97 }}
               className={cn(
-                'flex items-center gap-2.5 py-3 px-4 rounded-xl border-2 text-sm font-medium text-left transition-all',
+                'flex-1 flex flex-col items-center gap-2 py-5 px-4 rounded-2xl border-2 text-center transition-all',
                 service === svc.value
-                  ? 'border-primary-700 bg-primary-50 text-primary-700'
-                  : 'border-border bg-white text-foreground'
+                  ? 'border-primary-700 bg-primary-50 shadow-md'
+                  : 'border-border bg-white hover:border-primary-300'
               )}
             >
-              <span className="text-lg">{svc.label.split(' ')[0]}</span>
-              <span>{svc.label.split(' ').slice(1).join(' ')}</span>
-            </button>
+              <span className="text-4xl">{svc.icon}</span>
+              <div>
+                <p className={cn('font-bold text-sm', service === svc.value ? 'text-primary-700' : 'text-foreground')}>
+                  {svc.label}
+                </p>
+                <p className="text-xs text-muted mt-0.5">{svc.sublabel}</p>
+              </div>
+              <p className="text-[11px] text-muted leading-snug px-2 hidden md:block">{svc.description}</p>
+              {service === svc.value && (
+                <span className="text-[11px] font-bold text-primary-700 bg-primary-100 rounded-full px-2.5 py-0.5">
+                  ✓ Elegido
+                </span>
+              )}
+            </motion.button>
           ))}
         </div>
       </section>
@@ -228,7 +258,7 @@ export default function NewAppointmentPage() {
               <p className="font-semibold text-foreground">Resumen</p>
               <p className="text-muted">
                 <span className="text-foreground font-medium">
-                  {SERVICES.find((s) => s.value === service)?.label}
+                  {SERVICES.find((s) => s.value === service)?.icon} {SERVICES.find((s) => s.value === service)?.label}
                 </span>
                 {' · '}
                 {selectedDay?.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}

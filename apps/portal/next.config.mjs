@@ -8,6 +8,7 @@ const nextConfig = {
       { protocol: 'https', hostname: '**.bigotesypaticas.com' },
       { protocol: 'https', hostname: 'cdn.bigotesypaticas.com' },
       { protocol: 'https', hostname: '**.digitaloceanspaces.com' },
+      { protocol: 'https', hostname: '**.cdn.digitaloceanspaces.com' },
     ],
   },
   async rewrites() {
