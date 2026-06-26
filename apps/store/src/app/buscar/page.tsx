@@ -14,7 +14,7 @@ function SearchResults() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['buscar', q],
-    queryFn: () => storeApi.list({ q, page_size: 48 }),
+    queryFn: () => storeApi.list({ q, per_page: 48 }),
     enabled: !!q,
     staleTime: 60_000,
   });

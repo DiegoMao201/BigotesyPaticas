@@ -63,40 +63,7 @@ export default async function HomePage() {
       {/* HERO — VIDEO */}
       <HeroSection />
 
-      {/* PORTAL CTA */}
-      <PortalCTA />
-
-      {/* CATEGORIES */}
-      <section className="container-wide py-20">
-        <div className="flex items-end justify-between mb-10">
-          <div>
-            <p className="text-brand-600 font-semibold text-sm mb-1">Explora nuestro catálogo</p>
-            <h2 className="text-3xl md:text-4xl font-display font-extrabold">Compra por categoría</h2>
-            <p className="text-muted-foreground mt-2">Encuentra justo lo que tu mascota necesita</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-          {CATEGORIES.map((cat) => (
-            <Link
-              key={cat.slug}
-              href={`/categorias/${cat.slug}`}
-              className={`group relative overflow-hidden rounded-3xl bg-gradient-to-br ${cat.tone} p-6 aspect-[4/5] flex flex-col justify-between transition-all hover:shadow-warm hover:-translate-y-2 border border-white/60`}
-            >
-              <div className="text-8xl transition-transform group-hover:scale-110 group-hover:rotate-6 duration-300">
-                {cat.emoji}
-              </div>
-              <div>
-                <h3 className={`text-2xl font-display font-extrabold ${cat.accent}`}>{cat.name}</h3>
-                <div className={`flex items-center gap-1 text-sm font-medium ${cat.accent} opacity-70 group-hover:opacity-100 group-hover:gap-2 transition-all`}>
-                  Ver productos <ArrowRight className="h-3 w-3" />
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* FEATURED */}
+      {/* FEATURED — Destacados */}
       {featured.length > 0 && (
         <section className="container-wide py-20 bg-paw-pattern">
           <div className="flex items-end justify-between mb-10">
@@ -156,6 +123,39 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      {/* CATEGORIES — Compra por categoría */}
+      <section className="container-wide py-20">
+        <div className="flex items-end justify-between mb-10">
+          <div>
+            <p className="text-brand-600 font-semibold text-sm mb-1">Explora nuestro catálogo</p>
+            <h2 className="text-3xl md:text-4xl font-display font-extrabold">Compra por categoría</h2>
+            <p className="text-muted-foreground mt-2">Encuentra justo lo que tu mascota necesita</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+          {CATEGORIES.map((cat) => (
+            <Link
+              key={cat.slug}
+              href={`/categorias/${cat.slug}`}
+              className={`group relative overflow-hidden rounded-3xl bg-gradient-to-br ${cat.tone} p-6 aspect-[4/5] flex flex-col justify-between transition-all hover:shadow-warm hover:-translate-y-2 border border-white/60`}
+            >
+              <div className="text-8xl transition-transform group-hover:scale-110 group-hover:rotate-6 duration-300">
+                {cat.emoji}
+              </div>
+              <div>
+                <h3 className={`text-2xl font-display font-extrabold ${cat.accent}`}>{cat.name}</h3>
+                <div className={`flex items-center gap-1 text-sm font-medium ${cat.accent} opacity-70 group-hover:opacity-100 group-hover:gap-2 transition-all`}>
+                  Ver productos <ArrowRight className="h-3 w-3" />
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* PORTAL CTA */}
+      <PortalCTA />
 
       {/* VALUES */}
       <section className="container-wide py-20">

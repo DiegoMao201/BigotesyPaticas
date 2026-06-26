@@ -106,6 +106,8 @@ async def list_products(
     q: str | None = Query(None, description="Búsqueda por nombre/sku"),
     brand_id: uuid.UUID | None = None,
     category_id: uuid.UUID | None = None,
+    category_slug: str | None = Query(None, description="Filtrar por slug de categoría (resuelve UUID internamente)"),
+    species: str | None = Query(None, description="Filtrar por especie: perro, gato (incluye mixto automáticamente)"),
     supplier_id: uuid.UUID | None = Query(None, description="Filtrar por proveedor asociado"),
     without_supplier: bool = Query(False, description="Solo productos sin proveedor"),
     is_published: bool | None = None,
@@ -131,6 +133,22 @@ async def list_products(
     if category_id:
         stmt = stmt.where(Product.category_id == category_id)
         count_stmt = count_stmt.where(Product.category_id == category_id)
+    if category_slug:
+        cat = (await db.execute(
+            select(Category)
+            .where(func.lower(Category.slug) == category_slug.lower())
+            .where(Category.deleted_at.is_(None))
+        )).scalar_one_or_none()
+        if cat:
+            stmt = stmt.where(Product.category_id == cat.id)
+            count_stmt = count_stmt.where(Product.category_id == cat.id)
+    if species:
+        species_cond = or_(
+            Product.attributes["species"].astext == species,
+            Product.attributes["species"].astext == "mixto",
+        )
+        stmt = stmt.where(species_cond)
+        count_stmt = count_stmt.where(species_cond)
     if is_published is not None:
         stmt = stmt.where(Product.is_published == is_published)
         count_stmt = count_stmt.where(Product.is_published == is_published)
@@ -218,6 +236,49 @@ async def get_product_by_slug(slug: str, db: DBSession):
     p_out.stock_qty = int(stock_total or 0)
     p_out.in_stock = p_out.stock_qty > 0
     return p_out
+
+
+@router.get("/{product_id}/related", response_model=list[ProductOut])
+async def related_products(
+    product_id: uuid.UUID,
+    db: DBSession,
+    limit: int = Query(4, ge=1, le=12),
+):
+    """Productos relacionados (misma categoría, sin el propio producto)."""
+    product = (await db.execute(
+        select(Product).where(Product.id == product_id).where(Product.deleted_at.is_(None))
+    )).scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    stmt = (
+        select(Product)
+        .where(Product.deleted_at.is_(None))
+        .where(Product.is_published == True)  # noqa: E712
+        .where(Product.id != product_id)
+    )
+    if product.category_id:
+        stmt = stmt.where(Product.category_id == product.category_id)
+    stmt = stmt.order_by(Product.is_featured.desc(), Product.created_at.desc()).limit(limit)
+    rows = (await db.execute(stmt)).scalars().all()
+
+    product_ids = [r.id for r in rows]
+    stock_map: dict = {}
+    if product_ids:
+        stock_rows = (await db.execute(
+            select(Stock.product_id, func.sum(Stock.quantity).label("qty"))
+            .where(Stock.product_id.in_(product_ids))
+            .group_by(Stock.product_id)
+        )).all()
+        stock_map = {r.product_id: int(r.qty or 0) for r in stock_rows}
+
+    items = []
+    for r in rows:
+        p_out = ProductOut.model_validate(r)
+        p_out.stock_qty = stock_map.get(r.id, 0)
+        p_out.in_stock = p_out.stock_qty > 0
+        items.append(p_out)
+    return items
 
 
 @router.post(
