@@ -146,8 +146,8 @@ export function PetPhotoUploader({
           💡 ¿Cómo subo la foto?
         </p>
         <ol className="text-amber-700 text-xs flex flex-col gap-1 pl-1">
-          <li>1. Toca "Galería" para elegir una foto que ya tengas</li>
-          <li>2. O toca "Cámara" para tomarla ahora mismo</li>
+          <li>1. Toca &ldquo;Galería&rdquo; para elegir una foto que ya tengas</li>
+          <li>2. O toca &ldquo;Cámara&rdquo; para tomarla ahora mismo</li>
           <li>3. La foto se sube automáticamente</li>
         </ol>
         <p className="text-amber-600 text-xs mt-1">
