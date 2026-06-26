@@ -142,7 +142,7 @@ export default function DashboardPage() {
                   className="flex flex-col items-center gap-1.5 min-w-[72px]"
                 >
                   <div
-                    className="h-14 w-14 rounded-2xl flex items-center justify-center text-[26px] transition-all"
+                    className="h-14 w-14 rounded-2xl overflow-hidden flex items-center justify-center text-[26px] transition-all"
                     style={{
                       background: isActive ? t.grad : t.light,
                       boxShadow: isActive
@@ -151,7 +151,16 @@ export default function DashboardPage() {
                       border: isActive ? `2px solid ${t.dark}` : '2px solid transparent',
                     }}
                   >
-                    {getSpeciesEmoji(pet.species)}
+                    {pet.photo_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={pet.photo_url}
+                        alt={pet.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      getSpeciesEmoji(pet.species)
+                    )}
                   </div>
                   <span
                     className="text-xs font-semibold truncate w-16 text-center"
