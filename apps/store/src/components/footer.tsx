@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Instagram, Facebook, Mail, Phone, MapPin } from 'lucide-react';
+import { Instagram, Facebook, Mail, Phone, MapPin, Star } from 'lucide-react';
+import { BUSINESS_INFO } from '@/lib/business-info';
 
 const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
   ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
@@ -76,11 +77,20 @@ export function Footer() {
                 bigotesypaticasdosquebradas@gmail.com
               </a>
             </li>
-            <li className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 shrink-0" />
-              Dosquebradas, Risaralda
+            <li className="flex items-start gap-2">
+              <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>{BUSINESS_INFO.address.streetAddress},<br />Dosquebradas, Risaralda</span>
             </li>
           </ul>
+          <a
+            href={BUSINESS_INFO.mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 hover:text-amber-500 transition-colors"
+          >
+            <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+            5.0 ★★★★★ en Google
+          </a>
           <div className="flex gap-3 mt-4">
             <a href="https://www.instagram.com/bigotesypaticas" target="_blank" rel="noopener noreferrer"
                className="text-muted-foreground hover:text-brand">
