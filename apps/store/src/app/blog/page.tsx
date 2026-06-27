@@ -4,7 +4,7 @@ import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { Calendar, Tag } from 'lucide-react';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 1800; // 30 min
 
 export const metadata: Metadata = {
   title: 'Blog de mascotas — Consejos y guías para perros y gatos en Pereira',

@@ -332,6 +332,157 @@ async def update_product(product_id: uuid.UUID, payload: ProductUpdate, db: DBSe
     return out
 
 
+# ----------------------------- Advanced catalog with facets -----------------
+@router.get("/catalog")
+async def catalog_products(
+    db: DBSession,
+    category_slug: str | None = None,
+    life_stage: str | None = None,
+    size_range: str | None = None,
+    health_concerns: str | None = None,
+    brand: str | None = None,
+    pet_type: str | None = None,
+    price_min: float | None = None,
+    price_max: float | None = None,
+    in_stock: bool | None = None,
+    sort: str = Query("relevance", pattern="^(relevance|price_asc|price_desc|name|newest)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(40, ge=1, le=100),
+):
+    """Advanced catalog endpoint with facet filtering and counts."""
+    from sqlalchemy import cast, String, text as sql_text
+
+    stmt = select(Product).where(
+        Product.is_published == True,  # noqa: E712
+        Product.deleted_at.is_(None),
+    )
+
+    if category_slug:
+        cat = (await db.execute(
+            select(Category).where(func.lower(Category.slug) == category_slug.lower())
+        )).scalar_one_or_none()
+        if cat:
+            stmt = stmt.where(Product.category_id == cat.id)
+
+    if life_stage:
+        stages = [s.strip() for s in life_stage.split(",")]
+        stmt = stmt.where(or_(
+            Product.life_stage.in_(stages),
+            Product.life_stage == "all",
+        ))
+
+    if size_range:
+        sizes = [s.strip() for s in size_range.split(",")]
+        stmt = stmt.where(or_(
+            Product.size_range.in_(sizes),
+            Product.size_range == "all",
+        ))
+
+    if brand:
+        brands_list = [b.strip() for b in brand.split(",")]
+        stmt = stmt.where(Product.brand_normalized.in_(brands_list))
+
+    if pet_type:
+        stmt = stmt.where(or_(
+            Product.pet_type == pet_type,
+            Product.pet_type == "both",
+        ))
+
+    if price_min is not None:
+        stmt = stmt.where(Product.price >= price_min)
+    if price_max is not None:
+        stmt = stmt.where(Product.price <= price_max)
+
+    # health_concerns: array overlap using raw SQL
+    if health_concerns:
+        concerns = [c.strip() for c in health_concerns.split(",")]
+        stmt = stmt.where(
+            sql_text("health_concerns && ARRAY[:concerns]::text[]").bindparams(
+                concerns=concerns
+            )
+        )
+
+    # Sort
+    if sort == "price_asc":
+        stmt = stmt.order_by(Product.price.asc())
+    elif sort == "price_desc":
+        stmt = stmt.order_by(Product.price.desc())
+    elif sort == "name":
+        stmt = stmt.order_by(Product.name.asc())
+    else:
+        stmt = stmt.order_by(Product.created_at.desc())
+
+    # Count before pagination
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = (await db.execute(count_stmt)).scalar_one()
+
+    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+    rows = (await db.execute(stmt)).scalars().all()
+
+    # Stock
+    product_ids = [r.id for r in rows]
+    stock_map: dict = {}
+    if product_ids:
+        stock_rows = (await db.execute(
+            select(Stock.product_id, func.sum(Stock.quantity).label("qty"))
+            .where(Stock.product_id.in_(product_ids))
+            .group_by(Stock.product_id)
+        )).all()
+        stock_map = {r.product_id: int(r.qty or 0) for r in stock_rows}
+
+    # in_stock filter (post-stock-lookup)
+    items = []
+    for r in rows:
+        stock_qty = stock_map.get(r.id, 0)
+        if in_stock and stock_qty == 0:
+            continue
+        p_out = ProductOut.model_validate(r)
+        p_out.stock_qty = stock_qty
+        p_out.in_stock = stock_qty > 0
+        items.append(p_out)
+
+    # Facets — count available values across all matching products (without pagination)
+    facets: dict = {}
+    try:
+        facet_stmt = select(Product).where(
+            Product.is_published == True,  # noqa: E712
+            Product.deleted_at.is_(None),
+        )
+        facet_rows = (await db.execute(facet_stmt)).scalars().all()
+
+        life_stages: dict = {}
+        size_ranges: dict = {}
+        brands_count: dict = {}
+        pet_types: dict = {}
+
+        for p in facet_rows:
+            if p.life_stage and p.life_stage != "all":
+                life_stages[p.life_stage] = life_stages.get(p.life_stage, 0) + 1
+            if p.size_range and p.size_range != "all":
+                size_ranges[p.size_range] = size_ranges.get(p.size_range, 0) + 1
+            if p.brand_normalized:
+                brands_count[p.brand_normalized] = brands_count.get(p.brand_normalized, 0) + 1
+            if p.pet_type and p.pet_type != "both":
+                pet_types[p.pet_type] = pet_types.get(p.pet_type, 0) + 1
+
+        facets = {
+            "life_stages": life_stages,
+            "size_ranges": size_ranges,
+            "brands": dict(sorted(brands_count.items(), key=lambda x: -x[1])[:20]),
+            "pet_types": pet_types,
+        }
+    except Exception:
+        facets = {}
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "facets": facets,
+    }
+
+
 # ----------------------------- Brands ---------------------------------------
 @brands_router.get("", response_model=list[BrandOut])
 async def list_brands(db: DBSession):

@@ -4,6 +4,7 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: 'Política de Devoluciones',
   description: 'Política de devoluciones y cambios de Bigotes y Paticas. 30 días, gratis, sin complicaciones.',
+  alternates: { canonical: 'https://bigotesypaticas.com/devoluciones' },
 };
 
 export default function DevolucionesPage() {

@@ -105,5 +105,12 @@ class Product(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     enriched_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True, default=None)
     enriched_model: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
 
+    # Filtros avanzados de catálogo (sprint-3, migración 0015)
+    life_stage: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+    size_range: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+    health_concerns: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True, default=None)
+    pet_type: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
+    brand_normalized: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
+
     brand: Mapped[Brand | None] = relationship(Brand, lazy="joined")
     category: Mapped[Category | None] = relationship(Category, lazy="joined")

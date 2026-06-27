@@ -9,8 +9,9 @@ import { StickyCTAMobile } from './StickyCTAMobile';
 import { ProductSchema, BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
 import { ProductFAQ } from '@/components/seo/ProductFAQ';
 import { Truck, ShieldCheck, RefreshCw, ChevronRight, MessageCircle } from 'lucide-react';
+import { getOutOfStockWhatsAppUrl } from '@/lib/whatsapp-messages';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600; // 1 hora
 
 interface Props { params: { slug: string } }
 
@@ -221,6 +222,37 @@ export default async function ProductPage({ params }: Props) {
               <p className="text-muted-foreground leading-relaxed">{product.short_description}</p>
             )}
 
+            {/* Out-of-stock banner */}
+            {!product.in_stock && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">📦</span>
+                  <div>
+                    <p className="font-semibold text-amber-900">Producto agotado temporalmente</p>
+                    <p className="text-sm text-amber-700 mt-1">
+                      No está en nuestro inventario actual, pero podemos conseguirlo.
+                      Nuestro equipo se comunica contigo para coordinar disponibilidad y entrega.
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={getOutOfStockWhatsAppUrl({
+                    name: product.name,
+                    brand: product.brand,
+                    price: product.price,
+                    slug: product.slug,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl
+                             bg-green-500 hover:bg-green-600 text-white font-semibold text-sm transition-colors"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Solicitarlo por WhatsApp
+                </a>
+              </div>
+            )}
+
             {/* Add to cart */}
             {product.in_stock ? (
               <AddToCart
@@ -233,12 +265,12 @@ export default async function ProductPage({ params }: Props) {
                 }}
               />
             ) : (
-              <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
-                <p className="text-sm font-semibold text-red-700">Este producto está agotado</p>
-                <p className="text-xs text-red-500 mt-1">
-                  Consulta disponibilidad por WhatsApp o prueba otro producto similar.
-                </p>
-              </div>
+              <button
+                disabled
+                className="w-full py-3.5 rounded-2xl bg-gray-200 text-gray-400 font-bold cursor-not-allowed"
+              >
+                Agotado
+              </button>
             )}
 
             {/* WhatsApp */}

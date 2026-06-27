@@ -28,6 +28,7 @@ from app.api.v1 import (
     purchases,
     purchases_xml,
     sales,
+    search,
     seo,
     suppliers,
 )
@@ -36,6 +37,7 @@ api_router = APIRouter()
 
 api_router.include_router(health.router)
 api_router.include_router(blog.router, prefix="/v1")
+api_router.include_router(search.router, prefix="/v1")
 api_router.include_router(seo.router, prefix="/v1")
 api_router.include_router(landings.router, prefix="/v1")
 api_router.include_router(contact.router, prefix="/v1")

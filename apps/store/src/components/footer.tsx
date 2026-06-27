@@ -185,7 +185,9 @@ export function Footer() {
           </a>
           <div className="flex gap-3 mt-4">
             <a href="https://wa.me/573206876633" target="_blank" rel="noopener noreferrer"
-               className="text-muted-foreground hover:text-brand text-[1.2rem] leading-none">💬</a>
+               className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand transition-colors">
+              📱 WhatsApp directo
+            </a>
           </div>
         </div>
       </div>

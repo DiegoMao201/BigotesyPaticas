@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Minus, Plus, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { useCart, type CartItem } from '@/lib/cart-store';
 export function AddToCart({ product }: { product: Omit<CartItem, 'quantity'> }) {
   const [qty, setQty] = useState(1);
   const add = useCart((s) => s.add);
+  const router = useRouter();
 
   return (
     <div className="space-y-3">
@@ -35,7 +37,14 @@ export function AddToCart({ product }: { product: Omit<CartItem, 'quantity'> }) 
           className="flex-1"
           onClick={() => {
             add(product, qty);
-            toast.success(`${product.name} agregado al carrito`);
+            toast.success(`${product.name.slice(0, 35)}… agregado al carrito`, {
+              icon: '🛒',
+              duration: 4000,
+              action: {
+                label: 'Ver carrito',
+                onClick: () => router.push('/carrito'),
+              },
+            });
           }}
         >
           <ShoppingBag className="h-4 w-4" /> Agregar al carrito

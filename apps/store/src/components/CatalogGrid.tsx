@@ -2,9 +2,10 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { ChevronDown, Heart } from 'lucide-react';
+import { ChevronDown, Heart, MessageCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import type { Product } from '@/lib/api';
+import { getOutOfStockWhatsAppUrl } from '@/lib/whatsapp-messages';
 
 export interface FilterChip {
   label: string;
@@ -143,8 +144,9 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
                       <img
                         src={p.primary_image_url}
                         alt={p.name}
-                        className="w-full h-full object-contain p-2.5
-                                   group-hover:scale-105 transition-transform duration-300"
+                        className={`w-full h-full object-contain p-2.5
+                                   group-hover:scale-105 transition-transform duration-300
+                                   ${!p.in_stock ? 'grayscale opacity-70' : ''}`}
                       />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center text-4xl opacity-25">
@@ -160,9 +162,9 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
                           Disponible
                         </span>
                       ) : (
-                        <span className="bg-gray-200 text-gray-500 text-[9px] font-bold
-                                         px-1.5 py-0.5 rounded-full uppercase tracking-wide">
-                          Agotado
+                        <span className="bg-amber-100 text-amber-700 text-[9px] font-bold
+                                         px-1.5 py-0.5 rounded-full uppercase tracking-wide border border-amber-200">
+                          Agotado · Lo conseguimos
                         </span>
                       )}
                     </div>
@@ -216,6 +218,25 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
                         {formatCurrency(p.price)}
                       </span>
                     </div>
+                    {!p.in_stock && (
+                      <a
+                        href={getOutOfStockWhatsAppUrl({
+                          name: p.name,
+                          brand: p.brand ? { name: p.brand.name } : null,
+                          price: p.price,
+                          slug: p.slug,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 flex items-center justify-center gap-1 w-full py-1 rounded-lg
+                                   bg-green-500 hover:bg-green-600 text-white text-[9px] font-bold
+                                   transition-colors"
+                      >
+                        <MessageCircle className="w-2.5 h-2.5" />
+                        Lo consigo por WhatsApp
+                      </a>
+                    )}
                   </div>
                 </Link>
               );

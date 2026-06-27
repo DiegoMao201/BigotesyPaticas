@@ -5,7 +5,7 @@ import { storeApi } from '@/lib/api';
 import { ArticleSchema, BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { Calendar, ArrowLeft, Tag } from 'lucide-react';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 86400; // 1 día
 
 interface Props { params: { slug: string } }
 

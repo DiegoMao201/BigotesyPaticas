@@ -4,6 +4,7 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: 'Política de Privacidad',
   description: 'Política de privacidad y tratamiento de datos personales de Bigotes y Paticas, conforme a la Ley 1581 de 2012.',
+  alternates: { canonical: 'https://bigotesypaticas.com/politica-privacidad' },
 };
 
 export default function PoliticaPrivacidadPage() {

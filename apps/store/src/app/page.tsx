@@ -1,5 +1,12 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, Truck, ShieldCheck, Heart, Sparkles, Star } from 'lucide-react';
+
+export const revalidate = 600; // 10 min
+
+export const metadata: Metadata = {
+  alternates: { canonical: 'https://bigotesypaticas.com' },
+};
 import { storeApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { HeroSection } from '@/components/HeroSection';

@@ -156,6 +156,37 @@ export const storeApi = {
       return { items: [], total: 0, page: 1, per_page: 24 };
     }
   },
+  catalogFiltered: async (params: {
+    category_slug?: string;
+    life_stage?: string;
+    size_range?: string;
+    brand?: string;
+    pet_type?: string;
+    price_min?: number;
+    price_max?: number;
+    in_stock?: boolean;
+    sort?: string;
+    page?: number;
+    page_size?: number;
+  } = {}): Promise<{ items: Product[]; total: number; page: number; page_size: number; facets: Record<string, Record<string, number>> }> => {
+    const qs = new URLSearchParams();
+    if (params.category_slug) qs.set('category_slug', params.category_slug);
+    if (params.life_stage) qs.set('life_stage', params.life_stage);
+    if (params.size_range) qs.set('size_range', params.size_range);
+    if (params.brand) qs.set('brand', params.brand);
+    if (params.pet_type) qs.set('pet_type', params.pet_type);
+    if (params.price_min != null) qs.set('price_min', String(params.price_min));
+    if (params.price_max != null) qs.set('price_max', String(params.price_max));
+    if (params.in_stock != null) qs.set('in_stock', String(params.in_stock));
+    if (params.sort) qs.set('sort', params.sort);
+    if (params.page) qs.set('page', String(params.page));
+    if (params.page_size) qs.set('page_size', String(params.page_size));
+    try {
+      return await get<any>(`/v1/products/catalog?${qs.toString()}`);
+    } catch {
+      return { items: [], total: 0, page: 1, page_size: 40, facets: {} };
+    }
+  },
   bySlug: async (slug: string): Promise<Product | null> => {
     try { return await get<Product>(`/v1/products/by-slug/${slug}`); } catch { return null; }
   },

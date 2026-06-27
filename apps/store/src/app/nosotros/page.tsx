@@ -4,6 +4,7 @@ import Link from 'next/link';
 export const metadata = {
   title: 'Nuestra historia',
   description: 'Conoce a Bigotes y Paticas, la tienda de mascotas premium en Dosquebradas y Pereira.',
+  alternates: { canonical: 'https://bigotesypaticas.com/nosotros' },
 };
 
 export default function NosotrosPage() {

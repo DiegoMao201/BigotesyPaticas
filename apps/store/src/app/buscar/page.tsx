@@ -4,9 +4,10 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Search } from 'lucide-react';
+import { Search, MessageCircle } from 'lucide-react';
 import { storeApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { getWhatsAppUrl } from '@/lib/whatsapp-messages';
 
 function SearchResults() {
   const params = useSearchParams();
@@ -47,11 +48,36 @@ function SearchResults() {
   }
 
   if (data.items.length === 0) {
+    const waUrl = getWhatsAppUrl(
+      `¡Hola! Busqué "${q}" en su sitio web y no encontré resultados. ¿Tienen algo similar disponible?`
+    );
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
-        <Search className="h-12 w-12 opacity-20" />
-        <p className="text-lg">Sin resultados para <strong>"{q}"</strong></p>
-        <p className="text-sm">Prueba con otras palabras o navega por categorías.</p>
+      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-4 text-center">
+        <Search className="h-14 w-14 opacity-20" />
+        <div>
+          <p className="text-xl font-semibold text-foreground">Sin resultados para &ldquo;{q}&rdquo;</p>
+          <p className="text-sm mt-1">Intenta con otra palabra o escríbenos por WhatsApp.</p>
+        </div>
+        <a
+          href={waUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-green-500 hover:bg-green-600 text-white font-semibold text-sm transition-colors"
+        >
+          <MessageCircle className="h-4 w-4" />
+          Buscar por WhatsApp
+        </a>
+        <div className="mt-4 flex flex-wrap gap-2 justify-center">
+          {['Perros', 'Gatos', 'Accesorios', 'Snacks'].map((cat) => (
+            <Link
+              key={cat}
+              href={`/categorias/${cat.toLowerCase()}`}
+              className="px-3 py-1.5 rounded-full border border-border text-sm hover:bg-secondary transition-colors"
+            >
+              {cat}
+            </Link>
+          ))}
+        </div>
       </div>
     );
   }
@@ -59,7 +85,7 @@ function SearchResults() {
   return (
     <>
       <p className="text-sm text-muted-foreground mb-6">
-        {data.total} resultados para <strong>"{q}"</strong>
+        {data.total} resultado{data.total !== 1 ? 's' : ''} para <strong>&ldquo;{q}&rdquo;</strong>
       </p>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {data.items.map((p) => (
@@ -70,10 +96,11 @@ function SearchResults() {
           >
             <div className="aspect-square bg-white flex items-center justify-center overflow-hidden relative p-3">
               {p.primary_image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={p.primary_image_url}
                   alt={p.name}
-                  className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-sm"
+                  className={`w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-sm ${!p.in_stock ? 'grayscale opacity-70' : ''}`}
                 />
               ) : (
                 <span className="text-5xl">🐾</span>
@@ -81,14 +108,16 @@ function SearchResults() {
               <div className={`absolute top-2 left-2 text-xs font-medium px-2 py-0.5 rounded-full ${
                 p.in_stock
                   ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-gray-100 text-gray-500'
+                  : 'bg-amber-100 text-amber-700 border border-amber-200'
               }`}>
-                {p.in_stock ? 'Disponible' : 'No disponible'}
+                {p.in_stock ? 'Disponible' : 'Agotado · Lo conseguimos'}
               </div>
             </div>
             <div className="p-3 space-y-1">
               <h3 className="font-medium text-sm leading-tight line-clamp-2">{p.name}</h3>
-              <p className="font-bold text-brand-700">{formatCurrency(Number(p.price))}</p>
+              <p className={`font-bold ${p.in_stock ? 'text-brand-700' : 'text-gray-400'}`}>
+                {formatCurrency(Number(p.price))}
+              </p>
             </div>
           </Link>
         ))}

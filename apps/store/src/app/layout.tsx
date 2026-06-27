@@ -7,6 +7,8 @@ import { Footer } from '@/components/footer';
 import { OrganizationSchema, LocalBusinessSchema } from '@/components/seo/JsonLd';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 import { GoogleReviewPrompt } from '@/components/reviews/GoogleReviewPrompt';
+import { WhatsAppFloat } from '@/components/widgets/WhatsAppFloat';
+import { Toaster } from 'sonner';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 const jakarta = Plus_Jakarta_Sans({
@@ -62,7 +64,6 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: 'https://bigotesypaticas.com',
     types: { 'application/rss+xml': [{ url: '/feed.xml', title: 'Blog Bigotes y Paticas' }] },
   },
 };
@@ -79,6 +80,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main className="min-h-[calc(100vh-4rem-1px)]">{children}</main>
           <Footer />
           <GoogleReviewPrompt />
+          <WhatsAppFloat />
+          <Toaster position="bottom-left" richColors closeButton />
         </Providers>
       </body>
     </html>

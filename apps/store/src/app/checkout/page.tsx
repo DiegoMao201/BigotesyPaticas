@@ -108,6 +108,29 @@ export default function CheckoutPage() {
             </div>
           </div>
 
+          {/* Cobertura */}
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3 items-start">
+            <span className="text-xl shrink-0">📍</span>
+            <div>
+              <p className="font-semibold text-blue-900 text-sm">Cobertura actual</p>
+              <p className="text-blue-700 text-xs mt-0.5">
+                Pereira y Dosquebradas zona urbana en 24-72 horas.
+              </p>
+              <p className="text-blue-600 text-xs mt-1">
+                ¿Estás fuera de esta zona?{' '}
+                <a
+                  href="https://wa.me/573206876633?text=Hola!%20Quiero%20consultar%20cobertura%20de%20domicilio%20a%20mi%20zona."
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline font-medium"
+                >
+                  Escríbenos por WhatsApp
+                </a>{' '}
+                y coordinamos un envío especial.
+              </p>
+            </div>
+          </div>
+
           {/* Optional form */}
           <div className="bg-white border border-border rounded-2xl p-5 flex flex-col gap-4">
             <p className="font-semibold text-gray-900">Datos de entrega (opcional)</p>

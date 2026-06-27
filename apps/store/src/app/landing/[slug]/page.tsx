@@ -6,7 +6,7 @@ import { formatCurrency } from '@/lib/utils';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { MapPin, Truck, ChevronRight } from 'lucide-react';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600; // 1 hora
 
 interface Props { params: { slug: string } }
 

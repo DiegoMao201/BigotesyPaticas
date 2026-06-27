@@ -1,106 +1,135 @@
+import { Suspense } from 'react';
 import { storeApi } from '@/lib/api';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { CatalogGrid, type FilterChip } from '@/components/CatalogGrid';
+import { FilterSidebar } from '@/components/catalog/FilterSidebar';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 1800; // 30 min
 
-// Mapeo slug del nav → estrategia de filtro en la API
 const SLUG_STRATEGY: Record<string, {
   type: 'species' | 'category' | 'all';
   value?: string;
   label: string;
   emoji: string;
   description: string;
+  pet_type?: string;
 }> = {
-  perros:     { type: 'species',  value: 'perro',      label: 'Perros',            emoji: '🐕', description: 'Alimento, accesorios y cuidado para perros' },
-  gatos:      { type: 'species',  value: 'gato',       label: 'Gatos',             emoji: '🐈', description: 'Alimento, accesorios y cuidado para gatos' },
-  accesorios: { type: 'category', value: 'accesorios', label: 'Accesorios',        emoji: '🎀', description: 'Correas, collares, juguetes y más' },
+  perros:     { type: 'species',  value: 'perro',      label: 'Perros',            emoji: '🐕', description: 'Alimento, accesorios y cuidado para perros',             pet_type: 'dog'  },
+  gatos:      { type: 'species',  value: 'gato',       label: 'Gatos',             emoji: '🐈', description: 'Alimento, accesorios y cuidado para gatos',              pet_type: 'cat'  },
+  accesorios: { type: 'category', value: 'accesorios', label: 'Accesorios',        emoji: '🎀', description: 'Correas, collares, juguetes y más'  },
   snacks:     { type: 'category', value: 'snack',      label: 'Snacks y premios',  emoji: '🦴', description: 'Premios y golosinas saludables para tus mascotas' },
   todos:      { type: 'all',                           label: 'Todo el catálogo',  emoji: '🐾', description: 'Todos nuestros productos para mascotas' },
 };
 
-// Chips de filtro por slug (búsqueda client-side en nombre de producto)
 const FILTER_CHIPS: Record<string, FilterChip[]> = {
-  perros: [
-    { label: 'Concentrado', keyword: 'concentrado' },
-    { label: 'Snacks', keyword: 'snack' },
-    { label: 'Higiene', keyword: 'higiene' },
-    { label: 'Salud', keyword: 'salud' },
-    { label: 'Accesorios', keyword: 'accesorio' },
-  ],
-  gatos: [
-    { label: 'Concentrado', keyword: 'concentrado' },
-    { label: 'Snacks', keyword: 'snack' },
-    { label: 'Higiene', keyword: 'higiene' },
-    { label: 'Salud', keyword: 'salud' },
-  ],
-  snacks: [
-    { label: 'Dental', keyword: 'dental' },
-    { label: 'Natural', keyword: 'natural' },
-    { label: 'Perro', keyword: 'perro' },
-    { label: 'Gato', keyword: 'gato' },
-  ],
-  todos: [
-    { label: 'Concentrado', keyword: 'concentrado' },
-    { label: 'Snacks', keyword: 'snack' },
-    { label: 'Higiene', keyword: 'higiene' },
-    { label: 'Medicamento', keyword: 'medicamento' },
-    { label: 'Accesorio', keyword: 'accesorio' },
-  ],
+  perros:     [{ label: 'Concentrado', keyword: 'concentrado' }, { label: 'Snacks', keyword: 'snack' }, { label: 'Higiene', keyword: 'higiene' }, { label: 'Salud', keyword: 'salud' }, { label: 'Accesorios', keyword: 'accesorio' }],
+  gatos:      [{ label: 'Concentrado', keyword: 'concentrado' }, { label: 'Snacks', keyword: 'snack' }, { label: 'Higiene', keyword: 'higiene' }, { label: 'Salud', keyword: 'salud' }],
+  snacks:     [{ label: 'Dental', keyword: 'dental' }, { label: 'Natural', keyword: 'natural' }, { label: 'Perro', keyword: 'perro' }, { label: 'Gato', keyword: 'gato' }],
+  todos:      [{ label: 'Concentrado', keyword: 'concentrado' }, { label: 'Snacks', keyword: 'snack' }, { label: 'Higiene', keyword: 'higiene' }, { label: 'Medicamento', keyword: 'medicamento' }, { label: 'Accesorio', keyword: 'accesorio' }],
 };
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
+interface Props {
+  params: { slug: string };
+  searchParams: Record<string, string | string[] | undefined>;
+}
+
+export async function generateMetadata({ params, searchParams }: Props) {
   const slug = decodeURIComponent(params.slug);
   const s = SLUG_STRATEGY[slug];
   const label = s?.label ?? slug.charAt(0).toUpperCase() + slug.slice(1);
+
+  const lifeStage = searchParams.life_stage;
+  const sizeRange = searchParams.size_range;
+  const titleSuffix = [
+    lifeStage ? `${lifeStage}` : '',
+    sizeRange ? `talla ${sizeRange}` : '',
+  ].filter(Boolean).join(' ');
+
   return {
-    title: `${label} — Bigotes y Paticas`,
+    title: titleSuffix
+      ? `${label} ${titleSuffix} — Bigotes y Paticas`
+      : `${label} — Bigotes y Paticas`,
     description: s?.description ?? `Productos ${label} para mascotas`,
+    alternates: { canonical: `https://bigotesypaticas.com/categorias/${slug}` },
   };
 }
 
-export default async function CategoryPage({ params }: { params: { slug: string } }) {
+export default async function CategoryPage({ params, searchParams }: Props) {
   const slug = decodeURIComponent(params.slug);
   const strategy = SLUG_STRATEGY[slug];
 
-  const listParams: Parameters<typeof storeApi.list>[0] = { per_page: 40 };
+  // Advanced filter params from URL
+  const lifeStage = Array.isArray(searchParams.life_stage)
+    ? searchParams.life_stage.join(',')
+    : searchParams.life_stage;
+  const sizeRange = Array.isArray(searchParams.size_range)
+    ? searchParams.size_range.join(',')
+    : searchParams.size_range;
+  const brand = Array.isArray(searchParams.brand)
+    ? searchParams.brand.join(',')
+    : searchParams.brand;
+  const petType = Array.isArray(searchParams.pet_type)
+    ? searchParams.pet_type.join(',')
+    : searchParams.pet_type;
 
-  if (strategy?.type === 'species' && strategy.value) {
-    listParams.species = strategy.value;
-  } else if (strategy?.type === 'category' && strategy.value) {
-    listParams.category_slug = strategy.value;
+  const hasAdvancedFilters = !!(lifeStage || sizeRange || brand || petType);
+
+  // Resolve category slug for the catalog endpoint
+  let categorySlugForApi: string | undefined;
+  if (strategy?.type === 'category' && strategy.value) {
+    categorySlugForApi = strategy.value;
   } else if (!strategy) {
-    // Slug desconocido — intentar como slug de categoría directamente
-    listParams.category_slug = slug;
+    categorySlugForApi = slug;
   }
-  // type === 'all' → sin filtro, todos los publicados
+  // For species (perros/gatos), use pet_type filter in catalog endpoint
+  const effectivePetType = petType ?? strategy?.pet_type;
 
-  const [data, categories] = await Promise.all([
-    storeApi.list(listParams),
+  // Fetch data: prefer catalogFiltered for advanced filters or when facets needed
+  const [catalogData, legacyData, categories] = await Promise.all([
+    storeApi.catalogFiltered({
+      category_slug: categorySlugForApi,
+      life_stage: lifeStage,
+      size_range: sizeRange,
+      brand: brand,
+      pet_type: effectivePetType,
+      page_size: 40,
+    }),
+    // Keep legacy list for species-based filtering until catalog endpoint handles species
+    strategy?.type === 'species' && !hasAdvancedFilters
+      ? storeApi.list({ species: strategy.value, per_page: 40 })
+      : Promise.resolve(null),
     (strategy?.type === 'category' || !strategy) ? storeApi.categories() : Promise.resolve([]),
   ]);
+
+  // Use legacy data for simple species pages without advanced filters
+  const data = (strategy?.type === 'species' && !hasAdvancedFilters && legacyData)
+    ? legacyData
+    : { items: catalogData.items, total: catalogData.total };
+
+  const facets = catalogData.facets ?? {};
 
   const label = strategy?.label ?? (slug.charAt(0).toUpperCase() + slug.slice(1));
   const emoji = strategy?.emoji ?? '🐾';
   const description = strategy?.description;
 
-  const dbCategory = categories.find(
-    (c) => c.slug === (strategy?.value ?? slug)
+  const dbCategory = (categories as any[]).find(
+    (c: any) => c.slug === (strategy?.value ?? slug)
   );
 
-  // Query string para paginación client-side
+  // Build load-more query for legacy grid pagination
   const loadMoreParams = new URLSearchParams({ is_published: 'true' });
   if (strategy?.type === 'species' && strategy.value) {
     loadMoreParams.set('species', strategy.value);
-  } else if (strategy?.type === 'category' && strategy.value) {
-    loadMoreParams.set('category_slug', strategy.value);
-  } else if (!strategy) {
-    loadMoreParams.set('category_slug', slug);
+  } else if (categorySlugForApi) {
+    loadMoreParams.set('category_slug', categorySlugForApi);
   }
 
   const filterChips = FILTER_CHIPS[slug] ?? [];
+  const hasSidebarFilters = Object.keys(facets).some(
+    (k) => Object.keys((facets as any)[k] ?? {}).length > 0
+  );
 
   return (
     <div className="container-wide py-8">
@@ -110,6 +139,7 @@ export default async function CategoryPage({ params }: { params: { slug: string 
           { name: label, url: `https://bigotesypaticas.com/categorias/${slug}` },
         ]}
       />
+
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground mb-6">
         <Link href="/" className="hover:text-brand-600 transition-colors flex items-center gap-1">
@@ -119,7 +149,7 @@ export default async function CategoryPage({ params }: { params: { slug: string 
         <span className="text-foreground font-medium">{label}</span>
       </div>
 
-      {/* Header compacto */}
+      {/* Header */}
       <header className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <span className="text-3xl">{emoji}</span>
@@ -128,7 +158,7 @@ export default async function CategoryPage({ params }: { params: { slug: string 
               Catálogo · {label.toUpperCase()}
             </p>
             <h1 className="text-2xl md:text-3xl font-display font-extrabold text-[#0d4a45] leading-tight">
-              {dbCategory?.description ?? description ?? `Productos para ${label.toLowerCase()}`}
+              {(dbCategory as any)?.description ?? description ?? `Productos para ${label.toLowerCase()}`}
             </h1>
           </div>
         </div>
@@ -137,27 +167,37 @@ export default async function CategoryPage({ params }: { params: { slug: string 
         </p>
       </header>
 
-      {/* Grid interactivo con filtros y carga más */}
-      {data.items.length > 0 ? (
-        <CatalogGrid
-          initialItems={data.items}
-          totalCount={data.total}
-          apiQuery={loadMoreParams.toString()}
-          filterChips={filterChips}
-          slug={slug}
-        />
-      ) : (
-        <div className="text-center py-24">
-          <div className="text-7xl mb-6">{emoji}</div>
-          <h2 className="text-2xl font-display font-bold mb-3">Sin productos en esta categoría</h2>
-          <p className="text-muted-foreground mb-8">
-            Pronto agregaremos más productos. ¡Vuelve pronto!
-          </p>
-          <Link href="/" className="inline-flex items-center gap-2 btn-primary">
-            <ArrowLeft className="h-4 w-4" /> Volver al inicio
-          </Link>
+      {/* Layout con sidebar de filtros */}
+      <div className="flex gap-8 items-start">
+        {/* FilterSidebar — solo si hay facets */}
+        {hasSidebarFilters && (
+          <Suspense fallback={null}>
+            <FilterSidebar facets={facets as any} />
+          </Suspense>
+        )}
+
+        {/* Grid */}
+        <div className="flex-1 min-w-0">
+          {data.items.length > 0 ? (
+            <CatalogGrid
+              initialItems={data.items}
+              totalCount={data.total}
+              apiQuery={loadMoreParams.toString()}
+              filterChips={filterChips}
+              slug={slug}
+            />
+          ) : (
+            <div className="text-center py-24">
+              <div className="text-7xl mb-6">{emoji}</div>
+              <h2 className="text-2xl font-display font-bold mb-3">Sin productos con estos filtros</h2>
+              <p className="text-muted-foreground mb-8">Prueba con otros filtros o explora el catálogo completo.</p>
+              <Link href={`/categorias/${slug}`} className="inline-flex items-center gap-2 btn-primary">
+                <ArrowLeft className="h-4 w-4" /> Ver todos los productos
+              </Link>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Otras categorías */}
       {data.items.length > 0 && (
