@@ -67,6 +67,8 @@ async def get_landing(slug: str, db: DBSession):
 
 @router.post("", response_model=LandingOut, status_code=201)
 async def upsert_landing(data: LandingCreate, db: DBSession):
+    params = data.model_dump()
+    params["enriched_by_ai"] = data.ai_model is not None
     row = await db.execute(
         text("""
             INSERT INTO content.seo_landings
@@ -76,7 +78,7 @@ async def upsert_landing(data: LandingCreate, db: DBSession):
             VALUES
                 (:slug, :target_keyword, :title, :h1, :meta_description, :intro_content,
                  :category_slug, :geographic_focus, :cta_text, :is_active,
-                 :ai_model IS NOT NULL, :ai_model, now())
+                 :enriched_by_ai, :ai_model, now())
             ON CONFLICT (slug) DO UPDATE SET
                 target_keyword  = EXCLUDED.target_keyword,
                 title           = EXCLUDED.title,
@@ -92,7 +94,7 @@ async def upsert_landing(data: LandingCreate, db: DBSession):
                 updated_at      = now()
             RETURNING *
         """),
-        data.model_dump(),
+        params,
     )
     await db.commit()
     return dict(row.fetchone()._mapping)
