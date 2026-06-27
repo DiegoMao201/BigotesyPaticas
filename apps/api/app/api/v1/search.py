@@ -6,7 +6,8 @@ from sqlalchemy import func, or_, select, text
 from decimal import Decimal
 
 from app.deps import DBSession
-from app.models.catalog import Product, Stock
+from app.models.catalog import Product
+from app.models.inventory import Stock
 
 router = APIRouter(prefix="/search", tags=["search"])
 
