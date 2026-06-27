@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { cn, formatCurrency } from '@/lib/utils';
 import { customers, type Customer } from '@/lib/api';
+import { InviteToPortalModal } from '@/components/InviteToPortalModal';
 
 const RFM_BADGE: Record<string, { label: string; cls: string }> = {
   champion: { label: 'Campeón', cls: 'bg-emerald-100 text-emerald-800' },
@@ -148,6 +149,7 @@ export default function CustomersPage() {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
+  const [inviteCustomer, setInviteCustomer] = useState<Customer | null>(null);
   const [openCreate, setOpenCreate] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -261,6 +263,13 @@ export default function CustomersPage() {
                     </div>
                   )}
                   <button
+                    onClick={() => setInviteCustomer(c)}
+                    className="p-2 rounded border border-teal-200 hover:bg-teal-50 text-teal-600 transition-colors shrink-0"
+                    title="Invitar al portal"
+                  >
+                    📨
+                  </button>
+                  <button
                     onClick={() => setEditCustomer(c)}
                     className="p-2 rounded border border-border hover:bg-muted text-muted-foreground transition-colors shrink-0"
                     title="Editar"
@@ -297,6 +306,14 @@ export default function CustomersPage() {
           />
         )}
       </Dialog>
+
+      {inviteCustomer && (
+        <InviteToPortalModal
+          customer={inviteCustomer}
+          open={!!inviteCustomer}
+          onClose={() => setInviteCustomer(null)}
+        />
+      )}
     </div>
   );
 }

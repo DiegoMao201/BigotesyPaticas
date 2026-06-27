@@ -155,6 +155,38 @@ class PortalOrder(UUIDPKMixin, TimestampMixin, Base):
     points_awarded: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     under_minimum: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     sales_order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    payment_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    shipping_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PortalOrderItem(UUIDPKMixin, Base):
+    __tablename__ = "portal_order_items"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_portal_order_items_qty"),
+        {"schema": "portal"},
+    )
+
+    portal_order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("portal.portal_orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    product_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("catalog.products.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    sku: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    unit_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    subtotal: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default="now()", nullable=False
+    )
 
 
 class PortalSession(UUIDPKMixin, Base):

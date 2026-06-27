@@ -343,6 +343,7 @@ export interface Customer {
   rfm_monetary: number | null;
   last_purchase_at: string | null;
   created_at: string;
+  referral_code?: string | null;
 }
 
 export interface PaginatedCustomers {

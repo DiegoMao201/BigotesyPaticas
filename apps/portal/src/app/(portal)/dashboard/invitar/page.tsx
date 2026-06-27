@@ -11,11 +11,16 @@ import { auth, referral } from '@/lib/api';
 const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
   ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
 
-const WHATSAPP_MSG = (code: string, name: string) =>
-  `¡Hola! 🐾 Te recomiendo Bigotes y Paticas, donde compro todo para mi mascota.\n\n` +
-  `Tienen una app para pedir, agendar baños, llevar el carnet médico y ganar puntos.\n\n` +
-  `Usa mi código *${code}* al registrarte y los dos ganamos puntos 🎁\n\n` +
-  `👉 https://mi.bigotesypaticas.com/?ref=${code}`;
+const WHATSAPP_MSG = (code: string, _name: string) => {
+  const referralUrl = `https://mi.bigotesypaticas.com/?ref=${code}`;
+  return (
+    `🐾 ¡Hola! Te quiero invitar a Bigotes y Paticas, la tienda premium para mascotas en Pereira y Dosquebradas.\n\n` +
+    `Tienen comida, accesorios, snacks, medicamentos y todo lo que tu mascota necesita con entrega a domicilio en 24-72h.\n\n` +
+    `Si te registras con mi link, ganas 50 Puntos Bigotes (= $50.000 de descuento) y yo gano 100 puntos cuando hagas tu primer pedido. 🎁\n\n` +
+    `Regístrate aquí: ${referralUrl}\n\n` +
+    `¡Cuidamos a quien te cuida! 🐶🐱`
+  );
+};
 
 export default function InvitarPage() {
   const router = useRouter();

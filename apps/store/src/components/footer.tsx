@@ -1,13 +1,89 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
-import { Instagram, Facebook, Mail, Phone, MapPin, Star } from 'lucide-react';
+import { Phone, Mail, MapPin, Star } from 'lucide-react';
 import { BUSINESS_INFO } from '@/lib/business-info';
 
-const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
-  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
+const LOGO_URL =
+  process.env.NEXT_PUBLIC_BRAND_LOGO ??
+  'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
+
+const GOOGLE_REVIEW_URL = 'https://g.page/r/CfL67OgLB-10EBM/review';
+const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+
+function NewsletterForm() {
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus('loading');
+    try {
+      const res = await fetch(`${API}/v1/contact/newsletter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      setStatus(res.ok ? 'ok' : 'error');
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  if (status === 'ok') {
+    return (
+      <p className="text-teal-700 font-semibold">
+        🎉 ¡Listo! Revisa tu correo para tu cupón de bienvenida.
+      </p>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+      <input
+        type="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Tu email"
+        className="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+      />
+      <button
+        type="submit"
+        disabled={status === 'loading'}
+        className="px-6 py-3 rounded-xl bg-[#187f77] hover:bg-[#0d4a45] text-white font-semibold text-sm transition"
+      >
+        {status === 'loading' ? 'Suscribiendo...' : 'Suscribirme'}
+      </button>
+    </form>
+  );
+}
 
 export function Footer() {
   return (
     <footer className="border-t border-border bg-secondary/40 mt-24">
+      {/* Newsletter */}
+      <section className="bg-[#187f77]/5 py-12">
+        <div className="container mx-auto px-6 text-center max-w-2xl">
+          <h3 className="text-2xl font-bold text-[#0d4a45] mb-2">
+            🎁 Suscríbete y gana 50 Puntos Bigotes
+          </h3>
+          <p className="text-gray-600 mb-6">
+            En tu primera compra. Cero spam, solo ofertas y tips de cuidado de mascotas.
+          </p>
+          <NewsletterForm />
+          <p className="text-xs text-gray-500 mt-3">
+            Al suscribirte aceptas nuestra{' '}
+            <Link href="/politica-privacidad" className="underline hover:text-[#187f77]">
+              política de privacidad
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
+
+      {/* Main columns */}
       <div className="container-wide py-16 grid gap-10 md:grid-cols-5">
         <div>
           <div className="flex items-center gap-2 mb-4">
@@ -22,6 +98,22 @@ export function Footer() {
           <p className="text-sm text-muted-foreground leading-relaxed">
             Productos premium para mascotas en Pereira y Dosquebradas. Cuidamos a quien te cuida.
           </p>
+          {/* Google stars */}
+          <div className="flex items-center gap-2 mt-4">
+            <div className="flex">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+              ))}
+            </div>
+            <a
+              href={GOOGLE_REVIEW_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-medium text-[#187f77] hover:underline"
+            >
+              Califícanos en Google
+            </a>
+          </div>
         </div>
 
         <div>
@@ -31,7 +123,7 @@ export function Footer() {
             <li><Link href="/categorias/gatos" className="text-muted-foreground hover:text-brand">Gatos</Link></li>
             <li><Link href="/categorias/accesorios" className="text-muted-foreground hover:text-brand">Accesorios</Link></li>
             <li><Link href="/categorias/snacks" className="text-muted-foreground hover:text-brand">Snacks</Link></li>
-            <li><Link href="/landing/hills-pereira" className="text-muted-foreground hover:text-brand">Hill's en Pereira</Link></li>
+            <li><Link href="/landing/hills-pereira" className="text-muted-foreground hover:text-brand">Hill&apos;s en Pereira</Link></li>
             <li><Link href="/landing/royal-canin-pereira" className="text-muted-foreground hover:text-brand">Royal Canin Pereira</Link></li>
             <li><Link href="/landing/antipulgas-perros-colombia" className="text-muted-foreground hover:text-brand">Antipulgas perros</Link></li>
           </ul>
@@ -92,27 +184,20 @@ export function Footer() {
             5.0 ★★★★★ en Google
           </a>
           <div className="flex gap-3 mt-4">
-            <a href="https://www.instagram.com/bigotesypaticas" target="_blank" rel="noopener noreferrer"
-               className="text-muted-foreground hover:text-brand">
-              <Instagram className="h-5 w-5" />
-            </a>
-            <a href="https://www.facebook.com/bigotesypaticas" target="_blank" rel="noopener noreferrer"
-               className="text-muted-foreground hover:text-brand">
-              <Facebook className="h-5 w-5" />
-            </a>
             <a href="https://wa.me/573206876633" target="_blank" rel="noopener noreferrer"
                className="text-muted-foreground hover:text-brand text-[1.2rem] leading-none">💬</a>
           </div>
         </div>
       </div>
 
+      {/* Legal bar */}
       <div className="border-t border-border">
-        <div className="container-wide py-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-          <p>© {new Date().getFullYear()} Bigotes y Paticas. Todos los derechos reservados.</p>
+        <div className="container-wide py-6 flex flex-col md:flex-row justify-between items-center gap-3 text-sm text-muted-foreground">
+          <p>© {new Date().getFullYear()} Bigotes y Paticas. Mall Zamara Plaza, Cl. 15 #3A-07 Local 2, Dosquebradas, Risaralda.</p>
           <div className="flex gap-4">
-            <Link href="/legal/terminos" className="hover:text-brand">Términos</Link>
-            <Link href="/legal/privacidad" className="hover:text-brand">Privacidad</Link>
-            <Link href="/legal/cookies" className="hover:text-brand">Cookies</Link>
+            <Link href="/politica-privacidad" className="hover:text-brand">Privacidad</Link>
+            <Link href="/terminos" className="hover:text-brand">Términos</Link>
+            <Link href="/devoluciones" className="hover:text-brand">Devoluciones</Link>
           </div>
         </div>
       </div>

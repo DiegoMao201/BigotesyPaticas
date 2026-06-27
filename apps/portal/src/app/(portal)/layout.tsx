@@ -7,8 +7,10 @@ import { auth } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { BottomNav } from '@/components/ui/bottom-nav';
 import { WhatsAppButton } from '@/components/ui/whatsapp-button';
+import { CartButton } from '@/components/cart/CartButton';
 import { PageLoader } from '@/components/ui/loading-spinner';
 import { TermsModal } from '@/components/portal/TermsModal';
+import { GoogleReviewPrompt } from '@/components/reviews/GoogleReviewPrompt';
 import { NotificationBell } from '@/components/portal/NotificationBell';
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
@@ -38,11 +40,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       </div>
 
       {children}
+      <CartButton />
       <BottomNav />
       <WhatsAppButton />
 
       {/* Modal de términos — solo primera vez */}
       <TermsModal />
+      <GoogleReviewPrompt />
     </div>
   );
 }

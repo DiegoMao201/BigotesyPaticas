@@ -10,6 +10,7 @@ import Image from 'next/image';
 import { orders, pets, catalog, auth, referral as referralApi, type PublicProduct, type Pet, type TopProduct } from '@/lib/api';
 import { formatCOP, getSpeciesEmoji } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { usePortalCart } from '@/lib/cart-store';
 
 const CATEGORY_ICONS: Record<string, string> = {
   concentrado: '🥘',
@@ -31,6 +32,8 @@ function categoryIcon(slug: string) {
 export default function NewOrderPage() {
   const router = useRouter();
   const qc = useQueryClient();
+
+  const addItemToCart = usePortalCart((s) => s.addItem);
 
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<PublicProduct | TopProduct | null>(null);
@@ -104,6 +107,18 @@ export default function NewOrderPage() {
     setSelected(prod);
     setQty(1);
     setNotes('');
+  }
+
+  function addToCart(prod: PublicProduct | TopProduct) {
+    addItemToCart({
+      product_id: prod.id,
+      sku: (prod as TopProduct).sku ?? '',
+      name: prod.name,
+      image_url: prod.image_url ?? null,
+      unit_price: prod.price,
+      quantity: 1,
+    });
+    toast.success('Producto agregado al carrito 🛒');
   }
 
   if (selected) {
@@ -314,9 +329,13 @@ export default function NewOrderPage() {
                         <p className="text-xs font-bold text-primary-700 mt-auto">
                           {formatCOP(prod.price)}
                         </p>
-                        <span className="text-[10px] font-bold text-primary-700 bg-primary-50 rounded-lg px-2 py-1 text-center mt-1">
-                          + Pedir
-                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); addToCart(prod); }}
+                          className="text-[10px] font-bold text-teal-700 bg-teal-50 rounded-lg px-2 py-1 text-center mt-1 w-full hover:bg-teal-100"
+                        >
+                          🛒 Carrito
+                        </button>
                       </div>
                     </motion.button>
                   ))}
@@ -386,7 +405,13 @@ export default function NewOrderPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-bold text-primary-700 text-sm">{formatCOP(product.price)}</p>
-                    <span className="text-xs text-green-600 font-semibold">Pedir</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); addToCart(product); }}
+                      className="text-xs text-teal-700 font-semibold bg-teal-50 rounded-lg px-2 py-1 hover:bg-teal-100 transition"
+                    >
+                      🛒 Carrito
+                    </button>
                   </div>
                 </motion.button>
               ))}

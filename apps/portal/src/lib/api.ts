@@ -170,11 +170,26 @@ export interface TopProduct {
   sku: string | null;
 }
 
+export interface MultiOrderItem {
+  product_id: string;
+  quantity: number;
+  notes?: string;
+}
+
+export interface MultiOrderPayload {
+  items: MultiOrderItem[];
+  shipping_address: string;
+  payment_method: string;
+  general_notes?: string;
+}
+
 export const orders = {
   list: (page = 1) => request<Order[]>(`/orders?page=${page}`),
   get: (id: string) => request<Order>(`/orders/${id}`),
   create: (data: { product_id: string; pet_id?: string; quantity?: number; notes?: string }) =>
     request<Order>('/orders', { method: 'POST', body: JSON.stringify(data) }),
+  createMulti: (data: MultiOrderPayload) =>
+    request<Order>('/orders/multi', { method: 'POST', body: JSON.stringify(data) }),
   topProducts: (limit = 5) => request<TopProduct[]>(`/orders/me/top-products?limit=${limit}`),
 };
 

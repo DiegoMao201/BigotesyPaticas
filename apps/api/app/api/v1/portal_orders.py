@@ -13,7 +13,7 @@ from app.api.v1.portal_loyalty import award_points
 from app.deps import DBSession
 from app.models.catalog import Product
 from app.models.crm import Customer
-from app.models.portal import PortalOrder
+from app.models.portal import PortalOrder, PortalOrderItem
 from app.models.sales import Order as SalesOrder, OrderItem as SalesOrderItem
 
 router = APIRouter(prefix="/portal/orders", tags=["portal"])
@@ -130,6 +130,102 @@ async def create_order(
             )
 
     return _order_out(order, points=points_earned if points_earned else None)
+
+
+# ── multi-product order ────────────────────────────────────────────────
+
+class MultiOrderItemIn(BaseModel):
+    product_id: str
+    quantity: int = 1
+    notes: str | None = None
+
+
+class MultiOrderIn(BaseModel):
+    items: list[MultiOrderItemIn]
+    shipping_address: str
+    payment_method: str
+    general_notes: str | None = None
+
+
+@router.post("/multi", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
+async def create_multi_order(
+    payload: MultiOrderIn,
+    db: DBSession,
+    customer: Customer = PortalUser,
+) -> OrderOut:
+    """Pedido con múltiples productos. NUNCA valida stock."""
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="El carrito está vacío")
+
+    product_ids = [uuid.UUID(i.product_id) for i in payload.items]
+    products_rows = (
+        await db.execute(
+            select(Product).where(
+                Product.id.in_(product_ids),
+                Product.deleted_at == None,  # noqa: E711
+            )
+        )
+    ).scalars().all()
+    products_map = {p.id: p for p in products_rows}
+
+    for item in payload.items:
+        pid = uuid.UUID(item.product_id)
+        if pid not in products_map:
+            raise HTTPException(status_code=404, detail=f"Producto {item.product_id} no encontrado")
+        if item.quantity <= 0:
+            raise HTTPException(status_code=400, detail="Cantidad debe ser mayor a 0")
+
+    subtotal = sum(
+        float(products_map[uuid.UUID(i.product_id)].price or 0) * i.quantity
+        for i in payload.items
+    )
+    shipping = 0 if subtotal >= 30000 else 8000
+    total = subtotal + shipping
+    points_to_earn = int(subtotal / 1000)
+
+    # Use first product as primary (backward compat with portal_orders columns)
+    first_prod = products_map[uuid.UUID(payload.items[0].product_id)]
+
+    order = PortalOrder(
+        customer_id=customer.id,
+        product_id=first_prod.id,
+        product_name=f"Pedido multi-producto ({len(payload.items)} items)",
+        quantity=sum(i.quantity for i in payload.items),
+        unit_price=subtotal,
+        notes=payload.general_notes,
+        payment_method=payload.payment_method,
+        shipping_address=payload.shipping_address,
+        status="received",
+    )
+    db.add(order)
+    await db.flush()
+
+    for item in payload.items:
+        pid = uuid.UUID(item.product_id)
+        prod = products_map[pid]
+        unit = float(prod.price or 0)
+        db.add(PortalOrderItem(
+            portal_order_id=order.id,
+            product_id=prod.id,
+            sku=prod.sku,
+            name=prod.name,
+            image_url=prod.primary_image_url,
+            quantity=item.quantity,
+            unit_price=unit,
+            subtotal=unit * item.quantity,
+            notes=item.notes,
+        ))
+
+    await db.commit()
+    await db.refresh(order)
+
+    points_earned = 0
+    try:
+        points_earned = await award_points(db, customer.id, order.id, points_to_earn)
+    except Exception:
+        pass
+
+    return _order_out(order, points=points_earned or None)
 
 
 @router.get("/{order_id}", response_model=OrderOut)
