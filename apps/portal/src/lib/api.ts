@@ -144,7 +144,7 @@ export const pets = {
     }
     return res.json() as Promise<Pet>;
   },
-  carnetUrl: (petId: string) => `${BASE}/pets/${petId}/carnet.pdf`,
+  carnetUrl: (petId: string) => `${BASE}/pets/${petId}/carnet.pdf?t=${Date.now()}`,
 };
 
 // ── Orders ────────────────────────────────────────────────────────────

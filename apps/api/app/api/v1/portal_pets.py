@@ -552,7 +552,9 @@ async def carnet_pdf(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'inline; filename="carnet-{safe_name}.pdf"',
-            "Cache-Control": "private, max-age=300",
+            "Content-Disposition": f'attachment; filename="carnet-{safe_name}.pdf"',
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
         },
     )
