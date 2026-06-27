@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, or_, select, text
-from decimal import Decimal
 
 from app.deps import DBSession
 from app.models.catalog import Product
@@ -19,26 +18,24 @@ async def search_products(
     limit: int = Query(20, ge=1, le=60),
 ):
     """Fuzzy product search with trigram similarity (pg_trgm required)."""
-    # Normalize query
     q_clean = q.strip()
 
-    # Try trigram similarity first; fall back to ILIKE if extension not available
+    # brand_normalized is a text column; brand is a relationship — use brand_normalized for search
     try:
         stmt = (
             select(
                 Product,
                 func.greatest(
                     func.similarity(Product.name, q_clean),
-                    func.similarity(func.coalesce(Product.brand, ""), q_clean) * 0.8,
+                    func.similarity(func.coalesce(Product.brand_normalized, ""), q_clean) * 0.8,
                 ).label("sim"),
             )
             .where(
                 Product.is_published == True,  # noqa: E712
                 or_(
                     func.similarity(Product.name, q_clean) > 0.15,
-                    func.similarity(func.coalesce(Product.brand, ""), q_clean) > 0.2,
+                    func.similarity(func.coalesce(Product.brand_normalized, ""), q_clean) > 0.2,
                     Product.name.ilike(f"%{q_clean}%"),
-                    Product.brand.ilike(f"%{q_clean}%"),
                     Product.sku.ilike(f"%{q_clean}%"),
                 ),
             )
@@ -51,7 +48,6 @@ async def search_products(
         rows = await db.execute(stmt)
         products = rows.all()
     except Exception:
-        # pg_trgm not available — fall back to ILIKE
         stmt = (
             select(Product)
             .where(
@@ -59,7 +55,6 @@ async def search_products(
                 or_(
                     Product.name.ilike(f"%{q_clean}%"),
                     Product.sku.ilike(f"%{q_clean}%"),
-                    Product.brand.ilike(f"%{q_clean}%"),
                 ),
             )
             .limit(limit)
@@ -68,9 +63,8 @@ async def search_products(
         products = [(p, None) for p in rows.scalars().all()]
 
     if not products:
-        return []
+        return {"results": [], "query": q_clean, "total": 0}
 
-    # Batch stock lookup
     product_ids = [p.id for p, _ in products]
     stock_stmt = (
         select(Stock.product_id, func.sum(Stock.quantity).label("qty"))
@@ -80,10 +74,10 @@ async def search_products(
     stock_rows = await db.execute(stock_stmt)
     stock_map = {r.product_id: int(r.qty or 0) for r in stock_rows}
 
-    result = []
+    results = []
     for product, sim in products:
         stock_qty = stock_map.get(product.id, 0)
-        result.append({
+        results.append({
             "id": str(product.id),
             "sku": product.sku,
             "name": product.name,
@@ -91,13 +85,13 @@ async def search_products(
             "price": float(product.price) if product.price else 0,
             "compare_at_price": float(product.compare_at_price) if product.compare_at_price else None,
             "primary_image_url": product.primary_image_url,
-            "brand": product.brand,
+            "brand": product.brand.name if product.brand else None,
             "is_in_stock": stock_qty > 0,
             "stock_qty": stock_qty,
             "similarity": round(float(sim), 3) if sim is not None else None,
         })
 
-    return result
+    return {"results": results, "query": q_clean, "total": len(results)}
 
 
 @router.get("/redirect")
