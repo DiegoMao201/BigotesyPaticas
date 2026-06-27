@@ -1144,12 +1144,66 @@ export interface PortalOrder {
   quantity: number;
   unit_price: number | null;
   status: string;
+  workflow_status: string;
   invoice_number: string | null;
   sales_order_id: string | null;
   notes: string | null;
   created_at: string;
   delivered_at: string | null;
   points_awarded: number;
+}
+
+export interface PortalOrderItem {
+  id: string;
+  product_id: string | null;
+  sku: string | null;
+  name: string | null;
+  image_url: string | null;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  notes: string | null;
+  is_substituted: boolean;
+  substituted_from_name: string | null;
+}
+
+export interface PortalOrderDetail {
+  id: string;
+  customer_id: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_email: string | null;
+  status: string;
+  workflow_status: string;
+  payment_method: string | null;
+  shipping_address: string | null;
+  internal_notes: string | null;
+  customer_facing_notes: string | null;
+  discount_amount: number;
+  discount_reason: string | null;
+  subtotal: number;
+  shipping: number;
+  total: number;
+  points_awarded: number;
+  invoice_number: string | null;
+  last_status_change_at: string | null;
+  customer_confirmed_changes_at: string | null;
+  customer_confirmation_channel: string | null;
+  created_at: string;
+  delivered_at: string | null;
+  items: PortalOrderItem[];
+}
+
+export interface ActivityLogEntry {
+  id: string;
+  action: string;
+  actor_type: string | null;
+  actor_name: string | null;
+  changes: Record<string, unknown> | null;
+  notes: string | null;
+  visible_to_customer: boolean;
+  notification_sent_at: string | null;
+  created_at: string;
 }
 
 export interface PortalAppointment {
@@ -1176,6 +1230,47 @@ export const adminPortal = {
     api<{ ok: boolean; id: string; status: string }>(
       `/v1/admin/portal/orders/${id}`, { method: 'PATCH', body: JSON.stringify(body) }
     ),
+
+  // Sprint-2: order detail + workflow
+  orderDetail: (id: string) => api<PortalOrderDetail>(`/v1/admin/portal/orders/${id}/detail`),
+  orderActivity: (id: string) => api<ActivityLogEntry[]>(`/v1/admin/portal/orders/${id}/activity`),
+  changeWorkflow: (id: string, new_status: string, internal_notes?: string) =>
+    api<{ ok: boolean; workflow_status: string }>(
+      `/v1/admin/portal/orders/${id}/workflow`,
+      { method: 'PATCH', body: JSON.stringify({ new_status, internal_notes }) }
+    ),
+  editItemQty: (orderId: string, itemId: string, new_quantity: number, reason?: string) =>
+    api<PortalOrderDetail>(`/v1/admin/portal/orders/${orderId}/items/${itemId}/quantity`,
+      { method: 'PATCH', body: JSON.stringify({ new_quantity, reason }) }),
+  substituteItem: (orderId: string, itemId: string, body: { new_product_id: string; new_quantity?: number; reason: string }) =>
+    api<PortalOrderDetail>(`/v1/admin/portal/orders/${orderId}/items/${itemId}/substitute`,
+      { method: 'POST', body: JSON.stringify(body) }),
+  addItem: (orderId: string, body: { product_id: string; quantity?: number; notes?: string; reason?: string }) =>
+    api<PortalOrderDetail>(`/v1/admin/portal/orders/${orderId}/items`,
+      { method: 'POST', body: JSON.stringify(body) }),
+  removeItem: (orderId: string, itemId: string, reason: string) =>
+    api<PortalOrderDetail>(`/v1/admin/portal/orders/${orderId}/items/${itemId}`,
+      { method: 'DELETE', body: JSON.stringify({ reason }) }),
+  applyDiscount: (orderId: string, discount_amount: number, reason: string) =>
+    api<PortalOrderDetail>(`/v1/admin/portal/orders/${orderId}/discount`,
+      { method: 'POST', body: JSON.stringify({ discount_amount, reason }) }),
+  updateNotes: (orderId: string, body: { internal_notes?: string; customer_facing_notes?: string }) =>
+    api<{ ok: boolean }>(`/v1/admin/portal/orders/${orderId}/notes`,
+      { method: 'PATCH', body: JSON.stringify(body) }),
+  confirmApproval: (orderId: string, channel: string, notes?: string) =>
+    api<{ ok: boolean; workflow_status: string }>(
+      `/v1/admin/portal/orders/${orderId}/confirm-customer-approval`,
+      { method: 'POST', body: JSON.stringify({ channel, notes }) }
+    ),
+  markNotifSent: (orderId: string, channel = 'whatsapp') =>
+    api<{ ok: boolean; marked_at: string }>(
+      `/v1/admin/portal/orders/${orderId}/notifications/mark-sent`,
+      { method: 'POST', body: JSON.stringify({ channel }) }
+    ),
+  cancelOrder: (orderId: string, reason: string) =>
+    api<{ ok: boolean }>(`/v1/admin/portal/orders/${orderId}/cancel`,
+      { method: 'POST', body: JSON.stringify({ reason }) }),
+
   appointments: (opts?: { date_from?: string; date_to?: string; status?: string }) => {
     const p = new URLSearchParams();
     if (opts?.date_from) p.set('date_from', opts.date_from);
@@ -1183,10 +1278,25 @@ export const adminPortal = {
     if (opts?.status) p.set('status', opts.status);
     return api<PortalAppointment[]>(`/v1/admin/portal/appointments?${p}`);
   },
+  appointmentDetail: (id: string) => api<Record<string, unknown>>(`/v1/admin/portal/appointments/${id}/detail`),
   updateAppointment: (id: string, body: { status: string; cancel_reason?: string }) =>
     api<{ ok: boolean; id: string; status: string }>(
       `/v1/admin/portal/appointments/${id}`, { method: 'PATCH', body: JSON.stringify(body) }
     ),
+  rescheduleAppointment: (id: string, body: { proposed_options: string[]; reason_category: string; reason_notes?: string; compensation_points?: number }) =>
+    api<{ ok: boolean; workflow_status: string }>(
+      `/v1/admin/portal/appointments/${id}/reschedule`,
+      { method: 'PATCH', body: JSON.stringify(body) }
+    ),
+  confirmApptChoice: (id: string, chosen_datetime: string, customer_confirmed_via?: string) =>
+    api<{ ok: boolean }>(
+      `/v1/admin/portal/appointments/${id}/confirm-choice`,
+      { method: 'PATCH', body: JSON.stringify({ chosen_datetime, customer_confirmed_via }) }
+    ),
+  completeAppointment: (id: string) =>
+    api<{ ok: boolean }>(`/v1/admin/portal/appointments/${id}/complete`, { method: 'PATCH', body: '{}' }),
+  noShowAppointment: (id: string) =>
+    api<{ ok: boolean }>(`/v1/admin/portal/appointments/${id}/no-show`, { method: 'PATCH', body: '{}' }),
 };
 
 // ─── Admin ETL ─────────────────────────────────────────────────────────────

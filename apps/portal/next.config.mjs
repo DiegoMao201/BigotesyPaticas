@@ -7,11 +7,7 @@ const nextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: '**.bigotesypaticas.com' },
       { protocol: 'https', hostname: 'cdn.bigotesypaticas.com' },
-      // DO Spaces: directo y CDN (hostname explícito porque Next.js 14 no
-      // resuelve correctamente wildcards de 3+ niveles de subdominio)
-      { protocol: 'https', hostname: '*.digitaloceanspaces.com' },
-      { protocol: 'https', hostname: '*.nyc3.digitaloceanspaces.com' },
-      { protocol: 'https', hostname: 'catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com' },
+      { protocol: 'https', hostname: '**.digitaloceanspaces.com' },
       { protocol: 'https', hostname: 'api.bigotesypaticas.com' },
     ],
   },

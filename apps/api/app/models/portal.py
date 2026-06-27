@@ -157,6 +157,17 @@ class PortalOrder(UUIDPKMixin, TimestampMixin, Base):
     sales_order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     payment_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     shipping_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # sprint-2 workflow
+    workflow_status: Mapped[str] = mapped_column(String(40), nullable=False, default="received", index=True)
+    internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    customer_facing_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_status_change_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_status_changed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    customer_confirmed_changes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    customer_confirmation_channel: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    discount_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0"))
+    discount_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    total_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
 
 
 class PortalOrderItem(UUIDPKMixin, Base):
@@ -184,6 +195,30 @@ class PortalOrderItem(UUIDPKMixin, Base):
     unit_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     subtotal: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_substituted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    substituted_from_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_removed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default="now()", nullable=False
+    )
+
+
+class ActivityLog(Base):
+    __tablename__ = "activity_log"
+    __table_args__ = ({"schema": "portal"},)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(80), nullable=False)
+    actor_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    actor_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    changes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    visible_to_customer: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    notification_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notification_channel: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default="now()", nullable=False
     )

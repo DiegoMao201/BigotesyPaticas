@@ -13,7 +13,7 @@ from app.api.v1.portal_loyalty import award_points
 from app.deps import DBSession
 from app.models.catalog import Product
 from app.models.crm import Customer
-from app.models.portal import PortalOrder, PortalOrderItem
+from app.models.portal import ActivityLog, PortalOrder, PortalOrderItem
 from app.models.sales import Order as SalesOrder, OrderItem as SalesOrderItem
 
 router = APIRouter(prefix="/portal/orders", tags=["portal"])
@@ -326,3 +326,107 @@ async def top_products(
                 "sku": p.sku,
             })
     return result
+
+
+# ── timeline del pedido (cliente) ──────────────────────────────────────
+
+ACTION_LABELS: dict[str, str] = {
+    "created":             "Pedido recibido 📬",
+    "status_changed":      "Estado actualizado",
+    "item_quantity_changed": "Cantidad ajustada",
+    "item_substituted":    "Producto sustituido",
+    "item_added":          "Producto agregado",
+    "item_removed":        "Producto removido",
+    "discount_applied":    "Descuento aplicado 🎉",
+    "address_changed":     "Dirección actualizada",
+    "notes_updated":       "Nota del equipo",
+    "cancelled":           "Pedido cancelado",
+}
+
+@router.get("/{order_id}/timeline")
+async def order_timeline(
+    order_id: uuid.UUID,
+    db: DBSession,
+    customer: Customer = PortalUser,
+) -> dict:
+    """Timeline informativo del pedido visible al cliente."""
+    order = (await db.execute(
+        select(PortalOrder)
+        .where(
+            PortalOrder.id == order_id,
+            PortalOrder.customer_id == customer.id,
+        )
+    )).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+
+    items = (await db.execute(
+        select(PortalOrderItem)
+        .where(
+            PortalOrderItem.portal_order_id == order_id,
+            PortalOrderItem.is_removed == False,  # noqa: E712
+        )
+        .order_by(PortalOrderItem.created_at)
+    )).scalars().all()
+
+    # Activity log visible al cliente
+    try:
+        logs = (await db.execute(
+            select(ActivityLog)
+            .where(
+                ActivityLog.entity_type == "order",
+                ActivityLog.entity_id == order_id,
+                ActivityLog.visible_to_customer == True,  # noqa: E712
+            )
+            .order_by(ActivityLog.created_at.asc())
+        )).scalars().all()
+        timeline = [
+            {
+                "action": lg.action,
+                "label": ACTION_LABELS.get(lg.action, lg.action.replace("_", " ").title()),
+                "notes": lg.notes,
+                "created_at": lg.created_at.isoformat(),
+            }
+            for lg in logs
+        ]
+    except Exception:
+        # activity_log table may not exist yet in dev
+        timeline = []
+
+    subtotal = sum(float(i.subtotal or 0) for i in items)
+    discount = float(order.discount_amount or 0) if hasattr(order, "discount_amount") else 0.0
+    shipping = 0.0 if subtotal >= 30000 else 8000.0
+    total = subtotal - discount + shipping
+
+    ws = getattr(order, "workflow_status", order.status)
+
+    return {
+        "id": str(order.id),
+        "status": order.status,
+        "workflow_status": ws,
+        "customer_facing_notes": getattr(order, "customer_facing_notes", None),
+        "payment_method": order.payment_method,
+        "shipping_address": order.shipping_address,
+        "discount_amount": discount,
+        "subtotal": subtotal,
+        "shipping": shipping,
+        "total": total,
+        "invoice_number": order.invoice_number,
+        "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
+        "created_at": order.created_at.isoformat(),
+        "items": [
+            {
+                "id": str(i.id),
+                "name": i.name,
+                "image_url": i.image_url,
+                "quantity": i.quantity,
+                "unit_price": float(i.unit_price or 0),
+                "subtotal": float(i.subtotal or 0),
+                "is_substituted": i.is_substituted,
+                "substituted_from_name": i.substituted_from_name,
+                "notes": i.notes,
+            }
+            for i in items
+        ],
+        "timeline": timeline,
+    }

@@ -5,14 +5,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Users, ShoppingCart, Calendar, Star,
   RefreshCw, CheckCircle, Clock, ChevronRight,
-  Play, Package, Truck, XCircle, Loader2,
+  Package, Truck, XCircle, Loader2, Eye,
 } from 'lucide-react';
-import { api } from '@/lib/api';
 import { adminPortal, type PortalOrder, type PortalAppointment } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { OrderDetailDrawer } from './OrderDetailDrawer';
 
 function formatAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -56,31 +56,37 @@ function KpiCard({ label, value, icon, sub, accent }: {
   );
 }
 
-// ── Order status config ────────────────────────────────────────────────
+// ── Workflow status config (sprint-2) ─────────────────────────────────
 
-const ORDER_STATUS: Record<string, { label: string; color: string }> = {
-  received:   { label: 'Recibido',   color: 'bg-blue-100 text-blue-700' },
-  processing: { label: 'En proceso', color: 'bg-amber-100 text-amber-700' },
-  invoiced:   { label: 'Facturado',  color: 'bg-purple-100 text-purple-700' },
-  ready:      { label: 'Listo',      color: 'bg-green-100 text-green-700' },
-  delivered:  { label: 'Entregado',  color: 'bg-gray-100 text-gray-600' },
-  cancelled:  { label: 'Cancelado',  color: 'bg-red-100 text-red-600' },
+const WORKFLOW_STATUS: Record<string, { label: string; color: string; emoji: string }> = {
+  received:            { label: 'Recibido',              color: 'bg-blue-100 text-blue-700',     emoji: '📥' },
+  under_review:        { label: 'En revisión',           color: 'bg-purple-100 text-purple-700', emoji: '🔍' },
+  awaiting_customer:   { label: 'Esp. cliente',          color: 'bg-amber-100 text-amber-700',   emoji: '⏳' },
+  ready_to_invoice:    { label: 'Listo/facturar',        color: 'bg-sky-100 text-sky-700',       emoji: '📋' },
+  invoiced:            { label: 'Facturado',             color: 'bg-indigo-100 text-indigo-700', emoji: '🧾' },
+  in_preparation:      { label: 'Preparando',            color: 'bg-orange-100 text-orange-700', emoji: '🔧' },
+  ready_for_delivery:  { label: 'Listo/entregar',        color: 'bg-teal-100 text-teal-700',     emoji: '📦' },
+  in_transit:          { label: 'En camino',             color: 'bg-cyan-100 text-cyan-700',     emoji: '🚚' },
+  delivered:           { label: 'Entregado',             color: 'bg-green-100 text-green-700',   emoji: '✅' },
+  cancelled:           { label: 'Cancelado',             color: 'bg-red-100 text-red-600',       emoji: '❌' },
+  returned:            { label: 'Devuelto',              color: 'bg-gray-100 text-gray-600',     emoji: '↩️' },
 };
 
-const ORDER_NEXT: Record<string, { next: string; label: string; icon: React.ReactNode } | null> = {
-  received:   { next: 'processing', label: 'Aceptar', icon: <Play className="h-3.5 w-3.5" /> },
-  processing: { next: 'invoiced',   label: 'Facturar', icon: <Package className="h-3.5 w-3.5" /> },
-  invoiced:   { next: 'ready',      label: 'Listo',    icon: <CheckCircle className="h-3.5 w-3.5" /> },
-  ready:      { next: 'delivered',  label: 'Entregado', icon: <Truck className="h-3.5 w-3.5" /> },
-  delivered:  null,
-  cancelled:  null,
-};
+const WORKFLOW_TABS = [
+  { key: 'active',  label: 'Activos',    statuses: ['received', 'under_review', 'awaiting_customer', 'ready_to_invoice', 'invoiced', 'in_preparation', 'ready_for_delivery', 'in_transit'] },
+  { key: 'delivered', label: 'Entregados', statuses: ['delivered'] },
+  { key: 'cancelled', label: 'Cancelados', statuses: ['cancelled', 'returned'] },
+];
 
 const APPT_STATUS: Record<string, { label: string; color: string }> = {
-  pending:   { label: 'Pendiente',  color: 'bg-blue-100 text-blue-700' },
-  confirmed: { label: 'Confirmada', color: 'bg-green-100 text-green-700' },
-  completed: { label: 'Completada', color: 'bg-gray-100 text-gray-600' },
-  cancelled: { label: 'Cancelada',  color: 'bg-red-100 text-red-600' },
+  pending:                     { label: 'Pendiente',                  color: 'bg-blue-100 text-blue-700' },
+  confirmed:                   { label: 'Confirmada',                 color: 'bg-green-100 text-green-700' },
+  awaiting_customer_reschedule:{ label: 'Esp. cliente (reagendar)',   color: 'bg-amber-100 text-amber-700' },
+  rescheduled:                 { label: 'Reagendada',                 color: 'bg-purple-100 text-purple-700' },
+  in_progress:                 { label: 'En curso',                   color: 'bg-teal-100 text-teal-700' },
+  completed:                   { label: 'Completada',                 color: 'bg-gray-100 text-gray-600' },
+  no_show:                     { label: 'No asistió',                 color: 'bg-red-100 text-red-600' },
+  cancelled:                   { label: 'Cancelada',                  color: 'bg-red-100 text-red-600' },
 };
 
 // ── Página principal ──────────────────────────────────────────────────
@@ -88,7 +94,9 @@ const APPT_STATUS: Record<string, { label: string; color: string }> = {
 export default function PetMonitorPage() {
   const qc = useQueryClient();
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-  const [tab, setTab] = useState<'orders' | 'appointments'>('orders');
+  const [mainTab, setMainTab] = useState<'orders' | 'appointments'>('orders');
+  const [workflowTab, setWorkflowTab] = useState<'active' | 'delivered' | 'cancelled'>('active');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const { data: kpis, isLoading: kpisLoading, isFetching, refetch: refetchKpis } = useQuery({
     queryKey: ['admin-portal-overview'],
@@ -97,13 +105,13 @@ export default function PetMonitorPage() {
     refetchIntervalInBackground: true,
   });
 
-  const { data: pendingOrders, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
+  const { data: allOrders = [], isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
     queryKey: ['admin-portal-orders'],
     queryFn: () => adminPortal.orders(),
     refetchInterval: 30_000,
   });
 
-  const { data: appointments, isLoading: apptLoading, refetch: refetchAppts } = useQuery({
+  const { data: appointments = [], isLoading: apptLoading, refetch: refetchAppts } = useQuery({
     queryKey: ['admin-portal-appointments'],
     queryFn: () => adminPortal.appointments(),
     refetchInterval: 30_000,
@@ -120,245 +128,309 @@ export default function PetMonitorPage() {
     setLastRefresh(new Date());
   }
 
-  const { mutate: updateOrder, isPending: updatingOrder } = useMutation({
-    mutationFn: ({ id, status, notes }: { id: string; status: string; notes?: string }) =>
-      adminPortal.updateOrder(id, { status, notes }),
-    onSuccess: (_, vars) => {
-      toast.success(`Pedido → ${ORDER_STATUS[vars.status]?.label ?? vars.status}`);
-      qc.invalidateQueries({ queryKey: ['admin-portal-orders'] });
-      qc.invalidateQueries({ queryKey: ['admin-portal-overview'] });
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
   const { mutate: updateAppt, isPending: updatingAppt } = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      adminPortal.updateAppointment(id, { status }),
+    mutationFn: ({ id, status, cancel_reason }: { id: string; status: string; cancel_reason?: string }) =>
+      adminPortal.updateAppointment(id, { status, cancel_reason }),
     onSuccess: (_, vars) => {
-      toast.success(`Cita → ${APPT_STATUS[vars.status]?.label ?? vars.status}`);
+      const label = APPT_STATUS[vars.status]?.label ?? vars.status;
+      toast.success(`Cita → ${label}`);
       qc.invalidateQueries({ queryKey: ['admin-portal-appointments'] });
       qc.invalidateQueries({ queryKey: ['admin-portal-overview'] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const activeOrders = pendingOrders?.filter((o) => !['delivered', 'cancelled'].includes(o.status)) ?? [];
+  // Filter orders by tab
+  const currentTabStatuses = WORKFLOW_TABS.find((t) => t.key === workflowTab)?.statuses ?? [];
+  const filteredOrders = allOrders.filter((o) => {
+    const ws = o.workflow_status ?? o.status;
+    return currentTabStatuses.includes(ws);
+  });
+
+  const activeCount = allOrders.filter((o) => {
+    const ws = o.workflow_status ?? o.status;
+    return ['received', 'under_review', 'awaiting_customer', 'ready_to_invoice', 'invoiced', 'in_preparation', 'ready_for_delivery', 'in_transit'].includes(ws);
+  }).length;
+
+  const awaitingCount = allOrders.filter((o) => (o.workflow_status ?? o.status) === 'awaiting_customer').length;
 
   return (
     <div className="space-y-6 p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">🐾 Portal Monitor</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Pet Monitor</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Tiempo real del portal de clientes — polling cada 30 s
+            Última actualización: {lastRefresh.toLocaleTimeString('es-CO')}
+            {isFetching && <Loader2 className="inline h-3 w-3 animate-spin ml-1" />}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <p className="text-xs text-gray-400">Actualizado {formatAgo(lastRefresh.toISOString())}</p>
-          <Button variant="outline" size="sm" onClick={manualRefresh} disabled={isFetching} className="gap-2">
-            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-            Actualizar
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={manualRefresh} className="gap-1.5">
+          <RefreshCw className="h-4 w-4" /> Actualizar
+        </Button>
       </div>
 
       {/* KPIs */}
       {kpisLoading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <Card key={i} className="h-24 animate-pulse bg-gray-50" />)}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="p-4 animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-20 mb-2" />
+              <div className="h-8 bg-gray-200 rounded w-12" />
+            </Card>
+          ))}
         </div>
-      ) : kpis ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard label="Sesiones activas (24 h)" value={kpis.active_sessions_24h}
-            icon={<Users className="h-5 w-5 text-teal-600" />} accent="teal" sub="clientes conectados hoy" />
-          <KpiCard label="Pedidos pendientes" value={kpis.orders_pending}
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <KpiCard
+            label="Sesiones 24h"
+            value={kpis?.active_sessions_24h ?? 0}
+            icon={<Users className="h-5 w-5 text-teal-600" />}
+            accent="teal"
+          />
+          <KpiCard
+            label="Pedidos activos"
+            value={activeCount}
+            sub={awaitingCount > 0 ? `⏳ ${awaitingCount} esperando cliente` : undefined}
             icon={<ShoppingCart className="h-5 w-5 text-amber-600" />}
-            accent={kpis.orders_pending > 0 ? 'amber' : 'teal'} sub="recibidos + en proceso" />
-          <KpiCard label="Citas hoy" value={kpis.appointments_today}
-            icon={<Calendar className="h-5 w-5 text-brand" />} accent="brand" sub="pendientes o confirmadas" />
-          <KpiCard label="Puntos otorgados (30 d)" value={(kpis.loyalty_points_30d ?? 0).toLocaleString('es-CO')}
-            icon={<Star className="h-5 w-5 text-amber-500" />} accent="amber" sub="puntos de fidelidad" />
+            accent="amber"
+          />
+          <KpiCard
+            label="Citas hoy"
+            value={kpis?.appointments_today ?? 0}
+            icon={<Calendar className="h-5 w-5 text-rose-600" />}
+            accent="rose"
+          />
+          <KpiCard
+            label="Puntos 30d"
+            value={(kpis?.loyalty_points_30d ?? 0).toLocaleString('es-CO')}
+            icon={<Star className="h-5 w-5 text-emerald-600" />}
+            accent="emerald"
+          />
         </div>
-      ) : null}
+      )}
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
+      {/* Main tabs: Pedidos / Citas */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
         {(['orders', 'appointments'] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              tab === t ? 'border-teal-600 text-teal-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+            onClick={() => setMainTab(t)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              mainTab === t ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {t === 'orders' ? (
-              <span className="flex items-center gap-1.5">
-                <ShoppingCart className="h-4 w-4" />
-                Pedidos
-                {activeOrders.length > 0 && (
-                  <span className="bg-amber-100 text-amber-700 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                    {activeOrders.length}
-                  </span>
-                )}
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5">
-                <Calendar className="h-4 w-4" />
-                Citas
-                {(kpis?.appointments_today ?? 0) > 0 && (
-                  <span className="bg-blue-100 text-blue-700 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                    {kpis?.appointments_today}
-                  </span>
-                )}
-              </span>
-            )}
+            {t === 'orders' ? `📦 Pedidos${activeCount > 0 ? ` (${activeCount})` : ''}` : '📅 Citas'}
           </button>
         ))}
       </div>
 
-      {/* ── PEDIDOS ──────────────────────────────────────────────────────── */}
-      {tab === 'orders' && (
-        <Card className="p-5">
-          {ordersLoading && (
-            <div className="space-y-2">
-              {[...Array(3)].map((_, i) => <div key={i} className="h-16 rounded-lg bg-gray-50 animate-pulse" />)}
-            </div>
-          )}
-
-          {!ordersLoading && (pendingOrders ?? []).length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-8 text-gray-400">
-              <CheckCircle className="h-8 w-8 text-green-400" />
-              <p className="text-sm">Sin pedidos activos</p>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {pendingOrders?.map((order) => {
-              const { label, color } = ORDER_STATUS[order.status] ?? { label: order.status, color: 'bg-gray-100 text-gray-600' };
-              const nextAction = ORDER_NEXT[order.status];
+      {/* ORDERS VIEW */}
+      {mainTab === 'orders' && (
+        <div className="flex flex-col gap-4">
+          {/* Workflow sub-tabs */}
+          <div className="flex gap-1 border-b">
+            {WORKFLOW_TABS.map((t) => {
+              const count = allOrders.filter((o) => {
+                const ws = o.workflow_status ?? o.status;
+                return t.statuses.includes(ws);
+              }).length;
               return (
-                <div key={order.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
-                  <div className="text-xl mt-0.5">📦</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold text-gray-900">{order.product_name}</p>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${color}`}>{label}</span>
-                      {order.invoice_number && (
-                        <span className="text-xs text-purple-600 font-mono">{order.invoice_number}</span>
-                      )}
-                      {order.sales_order_id && (
-                        <span className="text-[10px] bg-emerald-100 text-emerald-700 font-semibold px-1.5 py-0.5 rounded-full">
-                          ✓ En ventas
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {order.customer_name ?? 'Cliente'}{order.pet_name ? ` · ${order.pet_name}` : ''} · ×{order.quantity}
-                      {order.unit_price ? ` · ${formatCOP(order.unit_price * order.quantity)}` : ''} · {formatAgo(order.created_at)}
-                    </p>
-                  </div>
-                  {nextAction && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={updatingOrder}
-                      onClick={() => updateOrder({ id: order.id, status: nextAction.next })}
-                      className="shrink-0 gap-1.5 text-xs"
-                    >
-                      {updatingOrder ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : nextAction.icon}
-                      {nextAction.label}
-                    </Button>
+                <button
+                  key={t.key}
+                  onClick={() => setWorkflowTab(t.key as typeof workflowTab)}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                    workflowTab === t.key
+                      ? 'border-teal-600 text-teal-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {t.label}
+                  {count > 0 && (
+                    <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                      workflowTab === t.key ? 'bg-teal-100 text-teal-800' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {count}
+                    </span>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
-        </Card>
+
+          {ordersLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <Card key={i} className="p-4 animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded w-1/3 mb-2" />
+                  <div className="h-3 bg-gray-100 rounded w-2/3" />
+                </Card>
+              ))}
+            </div>
+          ) : filteredOrders.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="font-medium">No hay pedidos en este estado</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredOrders.map((order) => {
+                const ws = order.workflow_status ?? order.status;
+                const wsInfo = WORKFLOW_STATUS[ws] ?? { label: ws, color: 'bg-gray-100 text-gray-600', emoji: '📦' };
+                const isAwaiting = ws === 'awaiting_customer';
+                return (
+                  <Card key={order.id} className={`p-4 border transition-shadow hover:shadow-md ${isAwaiting ? 'border-amber-300 bg-amber-50/30' : 'border-gray-100'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${wsInfo.color}`}>
+                            {wsInfo.emoji} {wsInfo.label}
+                          </span>
+                          {isAwaiting && (
+                            <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-bold animate-pulse">
+                              ⏳ Requiere contacto
+                            </span>
+                          )}
+                          {order.invoice_number && (
+                            <span className="text-xs text-gray-400">🧾 {order.invoice_number}</span>
+                          )}
+                        </div>
+                        <p className="font-semibold text-gray-900 text-sm">
+                          {order.customer_name ?? 'Cliente desconocido'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {order.product_name} · {order.quantity} und ·{' '}
+                          {formatCOP(order.unit_price)} · {formatAgo(order.created_at)}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedOrderId(order.id)}
+                        className="gap-1.5 shrink-0"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Ver
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
-      {/* ── CITAS ────────────────────────────────────────────────────────── */}
-      {tab === 'appointments' && (
-        <Card className="p-5">
-          {apptLoading && (
-            <div className="space-y-2">
-              {[...Array(3)].map((_, i) => <div key={i} className="h-16 rounded-lg bg-gray-50 animate-pulse" />)}
+      {/* APPOINTMENTS VIEW */}
+      {mainTab === 'appointments' && (
+        <div className="flex flex-col gap-3">
+          {apptLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <Card key={i} className="p-4 animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded w-1/3 mb-2" />
+                  <div className="h-3 bg-gray-100 rounded w-2/3" />
+                </Card>
+              ))}
             </div>
-          )}
-
-          {!apptLoading && (appointments ?? []).length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-8 text-gray-400">
-              <Clock className="h-8 w-8 text-gray-300" />
-              <p className="text-sm">Sin citas programadas</p>
+          ) : appointments.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Calendar className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="font-medium">No hay citas registradas</p>
             </div>
-          )}
-
-          <div className="space-y-3">
-            {appointments?.map((appt) => {
-              const { label, color } = APPT_STATUS[appt.status] ?? { label: appt.status, color: 'bg-gray-100 text-gray-600' };
-              const dt = new Date(appt.scheduled_at);
+          ) : (
+            appointments.map((appt) => {
+              const statusInfo = APPT_STATUS[appt.status] ?? { label: appt.status, color: 'bg-gray-100 text-gray-600' };
+              const isToday = new Date(appt.scheduled_at).toDateString() === new Date().toDateString();
               return (
-                <div key={appt.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
-                  <div className="text-xl mt-0.5">📅</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold text-gray-900 capitalize">
-                        {appt.service_type}{appt.pet_name ? ` — ${appt.pet_name}` : ''}
+                <Card key={appt.id} className={`p-4 border ${isToday ? 'border-teal-200 bg-teal-50/30' : 'border-gray-100'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusInfo.color}`}>
+                          {statusInfo.label}
+                        </span>
+                        {isToday && (
+                          <span className="text-xs bg-teal-200 text-teal-800 px-2 py-0.5 rounded-full font-bold">
+                            HOY
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-semibold text-gray-900 text-sm">
+                        {appt.customer_name ?? 'Cliente'} · {appt.pet_name ?? '—'}
                       </p>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${color}`}>{label}</span>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {appt.service_type} ·{' '}
+                        {new Date(appt.scheduled_at).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        {' · '}{appt.duration_min} min
+                        {appt.price != null && ` · ${formatCOP(appt.price)}`}
+                      </p>
+                      {appt.notes && (
+                        <p className="text-xs text-gray-400 mt-1 line-clamp-1">{appt.notes}</p>
+                      )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {appt.customer_name ?? 'Cliente'} ·{' '}
-                      {dt.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })} a las{' '}
-                      {dt.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      {appt.status === 'pending' && (
+                        <>
+                          <Button
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700 text-white text-xs gap-1"
+                            onClick={() => updateAppt({ id: appt.id, status: 'confirmed' })}
+                            disabled={updatingAppt}
+                          >
+                            <CheckCircle className="h-3 w-3" /> Confirmar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 border-red-200 hover:bg-red-50 text-xs gap-1"
+                            onClick={() => {
+                              const reason = window.prompt('Motivo de cancelación:');
+                              if (reason) updateAppt({ id: appt.id, status: 'cancelled', cancel_reason: reason });
+                            }}
+                            disabled={updatingAppt}
+                          >
+                            <XCircle className="h-3 w-3" /> Cancelar
+                          </Button>
+                        </>
+                      )}
+                      {appt.status === 'confirmed' && (
+                        <>
+                          <Button
+                            size="sm"
+                            className="bg-teal-600 hover:bg-teal-700 text-white text-xs"
+                            onClick={() => updateAppt({ id: appt.id, status: 'completed' })}
+                            disabled={updatingAppt}
+                          >
+                            ✅ Completar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-gray-600 text-xs"
+                            onClick={() => updateAppt({ id: appt.id, status: 'cancelled', cancel_reason: 'No show' })}
+                            disabled={updatingAppt}
+                          >
+                            No asistió
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {appt.status === 'pending' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={updatingAppt}
-                        onClick={() => updateAppt({ id: appt.id, status: 'confirmed' })}
-                        className="gap-1.5 text-xs"
-                      >
-                        {updatingAppt ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
-                        Confirmar
-                      </Button>
-                    )}
-                    {appt.status === 'confirmed' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={updatingAppt}
-                        onClick={() => updateAppt({ id: appt.id, status: 'completed' })}
-                        className="gap-1.5 text-xs"
-                      >
-                        <CheckCircle className="h-3.5 w-3.5" />
-                        Completar
-                      </Button>
-                    )}
-                    {['pending', 'confirmed'].includes(appt.status) && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={updatingAppt}
-                        onClick={() => {
-                          if (confirm('¿Cancelar esta cita?')) {
-                            updateAppt({ id: appt.id, status: 'cancelled' });
-                          }
-                        }}
-                        className="text-red-500 hover:text-red-600 hover:bg-red-50 text-xs"
-                      >
-                        <XCircle className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
+                </Card>
               );
-            })}
-          </div>
-        </Card>
+            })
+          )}
+        </div>
+      )}
+
+      {/* Order detail drawer */}
+      {selectedOrderId && (
+        <OrderDetailDrawer
+          orderId={selectedOrderId}
+          onClose={() => setSelectedOrderId(null)}
+          onRefreshList={manualRefresh}
+        />
       )}
     </div>
   );

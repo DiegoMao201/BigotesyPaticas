@@ -183,9 +183,47 @@ export interface MultiOrderPayload {
   general_notes?: string;
 }
 
+export interface OrderTimelineItem {
+  id: string;
+  name: string | null;
+  image_url: string | null;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  is_substituted: boolean;
+  substituted_from_name: string | null;
+  notes: string | null;
+}
+
+export interface OrderTimelineEntry {
+  action: string;
+  label: string;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface OrderTimeline {
+  id: string;
+  status: string;
+  workflow_status: string;
+  customer_facing_notes: string | null;
+  payment_method: string | null;
+  shipping_address: string | null;
+  discount_amount: number;
+  subtotal: number;
+  shipping: number;
+  total: number;
+  invoice_number: string | null;
+  delivered_at: string | null;
+  created_at: string;
+  items: OrderTimelineItem[];
+  timeline: OrderTimelineEntry[];
+}
+
 export const orders = {
   list: (page = 1) => request<Order[]>(`/orders?page=${page}`),
   get: (id: string) => request<Order>(`/orders/${id}`),
+  timeline: (id: string) => request<OrderTimeline>(`/orders/${id}/timeline`),
   create: (data: { product_id: string; pet_id?: string; quantity?: number; notes?: string }) =>
     request<Order>('/orders', { method: 'POST', body: JSON.stringify(data) }),
   createMulti: (data: MultiOrderPayload) =>
