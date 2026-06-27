@@ -16,7 +16,7 @@ async def sitemap_data(db: DBSession):
     products = await db.execute(
         text("""
             SELECT p.slug, p.updated_at,
-                   COALESCE((SELECT SUM(sl.quantity) FROM inventory.stock_levels sl WHERE sl.product_id = p.id), 0) > 0 AS is_in_stock
+                   COALESCE((SELECT SUM(s.quantity) FROM inventory.stock s WHERE s.product_id = p.id), 0) > 0 AS is_in_stock
             FROM catalog.products p
             WHERE p.is_published = true
             ORDER BY p.updated_at DESC
