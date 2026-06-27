@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Star, X } from 'lucide-react';
+import { Star, X, CheckCircle } from 'lucide-react';
 
 const GOOGLE_REVIEW_URL = 'https://g.page/r/CfL67OgLB-10EBM/review';
 const COOLDOWN_DAYS = 30;
 const STORAGE_KEY = 'bp_google_review_prompted_at';
 const MIN_VISITS = 3;
 const VISITS_KEY = 'bp_visit_count';
+const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
 
 function trackEvent(name: string, params?: Record<string, unknown>) {
   if (typeof window !== 'undefined') {
@@ -17,6 +18,11 @@ function trackEvent(name: string, params?: Record<string, unknown>) {
 
 export function GoogleReviewPrompt() {
   const [show, setShow] = useState(false);
+  const [hovered, setHovered] = useState(0);
+  const [selected, setSelected] = useState(0);
+  const [comment, setComment] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const visits = parseInt(localStorage.getItem(VISITS_KEY) ?? '0') + 1;
@@ -27,34 +33,48 @@ export function GoogleReviewPrompt() {
       const days = (Date.now() - parseInt(lastPrompted)) / (1000 * 60 * 60 * 24);
       if (days < COOLDOWN_DAYS) return;
     }
-
     if (visits < MIN_VISITS) return;
 
     const timer = setTimeout(() => setShow(true), 5000);
     return () => clearTimeout(timer);
   }, []);
 
-  const handleAccept = () => {
-    window.open(GOOGLE_REVIEW_URL, '_blank', 'noopener,noreferrer');
+  const handleDismiss = () => {
     localStorage.setItem(STORAGE_KEY, String(Date.now()));
-    trackEvent('google_review_intent', { source: 'popup' });
+    trackEvent('google_review_dismissed', { stars: selected });
     setShow(false);
   };
 
-  const handleDismiss = () => {
+  const handleSubmit = async () => {
+    if (!selected) return;
+    setLoading(true);
+
+    // 1. Save rating internally (fire-and-forget)
+    fetch(`${API}/v1/contact/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stars: selected, comment: comment || null, source: 'store' }),
+    }).catch(() => {/* no-op */});
+
+    // 2. Show success state
+    setSubmitted(true);
+    setLoading(false);
     localStorage.setItem(STORAGE_KEY, String(Date.now()));
-    trackEvent('google_review_dismissed', { source: 'popup' });
-    setShow(false);
+    trackEvent('google_review_submitted', { stars: selected });
+
+    // 3. For 4-5 stars: open Google review in a NEW TAB (current page stays open)
+    if (selected >= 4) {
+      setTimeout(() => {
+        window.open(GOOGLE_REVIEW_URL, '_blank', 'noopener,noreferrer');
+      }, 800);
+    }
   };
 
   if (!show) return null;
 
   return (
     <>
-      <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-        onClick={handleDismiss}
-      />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" onClick={handleDismiss} />
       <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl p-8 max-w-md w-[90%] z-50 animate-in fade-in zoom-in-95">
         <button
           onClick={handleDismiss}
@@ -63,37 +83,101 @@ export function GoogleReviewPrompt() {
           <X size={20} />
         </button>
 
-        <div className="text-center">
-          <div className="flex justify-center gap-1 mb-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Star key={i} className="w-10 h-10 fill-yellow-400 text-yellow-400" />
-            ))}
+        {submitted ? (
+          <div className="text-center py-4">
+            <CheckCircle className="h-14 w-14 text-teal-500 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-[#0d4a45] mb-2">
+              ¡Gracias por tu calificación! 🐾
+            </h3>
+            {selected >= 4 ? (
+              <p className="text-gray-600 text-sm">
+                Tu reseña en Google se abrió en una nueva pestaña.
+                ¡Nos ayuda un montón a seguir creciendo!
+              </p>
+            ) : (
+              <p className="text-gray-600 text-sm">
+                Recibimos tu calificación. ¡Trabajaremos para mejorar tu experiencia!
+              </p>
+            )}
+            <button
+              onClick={() => setShow(false)}
+              className="mt-6 px-8 py-2 rounded-xl bg-[#187f77] text-white font-semibold text-sm"
+            >
+              Cerrar
+            </button>
           </div>
+        ) : (
+          <div className="text-center">
+            <h3 className="text-2xl font-bold text-[#0d4a45] mb-1">
+              ¿Cómo calificarías tu experiencia?
+            </h3>
+            <p className="text-gray-500 text-sm mb-6">
+              Tu opinión nos ayuda a mejorar 🐶🐱
+            </p>
 
-          <h3 className="text-2xl font-bold text-[#0d4a45] mb-2">
-            ¿Te gusta Bigotes y Paticas? 🐾
-          </h3>
+            {/* Interactive stars */}
+            <div className="flex justify-center gap-2 mb-5">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  onMouseEnter={() => setHovered(n)}
+                  onMouseLeave={() => setHovered(0)}
+                  onClick={() => setSelected(n)}
+                  className="transition-transform hover:scale-110 active:scale-95"
+                  aria-label={`${n} estrellas`}
+                >
+                  <Star
+                    className={`w-12 h-12 transition-colors ${
+                      n <= (hovered || selected)
+                        ? 'fill-yellow-400 text-yellow-400'
+                        : 'fill-gray-200 text-gray-200'
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
 
-          <p className="text-gray-600 mb-6">
-            Una reseña honesta en Google nos ayuda muchísimo a llegar a más familias con mascotas
-            en Pereira y Dosquebradas.
-          </p>
+            {/* Label */}
+            {selected > 0 && (
+              <p className="text-sm font-medium text-gray-600 mb-4">
+                {selected === 1 && 'Muy malo 😟'}
+                {selected === 2 && 'Regular 😐'}
+                {selected === 3 && 'Bueno 🙂'}
+                {selected === 4 && 'Muy bueno 😊'}
+                {selected === 5 && '¡Excelente! 🤩'}
+              </p>
+            )}
 
-          <button
-            onClick={handleAccept}
-            className="w-full bg-[#187f77] hover:bg-[#0d4a45] text-white font-semibold py-4 rounded-xl transition mb-3"
-          >
-            Dejar reseña en Google →
-          </button>
+            {/* Optional comment — only for 1-3 stars */}
+            {selected > 0 && selected <= 3 && (
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="¿Qué podemos mejorar? (opcional)"
+                rows={2}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+              />
+            )}
 
-          <button onClick={handleDismiss} className="w-full text-gray-500 hover:text-gray-700 py-2">
-            Quizás después
-          </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!selected || loading}
+              className="w-full bg-[#187f77] hover:bg-[#0d4a45] disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold py-4 rounded-xl transition mb-3"
+            >
+              {loading ? 'Enviando...' : selected ? `Enviar ${selected} ⭐` : 'Selecciona una calificación'}
+            </button>
 
-          <p className="text-xs text-gray-400 mt-4">
-            Te toma 30 segundos · Cero spam · Suma 5 estrellas a Bigotes 🌟
-          </p>
-        </div>
+            {selected >= 4 && (
+              <p className="text-xs text-gray-400">
+                Al enviar, también se abrirá Google en una nueva pestaña para tu reseña pública.
+              </p>
+            )}
+
+            <button onClick={handleDismiss} className="w-full text-gray-400 hover:text-gray-600 py-2 text-sm mt-1">
+              Ahora no
+            </button>
+          </div>
+        )}
       </div>
     </>
   );

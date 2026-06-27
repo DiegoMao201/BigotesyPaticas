@@ -53,6 +53,32 @@ async def send_contact(payload: ContactForm, bg: BackgroundTasks) -> dict:
     return {"ok": True}
 
 
+class ReviewIn(BaseModel):
+    stars: int
+    comment: str | None = None
+    source: str | None = "store"
+
+
+@router.post("/review")
+async def submit_review(payload: ReviewIn, bg: BackgroundTasks) -> dict:
+    """Capture internal star rating and notify admin."""
+    def _send() -> None:
+        stars_txt = "⭐" * min(max(payload.stars, 1), 5)
+        send_email(
+            STORE_EMAIL,
+            f"Nueva calificación {stars_txt} — {payload.source}",
+            f"""
+            <h2 style="color:#187f77;">Nueva calificación interna</h2>
+            <p><strong>Estrellas:</strong> {stars_txt} ({payload.stars}/5)</p>
+            <p><strong>Fuente:</strong> {payload.source}</p>
+            {"<p><strong>Comentario:</strong> " + payload.comment + "</p>" if payload.comment else ""}
+            """,
+        )
+
+    bg.add_task(_send)
+    return {"ok": True}
+
+
 @router.post("/newsletter")
 async def newsletter_subscribe(payload: NewsletterIn, bg: BackgroundTasks) -> dict:
     """Log new subscriber and send welcome email."""
