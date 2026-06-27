@@ -1,17 +1,16 @@
 """Endpoints SEO — sitemap-data, IndexNow ping."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
+from app.deps import DBSession
 
 router = APIRouter(prefix="/seo", tags=["seo"])
 
 
 @router.get("/sitemap-data")
-async def sitemap_data(db: AsyncSession = Depends(get_db)):
+async def sitemap_data(db: DBSession):
     """Devuelve todos los slugs publicados en una sola query optimizada."""
 
     products = await db.execute(

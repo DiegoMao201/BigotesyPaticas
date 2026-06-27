@@ -2,14 +2,12 @@
 from __future__ import annotations
 
 from typing import Optional
-from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
+from app.deps import DBSession
 
 router = APIRouter(prefix="/landings", tags=["seo-landings"])
 
@@ -47,10 +45,7 @@ class LandingCreate(BaseModel):
 
 
 @router.get("", response_model=list[LandingOut])
-async def list_landings(
-    active_only: bool = True,
-    db: AsyncSession = Depends(get_db),
-):
+async def list_landings(db: DBSession, active_only: bool = True):
     where = "WHERE is_active = true" if active_only else ""
     rows = await db.execute(
         text(f"SELECT * FROM content.seo_landings {where} ORDER BY created_at DESC")
@@ -59,7 +54,7 @@ async def list_landings(
 
 
 @router.get("/{slug}", response_model=LandingOut)
-async def get_landing(slug: str, db: AsyncSession = Depends(get_db)):
+async def get_landing(slug: str, db: DBSession):
     row = await db.execute(
         text("SELECT * FROM content.seo_landings WHERE slug = :slug AND is_active = true"),
         {"slug": slug},
@@ -71,7 +66,7 @@ async def get_landing(slug: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("", response_model=LandingOut, status_code=201)
-async def upsert_landing(data: LandingCreate, db: AsyncSession = Depends(get_db)):
+async def upsert_landing(data: LandingCreate, db: DBSession):
     row = await db.execute(
         text("""
             INSERT INTO content.seo_landings
