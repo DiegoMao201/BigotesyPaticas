@@ -43,10 +43,22 @@ export default function InvitarPage() {
     });
   }
 
-  function shareWhatsApp() {
+  async function shareWhatsApp() {
     if (!code) return;
-    const msg = encodeURIComponent(WHATSAPP_MSG(code));
-    window.open(`https://wa.me/?text=${msg}`, '_blank');
+    const msg = WHATSAPP_MSG(code);
+
+    // Web Share API: native share sheet on mobile — text reaches WhatsApp reliably
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ text: msg });
+        return;
+      } catch {
+        // User cancelled or not supported — fall through to wa.me
+      }
+    }
+
+    // Desktop fallback: wa.me with pre-filled text
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   }
 
   const totalReferrals = refs?.total_referrals ?? 0;
