@@ -62,6 +62,36 @@ export interface EnrichedContent {
   modo_de_uso?: string;
   recomendado_para?: string[];
   advertencias?: string[];
+  seo?: {
+    meta_title?: string;
+    meta_description?: string;
+    keywords?: string[];
+    slug?: string;
+  };
+}
+
+export interface BlogPost {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  content?: string;
+  cover_image_url: string | null;
+  category: string | null;
+  keywords: string[];
+  meta_title: string | null;
+  meta_description: string | null;
+  author: string;
+  published_at: string | null;
+  updated_at: string | null;
+  view_count: number;
+}
+
+export interface BlogListResponse {
+  posts: BlogPost[];
+  total: number;
+  page: number;
+  per_page: number;
 }
 
 export interface ProductsPage {
@@ -111,5 +141,19 @@ export const storeApi = {
   },
   related: async (productId: string, limit = 4): Promise<Product[]> => {
     try { return await get<Product[]>(`/v1/products/${productId}/related?limit=${limit}`); } catch { return []; }
+  },
+  blogList: async (params: { page?: number; per_page?: number; category?: string } = {}): Promise<BlogListResponse> => {
+    const qs = new URLSearchParams({ published: 'true' });
+    if (params.page) qs.set('page', String(params.page));
+    if (params.per_page) qs.set('per_page', String(params.per_page));
+    if (params.category) qs.set('category', params.category);
+    try {
+      return await get<BlogListResponse>(`/v1/blog/posts?${qs.toString()}`);
+    } catch {
+      return { posts: [], total: 0, page: 1, per_page: 12 };
+    }
+  },
+  blogBySlug: async (slug: string): Promise<BlogPost | null> => {
+    try { return await get<BlogPost>(`/v1/blog/posts/${slug}`); } catch { return null; }
   },
 };

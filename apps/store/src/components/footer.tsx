@@ -37,12 +37,13 @@ export function Footer() {
           <h4 className="font-display font-semibold text-sm mb-4 uppercase tracking-wider">Empresa</h4>
           <ul className="space-y-2 text-sm">
             <li><Link href="/nosotros" className="text-muted-foreground hover:text-brand">Sobre nosotros</Link></li>
+            <li><Link href="/blog" className="text-muted-foreground hover:text-brand">Blog de mascotas</Link></li>
             <li><Link href="/contacto" className="text-muted-foreground hover:text-brand">Contacto</Link></li>
+            <li><Link href="/pereira-dosquebradas-mascotas" className="text-muted-foreground hover:text-brand">Pereira y Dosquebradas</Link></li>
             <li>
               <a href="https://mi.bigotesypaticas.com" target="_blank" rel="noopener noreferrer"
                  className="text-muted-foreground hover:text-brand">Portal clientes</a>
             </li>
-            <li><Link href="/admin" className="text-muted-foreground hover:text-brand">Acceso admin</Link></li>
           </ul>
         </div>
 

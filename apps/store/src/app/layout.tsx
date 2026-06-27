@@ -4,6 +4,7 @@ import './globals.css';
 import { Providers } from '@/components/providers';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
+import { OrganizationSchema, LocalBusinessSchema } from '@/components/seo/JsonLd';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 const jakarta = Plus_Jakarta_Sans({
@@ -17,27 +18,56 @@ const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', displ
 export const metadata: Metadata = {
   metadataBase: new URL('https://bigotesypaticas.com'),
   title: {
-    default: 'Bigotes y Paticas — Productos premium para mascotas',
-    template: '%s · Bigotes y Paticas',
+    default: 'Bigotes y Paticas — Tienda de mascotas Pereira y Dosquebradas',
+    template: '%s | Bigotes y Paticas',
   },
   description:
-    'Tienda premium de productos para perros y gatos en Pereira y Dosquebradas. Comida, accesorios, juguetes y cuidado, entregados en 24-72h.',
-  keywords: ['mascotas', 'perros', 'gatos', 'comida premium', 'accesorios mascotas', 'Dosquebradas', 'Pereira', 'Risaralda', 'Colombia'],
+    'Tienda premium de productos para mascotas en Pereira y Dosquebradas. Concentrados, accesorios, medicamentos veterinarios. Envío gratis desde $30.000 en 24-72h.',
+  keywords: [
+    'mascotas Pereira', 'tienda mascotas Dosquebradas', 'concentrado perro Pereira',
+    'comida gato Dosquebradas', 'veterinaria Pereira', 'domicilio mascotas Risaralda',
+    'Hills Pereira', 'Royal Canin Dosquebradas', 'Pro Plan Pereira',
+    'accesorios mascotas Pereira', 'medicamentos veterinarios Dosquebradas',
+  ],
+  authors: [{ name: 'Bigotes y Paticas' }],
+  creator: 'Bigotes y Paticas',
+  publisher: 'Bigotes y Paticas',
+  formatDetection: { telephone: false, email: false, address: false },
   openGraph: {
-    title: 'Bigotes y Paticas',
-    description: 'Productos premium para mascotas',
+    type: 'website',
+    locale: 'es_CO',
     url: 'https://bigotesypaticas.com',
     siteName: 'Bigotes y Paticas',
-    locale: 'es_CO',
-    type: 'website',
+    title: 'Bigotes y Paticas — Tienda de mascotas Pereira y Dosquebradas',
+    description: 'Productos premium para mascotas con entrega 24-72h en Pereira y Dosquebradas. Más de 900 productos.',
+    images: [{ url: '/api/og', width: 1200, height: 630, alt: 'Bigotes y Paticas' }],
   },
-  twitter: { card: 'summary_large_image' },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Bigotes y Paticas — Tienda de mascotas',
+    description: 'Tienda premium de mascotas en Pereira y Dosquebradas. Envío 24-72h.',
+    images: ['/api/og'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  alternates: { canonical: 'https://bigotesypaticas.com' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={`${inter.variable} ${jakarta.variable} ${mono.variable} font-sans`}>
+        <OrganizationSchema />
+        <LocalBusinessSchema />
         <Providers>
           <Header />
           <main className="min-h-[calc(100vh-4rem-1px)]">{children}</main>

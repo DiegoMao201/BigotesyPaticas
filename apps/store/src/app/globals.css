@@ -278,4 +278,18 @@
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
            bg-warm-100 text-warm-800;
   }
+
+  /* Blog content — tipografía para artículos */
+  .blog-content { @apply text-base leading-relaxed text-foreground; max-width: 72ch; }
+  .blog-content h2 { @apply text-2xl font-display font-bold text-[#0d4a45] mt-10 mb-4; }
+  .blog-content h3 { @apply text-xl font-display font-semibold text-[#187f77] mt-7 mb-3; }
+  .blog-content p { @apply mb-5 text-muted-foreground leading-relaxed; }
+  .blog-content ul, .blog-content ol { @apply mb-5 pl-6 space-y-2 text-muted-foreground; }
+  .blog-content ul { list-style-type: disc; }
+  .blog-content ol { list-style-type: decimal; }
+  .blog-content li { @apply leading-relaxed; }
+  .blog-content strong { @apply font-semibold text-foreground; }
+  .blog-content a { @apply text-[#187f77] underline underline-offset-2 hover:text-[#0d4a45] transition-colors; }
+  .blog-content blockquote { @apply border-l-4 border-[#187f77] pl-5 italic text-muted-foreground my-6; }
+  .blog-content hr { @apply border-border my-8; }
 }

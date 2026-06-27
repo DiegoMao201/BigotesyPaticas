@@ -53,6 +53,7 @@ export function Header() {
             <Link href="/categorias/gatos" className="hover:text-brand transition-colors">Gatos</Link>
             <Link href="/categorias/accesorios" className="hover:text-brand transition-colors">Accesorios</Link>
             <Link href="/categorias/snacks" className="hover:text-brand transition-colors">Snacks</Link>
+            <Link href="/blog" className="hover:text-brand transition-colors">Blog</Link>
             <Link href="/nosotros" className="hover:text-brand transition-colors">Nosotros</Link>
           </nav>
         )}

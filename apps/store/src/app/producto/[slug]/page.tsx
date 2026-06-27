@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { storeApi } from '@/lib/api';
@@ -5,13 +6,50 @@ import { formatCurrency } from '@/lib/utils';
 import { AddToCart } from './add-to-cart';
 import { ProductTabs } from './ProductTabs';
 import { StickyCTAMobile } from './StickyCTAMobile';
+import { ProductSchema, BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { Truck, ShieldCheck, RefreshCw, ChevronRight, MessageCircle } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
+interface Props { params: { slug: string } }
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const product = await storeApi.bySlug(params.slug);
+  if (!product) return { title: 'Producto no encontrado | Bigotes y Paticas' };
+
+  const seo = product.enriched_content?.seo;
+  const enrichedDesc = product.enriched_content?.descripcion_corta;
+  const priceStr = Number(product.price).toLocaleString('es-CO');
+
+  return {
+    title: seo?.meta_title || `${product.name} — $${priceStr} | Bigotes y Paticas`,
+    description:
+      seo?.meta_description ||
+      enrichedDesc ||
+      `Compra ${product.name} en Pereira y Dosquebradas. ${product.in_stock ? 'Disponible' : 'Próximamente'}. Envío 24-72h.`,
+    keywords: seo?.keywords || [
+      product.name,
+      product.brand?.name || '',
+      `${product.name} Pereira`,
+      `${product.name} Dosquebradas`,
+      product.category?.name || '',
+    ].filter(Boolean),
+    alternates: { canonical: `https://bigotesypaticas.com/producto/${product.slug}` },
+    openGraph: {
+      type: 'website',
+      title: seo?.meta_title || product.name,
+      description: seo?.meta_description || enrichedDesc || `Compra ${product.name} en Pereira`,
+      url: `https://bigotesypaticas.com/producto/${product.slug}`,
+      images: product.primary_image_url
+        ? [{ url: product.primary_image_url, width: 800, height: 800, alt: product.name }]
+        : [{ url: `/api/og?product=${encodeURIComponent(product.name)}&price=${product.price}`, width: 1200, height: 630 }],
+    },
+  };
+}
+
 const WA_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP ?? '573206876633';
 
-export default async function ProductPage({ params }: { params: { slug: string } }) {
+export default async function ProductPage({ params }: Props) {
   const product = await storeApi.bySlug(params.slug);
   if (!product) notFound();
 
@@ -33,6 +71,26 @@ export default async function ProductPage({ params }: { params: { slug: string }
 
   return (
     <>
+      <ProductSchema
+        name={product.name}
+        description={product.enriched_content?.descripcion || product.short_description || undefined}
+        imageUrl={product.primary_image_url || undefined}
+        sku={product.sku}
+        brand={product.brand?.name}
+        price={product.price}
+        inStock={product.in_stock}
+        slug={product.slug}
+      />
+      <BreadcrumbSchema
+        items={[
+          { name: 'Inicio', url: 'https://bigotesypaticas.com' },
+          ...(product.category
+            ? [{ name: product.category.name, url: `https://bigotesypaticas.com/categorias/${product.category.slug}` }]
+            : []),
+          { name: product.name, url: `https://bigotesypaticas.com/producto/${product.slug}` },
+        ]}
+      />
+
       {/* Breadcrumbs */}
       <div className="container-wide py-4">
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground flex-wrap">
