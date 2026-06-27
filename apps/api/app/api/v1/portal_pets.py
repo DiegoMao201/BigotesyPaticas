@@ -397,37 +397,19 @@ _SPECIES_EMOJI = {
 
 # ── PDF carnet ────────────────────────────────────────────────────────
 
-@router.get("/{pet_id}/carnet.pdf")
-async def carnet_pdf(
-    pet_id: uuid.UUID,
-    db: DBSession,
-    customer: Customer = PortalUser,
-) -> Response:
-    """Genera un PDF A5 horizontal con el carnet de salud de la mascota."""
-    pet = await _get_own_pet(pet_id, customer, db)
+_TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 
-    # Intentar WeasyPrint primero (mejor diseño), fallback a reportlab
-    try:
-        return await _carnet_weasyprint(pet, customer)
-    except Exception:
-        return _carnet_reportlab(pet, customer)
-
-
-async def _carnet_weasyprint(pet: Pet, customer: Customer) -> Response:
-    import base64
+# Jinja2 env con base_url para que WeasyPrint resuelva fonts/ y assets/
+def _make_jinja_env():
     from jinja2 import Environment, FileSystemLoader
-    from weasyprint import HTML  # type: ignore[import]
-
-    templates_dir = Path(__file__).parent.parent.parent / "templates"
-    env = Environment(loader=FileSystemLoader(str(templates_dir)))
 
     def _fmt_date(d: object) -> str:
         if not d:
             return "—"
         if isinstance(d, str):
             try:
-                from datetime import datetime as dt
-                d = dt.fromisoformat(d).date()
+                from datetime import datetime as _dt
+                d = _dt.fromisoformat(d).date()
             except Exception:
                 return str(d)
         try:
@@ -435,56 +417,75 @@ async def _carnet_weasyprint(pet: Pet, customer: Customer) -> Response:
         except Exception:
             return str(d)
 
+    env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=False)
     env.filters["format_date"] = _fmt_date
-    tmpl = env.get_template("carnet_pet.html")
+    return env
 
+
+@router.get("/{pet_id}/carnet.pdf")
+async def carnet_pdf(
+    pet_id: uuid.UUID,
+    db: DBSession,
+    customer: Customer = PortalUser,
+) -> Response:
+    """Genera carnet de salud en PDF A5 vertical con WeasyPrint + Jinja2."""
+    import base64
+    from weasyprint import HTML  # type: ignore[import]
+
+    pet = await _get_own_pet(pet_id, customer, db)
     today = date.today()
 
-    # ── Logo en base64 ──────────────────────────────────────────────────
+    # ── Logo: usar el archivo local en templates/assets/ ─────────────────
     logo_b64 = ""
-    logo_path = Path(__file__).parent.parent.parent.parent.parent / "BigotesyPaticas.png"
+    logo_path = _TEMPLATES_DIR / "assets" / "logo.png"
     if logo_path.exists():
         logo_b64 = base64.b64encode(logo_path.read_bytes()).decode()
-    else:
-        try:
-            import httpx
-            cdn = "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png"
-            resp = httpx.get(cdn, timeout=4)
-            if resp.status_code == 200:
-                logo_b64 = base64.b64encode(resp.content).decode()
-        except Exception:
-            pass
 
-    # ── Foto mascota en base64 ──────────────────────────────────────────
+    # ── Foto mascota ──────────────────────────────────────────────────────
     photo_b64 = ""
     if pet.photo_url:
-        try:
-            photo_path = _UPLOAD_DIR / pet.photo_url.lstrip("/media/")
-            if photo_path.exists():
-                photo_b64 = base64.b64encode(photo_path.read_bytes()).decode()
-        except Exception:
-            pass
+        if pet.photo_url.startswith("http"):
+            # Foto en CDN/Spaces
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=8) as client:
+                    resp = await client.get(pet.photo_url)
+                if resp.status_code == 200:
+                    photo_b64 = base64.b64encode(resp.content).decode()
+            except Exception:
+                pass
+        else:
+            # Foto local en /data/portal-uploads
+            try:
+                local_photo = _UPLOAD_DIR / pet.photo_url.lstrip("/media/")
+                if local_photo.exists():
+                    photo_b64 = base64.b64encode(local_photo.read_bytes()).decode()
+            except Exception:
+                pass
 
-    # ── QR code en base64 ──────────────────────────────────────────────
+    # ── QR code ───────────────────────────────────────────────────────────
     qr_b64 = ""
     try:
         import qrcode
-        public_url = f"https://mi.bigotesypaticas.com/pets/{pet.id}"
-        qr_img = qrcode.make(public_url, box_size=4, border=1)
+        qr_img = qrcode.make(
+            f"https://mi.bigotesypaticas.com/pets/{pet.id}",
+            box_size=8,
+            border=1,
+        )
         buf = io.BytesIO()
         qr_img.save(buf, format="PNG")
         qr_b64 = base64.b64encode(buf.getvalue()).decode()
     except Exception:
         pass
 
-    # ── Edad legible ────────────────────────────────────────────────────
+    # ── Edad humanizada ───────────────────────────────────────────────────
     age_display = ""
     if pet.birth_date:
         try:
             from dateutil.relativedelta import relativedelta
             bd = pet.birth_date if isinstance(pet.birth_date, date) else pet.birth_date.date()
             diff = relativedelta(today, bd)
-            parts = []
+            parts: list[str] = []
             if diff.years:
                 parts.append(f"{diff.years} año{'s' if diff.years != 1 else ''}")
             if diff.months:
@@ -493,47 +494,49 @@ async def _carnet_weasyprint(pet: Pet, customer: Customer) -> Response:
         except Exception:
             pass
 
-    # ── Context mascota ─────────────────────────────────────────────────
-    class _PetCtx:
+    # ── Contexto mascota (namespace limpio para el template) ──────────────
+    class _P:
         pass
 
-    pet_ctx = _PetCtx()
-    pet_ctx.name = pet.name
-    pet_ctx.species = pet.species
-    pet_ctx.breed = pet.breed
-    pet_ctx.birth_date = pet.birth_date
-    pet_ctx.weight_kg = float(pet.weight_kg) if pet.weight_kg else None
-    pet_ctx.food_brand = pet.food_brand
-    pet_ctx.food_freq_days = pet.food_freq_days
-    pet_ctx.age_display = age_display
+    p = _P()
+    p.name = pet.name
+    p.species = pet.species
+    p.breed = pet.breed
+    p.birth_date = pet.birth_date
+    p.weight_kg = float(pet.weight_kg) if pet.weight_kg else None
+    p.food_brand = pet.food_brand
+    p.food_freq_days = pet.food_freq_days
+    p.age_display = age_display
 
-    # ── Separar registros por tipo ──────────────────────────────────────
-    class _RecordCtx:
+    # ── Registros de salud ────────────────────────────────────────────────
+    class _R:
         pass
 
-    def _build_record(hr: object) -> _RecordCtx:
-        r = _RecordCtx()
+    def _rec(hr: object) -> _R:
+        r = _R()
         r.name = hr.name  # type: ignore[attr-defined]
-        r.record_type = hr.record_type  # type: ignore[attr-defined]
         r.applied_at = hr.applied_at  # type: ignore[attr-defined]
+        r.record_type = hr.record_type  # type: ignore[attr-defined]
         nd = getattr(hr, "next_due_at", None)
         r.next_due_at = nd
-        days = (nd.date() - today).days if nd else None  # type: ignore[union-attr]
-        r.is_due_soon = days is not None and days < 30
+        if nd:
+            nd_date = nd.date() if hasattr(nd, "date") else nd
+            r.is_due_soon = 0 <= (nd_date - today).days <= 30
+        else:
+            r.is_due_soon = False
         return r
 
     all_records = sorted(pet.health_records or [], key=lambda h: str(h.applied_at), reverse=True)
-    vaccines     = [_build_record(h) for h in all_records if h.record_type == "vacuna"]
-    dewormings   = [_build_record(h) for h in all_records if h.record_type == "desparasitacion"]
-    other_records = [_build_record(h) for h in all_records
-                     if h.record_type not in {"vacuna", "desparasitacion"}][:3]
+    vaccines = [_rec(h) for h in all_records if h.record_type == "vacuna"]
+    dewormings = [_rec(h) for h in all_records if h.record_type == "desparasitacion"]
 
-    html_str = tmpl.render(
-        pet=pet_ctx,
+    # ── Render HTML → PDF ─────────────────────────────────────────────────
+    env = _make_jinja_env()
+    html_str = env.get_template("carnet_pet.html").render(
+        pet=p,
         customer=customer,
         vaccines=vaccines,
         dewormings=dewormings,
-        other_records=other_records,
         emoji=_SPECIES_EMOJI.get(pet.species.lower(), "🐾"),
         today=today.strftime("%d/%m/%Y"),
         logo_b64=logo_b64,
@@ -541,94 +544,15 @@ async def _carnet_weasyprint(pet: Pet, customer: Customer) -> Response:
         qr_b64=qr_b64,
     )
 
-    pdf_bytes = HTML(string=html_str).write_pdf()
-    filename = f"carnet_{pet.name.lower().replace(' ', '_')}.pdf"
+    # base_url permite que las rutas relativas fonts/ y assets/ funcionen
+    pdf_bytes = HTML(string=html_str, base_url=str(_TEMPLATES_DIR)).write_pdf()
+
+    safe_name = pet.name.lower().replace(" ", "_")
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
-    )
-
-
-def _carnet_reportlab(pet: Pet, customer: Customer) -> Response:
-    """Fallback PDF con reportlab cuando WeasyPrint no está disponible."""
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A5, landscape
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-
-    theme = _THEME_COLORS.get(pet.color_theme, _THEME_COLORS["teal"])
-    BRAND = colors.HexColor(theme["accent"])
-    BG = colors.HexColor(theme["bg_light"])
-
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=landscape(A5),
-        rightMargin=1.5 * cm, leftMargin=1.5 * cm,
-        topMargin=1.2 * cm, bottomMargin=1.2 * cm,
-    )
-    styles = getSampleStyleSheet()
-    title_st = ParagraphStyle("t", parent=styles["Heading1"], textColor=BRAND, fontSize=18, spaceAfter=3)
-    sub_st = ParagraphStyle("s", parent=styles["Normal"], fontSize=9, spaceAfter=2)
-    foot_st = ParagraphStyle("f", parent=styles["Normal"], fontSize=7, textColor=colors.HexColor("#9ca3af"))
-
-    story = []
-    story.append(Paragraph(f"🐾 {pet.name} — Carnet de Salud", title_st))
-    story.append(Paragraph(f"Bigotes y Paticas · {pet.species.capitalize()}", sub_st))
-    story.append(Spacer(1, 0.3 * cm))
-
-    bd = str(pet.birth_date) if pet.birth_date else "—"
-    data = [
-        ["Raza", pet.breed or "—", "Nacimiento", bd],
-        ["Peso", f"{pet.weight_kg} kg" if pet.weight_kg else "—", "Alimento", pet.food_brand or "—"],
-        ["Dueño", customer.full_name or "—", "Teléfono", customer.phone or "—"],
-    ]
-    t = Table(data, colWidths=[2.5 * cm, 5 * cm, 2.5 * cm, 5 * cm])
-    t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, -1), BG),
-        ("BACKGROUND", (2, 0), (2, -1), BG),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e5e7eb")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
-    story.append(t)
-    story.append(Spacer(1, 0.4 * cm))
-
-    records = sorted(pet.health_records or [], key=lambda r: str(r.applied_at), reverse=True)
-    if records:
-        story.append(Paragraph("Historial de Salud", title_st))
-        hr_data = [["Tipo", "Detalle", "Aplicado", "Próxima dosis", "Vet."]]
-        for hr in records[:6]:
-            nd = str(hr.next_due_at) if hr.next_due_at else "—"
-            hr_data.append([hr.record_type.capitalize(), hr.name, str(hr.applied_at), nd, hr.vet_name or "—"])
-        ht = Table(hr_data, colWidths=[2 * cm, 5.5 * cm, 2.2 * cm, 2.5 * cm, 2.8 * cm])
-        ht.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), BRAND),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, BG]),
-            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#e5e7eb")),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ]))
-        story.append(ht)
-
-    story.append(Spacer(1, 0.5 * cm))
-    story.append(Paragraph(
-        f"Generado el {date.today().strftime('%d/%m/%Y')} · mi.bigotesypaticas.com", foot_st,
-    ))
-
-    doc.build(story)
-    buf.seek(0)
-    filename = f"carnet_{pet.name.lower().replace(' ', '_')}.pdf"
-    return Response(
-        content=buf.read(),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'inline; filename="carnet-{safe_name}.pdf"',
+            "Cache-Control": "private, max-age=300",
+        },
     )

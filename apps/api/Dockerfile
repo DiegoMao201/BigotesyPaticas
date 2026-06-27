@@ -12,11 +12,20 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Dependencias OS
+# Dependencias OS — incluye libs para WeasyPrint (pango, cairo, gdk-pixbuf)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libpangocairo-1.0-0 \
+    libcairo2 \
+    libgdk-pixbuf-2.0-0 \
+    libgdk-pixbuf2.0-common \
+    libgobject-2.0-0 \
+    libglib2.0-0 \
+    shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- builder ----

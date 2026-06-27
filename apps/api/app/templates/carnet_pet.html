@@ -3,238 +3,268 @@
 <head>
   <meta charset="UTF-8">
   <style>
+    @font-face {
+      font-family: 'Playfair Display';
+      src: url('fonts/PlayfairDisplay-Bold.woff2') format('woff2');
+      font-weight: 700;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Alegreya Sans';
+      src: url('fonts/AlegreyaSans-Regular.woff2') format('woff2');
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Alegreya Sans';
+      src: url('fonts/AlegreyaSans-Medium.woff2') format('woff2');
+      font-weight: 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Alegreya Sans';
+      src: url('fonts/AlegreyaSans-Bold.woff2') format('woff2');
+      font-weight: 700;
+      font-style: normal;
+    }
+
     @page {
       size: 148mm 210mm;
       margin: 0;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
     body {
-      font-family: 'Georgia', 'Times New Roman', serif;
+      font-family: 'Alegreya Sans', Georgia, sans-serif;
       color: #ffffff;
       width: 148mm;
       height: 210mm;
-      background: linear-gradient(175deg, #187f77 0%, #0f5c55 55%, #0a3d39 100%);
-      padding: 8mm 9mm 30mm 9mm;
+      background: #187f77;
       position: relative;
       overflow: hidden;
     }
 
-    /* Círculo decorativo fondo */
-    body::before {
-      content: '';
+    /* Fondo degradado via capas */
+    .bg-gradient {
       position: absolute;
-      top: -20mm;
-      right: -20mm;
-      width: 60mm;
-      height: 60mm;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.04);
+      inset: 0;
+      background: linear-gradient(180deg, #187f77 0%, #0d4a45 100%);
+      z-index: 0;
     }
-    body::after {
-      content: '';
+
+    /* Círculos decorativos */
+    .deco-circle-1 {
       position: absolute;
-      bottom: 25mm;
-      left: -15mm;
-      width: 45mm;
-      height: 45mm;
+      top: -22mm;
+      right: -18mm;
+      width: 68mm;
+      height: 68mm;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.05);
+      z-index: 0;
+    }
+    .deco-circle-2 {
+      position: absolute;
+      bottom: 28mm;
+      left: -18mm;
+      width: 52mm;
+      height: 52mm;
       border-radius: 50%;
       background: rgba(255,255,255,0.03);
+      z-index: 0;
+    }
+
+    .content {
+      position: relative;
+      z-index: 1;
+      padding: 9mm 11mm 28mm 11mm;
+      height: 210mm;
     }
 
     /* ── HEADER ── */
     .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      text-align: center;
       margin-bottom: 5mm;
     }
 
-    .brand {
+    .logo-wrap {
       display: flex;
       align-items: center;
-      gap: 2.5mm;
+      justify-content: center;
+      gap: 3mm;
+      margin-bottom: 2.5mm;
     }
 
-    .brand-logo {
-      width: 11mm;
-      height: 11mm;
+    .logo {
+      width: 13mm;
+      height: 13mm;
       object-fit: contain;
     }
 
     .brand-name {
-      font-family: Georgia, serif;
-      font-size: 10pt;
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 13pt;
       font-weight: 700;
-      letter-spacing: 0.02em;
+      letter-spacing: -0.2pt;
     }
 
-    .card-badge {
-      font-family: system-ui, sans-serif;
-      font-size: 6.5pt;
-      letter-spacing: 0.22em;
+    .card-title {
+      font-family: 'Alegreya Sans', sans-serif;
+      font-size: 7.5pt;
+      letter-spacing: 0.38em;
       text-transform: uppercase;
-      background: rgba(245,166,65,0.2);
-      border: 0.3mm solid rgba(245,166,65,0.6);
-      color: #f5d08a;
-      padding: 1mm 2.5mm;
-      border-radius: 1mm;
+      opacity: 0.8;
+      font-weight: 500;
     }
 
     /* ── DIVIDER ── */
     .divider {
       height: 0.3mm;
-      background: linear-gradient(to right, transparent, rgba(255,255,255,0.25), transparent);
-      margin: 3.5mm 0;
+      background: linear-gradient(to right, transparent, rgba(255,255,255,0.28), transparent);
+      margin: 3mm 0;
     }
 
     /* ── MASCOTA ── */
     .pet-section {
-      display: flex;
-      align-items: center;
-      gap: 5mm;
-      margin-bottom: 2mm;
+      text-align: center;
+      margin: 3.5mm 0 4mm 0;
     }
 
-    .pet-photo-wrap {
-      flex-shrink: 0;
-      width: 28mm;
-      height: 28mm;
+    .pet-photo-ring {
+      width: 30mm;
+      height: 30mm;
       border-radius: 50%;
+      border: 1.2mm solid rgba(255,255,255,0.38);
+      margin: 0 auto 2.5mm;
+      display: block;
+      overflow: hidden;
       background: rgba(255,255,255,0.12);
-      padding: 1mm;
-      box-shadow: 0 2mm 8mm rgba(0,0,0,0.25);
     }
 
-    .pet-photo-wrap img,
-    .pet-photo-placeholder {
+    .pet-photo-ring img {
       width: 100%;
       height: 100%;
-      border-radius: 50%;
       object-fit: cover;
+      border-radius: 50%;
       display: block;
     }
 
     .pet-photo-placeholder {
-      background: rgba(255,255,255,0.1);
+      width: 30mm;
+      height: 30mm;
+      border-radius: 50%;
+      border: 1.2mm solid rgba(255,255,255,0.38);
+      margin: 0 auto 2.5mm;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18pt;
+      background: rgba(255,255,255,0.1);
+      font-size: 22pt;
       line-height: 1;
     }
 
-    .pet-info {
-      flex: 1;
-      min-width: 0;
-    }
-
     .pet-name {
-      font-family: Georgia, serif;
-      font-size: 20pt;
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 21pt;
       font-weight: 700;
-      letter-spacing: -0.3pt;
-      line-height: 1.1;
+      letter-spacing: -0.5pt;
+      line-height: 1;
     }
 
     .pet-meta {
-      font-family: system-ui, sans-serif;
-      font-size: 8pt;
-      color: rgba(255,255,255,0.75);
+      font-family: 'Alegreya Sans', sans-serif;
+      font-size: 8.5pt;
+      opacity: 0.82;
       margin-top: 1.5mm;
       line-height: 1.5;
     }
 
-    .pet-meta strong {
-      color: rgba(255,255,255,0.9);
-    }
-
-    /* ── SECCIÓN ── */
+    /* ── SECCIONES ── */
     .section {
-      margin-bottom: 0.5mm;
+      margin: 2mm 0;
     }
 
     .section-title {
-      font-family: system-ui, sans-serif;
-      font-size: 6.5pt;
-      letter-spacing: 0.2em;
+      font-family: 'Alegreya Sans', sans-serif;
+      font-size: 6.8pt;
+      letter-spacing: 0.22em;
       text-transform: uppercase;
       color: #f5a641;
-      font-weight: 600;
-      margin-bottom: 1.5mm;
+      font-weight: 700;
+      margin-bottom: 2mm;
     }
 
+    /* Grid 2 columnas para datos básicos */
     .data-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.8mm 3mm;
+      gap: 1mm 4mm;
     }
 
-    .data-item {
-      font-family: system-ui, sans-serif;
-    }
-
-    .data-label {
+    .data-item .data-label {
       font-size: 6.5pt;
-      color: rgba(255,255,255,0.6);
+      color: rgba(255,255,255,0.58);
       line-height: 1;
-      margin-bottom: 0.3mm;
+      margin-bottom: 0.4mm;
     }
 
-    .data-value {
+    .data-item .data-value {
+      font-family: 'Alegreya Sans', sans-serif;
       font-size: 8pt;
       font-weight: 500;
-      color: rgba(255,255,255,0.95);
       line-height: 1.2;
     }
 
-    /* ── TABLA SALUD ── */
-    .health-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-family: system-ui, sans-serif;
-      font-size: 7.5pt;
-    }
-
-    .health-table th {
-      text-align: left;
-      color: rgba(255,255,255,0.55);
-      font-weight: 500;
-      font-size: 6.5pt;
-      padding: 0 0 1mm 0;
-      border-bottom: 0.3mm solid rgba(255,255,255,0.12);
-    }
-
-    .health-table th:last-child,
-    .health-table td:last-child {
-      text-align: right;
-    }
-
-    .health-table td {
+    /* Filas de datos (vacunas, desparasitación) */
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 8.5pt;
       padding: 1mm 0;
-      color: rgba(255,255,255,0.9);
       border-bottom: 0.2mm solid rgba(255,255,255,0.06);
     }
 
-    .health-table td:first-child {
+    .data-row:last-child {
+      border-bottom: none;
+    }
+
+    .data-row .label {
+      opacity: 0.78;
+      flex: 1;
+      padding-right: 3mm;
+    }
+
+    .data-row .value {
       font-weight: 500;
+      text-align: right;
+      flex-shrink: 0;
     }
 
-    .due-soon {
-      color: #f5a641 !important;
+    .data-row .value.due-soon {
+      color: #f5a641;
     }
 
-    /* ── ALERTA ── */
-    .alert-box {
-      background: rgba(245,166,65,0.12);
-      border-left: 1mm solid #f5a641;
+    /* Alerta vacuna próxima */
+    .alert {
+      background: rgba(245,166,65,0.16);
+      border: 0.3mm solid rgba(245,166,65,0.45);
+      border-radius: 1.5mm;
       padding: 1.5mm 2.5mm;
-      border-radius: 0 1mm 1mm 0;
       margin-top: 1.5mm;
-      font-family: system-ui, sans-serif;
-      font-size: 7pt;
-      color: #f5d08a;
+      font-size: 7.5pt;
+      color: #FFE8C0;
+    }
+
+    .no-records {
+      font-size: 7.5pt;
+      opacity: 0.45;
+      font-style: italic;
     }
 
     /* ── FOOTER ── */
@@ -243,199 +273,209 @@
       bottom: 0;
       left: 0;
       right: 0;
-      padding: 4mm 9mm 5mm;
-      background: rgba(0,0,0,0.18);
+      padding: 4mm 11mm 5mm;
+      background: rgba(0,0,0,0.20);
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
     }
 
-    .footer-text {
-      font-family: system-ui, sans-serif;
-      font-size: 6.5pt;
-      color: rgba(255,255,255,0.65);
+    .footer-info {
+      font-family: 'Alegreya Sans', sans-serif;
+      font-size: 6.8pt;
+      color: rgba(255,255,255,0.72);
       line-height: 1.55;
     }
 
-    .footer-text strong {
-      color: rgba(255,255,255,0.9);
-      font-size: 7.5pt;
+    .footer-info strong {
+      color: rgba(255,255,255,0.94);
+      font-size: 7.8pt;
+      font-weight: 700;
+      display: block;
+      margin-bottom: 0.5mm;
+    }
+
+    .footer-meta {
+      opacity: 0.7;
+      font-size: 6.2pt;
+      margin-top: 1mm;
+    }
+
+    .qr-block {
+      text-align: center;
     }
 
     .qr-wrap {
       background: white;
       padding: 1.5mm;
       border-radius: 1.5mm;
-      box-shadow: 0 1mm 4mm rgba(0,0,0,0.3);
+      display: inline-block;
     }
 
     .qr-wrap img {
-      width: 17mm;
-      height: 17mm;
+      width: 19mm;
+      height: 19mm;
       display: block;
     }
 
-    .no-records {
-      font-family: system-ui, sans-serif;
-      font-size: 7.5pt;
-      color: rgba(255,255,255,0.4);
-      font-style: italic;
+    .qr-label {
+      font-family: 'Alegreya Sans', sans-serif;
+      font-size: 6pt;
+      opacity: 0.65;
+      margin-top: 1mm;
+      text-align: center;
     }
   </style>
 </head>
 <body>
+  <div class="bg-gradient"></div>
+  <div class="deco-circle-1"></div>
+  <div class="deco-circle-2"></div>
 
-  <!-- HEADER -->
-  <div class="header">
-    <div class="brand">
-      {% if logo_b64 %}
-      <img src="data:image/png;base64,{{ logo_b64 }}" alt="Bigotes y Paticas" class="brand-logo">
-      {% endif %}
-      <span class="brand-name">Bigotes y Paticas</span>
+  <div class="content">
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="logo-wrap">
+        <img src="assets/logo.png" alt="Bigotes y Paticas" class="logo">
+        <span class="brand-name">Bigotes y Paticas</span>
+      </div>
+      <p class="card-title">Carnet de Salud</p>
     </div>
-    <span class="card-badge">Carnet de Salud</span>
-  </div>
 
-  <div class="divider"></div>
+    <div class="divider"></div>
 
-  <!-- MASCOTA -->
-  <div class="pet-section">
-    <div class="pet-photo-wrap">
+    <!-- FOTO + NOMBRE -->
+    <div class="pet-section">
       {% if photo_b64 %}
-      <img src="data:image/jpeg;base64,{{ photo_b64 }}" alt="{{ pet.name }}">
+        <div class="pet-photo-ring">
+          <img src="data:image/jpeg;base64,{{ photo_b64 }}" alt="{{ pet.name }}">
+        </div>
       {% else %}
-      <div class="pet-photo-placeholder">{{ emoji }}</div>
+        <div class="pet-photo-placeholder">{{ emoji }}</div>
       {% endif %}
-    </div>
-    <div class="pet-info">
-      <div class="pet-name">{{ pet.name }}</div>
-      <div class="pet-meta">
-        {% if pet.species %}<strong>{{ pet.species|title }}</strong>{% endif %}
-        {% if pet.breed %} · {{ pet.breed }}{% endif %}
+
+      <h1 class="pet-name">{{ pet.name }}</h1>
+      <p class="pet-meta">
+        {% if pet.species %}{{ pet.species|title }}{% endif %}
+        {% if pet.breed %} &middot; {{ pet.breed }}{% endif %}
         {% if pet.age_display %}<br>{{ pet.age_display }}{% endif %}
-        {% if pet.weight_kg %} · {{ pet.weight_kg }} kg{% endif %}
-      </div>
+        {% if pet.weight_kg %} &middot; {{ pet.weight_kg }} kg{% endif %}
+      </p>
     </div>
-  </div>
 
-  <!-- DATOS BÁSICOS -->
-  {% if pet.birth_date or pet.food_brand %}
-  <div class="divider"></div>
-  <div class="section">
-    <div class="section-title">Datos básicos</div>
-    <div class="data-grid">
-      {% if pet.birth_date %}
-      <div class="data-item">
-        <div class="data-label">Nacimiento</div>
-        <div class="data-value">{{ pet.birth_date|format_date }}</div>
+    <!-- DATOS BÁSICOS -->
+    {% if pet.birth_date or pet.food_brand or pet.weight_kg %}
+    <div class="divider"></div>
+    <div class="section">
+      <p class="section-title">Datos básicos</p>
+      <div class="data-grid">
+        {% if pet.birth_date %}
+        <div class="data-item">
+          <div class="data-label">Nacimiento</div>
+          <div class="data-value">{{ pet.birth_date|format_date }}</div>
+        </div>
+        {% endif %}
+        {% if pet.weight_kg %}
+        <div class="data-item">
+          <div class="data-label">Peso</div>
+          <div class="data-value">{{ pet.weight_kg }} kg</div>
+        </div>
+        {% endif %}
+        {% if pet.food_brand %}
+        <div class="data-item">
+          <div class="data-label">Alimento</div>
+          <div class="data-value">{{ pet.food_brand }}</div>
+        </div>
+        {% endif %}
+        {% if pet.food_freq_days %}
+        <div class="data-item">
+          <div class="data-label">Reposición</div>
+          <div class="data-value">Cada {{ pet.food_freq_days }} días</div>
+        </div>
+        {% endif %}
       </div>
-      {% endif %}
-      {% if pet.weight_kg %}
-      <div class="data-item">
-        <div class="data-label">Peso</div>
-        <div class="data-value">{{ pet.weight_kg }} kg</div>
-      </div>
-      {% endif %}
-      {% if pet.food_brand %}
-      <div class="data-item">
-        <div class="data-label">Alimento</div>
-        <div class="data-value">{{ pet.food_brand }}</div>
-      </div>
-      {% endif %}
-      {% if pet.food_freq_days %}
-      <div class="data-item">
-        <div class="data-label">Frecuencia reposición</div>
-        <div class="data-value">Cada {{ pet.food_freq_days }} días</div>
-      </div>
-      {% endif %}
     </div>
-  </div>
-  {% endif %}
-
-  <!-- VACUNAS -->
-  <div class="divider"></div>
-  <div class="section">
-    <div class="section-title">Vacunación</div>
-    {% if vaccines %}
-    <table class="health-table">
-      <tr>
-        <th>Vacuna</th>
-        <th>Aplicada</th>
-        <th>Próxima dosis</th>
-      </tr>
-      {% for v in vaccines %}
-      <tr>
-        <td>{{ v.name }}</td>
-        <td>{{ v.applied_at|format_date }}</td>
-        <td class="{% if v.is_due_soon %}due-soon{% endif %}">
-          {{ v.next_due_at|format_date if v.next_due_at else '—' }}
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-    {% set alerts = vaccines|selectattr('is_due_soon')|list %}
-    {% for v in alerts %}
-    <div class="alert-box">
-      ⚠ {{ v.name }} — próxima dosis antes de {{ v.next_due_at|format_date }}
-    </div>
-    {% endfor %}
-    {% else %}
-    <div class="no-records">Sin vacunas registradas</div>
     {% endif %}
-  </div>
 
-  <!-- DESPARASITACIÓN -->
-  {% if dewormings %}
-  <div class="divider"></div>
-  <div class="section">
-    <div class="section-title">Desparasitación</div>
-    <table class="health-table">
-      <tr>
-        <th>Producto</th>
-        <th>Aplicado</th>
-        <th>Próxima</th>
-      </tr>
+    <!-- VACUNAS -->
+    <div class="divider"></div>
+    <div class="section">
+      <p class="section-title">Vacunación</p>
+      {% if vaccines %}
+        {% for v in vaccines %}
+        <div class="data-row">
+          <span class="label">{{ v.name }}</span>
+          <span class="value {% if v.is_due_soon %}due-soon{% endif %}">
+            {{ v.applied_at|format_date }}
+            {%- if v.next_due_at %} → {{ v.next_due_at|format_date }}{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+        {% for v in vaccines %}
+          {% if v.is_due_soon %}
+          <div class="alert">
+            ⚠ <strong>{{ v.name }}</strong> — próxima dosis: {{ v.next_due_at|format_date }}
+          </div>
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        <p class="no-records">Sin vacunas registradas aún</p>
+      {% endif %}
+    </div>
+
+    <!-- DESPARASITACIÓN -->
+    {% if dewormings %}
+    <div class="divider"></div>
+    <div class="section">
+      <p class="section-title">Desparasitación</p>
       {% for d in dewormings %}
-      <tr>
-        <td>{{ d.name }}</td>
-        <td>{{ d.applied_at|format_date }}</td>
-        <td class="{% if d.is_due_soon %}due-soon{% endif %}">
-          {{ d.next_due_at|format_date if d.next_due_at else '—' }}
-        </td>
-      </tr>
+      <div class="data-row">
+        <span class="label">{{ d.name }}</span>
+        <span class="value {% if d.is_due_soon %}due-soon{% endif %}">
+          {{ d.applied_at|format_date }}
+          {%- if d.next_due_at %} → {{ d.next_due_at|format_date }}{% endif %}
+        </span>
+      </div>
       {% endfor %}
-    </table>
-  </div>
-  {% endif %}
+    </div>
+    {% endif %}
 
-  <!-- OTRAS CONSULTAS (máx 2) -->
-  {% if other_records %}
-  <div class="divider"></div>
-  <div class="section">
-    <div class="section-title">Otras consultas</div>
-    <table class="health-table">
-      {% for r in other_records %}
-      <tr>
-        <td>{{ r.record_type|title }}</td>
-        <td>{{ r.name }}</td>
-        <td>{{ r.applied_at|format_date }}</td>
-      </tr>
-      {% endfor %}
-    </table>
-  </div>
-  {% endif %}
+    <!-- ALIMENTACIÓN (si tiene detalles) -->
+    {% if pet.food_brand and pet.food_freq_days and not (pet.birth_date or pet.weight_kg) %}
+    <div class="divider"></div>
+    <div class="section">
+      <p class="section-title">Alimentación</p>
+      <div class="data-row">
+        <span class="label">Marca / Tipo</span>
+        <span class="value">{{ pet.food_brand }}</span>
+      </div>
+      <div class="data-row">
+        <span class="label">Frecuencia compra</span>
+        <span class="value">Cada {{ pet.food_freq_days }} días</span>
+      </div>
+    </div>
+    {% endif %}
+
+  </div><!-- /content -->
 
   <!-- FOOTER -->
   <div class="footer">
-    <div class="footer-text">
-      <strong>{{ customer.full_name or '—' }}</strong><br>
+    <div class="footer-info">
+      <strong>{{ customer.full_name or '—' }}</strong>
       {% if customer.phone %}📱 {{ customer.phone }}<br>{% endif %}
-      Bigotes y Paticas · Dosquebradas<br>
-      Emitido {{ today }}
+      <div class="footer-meta">
+        Bigotes y Paticas &middot; Dosquebradas, Risaralda<br>
+        Emitido el {{ today }} &middot; mi.bigotesypaticas.com
+      </div>
     </div>
+
     {% if qr_b64 %}
-    <div class="qr-wrap">
-      <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Carnet">
+    <div class="qr-block">
+      <div class="qr-wrap">
+        <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Carnet">
+      </div>
+      <p class="qr-label">Escanea aquí</p>
     </div>
     {% endif %}
   </div>
