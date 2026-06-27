@@ -54,15 +54,7 @@ export default async function BlogPostPage({ params }: Props) {
 
   return (
     <>
-      <ArticleSchema
-        title={post.title}
-        description={post.meta_description || post.excerpt || undefined}
-        imageUrl={post.cover_image_url || undefined}
-        publishedAt={post.published_at || undefined}
-        updatedAt={post.updated_at || undefined}
-        author={post.author}
-        url={postUrl}
-      />
+      <ArticleSchema post={post} />
       <BreadcrumbSchema
         items={[
           { name: 'Inicio', url: 'https://bigotesypaticas.com' },

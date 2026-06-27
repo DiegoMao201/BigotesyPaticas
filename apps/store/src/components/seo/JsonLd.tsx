@@ -1,15 +1,10 @@
-const CDN_LOGO =
-  'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
+import { BUSINESS_INFO } from '@/lib/business-info';
 
-export interface ProductSchemaProps {
-  name: string;
-  description?: string;
-  imageUrl?: string;
-  sku?: string;
-  brand?: string;
-  price: string | number;
-  inStock: boolean;
-  slug: string;
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+
+export interface FAQ {
+  pregunta: string;
+  respuesta: string;
 }
 
 export interface BreadcrumbItem {
@@ -17,20 +12,35 @@ export interface BreadcrumbItem {
   url: string;
 }
 
-export interface FAQ {
-  pregunta: string;
-  respuesta: string;
+interface ProductData {
+  name: string;
+  slug: string;
+  sku?: string | null;
+  brand?: { name: string } | null;
+  category?: { name: string; slug: string } | null;
+  price: string | number;
+  in_stock: boolean;
+  primary_image_url?: string | null;
+  images?: string[];
+  short_description?: string | null;
+  enriched_content?: {
+    descripcion?: string;
+    descripcion_corta?: string;
+    faqs?: FAQ[];
+  } | null;
 }
 
-export interface ArticleSchemaProps {
+interface ArticleData {
   title: string;
-  description?: string;
-  imageUrl?: string;
-  publishedAt?: string;
-  updatedAt?: string;
-  author?: string;
-  url: string;
+  slug: string;
+  cover_image_url?: string | null;
+  published_at?: string | null;
+  updated_at?: string | null;
+  meta_description?: string | null;
+  excerpt?: string | null;
 }
+
+// ─── Helper interno ──────────────────────────────────────────────────────────
 
 function JsonLd({ data }: { data: object }) {
   return (
@@ -41,40 +51,50 @@ function JsonLd({ data }: { data: object }) {
   );
 }
 
+// ─── OrganizationSchema ───────────────────────────────────────────────────────
+// Renderizar UNA VEZ en layout.tsx (root)
+
 export function OrganizationSchema() {
   return (
     <JsonLd
       data={{
         '@context': 'https://schema.org',
         '@type': 'Organization',
-        name: 'Bigotes y Paticas',
-        url: 'https://bigotesypaticas.com',
-        logo: CDN_LOGO,
-        description:
-          'Tienda premium de productos para mascotas en Pereira y Dosquebradas, Risaralda, Colombia',
+        '@id': `${BUSINESS_INFO.url}/#organization`,
+        name: BUSINESS_INFO.name,
+        alternateName: BUSINESS_INFO.alternateName,
+        legalName: BUSINESS_INFO.legalName,
+        url: BUSINESS_INFO.url,
+        logo: {
+          '@type': 'ImageObject',
+          url: BUSINESS_INFO.logo,
+          width: 512,
+          height: 512,
+        },
+        image: BUSINESS_INFO.logo,
+        description: BUSINESS_INFO.description,
         address: {
           '@type': 'PostalAddress',
-          addressLocality: 'Dosquebradas',
-          addressRegion: 'Risaralda',
-          postalCode: '661001',
-          addressCountry: 'CO',
+          ...BUSINESS_INFO.address,
         },
-        contactPoint: {
-          '@type': 'ContactPoint',
-          telephone: '+573206876633',
-          contactType: 'customer service',
-          email: 'bigotesypaticasdosquebradas@gmail.com',
-          areaServed: 'CO',
-          availableLanguage: 'Spanish',
-        },
-        sameAs: [
-          'https://www.facebook.com/bigotesypaticas',
-          'https://www.instagram.com/bigotesypaticas',
+        contactPoint: [
+          {
+            '@type': 'ContactPoint',
+            telephone: BUSINESS_INFO.phone,
+            contactType: 'customer service',
+            email: BUSINESS_INFO.email,
+            areaServed: [...BUSINESS_INFO.areaServed],
+            availableLanguage: 'Spanish',
+          },
         ],
+        ...(BUSINESS_INFO.sameAs.length > 0 && { sameAs: [...BUSINESS_INFO.sameAs] }),
       }}
     />
   );
 }
+
+// ─── LocalBusinessSchema ──────────────────────────────────────────────────────
+// Renderizar UNA VEZ en layout.tsx (root)
 
 export function LocalBusinessSchema() {
   return (
@@ -82,71 +102,168 @@ export function LocalBusinessSchema() {
       data={{
         '@context': 'https://schema.org',
         '@type': 'PetStore',
-        name: 'Bigotes y Paticas',
-        image: CDN_LOGO,
-        '@id': 'https://bigotesypaticas.com',
-        url: 'https://bigotesypaticas.com',
-        telephone: '+573206876633',
-        email: 'bigotesypaticasdosquebradas@gmail.com',
-        priceRange: '$$',
+        '@id': `${BUSINESS_INFO.url}/#localbusiness`,
+        name: BUSINESS_INFO.name,
+        image: [BUSINESS_INFO.logo],
+        url: BUSINESS_INFO.url,
+        telephone: BUSINESS_INFO.phone,
+        email: BUSINESS_INFO.email,
+        priceRange: BUSINESS_INFO.priceRange,
+        currenciesAccepted: BUSINESS_INFO.currenciesAccepted,
+        paymentAccepted: [...BUSINESS_INFO.paymentMethods].join(', '),
         address: {
           '@type': 'PostalAddress',
-          addressLocality: 'Dosquebradas',
-          addressRegion: 'Risaralda',
-          postalCode: '661001',
-          addressCountry: 'CO',
+          ...BUSINESS_INFO.address,
         },
         geo: {
           '@type': 'GeoCoordinates',
-          latitude: 4.8333,
-          longitude: -75.6833,
+          latitude: BUSINESS_INFO.geo.latitude,
+          longitude: BUSINESS_INFO.geo.longitude,
         },
-        openingHoursSpecification: [
-          {
-            '@type': 'OpeningHoursSpecification',
-            dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-            opens: '09:00',
-            closes: '19:00',
+        hasMap: BUSINESS_INFO.mapsUrl,
+        openingHoursSpecification: BUSINESS_INFO.openingHours.map((h) => ({
+          '@type': 'OpeningHoursSpecification',
+          dayOfWeek: [...h.days],
+          opens: h.opens,
+          closes: h.closes,
+        })),
+        areaServed: BUSINESS_INFO.areaServed.map((city) => ({
+          '@type': 'City',
+          name: city,
+          containedInPlace: {
+            '@type': 'AdministrativeArea',
+            name: 'Risaralda',
           },
-        ],
-        areaServed: [
-          { '@type': 'City', name: 'Pereira' },
-          { '@type': 'City', name: 'Dosquebradas' },
-        ],
-        hasMap: 'https://maps.google.com/?q=Dosquebradas,Risaralda,Colombia',
+        })),
+        amenityFeature: [
+          BUSINESS_INFO.features.wheelchairAccessibleEntrance && {
+            '@type': 'LocationFeatureSpecification',
+            name: 'Wheelchair-accessible entrance',
+            value: true,
+          },
+          BUSINESS_INFO.features.homeDelivery && {
+            '@type': 'LocationFeatureSpecification',
+            name: 'Home delivery',
+            value: true,
+          },
+          BUSINESS_INFO.features.curbsidePickup && {
+            '@type': 'LocationFeatureSpecification',
+            name: 'Curbside pickup',
+            value: true,
+          },
+          BUSINESS_INFO.features.inStorePickup && {
+            '@type': 'LocationFeatureSpecification',
+            name: 'In-store pickup',
+            value: true,
+          },
+        ].filter(Boolean),
+        aggregateRating: {
+          '@type': 'AggregateRating',
+          ratingValue: BUSINESS_INFO.rating.value,
+          reviewCount: BUSINESS_INFO.rating.reviewCount,
+          bestRating: BUSINESS_INFO.rating.bestRating,
+        },
       }}
     />
   );
 }
 
-export function ProductSchema({
-  name, description, imageUrl, sku, brand, price, inStock, slug,
-}: ProductSchemaProps) {
-  return (
-    <JsonLd
-      data={{
-        '@context': 'https://schema.org',
-        '@type': 'Product',
-        name,
-        ...(imageUrl && { image: [imageUrl] }),
-        ...(description && { description }),
-        ...(sku && { sku }),
-        brand: { '@type': 'Brand', name: brand || 'Genérico' },
-        offers: {
-          '@type': 'Offer',
-          url: `https://bigotesypaticas.com/producto/${slug}`,
-          priceCurrency: 'COP',
-          price: Number(price),
-          availability: inStock
-            ? 'https://schema.org/InStock'
-            : 'https://schema.org/OutOfStock',
-          seller: { '@type': 'Organization', name: 'Bigotes y Paticas' },
-          areaServed: ['Pereira', 'Dosquebradas'],
+// ─── ProductSchema ────────────────────────────────────────────────────────────
+// Renderizar en cada página de producto
+
+export function ProductSchema({ product }: { product: ProductData }) {
+  const enriched = product.enriched_content;
+  const description =
+    enriched?.descripcion ||
+    enriched?.descripcion_corta ||
+    product.short_description ||
+    product.name;
+
+  const imageUrls = [
+    product.primary_image_url,
+    ...(product.images ?? []),
+  ].filter(Boolean) as string[];
+
+  const price = Number(product.price);
+  const priceValidUntil = new Date();
+  priceValidUntil.setMonth(priceValidUntil.getMonth() + 6);
+
+  const schema: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    ...(imageUrls.length > 0 && { image: imageUrls }),
+    description,
+    sku: product.sku ?? undefined,
+    mpn: product.sku ?? undefined,
+    brand: {
+      '@type': 'Brand',
+      name: product.brand?.name || 'Bigotes y Paticas',
+    },
+    ...(product.category?.name && { category: product.category.name }),
+    offers: {
+      '@type': 'Offer',
+      url: `${BUSINESS_INFO.url}/producto/${product.slug}`,
+      priceCurrency: 'COP',
+      price,
+      priceValidUntil: priceValidUntil.toISOString().split('T')[0],
+      availability: product.in_stock
+        ? 'https://schema.org/InStock'
+        : 'https://schema.org/OutOfStock',
+      itemCondition: 'https://schema.org/NewCondition',
+      seller: {
+        '@type': 'Organization',
+        '@id': `${BUSINESS_INFO.url}/#organization`,
+      },
+      shippingDetails: {
+        '@type': 'OfferShippingDetails',
+        shippingRate: {
+          '@type': 'MonetaryAmount',
+          value:
+            price >= BUSINESS_INFO.shipping.freeShippingMinimum
+              ? '0'
+              : String(BUSINESS_INFO.shipping.standardShippingCost),
+          currency: 'COP',
         },
-      }}
-    />
-  );
+        shippingDestination: BUSINESS_INFO.areaServed.map((city) => ({
+          '@type': 'DefinedRegion',
+          addressCountry: 'CO',
+          addressRegion: 'Risaralda',
+          addressLocality: city,
+        })),
+        deliveryTime: {
+          '@type': 'ShippingDeliveryTime',
+          handlingTime: {
+            '@type': 'QuantitativeValue',
+            minValue: BUSINESS_INFO.shipping.handlingDaysMin,
+            maxValue: BUSINESS_INFO.shipping.handlingDaysMax,
+            unitCode: 'DAY',
+          },
+          transitTime: {
+            '@type': 'QuantitativeValue',
+            minValue: BUSINESS_INFO.shipping.transitDaysMin,
+            maxValue: BUSINESS_INFO.shipping.transitDaysMax,
+            unitCode: 'DAY',
+          },
+        },
+      },
+      hasMerchantReturnPolicy: {
+        '@type': 'MerchantReturnPolicy',
+        applicableCountry: BUSINESS_INFO.returns.country,
+        returnPolicyCategory:
+          'https://schema.org/MerchantReturnFiniteReturnWindow',
+        merchantReturnDays: BUSINESS_INFO.returns.window,
+        returnMethod: `https://schema.org/${BUSINESS_INFO.returns.method}`,
+        returnFees: `https://schema.org/${BUSINESS_INFO.returns.fees}`,
+      },
+    },
+  };
+
+  return <JsonLd data={schema} />;
 }
+
+// ─── BreadcrumbSchema ────────────────────────────────────────────────────────
+// Renderizar en producto, categoría, blog, landing
 
 export function BreadcrumbSchema({ items }: { items: BreadcrumbItem[] }) {
   return (
@@ -165,6 +282,9 @@ export function BreadcrumbSchema({ items }: { items: BreadcrumbItem[] }) {
   );
 }
 
+// ─── FAQPageSchema ────────────────────────────────────────────────────────────
+// Renderizar en producto si hay FAQs en enriched_content
+
 export function FAQPageSchema({ faqs }: { faqs: FAQ[] }) {
   if (!faqs || faqs.length === 0) return null;
   return (
@@ -182,29 +302,38 @@ export function FAQPageSchema({ faqs }: { faqs: FAQ[] }) {
   );
 }
 
-export function ArticleSchema({
-  title, description, imageUrl, publishedAt, updatedAt, author, url,
-}: ArticleSchemaProps) {
+// ─── ArticleSchema ────────────────────────────────────────────────────────────
+// Renderizar en posts del blog
+
+export function ArticleSchema({ post }: { post: ArticleData }) {
   return (
     <JsonLd
       data={{
         '@context': 'https://schema.org',
         '@type': 'Article',
-        headline: title,
-        ...(description && { description }),
-        ...(imageUrl && { image: imageUrl }),
-        ...(publishedAt && { datePublished: publishedAt }),
-        ...(updatedAt && { dateModified: updatedAt }),
+        headline: post.title,
+        ...(post.cover_image_url && { image: [post.cover_image_url] }),
+        ...(post.published_at && { datePublished: post.published_at }),
+        ...(post.updated_at && { dateModified: post.updated_at }),
         author: {
           '@type': 'Organization',
-          name: author || 'Equipo Bigotes y Paticas',
+          '@id': `${BUSINESS_INFO.url}/#organization`,
+          name: BUSINESS_INFO.name,
         },
         publisher: {
           '@type': 'Organization',
-          name: 'Bigotes y Paticas',
-          logo: { '@type': 'ImageObject', url: CDN_LOGO },
+          '@id': `${BUSINESS_INFO.url}/#organization`,
+          name: BUSINESS_INFO.name,
+          logo: {
+            '@type': 'ImageObject',
+            url: BUSINESS_INFO.logo,
+          },
         },
-        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+        description: post.meta_description || post.excerpt || undefined,
+        mainEntityOfPage: {
+          '@type': 'WebPage',
+          '@id': `${BUSINESS_INFO.url}/blog/${post.slug}`,
+        },
       }}
     />
   );

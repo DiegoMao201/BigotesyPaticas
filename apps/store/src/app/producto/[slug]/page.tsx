@@ -72,16 +72,7 @@ export default async function ProductPage({ params }: Props) {
 
   return (
     <>
-      <ProductSchema
-        name={product.name}
-        description={product.enriched_content?.descripcion || product.short_description || undefined}
-        imageUrl={product.primary_image_url || undefined}
-        sku={product.sku}
-        brand={product.brand?.name}
-        price={product.price}
-        inStock={product.in_stock}
-        slug={product.slug}
-      />
+      <ProductSchema product={product} />
       <BreadcrumbSchema
         items={[
           { name: 'Inicio', url: 'https://bigotesypaticas.com' },

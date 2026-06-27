@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { storeApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import { BreadcrumbSchema, LocalBusinessSchema } from '@/components/seo/JsonLd';
+import { BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { MapPin, Truck, ChevronRight } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -44,7 +44,6 @@ export default async function LandingPage({ params }: Props) {
           { name: landing.h1, url: pageUrl },
         ]}
       />
-      <LocalBusinessSchema />
 
       {/* Hero */}
       <header className="py-14 text-center bg-gradient-to-b from-teal-50/60 to-transparent border-b border-border/40">

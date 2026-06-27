@@ -1,6 +1,7 @@
 import { storeApi } from '@/lib/api';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { CatalogGrid, type FilterChip } from '@/components/CatalogGrid';
 
 export const dynamic = 'force-dynamic';
@@ -103,6 +104,12 @@ export default async function CategoryPage({ params }: { params: { slug: string 
 
   return (
     <div className="container-wide py-8">
+      <BreadcrumbSchema
+        items={[
+          { name: 'Inicio', url: 'https://bigotesypaticas.com' },
+          { name: label, url: `https://bigotesypaticas.com/categorias/${slug}` },
+        ]}
+      />
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground mb-6">
         <Link href="/" className="hover:text-brand-600 transition-colors flex items-center gap-1">
