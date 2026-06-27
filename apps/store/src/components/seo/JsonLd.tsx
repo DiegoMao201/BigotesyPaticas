@@ -64,6 +64,7 @@ export function OrganizationSchema() {
         name: BUSINESS_INFO.name,
         alternateName: BUSINESS_INFO.alternateName,
         legalName: BUSINESS_INFO.legalName,
+        taxID: BUSINESS_INFO.legal.nit,
         url: BUSINESS_INFO.url,
         logo: {
           '@type': 'ImageObject',

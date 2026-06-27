@@ -193,7 +193,7 @@ export function Footer() {
       {/* Legal bar */}
       <div className="border-t border-border">
         <div className="container-wide py-6 flex flex-col md:flex-row justify-between items-center gap-3 text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} Bigotes y Paticas. Mall Zamara Plaza, Cl. 15 #3A-07 Local 2, Dosquebradas, Risaralda.</p>
+          <p>© {new Date().getFullYear()} Bigotes y Paticas · {BUSINESS_INFO.legal.nitFormatted} · {BUSINESS_INFO.legal.owner} · Mall Zamara Plaza, Cl. 15 #3A-07 Local 2, Dosquebradas, Risaralda.</p>
           <div className="flex gap-4">
             <Link href="/politica-privacidad" className="hover:text-brand">Privacidad</Link>
             <Link href="/terminos" className="hover:text-brand">Términos</Link>

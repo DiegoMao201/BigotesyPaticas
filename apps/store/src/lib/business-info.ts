@@ -1,7 +1,7 @@
 /** Fuente única de verdad para datos del negocio — usada en todos los schemas JSON-LD. */
 export const BUSINESS_INFO = {
   name: "Bigotes y Paticas",
-  legalName: "Bigotes y Paticas",
+  legalName: "Diego Mauricio García — Bigotes y Paticas",
   alternateName: "Bigotes y Paticas Dosquebradas",
   description:
     "Tienda premium de productos para mascotas en Dosquebradas. Concentrados, accesorios, medicamentos veterinarios con entrega 24-72h en Pereira y Dosquebradas.",
@@ -90,4 +90,13 @@ export const BUSINESS_INFO = {
 
   // Agregar cuando se activen redes sociales
   sameAs: [] as string[],
+
+  legal: {
+    nit: "1088266407",
+    nitFormatted: "NIT 1088266407-7",
+    owner: "Diego Mauricio García",
+    regime: "Régimen Simple de Tributación",
+    dataProtectionLaw: "Ley 1581 de 2012",
+    privacyEmail: "bigotesypaticasdosquebradas@gmail.com",
+  },
 } as const;
