@@ -11,29 +11,12 @@ function buildTemplate(customer: Customer): string {
   const firstName = customer.full_name?.split(' ')[0] ?? 'amigo';
   const petName = customer.pet_name ?? 'tu mascota';
   const referralCode = customer.referral_code ?? '';
-  const referralUrl = referralCode
+  const url = referralCode
     ? `https://mi.bigotesypaticas.com/?ref=${referralCode}`
     : 'https://mi.bigotesypaticas.com/registro';
 
-  return `¡Hola ${firstName}! 🐾
-
-Soy de Bigotes y Paticas. ¡Tenemos novedades para ti!
-
-Creamos una App exclusiva para nuestros clientes donde puedes:
-
-✨ Llevar el carnet digital de ${petName}
-✨ Pedir a domicilio en 1 clic
-✨ Ganar puntos en cada compra (1 punto = $1.000)
-✨ Recibir recordatorios de vacunas y desparasitación
-✨ Ver tu historial completo de compras
-
-Te regalamos 100 Puntos Bigotes solo por registrarte (= $100 de descuento).
-
-👉 ${referralUrl}
-
-Si nos quieres calificar en Google mientras tanto: ${GOOGLE_REVIEW_URL}
-
-¡Cuidamos a quien te cuida! 🐶🐱`;
+  // Keep under ~300 chars so WhatsApp reliably passes the full text to the native app
+  return `Hola ${firstName}! Soy de Bigotes y Paticas. Creamos una app donde puedes pedir domicilio, llevar el carnet de ${petName} y ganar puntos. Registrate gratis: ${url}`;
 }
 
 interface Props {
@@ -72,13 +55,16 @@ export function InviteToPortalModal({ customer, open, onClose }: Props) {
           {customer.phone && <span> · {customer.phone}</span>}
         </p>
 
-        <label className="text-xs font-medium text-gray-600 mb-1 block">
-          Mensaje (editable):
-        </label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs font-medium text-gray-600">Mensaje (editable):</label>
+          <span className={`text-xs font-mono ${message.length > 300 ? 'text-amber-600 font-bold' : 'text-gray-400'}`}>
+            {message.length} chars {message.length > 300 ? '⚠ puede truncarse en WhatsApp' : '✓ OK'}
+          </span>
+        </div>
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          rows={14}
+          rows={8}
           className="w-full rounded-xl border border-gray-200 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono leading-relaxed mb-4"
         />
 
