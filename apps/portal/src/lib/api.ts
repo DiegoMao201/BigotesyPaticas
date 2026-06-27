@@ -327,7 +327,14 @@ export const catalog = {
     if (search) params.set('q', search);
     if (categoryId) params.set('category_id', categoryId);
     return fetch(`/api/v1/products?${params}`)
-      .then((r) => r.json()) as Promise<{ items: PublicProduct[] }>;
+      .then((r) => r.json())
+      .then((data: { items: Record<string, unknown>[] }) => ({
+        items: data.items.map((p) => ({
+          ...p,
+          // API returns primary_image_url; portal expects image_url
+          image_url: (p.image_url ?? p.primary_image_url ?? null) as string | null,
+        })),
+      })) as Promise<{ items: PublicProduct[] }>;
   },
 };
 
