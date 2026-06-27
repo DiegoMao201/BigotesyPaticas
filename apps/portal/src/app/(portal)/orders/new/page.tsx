@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Search, ShoppingCart, Loader2, Star, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
+import { Search, ShoppingCart, Star, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import Image from 'next/image';
-import { orders, pets, catalog, auth, referral as referralApi, type PublicProduct, type Pet, type TopProduct } from '@/lib/api';
+import { orders, pets, catalog, auth, type PublicProduct, type TopProduct } from '@/lib/api';
 import { formatCOP, getSpeciesEmoji } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { usePortalCart } from '@/lib/cart-store';
@@ -31,7 +31,6 @@ function categoryIcon(slug: string) {
 
 export default function NewOrderPage() {
   const router = useRouter();
-  const qc = useQueryClient();
 
   const addItemToCart = usePortalCart((s) => s.addItem);
 
@@ -69,29 +68,28 @@ export default function NewOrderPage() {
   });
   const filteredProducts = catalogData?.items ?? [];
 
-  const { mutate: createOrder, isPending } = useMutation({
-    mutationFn: () => {
-      const prod = selected as any;
-      return orders.create({
-        product_id: prod.id,
-        pet_id: selectedPetId || undefined,
-        quantity: qty,
-        notes: notes || undefined,
-      });
-    },
-    onSuccess: (order) => {
-      qc.invalidateQueries({ queryKey: ['portal-orders'] });
-      toast.success(
-        order.points_earned
-          ? `Pedido enviado ✓ +${order.points_earned} puntos`
-          : 'Pedido enviado con éxito',
-      );
-      router.replace('/orders');
-    },
-    onError: (err: any) => toast.error(err.message ?? 'Error al enviar pedido'),
-  });
-
   const selectedPrice = (selected as any)?.price ?? 0;
+
+  function handleAddToCart() {
+    if (!selected) return;
+    const prod = selected as any;
+    const petName = selectedPetId ? petsData?.find((p) => p.id === selectedPetId)?.name : null;
+    const finalNotes = [notes, petName ? `Para: ${petName}` : ''].filter(Boolean).join(' | ') || undefined;
+    addItemToCart({
+      product_id: prod.id,
+      sku: prod.sku ?? '',
+      name: prod.name,
+      image_url: prod.image_url ?? null,
+      unit_price: prod.price,
+      quantity: qty,
+      notes: finalNotes,
+    });
+    toast.success(`${prod.name.slice(0, 30)}... agregado al carrito 🛒`);
+    setSelected(null);
+    setQty(1);
+    setNotes('');
+    setSelectedPetId('');
+  }
 
   function shareWhatsApp() {
     const code = me?.referral_code;
@@ -131,7 +129,7 @@ export default function NewOrderPage() {
           >
             ← Volver
           </button>
-          <h1 className="font-display text-xl font-bold">Confirmar pedido</h1>
+          <h1 className="font-display text-xl font-bold">Agregar al carrito</h1>
         </div>
 
         <div className="card flex items-center gap-4 py-3 border-2 border-primary-700">
@@ -238,19 +236,16 @@ export default function NewOrderPage() {
           />
         </div>
 
-        <button onClick={() => createOrder()} disabled={isPending} className="btn-primary">
-          {isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <>
-              <ShoppingCart className="h-4 w-4" />
-              Enviar pedido
-            </>
-          )}
+        <button onClick={handleAddToCart} className="btn-primary">
+          <ShoppingCart className="h-4 w-4" />
+          Agregar al carrito
         </button>
-        <p className="text-xs text-muted text-center">
-          Un asesor confirmará y coordinará la entrega por WhatsApp.
-        </p>
+        <button
+          onClick={() => { handleAddToCart(); router.push('/pedido'); }}
+          className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl transition flex items-center justify-center gap-2"
+        >
+          Agregar y confirmar pedido →
+        </button>
       </div>
     );
   }

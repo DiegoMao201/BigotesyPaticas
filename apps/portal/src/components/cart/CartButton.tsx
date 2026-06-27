@@ -15,7 +15,7 @@ export function CartButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-24 right-4 z-30 w-14 h-14 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center hover:bg-teal-700 transition"
+        className="fixed bottom-40 right-4 z-40 w-14 h-14 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center hover:bg-teal-700 transition"
         aria-label="Ver carrito"
       >
         <ShoppingCart className="h-6 w-6" />
