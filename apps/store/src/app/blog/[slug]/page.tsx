@@ -122,7 +122,7 @@ export default async function BlogPostPage({ params }: Props) {
         {/* Content */}
         <div
           className="blog-content"
-          dangerouslySetInnerHTML={{ __html: post.content }}
+          dangerouslySetInnerHTML={{ __html: post.content ?? '' }}
         />
 
         {/* Keywords */}
