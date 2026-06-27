@@ -6,7 +6,8 @@ import { formatCurrency } from '@/lib/utils';
 import { AddToCart } from './add-to-cart';
 import { ProductTabs } from './ProductTabs';
 import { StickyCTAMobile } from './StickyCTAMobile';
-import { ProductSchema, BreadcrumbSchema } from '@/components/seo/JsonLd';
+import { ProductSchema, BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
+import { ProductFAQ } from '@/components/seo/ProductFAQ';
 import { Truck, ShieldCheck, RefreshCw, ChevronRight, MessageCircle } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -90,6 +91,9 @@ export default async function ProductPage({ params }: Props) {
           { name: product.name, url: `https://bigotesypaticas.com/producto/${product.slug}` },
         ]}
       />
+      {product.enriched_content?.faqs && product.enriched_content.faqs.length > 0 && (
+        <FAQPageSchema faqs={product.enriched_content.faqs} />
+      )}
 
       {/* Breadcrumbs */}
       <div className="container-wide py-4">
@@ -285,6 +289,13 @@ export default async function ProductPage({ params }: Props) {
         <div className="mt-14 border-t border-border pt-2">
           <ProductTabs product={product} />
         </div>
+
+        {/* ── FAQs ── */}
+        {product.enriched_content?.faqs && product.enriched_content.faqs.length > 0 && (
+          <div className="mt-10 max-w-2xl">
+            <ProductFAQ faqs={product.enriched_content.faqs} />
+          </div>
+        )}
 
         {/* ── Productos relacionados ── */}
         {related.length > 0 && (

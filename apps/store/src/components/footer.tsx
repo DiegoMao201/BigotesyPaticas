@@ -7,7 +7,7 @@ const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
 export function Footer() {
   return (
     <footer className="border-t border-border bg-secondary/40 mt-24">
-      <div className="container-wide py-16 grid gap-12 md:grid-cols-4">
+      <div className="container-wide py-16 grid gap-10 md:grid-cols-5">
         <div>
           <div className="flex items-center gap-2 mb-4">
             <div className="w-10 h-10 rounded-2xl bg-teal-700 flex items-center justify-center overflow-hidden p-1.5">
@@ -29,7 +29,22 @@ export function Footer() {
             <li><Link href="/categorias/perros" className="text-muted-foreground hover:text-brand">Perros</Link></li>
             <li><Link href="/categorias/gatos" className="text-muted-foreground hover:text-brand">Gatos</Link></li>
             <li><Link href="/categorias/accesorios" className="text-muted-foreground hover:text-brand">Accesorios</Link></li>
-            <li><Link href="/ofertas" className="text-muted-foreground hover:text-brand">Ofertas</Link></li>
+            <li><Link href="/categorias/snacks" className="text-muted-foreground hover:text-brand">Snacks</Link></li>
+            <li><Link href="/landing/hills-pereira" className="text-muted-foreground hover:text-brand">Hill's en Pereira</Link></li>
+            <li><Link href="/landing/royal-canin-pereira" className="text-muted-foreground hover:text-brand">Royal Canin Pereira</Link></li>
+            <li><Link href="/landing/antipulgas-perros-colombia" className="text-muted-foreground hover:text-brand">Antipulgas perros</Link></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 className="font-display font-semibold text-sm mb-4 uppercase tracking-wider">Ciudades</h4>
+          <ul className="space-y-2 text-sm">
+            <li><Link href="/landing/comida-perros-pereira" className="text-muted-foreground hover:text-brand">Mascotas Pereira</Link></li>
+            <li><Link href="/landing/concentrado-perro-dosquebradas" className="text-muted-foreground hover:text-brand">Mascotas Dosquebradas</Link></li>
+            <li><Link href="/landing/domicilio-mascotas-pereira" className="text-muted-foreground hover:text-brand">Domicilio Pereira</Link></li>
+            <li><Link href="/landing/domicilio-mascotas-dosquebradas" className="text-muted-foreground hover:text-brand">Domicilio Dosquebradas</Link></li>
+            <li><Link href="/pereira-dosquebradas-mascotas" className="text-muted-foreground hover:text-brand">Pereira y Dosquebradas</Link></li>
+            <li><Link href="/landing/tienda-mascotas-risaralda" className="text-muted-foreground hover:text-brand">Tienda Risaralda</Link></li>
           </ul>
         </div>
 
@@ -39,7 +54,8 @@ export function Footer() {
             <li><Link href="/nosotros" className="text-muted-foreground hover:text-brand">Sobre nosotros</Link></li>
             <li><Link href="/blog" className="text-muted-foreground hover:text-brand">Blog de mascotas</Link></li>
             <li><Link href="/contacto" className="text-muted-foreground hover:text-brand">Contacto</Link></li>
-            <li><Link href="/pereira-dosquebradas-mascotas" className="text-muted-foreground hover:text-brand">Pereira y Dosquebradas</Link></li>
+            <li><Link href="/landing/carnet-digital-mascota" className="text-muted-foreground hover:text-brand">Carnet digital mascota</Link></li>
+            <li><Link href="/landing/app-mascotas-colombia" className="text-muted-foreground hover:text-brand">App para mascotas</Link></li>
             <li>
               <a href="https://mi.bigotesypaticas.com" target="_blank" rel="noopener noreferrer"
                  className="text-muted-foreground hover:text-brand">Portal clientes</a>

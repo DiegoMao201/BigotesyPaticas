@@ -48,6 +48,11 @@ export interface Product {
   enriched_model?: string | null;
 }
 
+export interface FAQ {
+  pregunta: string;
+  respuesta: string;
+}
+
 export interface EnrichedContent {
   descripcion_corta?: string;
   descripcion?: string;
@@ -62,12 +67,27 @@ export interface EnrichedContent {
   modo_de_uso?: string;
   recomendado_para?: string[];
   advertencias?: string[];
+  faqs?: FAQ[];
   seo?: {
     meta_title?: string;
     meta_description?: string;
     keywords?: string[];
     slug?: string;
   };
+}
+
+export interface SeoLanding {
+  id: string;
+  slug: string;
+  target_keyword: string;
+  title: string;
+  h1: string;
+  meta_description: string | null;
+  intro_content: string | null;
+  category_slug: string | null;
+  geographic_focus: string | null;
+  cta_text: string | null;
+  is_active: boolean;
 }
 
 export interface BlogPost {
@@ -155,5 +175,11 @@ export const storeApi = {
   },
   blogBySlug: async (slug: string): Promise<BlogPost | null> => {
     try { return await get<BlogPost>(`/v1/blog/posts/${slug}`); } catch { return null; }
+  },
+  landingBySlug: async (slug: string): Promise<SeoLanding | null> => {
+    try { return await get<SeoLanding>(`/v1/landings/${slug}`); } catch { return null; }
+  },
+  landings: async (): Promise<SeoLanding[]> => {
+    try { return await get<SeoLanding[]>('/v1/landings'); } catch { return []; }
   },
 };

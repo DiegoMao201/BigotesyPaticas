@@ -60,6 +60,10 @@ REGLAS:
 5. recomendado_para: sé específico (edad, tamaño, condición). Máximo 4 items.
 6. beneficios: 3 bullets concisos con emoji ✓.
 7. advertencias: array vacío [] para productos benignos (camas, juguetes, accesorios).
+8. faqs: 3 preguntas frecuentes reales que haría un dueño de mascota sobre ESTE producto.
+9. seo.meta_title: 50-60 chars con keyword principal + "Bigotes y Paticas" al final.
+   seo.meta_description: 140-160 chars con beneficio + CTA + "Pereira/Dosquebradas".
+   seo.keywords: 5-7 keywords relevantes incluyendo ciudad y marca.
 
 DEVUELVE SOLO JSON VÁLIDO — sin markdown, sin ```json, solo el objeto:
 
@@ -80,7 +84,26 @@ DEVUELVE SOLO JSON VÁLIDO — sin markdown, sin ```json, solo el objeto:
   }},
   "modo_de_uso": "Instrucciones seguras y generales de uso",
   "recomendado_para": ["Perros adultos", "Razas medianas"],
-  "advertencias": []
+  "advertencias": [],
+  "faqs": [
+    {{
+      "pregunta": "¿Para qué tamaño de mascota es este producto?",
+      "respuesta": "Respuesta concreta basada en el producto real."
+    }},
+    {{
+      "pregunta": "¿Cada cuánto se usa o se aplica?",
+      "respuesta": "Respuesta basada en uso general del tipo de producto."
+    }},
+    {{
+      "pregunta": "¿Se consigue en Pereira y Dosquebradas?",
+      "respuesta": "Sí, en Bigotes y Paticas lo tenemos disponible con domicilio a toda la zona urbana de Pereira y Dosquebradas en 24-72 horas."
+    }}
+  ],
+  "seo": {{
+    "meta_title": "Nombre del producto + atributo clave | Bigotes y Paticas",
+    "meta_description": "Descripción SEO de 140-160 chars con beneficio y CTA.",
+    "keywords": ["keyword 1 Pereira", "keyword 2 Dosquebradas", "keyword 3", "keyword 4", "keyword 5"]
+  }}
 }}"""
 
 

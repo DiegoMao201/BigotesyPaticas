@@ -5,6 +5,7 @@ import { Providers } from '@/components/providers';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { OrganizationSchema, LocalBusinessSchema } from '@/components/seo/JsonLd';
+import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 const jakarta = Plus_Jakarta_Sans({
@@ -59,13 +60,17 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
-  alternates: { canonical: 'https://bigotesypaticas.com' },
+  alternates: {
+    canonical: 'https://bigotesypaticas.com',
+    types: { 'application/rss+xml': [{ url: '/feed.xml', title: 'Blog Bigotes y Paticas' }] },
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={`${inter.variable} ${jakarta.variable} ${mono.variable} font-sans`}>
+        <GoogleAnalytics />
         <OrganizationSchema />
         <LocalBusinessSchema />
         <Providers>

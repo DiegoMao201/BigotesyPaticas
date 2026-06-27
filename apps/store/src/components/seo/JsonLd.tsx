@@ -17,6 +17,11 @@ export interface BreadcrumbItem {
   url: string;
 }
 
+export interface FAQ {
+  pregunta: string;
+  respuesta: string;
+}
+
 export interface ArticleSchemaProps {
   title: string;
   description?: string;
@@ -154,6 +159,23 @@ export function BreadcrumbSchema({ items }: { items: BreadcrumbItem[] }) {
           position: idx + 1,
           name: item.name,
           item: item.url,
+        })),
+      }}
+    />
+  );
+}
+
+export function FAQPageSchema({ faqs }: { faqs: FAQ[] }) {
+  if (!faqs || faqs.length === 0) return null;
+  return (
+    <JsonLd
+      data={{
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: faqs.map((f) => ({
+          '@type': 'Question',
+          name: f.pregunta,
+          acceptedAnswer: { '@type': 'Answer', text: f.respuesta },
         })),
       }}
     />

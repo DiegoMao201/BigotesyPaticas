@@ -1,6 +1,7 @@
 """Blog público — listado y detalle de artículos SEO."""
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Optional
 
@@ -8,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 
 from app.deps import DBSession
+from app.services.seo_notifications import notify_indexnow
 
 router = APIRouter(prefix="/blog", tags=["blog"])
 
@@ -154,4 +156,10 @@ async def create_post(payload: dict, db: DBSession) -> dict:
         },
     )
     await db.commit()
-    return {"id": str(post_id), "slug": payload.get("slug"), "ok": True}
+    slug = payload.get("slug", "")
+    asyncio.create_task(notify_indexnow([
+        f"https://bigotesypaticas.com/blog/{slug}",
+        "https://bigotesypaticas.com/blog",
+        "https://bigotesypaticas.com/sitemap.xml",
+    ]))
+    return {"id": str(post_id), "slug": slug, "ok": True}
