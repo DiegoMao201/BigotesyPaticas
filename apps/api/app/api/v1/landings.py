@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -10,6 +11,13 @@ from sqlalchemy import text
 from app.deps import DBSession
 
 router = APIRouter(prefix="/landings", tags=["seo-landings"])
+
+
+def _row(mapping) -> dict:
+    d = dict(mapping)
+    if isinstance(d.get("id"), UUID):
+        d["id"] = str(d["id"])
+    return d
 
 
 class LandingOut(BaseModel):
@@ -50,7 +58,7 @@ async def list_landings(db: DBSession, active_only: bool = True):
     rows = await db.execute(
         text(f"SELECT * FROM content.seo_landings {where} ORDER BY created_at DESC")
     )
-    return [dict(r._mapping) for r in rows]
+    return [_row(r._mapping) for r in rows]
 
 
 @router.get("/{slug}", response_model=LandingOut)
@@ -62,7 +70,7 @@ async def get_landing(slug: str, db: DBSession):
     result = row.fetchone()
     if not result:
         raise HTTPException(status_code=404, detail="Landing not found")
-    return dict(result._mapping)
+    return _row(result._mapping)
 
 
 @router.post("", response_model=LandingOut, status_code=201)
@@ -97,4 +105,4 @@ async def upsert_landing(data: LandingCreate, db: DBSession):
         params,
     )
     await db.commit()
-    return dict(row.fetchone()._mapping)
+    return _row(row.fetchone()._mapping)
