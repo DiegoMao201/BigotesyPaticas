@@ -4,10 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Phone, Mail, MapPin, Star } from 'lucide-react';
 import { BUSINESS_INFO } from '@/lib/business-info';
-
-const LOGO_URL =
-  process.env.NEXT_PUBLIC_BRAND_LOGO ??
-  'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
+import { Logo } from '@/components/brand/Logo';
 
 const GOOGLE_REVIEW_URL = 'https://g.page/r/CfL67OgLB-10EBM/review';
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
@@ -88,8 +85,7 @@ export function Footer() {
         <div>
           <div className="flex items-center gap-2 mb-4">
             <div className="w-10 h-10 rounded-2xl bg-teal-700 flex items-center justify-center overflow-hidden p-1.5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={LOGO_URL} alt="Bigotes y Paticas" className="w-full h-full object-contain" />
+              <Logo size={40} className="w-full h-full object-contain" />
             </div>
             <span className="font-display font-bold text-lg">
               Bigotes <span className="text-gradient">y Paticas</span>

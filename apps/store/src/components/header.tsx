@@ -8,9 +8,7 @@ import { useCart } from '@/lib/cart-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-
-const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
-  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
+import { Logo } from '@/components/brand/Logo';
 
 export function Header() {
   const count = useCart((s) => s.count());
@@ -38,8 +36,7 @@ export function Header() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group shrink-0">
           <div className="w-9 h-9 rounded-2xl bg-teal-700 flex items-center justify-center shadow-elegant transition-transform group-hover:scale-105 overflow-hidden p-1.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={LOGO_URL} alt="Bigotes y Paticas" className="w-full h-full object-contain" />
+            <Logo size={36} className="w-full h-full object-contain" priority />
           </div>
           <div className="font-display font-bold text-lg leading-none tracking-tight">
             Bigotes <span className="text-gradient">y Paticas</span>

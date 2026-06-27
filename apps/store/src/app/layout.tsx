@@ -37,6 +37,17 @@ export const metadata: Metadata = {
   creator: 'Bigotes y Paticas',
   publisher: 'Bigotes y Paticas',
   formatDetection: { telephone: false, email: false, address: false },
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '48x48 32x32 16x16' },
+      { url: '/icon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
+    shortcut: ['/favicon.ico'],
+  },
+  manifest: '/site.webmanifest',
   openGraph: {
     type: 'website',
     locale: 'es_CO',
@@ -44,13 +55,18 @@ export const metadata: Metadata = {
     siteName: 'Bigotes y Paticas',
     title: 'Bigotes y Paticas — Tienda de mascotas Pereira y Dosquebradas',
     description: 'Productos premium para mascotas con entrega 24-72h en Pereira y Dosquebradas. Más de 900 productos.',
-    images: [{ url: '/api/og', width: 1200, height: 630, alt: 'Bigotes y Paticas' }],
+    images: [{
+      url: 'https://bigotesypaticas.com/opengraph-image.png',
+      width: 1200,
+      height: 630,
+      alt: 'Bigotes y Paticas — Tienda de mascotas en Pereira y Dosquebradas',
+    }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Bigotes y Paticas — Tienda de mascotas',
     description: 'Tienda premium de mascotas en Pereira y Dosquebradas. Envío 24-72h.',
-    images: ['/api/og'],
+    images: ['https://bigotesypaticas.com/opengraph-image.png'],
   },
   robots: {
     index: true,

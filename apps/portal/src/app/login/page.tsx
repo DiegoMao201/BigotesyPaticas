@@ -9,12 +9,11 @@ import { Phone, CreditCard, ArrowRight, Loader2 } from 'lucide-react';
 import { auth, pets, referral as referralApi, type LoginResponse } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { cn } from '@/lib/utils';
+import { Logo } from '@/components/brand/Logo';
 
 const VIDEO_MP4  = process.env.NEXT_PUBLIC_LOGIN_VIDEO_MP4  ?? '';
 const VIDEO_WEBM = process.env.NEXT_PUBLIC_LOGIN_VIDEO_WEBM ?? '';
 const VIDEO_POSTER = process.env.NEXT_PUBLIC_LOGIN_POSTER   ?? '';
-const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
-  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
 
 type Step = 'login' | 'onboarding';
 
@@ -149,8 +148,7 @@ function LoginPageInner() {
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={LOGO_URL} alt="Bigotes y Paticas" className="w-full h-full object-contain" />
+              <Logo size={80} className="w-full h-full object-contain" priority />
             </motion.div>
             <h1 className="text-white text-3xl font-semibold tracking-tight drop-shadow-lg">
               Bigotes y Paticas

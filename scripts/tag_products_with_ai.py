@@ -86,7 +86,7 @@ Descripción: {description[:300] or 'Sin descripción'}"""
             OPENROUTER_URL,
             headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type": "application/json"},
             json={
-                "model": "google/gemini-flash-1.5-8b",
+                "model": "google/gemini-2.5-flash-lite",
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_msg},
