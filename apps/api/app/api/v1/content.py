@@ -156,11 +156,12 @@ async def generate_post(payload: GeneratePostRequest, db: DBSession):
             INSERT INTO content.scheduled_posts
                 (template_id, category, source_data, visual_prompt, caption,
                  hashtags, cta_url, image_url, image_local_path, scheduled_at,
-                 status, dry_run, image_model, image_cost_usd)
+                 status, dry_run, image_model, image_cost_usd, product_id)
             VALUES
                 (:tpl_id, :category, CAST(:src_data AS jsonb), :visual_prompt, :caption,
                  :hashtags, :cta_url, :image_url, :image_local_path, :scheduled_at,
-                 'pending_approval', false, :image_model, :image_cost_usd)
+                 'pending_approval', false, :image_model, :image_cost_usd,
+                 CAST(:product_id AS uuid))
             RETURNING *
         """),
         {
@@ -176,6 +177,7 @@ async def generate_post(payload: GeneratePostRequest, db: DBSession):
             "scheduled_at":    scheduled_at,
             "image_model":     result.get("image_model", model_cfg),
             "image_cost_usd":  result.get("image_cost_usd", 0.50),
+            "product_id":      result.get("product_id"),
         },
     )).mappings().first()
     await db.commit()

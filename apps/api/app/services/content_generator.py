@@ -140,20 +140,31 @@ class ContentGenerator:
         branded_path = None
         cost = IMAGE_COSTS.get(effective_model, 0.50)
         try:
-            if effective_model == "flux-1.1-pro":
+            # product_hero: fondo IA + foto real del producto del CDN
+            if tpl.get("code") == "product_hero" and context.get("product_image_url"):
+                cdn_url, branded_path, cost = await self._compose_product_hero_image(
+                    context["product_image_url"]
+                )
+            elif effective_model == "flux-1.1-pro":
                 raw_path = await asyncio.get_event_loop().run_in_executor(
                     None, self._generate_image_flux_pro, filled["visual_prompt"]
+                )
+                branded_path = await asyncio.get_event_loop().run_in_executor(
+                    None, self._apply_logo_overlay, raw_path
+                )
+                cdn_url = await asyncio.get_event_loop().run_in_executor(
+                    None, self._upload_to_cdn, branded_path
                 )
             else:
                 raw_path = await asyncio.get_event_loop().run_in_executor(
                     None, self._generate_image_gpt, filled["visual_prompt"]
                 )
-            branded_path = await asyncio.get_event_loop().run_in_executor(
-                None, self._apply_logo_overlay, raw_path
-            )
-            cdn_url = await asyncio.get_event_loop().run_in_executor(
-                None, self._upload_to_cdn, branded_path
-            )
+                branded_path = await asyncio.get_event_loop().run_in_executor(
+                    None, self._apply_logo_overlay, raw_path
+                )
+                cdn_url = await asyncio.get_event_loop().run_in_executor(
+                    None, self._upload_to_cdn, branded_path
+                )
         except Exception as e:
             log.warning("Imagen no generada (se puede agregar manualmente): %s", e)
             cost = 0.0
@@ -165,8 +176,9 @@ class ContentGenerator:
             "cta_url":          filled.get("cta_url"),
             "image_url":        cdn_url,
             "image_local_path": str(branded_path) if branded_path else None,
-            "image_model":      effective_model,
+            "image_model":      "compose+gpt-image-1" if (tpl.get("code") == "product_hero" and context.get("product_image_url")) else effective_model,
             "image_cost_usd":   cost,
+            "product_id":       context.get("product_id"),
         }
 
     async def regenerate_image(self, visual_prompt: str, image_model: str = "gpt-image-1") -> tuple[str, str, float]:
@@ -226,6 +238,7 @@ INSTRUCCIONES CRÍTICAS:
 9. PROHIBIDO: "tu mejor amigo", "cuida tu mascota", "premium calidad", "amor incondicional".
 10. CTAs siempre apuntan a bigotesypaticas.com o mi.bigotesypaticas.com o WhatsApp. NO tienda física como CTA principal.
 11. Domicilio: GRATIS en pedidos +$30.000. Solo $5.000 en pedidos menores.
+12. TEXTO EN IMAGEN EN ESPAÑOL: Si el visual_prompt_template tiene la variable {{display_text_es}}, rellenala con texto corto (máx 12 palabras), directo e impactante en ESPAÑOL colombiano. Ejemplo para educational_data: "38 de cada 100 perros en Colombia tienen sobrepeso". Sin inglés.
 
 Respondé JSON estricto sin markdown:
 {{"visual_prompt": "...", "caption": "...", "hashtags": ["#..."], "cta_url": "..." }}"""
@@ -315,6 +328,68 @@ Respondé JSON estricto sin markdown:
 
         log.info("Imagen Flux 1.1 Pro guardada: %s (%.1f KB)", out, out.stat().st_size / 1024)
         return out
+
+    # ── Paso 2c: Composición product_hero (fondo IA + foto real) ─────────────
+
+    async def _compose_product_hero_image(self, product_image_url: str) -> tuple[str, Path, float]:
+        """Descarga foto real del producto del CDN, genera fondo editorial con IA y los compone."""
+        import io as _io
+        from PIL import Image as PilImage, ImageFilter
+
+        # 1. Descargar imagen real
+        resp = requests.get(product_image_url, timeout=30)
+        resp.raise_for_status()
+        prod_img = PilImage.open(_io.BytesIO(resp.content)).convert("RGBA")
+        log.info("Foto real del producto descargada: %dx%d", prod_img.width, prod_img.height)
+
+        # 2. Generar fondo editorial (sin producto) con GPT-image-1
+        bg_prompt = (
+            "Premium product photography BACKGROUND ONLY — no product, no object, no packaging visible. "
+            "Elegant teal gradient from #0d4a45 (corners) to #187f77 (center top), "
+            "subtle golden amber #f5a641 light rays from upper right creating warm depth, "
+            "fine suspended golden dust particles, cinematic soft bokeh, "
+            "generous empty negative space in center for product placement, "
+            "Apple commercial minimalism, 1:1 square format, ultra-detailed, photorealistic."
+        )
+        raw_bg_path = await asyncio.get_event_loop().run_in_executor(
+            None, self._generate_image_gpt, bg_prompt
+        )
+
+        # 3. Componer: fondo + producto centrado con sombra
+        bg = PilImage.open(raw_bg_path).convert("RGBA")
+
+        ratio = prod_img.width / prod_img.height
+        if ratio >= 1:
+            target_w = int(bg.width * 0.58)
+            target_h = int(target_w / ratio)
+        else:
+            target_h = int(bg.height * 0.60)
+            target_w = int(target_h * ratio)
+
+        prod_resized = prod_img.resize((target_w, target_h), PilImage.LANCZOS)
+        x = (bg.width - prod_resized.width) // 2
+        y = int(bg.height * 0.44) - prod_resized.height // 2
+
+        # Sombra difusa
+        shadow = PilImage.new("RGBA", bg.size, (0, 0, 0, 0))
+        shadow_layer = PilImage.new("RGBA", prod_resized.size, (0, 0, 0, 65))
+        mask = prod_resized.split()[3]
+        shadow.paste(shadow_layer, (x + 18, y + 22), mask)
+        shadow = shadow.filter(ImageFilter.GaussianBlur(28))
+        bg = PilImage.alpha_composite(bg, shadow)
+        bg.paste(prod_resized, (x, y), mask)
+
+        composite_path = TEMP_DIR / f"product_hero_{uuid.uuid4()}.png"
+        bg.convert("RGB").save(composite_path, "PNG", optimize=True)
+        log.info("Composición product_hero guardada: %s", composite_path)
+
+        branded_path = await asyncio.get_event_loop().run_in_executor(
+            None, self._apply_logo_overlay, composite_path
+        )
+        cdn_url = await asyncio.get_event_loop().run_in_executor(
+            None, self._upload_to_cdn, branded_path
+        )
+        return cdn_url, branded_path, IMAGE_COSTS["gpt-image-1"]
 
     # ── Paso 3: Logo overlay ──────────────────────────────────────────────────
 
