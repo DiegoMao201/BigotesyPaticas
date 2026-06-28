@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, UTC
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select, and_, desc, text
 
@@ -90,7 +90,11 @@ async def _has_verified_purchase(db: DBSession, customer_id: uuid.UUID, product_
 # ── Routers ───────────────────────────────────────────────────────────────────
 
 router = APIRouter(prefix="/v1", tags=["reviews"])
-admin_router = APIRouter(prefix="/v1/admin", tags=["admin-reviews"])
+admin_router = APIRouter(
+    prefix="/v1/admin",
+    tags=["admin-reviews"],
+    dependencies=[Depends(require_permission("admin"))],
+)
 public_router = APIRouter(prefix="/v1/public", tags=["public"])
 
 
@@ -135,7 +139,7 @@ async def list_product_reviews(
     aggregate = {
         "avg": float(product.rating_avg) if product and product.rating_avg else 0.0,
         "count": product.rating_count if product else 0,
-        "distribution": product.rating_distribution or {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0},
+        "distribution": (product.rating_distribution if product else None) or {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0},
     }
 
     return {"reviews": result, "total": total, "aggregate": aggregate, "page": page}
@@ -264,7 +268,6 @@ async def admin_list_reviews(
     status_filter: str = "pending",
     page: int = 1,
     page_size: int = 20,
-    _=require_permission("admin"),
     db: DBSession = ...,
 ):
     page_size = min(page_size, 100)
@@ -303,7 +306,6 @@ async def admin_list_reviews(
 async def moderate_review(
     review_id: uuid.UUID,
     payload: ModerationAction,
-    _=require_permission("admin"),
     db: DBSession = ...,
 ):
     rev = (await db.execute(select(ProductReview).where(ProductReview.id == review_id))).scalar_one_or_none()
@@ -345,7 +347,6 @@ async def moderate_review(
 async def reply_review(
     review_id: uuid.UUID,
     payload: AdminReply,
-    _=require_permission("admin"),
     db: DBSession = ...,
 ):
     rev = (await db.execute(select(ProductReview).where(ProductReview.id == review_id))).scalar_one_or_none()
@@ -394,7 +395,6 @@ async def public_gbp_reviews(limit: int = 6, db: DBSession = ...):
 
 @admin_router.get("/gbp-reviews/unmatched")
 async def gbp_unmatched(
-    _=require_permission("admin"),
     db: DBSession = ...,
 ):
     rows = (
@@ -421,7 +421,6 @@ async def gbp_unmatched(
 async def gbp_match_customer(
     gbp_id: uuid.UUID,
     payload: GBPMatchRequest,
-    _=require_permission("admin"),
     db: DBSession = ...,
 ):
     row = (await db.execute(select(GBPReviewCache).where(GBPReviewCache.id == gbp_id))).scalar_one_or_none()
@@ -442,3 +441,24 @@ async def gbp_match_customer(
         )
     await db.commit()
     return {"ok": True}
+
+
+@admin_router.post("/gbp-sync/run")
+async def run_gbp_sync():
+    """Dispara el sync de reseñas GBP en background (ejecuta el script externo)."""
+    import asyncio, subprocess, sys
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "/app/scripts/sync_gbp_reviews.py",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+        return {
+            "ok": proc.returncode == 0,
+            "output": (stdout or b"").decode()[-2000:],
+            "error": (stderr or b"").decode()[-500:] if proc.returncode != 0 else None,
+        }
+    except asyncio.TimeoutError:
+        proc.kill()
+        return {"ok": False, "error": "timeout después de 60 segundos"}
