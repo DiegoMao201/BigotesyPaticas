@@ -10,8 +10,9 @@ import {
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
 import { useAuth } from '@/lib/auth-store';
-import { setToken } from '@/lib/api';
+import { setToken, adminPortal } from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 
 const NAV_GROUPS = [
   {
@@ -81,6 +82,14 @@ export function Sidebar({
   const user = useAuth((s) => s.user);
   const clear = useAuth((s) => s.clear);
 
+  const { data: pendingNotifs } = useQuery({
+    queryKey: ['pending-notifs'],
+    queryFn: () => adminPortal.pendingNotifications(60),
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 4 * 60 * 1000,
+  });
+  const pendingCount = pendingNotifs?.length ?? 0;
+
   function logout() {
     setToken(null);
     clear();
@@ -135,7 +144,14 @@ export function Sidebar({
                       <Icon className={cn('h-4 w-4', active ? 'text-brand-700' : item.highlight && !active ? 'text-white' : '')} />
                       {item.label}
                     </div>
-                    {active && <ChevronRight className="h-3 w-3 text-brand-400" />}
+                    <div className="flex items-center gap-1">
+                      {item.href === '/pet-monitor' && pendingCount > 0 && (
+                        <span className="text-[10px] font-bold bg-amber-400 text-amber-900 rounded-full px-1.5 py-0.5 leading-none">
+                          {pendingCount}
+                        </span>
+                      )}
+                      {active && <ChevronRight className="h-3 w-3 text-brand-400" />}
+                    </div>
                   </Link>
                 );
               })}

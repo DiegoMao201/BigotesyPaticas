@@ -131,7 +131,7 @@ async def list_product_reviews(
     for rev in rows:
         customer = (await db.execute(select(Customer).where(Customer.id == rev.customer_id))).scalar_one_or_none()
         d = ReviewOut.model_validate(rev)
-        d.customer_first_name = customer.first_name if customer else "Cliente"
+        d.customer_first_name = customer.full_name.split()[0] if customer and customer.full_name else "Cliente"
         result.append(d)
 
     # Aggregate
@@ -289,10 +289,10 @@ async def admin_list_reviews(
         customer = (await db.execute(select(Customer).where(Customer.id == rev.customer_id))).scalar_one_or_none()
         product = (await db.execute(select(Product).where(Product.id == rev.product_id))).scalar_one_or_none()
         d = ReviewOut.model_validate(rev)
-        d.customer_first_name = customer.first_name if customer else "Cliente"
+        d.customer_first_name = customer.full_name.split()[0] if customer and customer.full_name else "Cliente"
         result.append({
             **d.model_dump(),
-            "customer_name": f"{customer.first_name or ''} {customer.last_name or ''}".strip() if customer else "Desconocido",
+            "customer_name": customer.full_name if customer else "Desconocido",
             "customer_phone": customer.phone if customer else None,
             "product_name": product.name if product else "Producto eliminado",
             "product_sku": product.sku if product else None,

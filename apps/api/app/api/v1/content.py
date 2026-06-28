@@ -240,7 +240,7 @@ async def get_post(post_id: uuid.UUID, db: DBSession):
 @router.patch("/scheduled-posts/{post_id}")
 async def edit_post(post_id: uuid.UUID, payload: EditPostRequest, db: DBSession):
     post = await _get_post_or_404(db, post_id)
-    updates: dict = {"edited_by_admin": True, "updated_at": datetime.utcnow()}
+    updates: dict = {"edited_by_admin": True}
     if payload.caption is not None:
         updates["caption"] = payload.caption
     if payload.hashtags is not None:
@@ -252,7 +252,7 @@ async def edit_post(post_id: uuid.UUID, payload: EditPostRequest, db: DBSession)
     if payload.visual_prompt is not None:
         updates["visual_prompt"] = payload.visual_prompt
 
-    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+    set_clause = ", ".join(f"{k} = :{k}" for k in updates) + ", updated_at = NOW()"
     updates["post_id"] = str(post_id)
     await db.execute(
         text(f"UPDATE content.scheduled_posts SET {set_clause} WHERE id = :post_id"),
@@ -281,10 +281,10 @@ async def regenerate_image(post_id: uuid.UUID, payload: RegenerateImageRequest, 
         text("""
             UPDATE content.scheduled_posts
             SET image_url = :url, image_local_path = :lp,
-                visual_prompt = :vp, updated_at = :now
+                visual_prompt = :vp, updated_at = NOW()
             WHERE id = :id
         """),
-        {"url": cdn_url, "lp": local_path, "vp": prompt, "now": datetime.utcnow(), "id": str(post_id)},
+        {"url": cdn_url, "lp": local_path, "vp": prompt, "id": str(post_id)},
     )
     await db.commit()
     return {"ok": True, "image_url": cdn_url}
@@ -295,17 +295,16 @@ async def regenerate_image(post_id: uuid.UUID, payload: RegenerateImageRequest, 
 @router.post("/scheduled-posts/{post_id}/approve")
 async def approve_post(post_id: uuid.UUID, db: DBSession):
     await _get_post_or_404(db, post_id)
-    now = datetime.utcnow()
     await db.execute(
         text("""
             UPDATE content.scheduled_posts
-            SET status = 'approved', approved_at = :now, updated_at = :now
+            SET status = 'approved', approved_at = NOW(), updated_at = NOW()
             WHERE id = :id
         """),
-        {"now": now, "id": str(post_id)},
+        {"id": str(post_id)},
     )
     await db.commit()
-    return {"ok": True, "status": "approved"}
+    return _post_to_dict(await _get_post_or_404(db, post_id))
 
 
 # ─── 4.7 Rechazar post ────────────────────────────────────────────────────────
@@ -316,13 +315,13 @@ async def reject_post(post_id: uuid.UUID, payload: RejectRequest, db: DBSession)
     await db.execute(
         text("""
             UPDATE content.scheduled_posts
-            SET status = 'rejected', rejected_reason = :reason, updated_at = :now
+            SET status = 'rejected', rejected_reason = :reason, updated_at = NOW()
             WHERE id = :id
         """),
-        {"reason": payload.reason, "now": datetime.utcnow(), "id": str(post_id)},
+        {"reason": payload.reason, "id": str(post_id)},
     )
     await db.commit()
-    return {"ok": True, "status": "rejected"}
+    return _post_to_dict(await _get_post_or_404(db, post_id))
 
 
 # ─── 4.8 Test publish ────────────────────────────────────────────────────────
@@ -411,14 +410,12 @@ async def trigger_week_plan(db: DBSession):
 
 @router.post("/approve-all-pending")
 async def approve_all_pending(db: DBSession):
-    now = datetime.utcnow()
     result = await db.execute(
         text("""
             UPDATE content.scheduled_posts
-            SET status = 'approved', approved_at = :now, updated_at = :now
+            SET status = 'approved', approved_at = NOW(), updated_at = NOW()
             WHERE status = 'pending_approval'
         """),
-        {"now": now},
     )
     await db.commit()
     return {"ok": True, "approved": result.rowcount}

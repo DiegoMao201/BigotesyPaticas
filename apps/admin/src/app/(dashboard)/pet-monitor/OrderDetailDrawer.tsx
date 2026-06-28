@@ -7,9 +7,9 @@ import { toast } from 'sonner';
 import {
   X, ChevronRight, MessageCircle, Package, MapPin,
   StickyNote, Percent, UserCheck, XCircle, Clock,
-  CheckCircle2, AlertCircle,
+  CheckCircle2, AlertCircle, Copy, Send, SkipForward,
 } from 'lucide-react';
-import { adminPortal, type PortalOrderDetail, type ActivityLogEntry } from '@/lib/api';
+import { adminPortal, type PortalOrderDetail, type ActivityLogEntry, type PendingNotification } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
 const WORKFLOW_LABELS: Record<string, { label: string; color: string }> = {
@@ -52,6 +52,7 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
   const [discountAmount, setDiscountAmount] = useState('');
   const [discountReason, setDiscountReason] = useState('');
   const [showDiscount, setShowDiscount] = useState(false);
+  const [pendingNotif, setPendingNotif] = useState<PendingNotification | null>(null);
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['portal-order-detail', orderId],
@@ -72,7 +73,11 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
   const workflowMut = useMutation({
     mutationFn: ({ status, notes }: { status: string; notes?: string }) =>
       adminPortal.changeWorkflow(orderId, status, notes),
-    onSuccess: (d) => { toast.success(`Estado → ${WORKFLOW_LABELS[d.workflow_status]?.label ?? d.workflow_status}`); invalidate(); },
+    onSuccess: (d) => {
+      toast.success(`Estado → ${WORKFLOW_LABELS[d.workflow_status]?.label ?? d.workflow_status}`);
+      invalidate();
+      if (d.pending_notification) setPendingNotif(d.pending_notification);
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -368,9 +373,128 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
           )}
         </div>
       </div>
+
+      {/* Modal notificación WhatsApp */}
+      {pendingNotif && (
+        <WhatsAppNotifModal
+          notif={pendingNotif}
+          onClose={() => setPendingNotif(null)}
+        />
+      )}
     </>
   );
 }
+
+
+// ── Modal WhatsApp pre-armado ─────────────────────────────────────────────────
+
+function WhatsAppNotifModal({
+  notif,
+  onClose,
+}: {
+  notif: PendingNotification;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+
+  const sentMut = useMutation({
+    mutationFn: () => adminPortal.markNotificationSent(notif.id),
+    onSuccess: () => {
+      toast.success('Mensaje marcado como enviado ✅');
+      qc.invalidateQueries({ queryKey: ['pending-notifs'] });
+      onClose();
+    },
+  });
+
+  const skipMut = useMutation({
+    mutationFn: () => adminPortal.skipNotification(notif.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pending-notifs'] });
+      onClose();
+    },
+  });
+
+  function copyMessage() {
+    navigator.clipboard.writeText(notif.rendered_message)
+      .then(() => toast.success('Mensaje copiado al portapapeles 📋'))
+      .catch(() => toast.error('No se pudo copiar'));
+  }
+
+  const TEMPLATE_LABELS: Record<string, string> = {
+    order_received: '📥 Pedido recibido',
+    changes_to_confirm: '⚠️ Cambios para confirmar',
+    order_invoiced: '🧾 Facturado',
+    ready_for_delivery: '🚚 En camino',
+    delivered_with_review_cta: '⭐ Entregado + Calificar',
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-end sm:items-center justify-center p-4">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl flex flex-col gap-0 overflow-hidden">
+        {/* Header */}
+        <div className="bg-green-600 px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-white font-bold text-base flex items-center gap-2">
+              <MessageCircle size={18} /> Envía este mensaje al cliente
+            </p>
+            <p className="text-green-100 text-xs mt-0.5">
+              {TEMPLATE_LABELS[notif.template_code] ?? notif.template_code}
+              {notif.customer_name && ` · ${notif.customer_name}`}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-green-700">
+            <X size={18} className="text-white" />
+          </button>
+        </div>
+
+        {/* Message preview */}
+        <div className="p-4 bg-gray-50 border-b">
+          <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed max-h-56 overflow-y-auto">
+            {notif.rendered_message}
+          </pre>
+        </div>
+
+        {/* Action buttons */}
+        <div className="p-4 flex gap-2">
+          <button
+            onClick={copyMessage}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <Copy size={15} /> Copiar
+          </button>
+          <a
+            href={notif.whatsapp_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition-colors"
+          >
+            <Send size={15} /> Abrir WhatsApp
+          </a>
+        </div>
+
+        {/* Confirm or skip */}
+        <div className="px-4 pb-4 flex gap-2 border-t pt-3">
+          <p className="text-xs text-gray-500 self-center flex-1">Después de enviar:</p>
+          <button
+            onClick={() => sentMut.mutate()}
+            disabled={sentMut.isPending}
+            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 disabled:opacity-50 transition-colors"
+          >
+            <CheckCircle2 size={13} /> Ya lo envié
+          </button>
+          <button
+            onClick={() => skipMut.mutate()}
+            disabled={skipMut.isPending}
+            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-gray-100 text-gray-600 text-xs font-bold hover:bg-gray-200 disabled:opacity-50 transition-colors"
+          >
+            <SkipForward size={13} /> Saltar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function formatAction(action: string): string {
   const map: Record<string, string> = {

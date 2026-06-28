@@ -1,7 +1,6 @@
 """Admin Portal — endpoints de gestión de pedidos y citas del portal."""
 from __future__ import annotations
 
-import math
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -17,13 +16,18 @@ from app.models.portal import (
     ActivityLog,
     Appointment,
     LoyaltyPoint,
+    PendingNotification,
     PortalNotification,
     PortalOrder,
     PortalOrderItem,
-    PortalReferral,
     PortalSession,
 )
-from app.models.sales import Order as SalesOrder, OrderItem as SalesOrderItem
+from app.services.portal_order_actions import (
+    bridge_to_sales,
+    credit_loyalty_points,
+    process_referral_reward,
+    queue_customer_notification,
+)
 
 router = APIRouter(prefix="/admin/portal", tags=["admin-portal"])
 
@@ -179,7 +183,7 @@ async def update_portal_order(
 
     now = datetime.now(UTC)
 
-    if old_status == "received" and new_status == "processing":
+    if new_status == "processing":
         await notify_customer(
             db,
             order.customer_id,
@@ -190,55 +194,15 @@ async def update_portal_order(
         )
 
     elif new_status == "invoiced":
-        from app.api.v1.sales import _next_order_number
-        invoice_num = await _next_order_number(db)
-        total = float(order.unit_price or 0) * order.quantity
-
-        # Crear venta REAL en sales.orders con channel='PORTAL'
-        sales_order = SalesOrder(
-            order_number=invoice_num,
-            channel="PORTAL",
-            customer_id=order.customer_id,
-            grand_total=total,
-            subtotal=total,
-            tax_total=0,
-            discount_total=0,
-            shipping_total=0,
-            payment_status="Pendiente",
-            status="confirmed",
-            occurred_at=now,
-            notes=f"Pedido portal #{str(order.id)[:8]}",
-            metadata={"portal_order_id": str(order.id)},
-        )
-        db.add(sales_order)
-        await db.flush()
-
-        # Crear ítem de la venta
-        item = SalesOrderItem(
-            order_id=sales_order.id,
-            product_id=order.product_id,
-            sku_snapshot="",
-            name_snapshot=order.product_name,
-            quantity=order.quantity,
-            unit_price=order.unit_price or 0,
-            unit_cost=0,
-            discount=0,
-            line_total=total,
-        )
-        db.add(item)
-
-        order.invoice_number = invoice_num
-        order.invoiced_at = now
-        order.sales_order_id = sales_order.id
-        if payload.notes:
-            order.processed_by = payload.notes
+        # Usar función compartida (idempotente)
+        await bridge_to_sales(order, db)
         await notify_customer(
             db,
             order.customer_id,
             notif_type="order_invoiced",
             title="Pedido facturado",
-            body=f"Tu pedido fue facturado — {invoice_num} 🧾",
-            data={"order_id": str(order.id), "invoice_number": invoice_num},
+            body=f"Tu pedido fue facturado — {order.invoice_number} 🧾",
+            data={"order_id": str(order.id), "invoice_number": order.invoice_number},
         )
 
     elif new_status == "ready":
@@ -253,24 +217,9 @@ async def update_portal_order(
 
     elif new_status == "delivered":
         order.delivered_at = now
-
-        # Calcular puntos: 1 punto por cada $1.000 COP
-        price = float(order.unit_price or 0)
-        points = math.floor(price * order.quantity / 1000)
-        order.points_awarded = points
-
-        if points > 0:
-            lp = LoyaltyPoint(
-                customer_id=order.customer_id,
-                points=points,
-                reason="portal_order",
-                reference_type="portal_order",
-                reference_id=order.id,
-                description=f"Entrega de pedido: {order.product_name}",
-                expires_at=now + timedelta(days=365),
-            )
-            db.add(lp)
-
+        # Usar funciones compartidas (idempotentes)
+        points = await credit_loyalty_points(order, db)
+        await process_referral_reward(order, db)
         await notify_customer(
             db,
             order.customer_id,
@@ -280,41 +229,6 @@ async def update_portal_order(
                  else "Tu pedido fue entregado con éxito 🐾",
             data={"order_id": str(order.id), "points_awarded": points},
         )
-
-        # Verificar referido: si es primera entrega y referrer no ha recibido recompensa
-        referral = (await db.execute(
-            select(PortalReferral).where(
-                PortalReferral.referred_customer_id == order.customer_id,
-                PortalReferral.reward_paid_at == None,  # noqa: E711
-            )
-        )).scalar_one_or_none()
-
-        if referral:
-            # Marcar primera compra si no estaba marcada
-            if referral.first_purchase_at is None:
-                referral.first_purchase_at = now
-
-            # Otorgar 100 puntos al referidor
-            referral.reward_paid_at = now
-            referrer_lp = LoyaltyPoint(
-                customer_id=referral.referrer_customer_id,
-                points=100,
-                reason="referral",
-                reference_type="referral",
-                reference_id=referral.id,
-                description="Recompensa por referir a un nuevo cliente",
-                expires_at=now + timedelta(days=365),
-            )
-            db.add(referrer_lp)
-
-            await notify_customer(
-                db,
-                referral.referrer_customer_id,
-                notif_type="referral_reward",
-                title="¡Ganaste puntos por referir!",
-                body="Tu amigo hizo su primera compra. ¡Recibiste 100 puntos de fidelidad! 🎉",
-                data={"referral_id": str(referral.id), "points": 100},
-            )
 
     elif new_status == "cancelled":
         reason_text = payload.cancel_reason or ""
@@ -694,9 +608,24 @@ async def change_workflow_status(
         order.delivered_at = datetime.now(UTC)
         order.status = "delivered"
 
+    # ── Portar lógica del endpoint viejo ──────────────────────────────────────
+    if new == "invoiced":
+        await bridge_to_sales(order, db)
+
+    if new == "delivered":
+        await credit_loyalty_points(order, db)
+        await process_referral_reward(order, db)
+
+    # Encolar notificación WhatsApp para modal admin (no envía nada automático)
+    pending_notif = await queue_customer_notification(order, new, db)
+
     await _log(db, order_id, "status_changed", changes={"workflow_status": {"before": old, "after": new}})
     await db.commit()
-    return {"ok": True, "workflow_status": new}
+
+    result: dict = {"ok": True, "workflow_status": new}
+    if pending_notif:
+        result["pending_notification"] = pending_notif
+    return result
 
 
 # ── PATCH item quantity ────────────────────────────────────────────────────────
@@ -1122,3 +1051,98 @@ async def order_timeline_preview(order_id: uuid.UUID, db: DBSession) -> list[dic
         }
         for lg in logs
     ]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SPRINT 5.2 — Endpoints de notificaciones pendientes (modal WhatsApp admin)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _notif_dict(n: PendingNotification) -> dict:
+    return {
+        "id": str(n.id),
+        "portal_order_id": str(n.portal_order_id),
+        "template_code": n.template_code,
+        "rendered_message": n.rendered_message,
+        "whatsapp_link": n.whatsapp_link,
+        "status": n.status,
+        "created_at": n.created_at.isoformat() if n.created_at else None,
+        "sent_at": n.sent_at.isoformat() if n.sent_at else None,
+    }
+
+
+@router.get("/notifications/pending")
+async def list_pending_notifications(
+    db: DBSession,
+    min_age_minutes: int = Query(default=0, ge=0),
+) -> list[dict]:
+    """Lista notificaciones WhatsApp pendientes de envío por el admin."""
+    from sqlalchemy import and_
+    q = select(PendingNotification).where(PendingNotification.status == "pending")
+    if min_age_minutes > 0:
+        cutoff = datetime.now(UTC) - timedelta(minutes=min_age_minutes)
+        q = q.where(PendingNotification.created_at <= cutoff)
+    q = q.order_by(PendingNotification.created_at.desc())
+    rows = (await db.execute(q)).scalars().all()
+
+    result = []
+    for n in rows:
+        order = (await db.execute(
+            select(PortalOrder).where(PortalOrder.id == n.portal_order_id)
+        )).scalar_one_or_none()
+        customer = None
+        if order:
+            customer = (await db.execute(
+                select(Customer).where(Customer.id == order.customer_id)
+            )).scalar_one_or_none()
+
+        d = _notif_dict(n)
+        d["customer_name"] = customer.full_name if customer else ""
+        d["customer_phone"] = customer.phone if customer else None
+        d["invoice_number"] = order.invoice_number if order else None
+        result.append(d)
+
+    return result
+
+
+class MarkNotifPayload(BaseModel):
+    channel: str = "whatsapp"
+
+
+@router.post("/notifications/{notif_id}/mark-sent")
+async def mark_notification_sent(
+    notif_id: uuid.UUID,
+    payload: MarkNotifPayload,
+    db: DBSession,
+) -> dict:
+    """Marca una notificación como enviada manualmente por el admin."""
+    notif = (await db.execute(
+        select(PendingNotification).where(PendingNotification.id == notif_id)
+    )).scalar_one_or_none()
+    if not notif:
+        raise HTTPException(404, "Notificación no encontrada")
+
+    notif.status = "sent_by_admin"
+    notif.sent_at = datetime.now(UTC)
+
+    # Registrar en activity_log del pedido
+    await _log(
+        db, notif.portal_order_id, "whatsapp_template_sent",
+        changes={"template_code": notif.template_code, "channel": payload.channel},
+        visible=False,
+    )
+    await db.commit()
+    return {"ok": True, "status": "sent_by_admin", "sent_at": notif.sent_at.isoformat()}
+
+
+@router.post("/notifications/{notif_id}/skip")
+async def skip_notification(notif_id: uuid.UUID, db: DBSession) -> dict:
+    """Omite una notificación pendiente (Diego decidió no enviar este mensaje)."""
+    notif = (await db.execute(
+        select(PendingNotification).where(PendingNotification.id == notif_id)
+    )).scalar_one_or_none()
+    if not notif:
+        raise HTTPException(404, "Notificación no encontrada")
+
+    notif.status = "skipped"
+    await db.commit()
+    return {"ok": True, "status": "skipped"}

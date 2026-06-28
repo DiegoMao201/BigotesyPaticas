@@ -309,6 +309,29 @@ class PortalNotification(UUIDPKMixin, Base):
     action_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class PendingNotification(UUIDPKMixin, Base):
+    __tablename__ = "pending_notifications"
+    __table_args__ = ({"schema": "portal"},)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default="now()", nullable=False
+    )
+    portal_order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("portal.portal_orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    template_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    rendered_message: Mapped[str] = mapped_column(Text, nullable=False)
+    whatsapp_link: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", index=True
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+
 class PortalReferral(Base):
     __tablename__ = "referrals"
     __table_args__ = {"schema": "portal"}

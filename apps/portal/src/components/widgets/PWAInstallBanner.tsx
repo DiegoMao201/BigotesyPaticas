@@ -9,13 +9,25 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const STORAGE_KEY = 'portal_pwa_dismissed_until';
+const INSTALLED_KEY = 'portal_pwa_installed';
 const DISMISS_DAYS = 7;
+
+function isAlreadyInstalled(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (window.matchMedia('(display-mode: standalone)').matches) return true;
+  if ((window.navigator as Navigator & { standalone?: boolean }).standalone === true) return true;
+  if (localStorage.getItem(INSTALLED_KEY) === 'true') return true;
+  return false;
+}
 
 export function PWAInstallBanner() {
   const [show, setShow] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
+    // Si ya está instalada, nunca mostrar
+    if (isAlreadyInstalled()) return;
+
     const dismissed = localStorage.getItem(STORAGE_KEY);
     if (dismissed && Date.now() < Number(dismissed)) return;
 
@@ -25,7 +37,19 @@ export function PWAInstallBanner() {
       setTimeout(() => setShow(true), 30_000);
     };
     window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+
+    // Cuando el usuario instala desde el banner del navegador
+    const onInstalled = () => {
+      localStorage.setItem(INSTALLED_KEY, 'true');
+      setShow(false);
+      setDeferredPrompt(null);
+    };
+    window.addEventListener('appinstalled', onInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
   }, []);
 
   function dismiss() {
@@ -37,7 +61,10 @@ export function PWAInstallBanner() {
     if (!deferredPrompt) return;
     await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') localStorage.removeItem(STORAGE_KEY);
+    if (outcome === 'accepted') {
+      localStorage.setItem(INSTALLED_KEY, 'true');
+      localStorage.removeItem(STORAGE_KEY);
+    }
     setShow(false);
     setDeferredPrompt(null);
   }

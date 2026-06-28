@@ -1235,6 +1235,20 @@ export interface ActivityLogEntry {
   created_at: string;
 }
 
+export interface PendingNotification {
+  id: string;
+  portal_order_id: string;
+  template_code: string;
+  rendered_message: string;
+  whatsapp_link: string;
+  status: 'pending' | 'sent_by_admin' | 'skipped';
+  customer_name?: string;
+  customer_phone?: string | null;
+  invoice_number?: string | null;
+  created_at: string | null;
+  sent_at?: string | null;
+}
+
 export interface PortalAppointment {
   id: string;
   customer_name: string | null;
@@ -1264,7 +1278,7 @@ export const adminPortal = {
   orderDetail: (id: string) => api<PortalOrderDetail>(`/v1/admin/portal/orders/${id}/detail`),
   orderActivity: (id: string) => api<ActivityLogEntry[]>(`/v1/admin/portal/orders/${id}/activity`),
   changeWorkflow: (id: string, new_status: string, internal_notes?: string) =>
-    api<{ ok: boolean; workflow_status: string }>(
+    api<{ ok: boolean; workflow_status: string; pending_notification?: PendingNotification }>(
       `/v1/admin/portal/orders/${id}/workflow`,
       { method: 'PATCH', body: JSON.stringify({ new_status, internal_notes }) }
     ),
@@ -1299,6 +1313,20 @@ export const adminPortal = {
   cancelOrder: (orderId: string, reason: string) =>
     api<{ ok: boolean }>(`/v1/admin/portal/orders/${orderId}/cancel`,
       { method: 'POST', body: JSON.stringify({ reason }) }),
+
+  // Sprint 5.2: notificaciones pendientes (modal WhatsApp admin)
+  pendingNotifications: (minAgeMinutes = 0) =>
+    api<PendingNotification[]>(`/v1/admin/portal/notifications/pending?min_age_minutes=${minAgeMinutes}`),
+  markNotificationSent: (notifId: string) =>
+    api<{ ok: boolean; status: string; sent_at: string }>(
+      `/v1/admin/portal/notifications/${notifId}/mark-sent`,
+      { method: 'POST', body: JSON.stringify({ channel: 'whatsapp' }) }
+    ),
+  skipNotification: (notifId: string) =>
+    api<{ ok: boolean; status: string }>(
+      `/v1/admin/portal/notifications/${notifId}/skip`,
+      { method: 'POST', body: '{}' }
+    ),
 
   appointments: (opts?: { date_from?: string; date_to?: string; status?: string }) => {
     const p = new URLSearchParams();
