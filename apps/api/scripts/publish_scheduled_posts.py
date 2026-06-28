@@ -74,10 +74,11 @@ async def publish_post(post: dict, dry_run: bool, cur, conn) -> bool:
         platforms = post.get("target_platforms") or ["instagram", "facebook"]
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                if "instagram" in platforms:
+                # Solo publicar en plataformas que aún no tienen ID (evita duplicados en retry)
+                if "instagram" in platforms and not ig_id:
                     result = await publish_to_meta(post, "instagram", dry_run=False)
                     ig_id = result.get("instagram_post_id")
-                if "facebook" in platforms:
+                if "facebook" in platforms and not fb_id:
                     result = await publish_to_meta(post, "facebook", dry_run=False)
                     fb_id = result.get("facebook_post_id")
                 break
