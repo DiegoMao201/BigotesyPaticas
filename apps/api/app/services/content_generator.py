@@ -81,20 +81,21 @@ class ContentGenerator:
             None, self._fill_template_with_claude, template, context
         )
 
-        # 2. GPT-image-1 genera la imagen
-        raw_path = await asyncio.get_event_loop().run_in_executor(
-            None, self._generate_image_gpt, filled["visual_prompt"]
-        )
-
-        # 3. Logo overlay
-        branded_path = await asyncio.get_event_loop().run_in_executor(
-            None, self._apply_logo_overlay, raw_path
-        )
-
-        # 4. Subir al CDN
-        cdn_url = await asyncio.get_event_loop().run_in_executor(
-            None, self._upload_to_cdn, branded_path
-        )
+        # 2. GPT-image-1 genera la imagen (si falla por billing, el post se crea sin imagen)
+        cdn_url = None
+        branded_path = None
+        try:
+            raw_path = await asyncio.get_event_loop().run_in_executor(
+                None, self._generate_image_gpt, filled["visual_prompt"]
+            )
+            branded_path = await asyncio.get_event_loop().run_in_executor(
+                None, self._apply_logo_overlay, raw_path
+            )
+            cdn_url = await asyncio.get_event_loop().run_in_executor(
+                None, self._upload_to_cdn, branded_path
+            )
+        except Exception as e:
+            log.warning("Imagen no generada (se puede agregar manualmente): %s", e)
 
         return {
             "visual_prompt":    filled["visual_prompt"],
@@ -102,7 +103,7 @@ class ContentGenerator:
             "hashtags":         filled.get("hashtags", []),
             "cta_url":          filled.get("cta_url"),
             "image_url":        cdn_url,
-            "image_local_path": str(branded_path),
+            "image_local_path": str(branded_path) if branded_path else None,
         }
 
     async def regenerate_image(self, visual_prompt: str) -> tuple[str, str]:
