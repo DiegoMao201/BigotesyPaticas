@@ -144,52 +144,46 @@ function LoginPageInner() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.55 }}
           >
+            {/* Logo con glow blanco para destacar sobre fondo teal */}
             <motion.div
-              className="mb-4 relative inline-block"
-              animate={{ y: [0, -6, 0] }}
-              transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+              className="mb-5 relative"
+              animate={{ y: [0, -7, 0] }}
+              transition={{ duration: 3.8, repeat: Infinity, ease: 'easeInOut' }}
             >
-              {/* Halo teal pulsante */}
+              {/* Halo blanco pulsante — contraste sobre overlay teal */}
               <div
-                className="absolute inset-0 rounded-full opacity-40"
+                className="absolute inset-0 rounded-[2rem]"
                 style={{
-                  background: 'radial-gradient(circle, #187f77 0%, transparent 70%)',
-                  filter: 'blur(40px)',
-                  transform: 'scale(1.6)',
-                  animation: 'pulse-soft 3s ease-in-out infinite',
+                  background: 'radial-gradient(circle, rgba(255,255,255,0.35) 0%, transparent 70%)',
+                  filter: 'blur(28px)',
+                  transform: 'scale(1.8)',
+                  animation: 'pulse-soft 3.5s ease-in-out infinite',
                   zIndex: 0,
                 }}
               />
-              {/* Destello amarillo arriba-derecha */}
-              <span
-                className="absolute -top-2 -right-2 w-3 h-3 rounded-full"
-                style={{ backgroundColor: '#f5a641', opacity: 0.7, animation: 'ping 3s cubic-bezier(0,0,0.2,1) infinite', zIndex: 1 }}
-              />
-              {/* Destello amarillo abajo-izquierda */}
-              <span
-                className="absolute -bottom-2 -left-2 w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: '#f5a641', opacity: 0.6, animation: 'ping 4s cubic-bezier(0,0,0.2,1) infinite', animationDelay: '1s', zIndex: 1 }}
-              />
-              {/* Destello amarillo arriba-izquierda */}
-              <span
-                className="absolute -top-4 -left-4 w-2 h-2 rounded-full"
-                style={{ backgroundColor: '#f5a641', opacity: 0.5, animation: 'ping 5s cubic-bezier(0,0,0.2,1) infinite', animationDelay: '2s', zIndex: 1 }}
-              />
+              {/* Destellos dorados */}
+              <span className="absolute -top-2 -right-2 w-3 h-3 rounded-full z-[1]"
+                style={{ backgroundColor: '#f5a641', opacity: 0.85, animation: 'ping 3s cubic-bezier(0,0,0.2,1) infinite' }} />
+              <span className="absolute -bottom-2 -left-2 w-2.5 h-2.5 rounded-full z-[1]"
+                style={{ backgroundColor: '#f5a641', opacity: 0.7, animation: 'ping 4s cubic-bezier(0,0,0.2,1) infinite', animationDelay: '1.2s' }} />
+              <span className="absolute -top-3 -left-3 w-2 h-2 rounded-full z-[1]"
+                style={{ backgroundColor: '#f5a641', opacity: 0.55, animation: 'ping 5.5s cubic-bezier(0,0,0.2,1) infinite', animationDelay: '2.4s' }} />
+              {/* Logo transparente — flota sobre el fondo sin recuadro */}
               <Image
-                src="/icon.svg"
+                src="/icon-512.png"
                 alt="Bigotes y Paticas"
-                width={120}
-                height={120}
+                width={140}
+                height={140}
                 priority
                 className="relative z-10"
-                style={{ filter: 'drop-shadow(0 12px 30px rgba(13,74,69,0.35))' }}
+                style={{ filter: 'drop-shadow(0 8px 32px rgba(0,0,0,0.45)) drop-shadow(0 0 20px rgba(255,255,255,0.25))' }}
                 unoptimized
               />
             </motion.div>
-            <h1 className="text-white text-3xl font-semibold tracking-tight drop-shadow-lg">
+            <h1 className="text-white text-3xl font-bold tracking-tight" style={{ textShadow: '0 2px 16px rgba(0,0,0,0.35)' }}>
               Bigotes y Paticas
             </h1>
-            <p className="text-white/90 text-sm mt-1 drop-shadow-md">Tu portal de mascotas</p>
+            <p className="text-white/85 text-sm mt-1.5" style={{ textShadow: '0 1px 8px rgba(0,0,0,0.3)' }}>Tu portal de mascotas</p>
           </motion.div>
         )}
       </AnimatePresence>

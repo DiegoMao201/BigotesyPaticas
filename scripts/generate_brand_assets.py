@@ -1,6 +1,6 @@
 """
 Genera todos los assets de marca desde packages/branding/logo-source.png
-Fuente: PNG cuadrado (casita teal + perro + gato, fondo sólido teal).
+Fuente: PNG cuadrado con fondo transparente (solo casita + perro + gato).
 Requiere: pip install Pillow
 """
 import base64, shutil
@@ -13,30 +13,26 @@ assert SOURCE.exists(), f"NO ENCONTRADO: {SOURCE}"
 src_img = Image.open(SOURCE).convert("RGBA")
 print(f"Fuente: {SOURCE} ({src_img.size}, mode=RGBA)")
 
-def render_png(size, output, maskable=False):
-    img = src_img.copy()
-    img.thumbnail((size, size), Image.LANCZOS)
-    square = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    offset = ((size - img.width) // 2, (size - img.height) // 2)
-    square.paste(img, offset, img)
-    img = square
+# Fondo teal para íconos que requieren fondo sólido (maskable / apple-touch)
+TEAL_BG = (24, 127, 119, 255)
 
-    if maskable:
-        padded = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-        inner = int(size * 0.8)
-        inner_img = src_img.copy()
-        inner_img.thumbnail((inner, inner), Image.LANCZOS)
-        sq = Image.new("RGBA", (inner, inner), (0, 0, 0, 0))
-        o = ((inner - inner_img.width) // 2, (inner - inner_img.height) // 2)
-        sq.paste(inner_img, o, inner_img)
-        po = (size - inner) // 2
-        padded.paste(sq, (po, po), sq)
-        img = padded
+def render_png(size, output, bg=(0, 0, 0, 0), padding=1.0):
+    """
+    bg=(0,0,0,0): fondo transparente (íconos normales — logo flotante sobre cualquier fondo)
+    bg=TEAL_BG: fondo sólido (apple-touch para iOS, maskable para PWA)
+    padding=0.75: deja margen del 25% alrededor del logo (requerimiento maskable)
+    """
+    canvas = Image.new("RGBA", (size, size), bg)
+    inner = int(size * padding)
+    logo = src_img.copy()
+    logo.thumbnail((inner, inner), Image.LANCZOS)
+    offset = ((size - logo.width) // 2, (size - logo.height) // 2)
+    canvas.paste(logo, offset, logo)
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    img.save(output, "PNG", optimize=True)
+    canvas.save(output, "PNG", optimize=True)
     kb = output.stat().st_size / 1024
-    print(f"  ✓ {output} ({img.size[0]}x{img.size[1]}, {kb:.1f} KB)")
+    print(f"  ✓ {output} ({size}x{size}, {kb:.1f} KB)")
 
 def render_ico(sizes, output):
     imgs = []
@@ -92,7 +88,7 @@ render_ico([16, 32, 48], store / "favicon.ico")
 render_png(32, store / "icon-32.png")
 render_png(192, store / "icon-192.png")
 render_png(512, store / "icon-512.png")
-render_png(180, store / "apple-touch-icon.png")
+render_png(180, store / "apple-touch-icon.png", bg=TEAL_BG, padding=0.80)
 render_opengraph(store / "opengraph-image.png")
 
 # ── apps/admin/public ──
@@ -103,7 +99,7 @@ render_ico([16, 32, 48], admin / "favicon.ico")
 render_png(32, admin / "icon-32.png")
 render_png(192, admin / "icon-192.png")
 render_png(512, admin / "icon-512.png")
-render_png(180, admin / "apple-touch-icon.png")
+render_png(180, admin / "apple-touch-icon.png", bg=TEAL_BG, padding=0.80)
 
 # ── apps/portal/public ──
 portal = Path("apps/portal/public")
@@ -113,9 +109,9 @@ render_ico([16, 32, 48], portal / "favicon.ico")
 render_png(32, portal / "icon-32.png")
 render_png(192, portal / "icon-192.png")
 render_png(512, portal / "icon-512.png")
-render_png(180, portal / "apple-touch-icon.png")
-render_png(192, portal / "icon-maskable-192.png", maskable=True)
-render_png(512, portal / "icon-maskable-512.png", maskable=True)
+render_png(180, portal / "apple-touch-icon.png", bg=TEAL_BG, padding=0.80)
+render_png(192, portal / "icon-maskable-192.png", bg=TEAL_BG, padding=0.75)
+render_png(512, portal / "icon-maskable-512.png", bg=TEAL_BG, padding=0.75)
 
 # ── dist/brand/cdn-uploads ──
 cdn = Path("dist/brand/cdn-uploads")

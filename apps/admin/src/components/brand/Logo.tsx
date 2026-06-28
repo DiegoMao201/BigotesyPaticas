@@ -17,7 +17,7 @@ export function Logo({ size = 56, className = '', priority = false, variant = 'p
   const cls = [variantClasses[variant], className].filter(Boolean).join(' ');
   return (
     <Image
-      src="/icon.svg"
+      src="/icon-512.png"
       alt="Bigotes y Paticas"
       width={size}
       height={size}
