@@ -6,7 +6,7 @@ Instagram y Facebook usando IA (GPT-image-1 + Claude Haiku 4.5).
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -83,7 +83,7 @@ async def _get_next_scheduled_at(db: DBSession, preferred_at: datetime | None) -
     """Elige el próximo slot horario disponible."""
     if preferred_at:
         return preferred_at
-    now = datetime.now(UTC)
+    now = datetime.utcnow()
     dow = now.weekday()  # 0=Mon
     # Convertir a formato BD (0=Dom)
     bd_dow = (dow + 1) % 7
@@ -240,7 +240,7 @@ async def get_post(post_id: uuid.UUID, db: DBSession):
 @router.patch("/scheduled-posts/{post_id}")
 async def edit_post(post_id: uuid.UUID, payload: EditPostRequest, db: DBSession):
     post = await _get_post_or_404(db, post_id)
-    updates: dict = {"edited_by_admin": True, "updated_at": datetime.now(UTC)}
+    updates: dict = {"edited_by_admin": True, "updated_at": datetime.utcnow()}
     if payload.caption is not None:
         updates["caption"] = payload.caption
     if payload.hashtags is not None:
@@ -284,7 +284,7 @@ async def regenerate_image(post_id: uuid.UUID, payload: RegenerateImageRequest, 
                 visual_prompt = :vp, updated_at = :now
             WHERE id = :id
         """),
-        {"url": cdn_url, "lp": local_path, "vp": prompt, "now": datetime.now(UTC), "id": str(post_id)},
+        {"url": cdn_url, "lp": local_path, "vp": prompt, "now": datetime.utcnow(), "id": str(post_id)},
     )
     await db.commit()
     return {"ok": True, "image_url": cdn_url}
@@ -295,7 +295,7 @@ async def regenerate_image(post_id: uuid.UUID, payload: RegenerateImageRequest, 
 @router.post("/scheduled-posts/{post_id}/approve")
 async def approve_post(post_id: uuid.UUID, db: DBSession):
     await _get_post_or_404(db, post_id)
-    now = datetime.now(UTC)
+    now = datetime.utcnow()
     await db.execute(
         text("""
             UPDATE content.scheduled_posts
@@ -319,7 +319,7 @@ async def reject_post(post_id: uuid.UUID, payload: RejectRequest, db: DBSession)
             SET status = 'rejected', rejected_reason = :reason, updated_at = :now
             WHERE id = :id
         """),
-        {"reason": payload.reason, "now": datetime.now(UTC), "id": str(post_id)},
+        {"reason": payload.reason, "now": datetime.utcnow(), "id": str(post_id)},
     )
     await db.commit()
     return {"ok": True, "status": "rejected"}
@@ -411,7 +411,7 @@ async def trigger_week_plan(db: DBSession):
 
 @router.post("/approve-all-pending")
 async def approve_all_pending(db: DBSession):
-    now = datetime.now(UTC)
+    now = datetime.utcnow()
     result = await db.execute(
         text("""
             UPDATE content.scheduled_posts
