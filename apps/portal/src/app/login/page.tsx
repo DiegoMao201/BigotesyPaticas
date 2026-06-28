@@ -144,11 +144,11 @@ function LoginPageInner() {
             transition={{ duration: 0.55 }}
           >
             <motion.div
-              className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-xl border border-white/30 flex items-center justify-center mb-4 shadow-lg shadow-black/20 overflow-hidden p-2"
+              className="mb-4 drop-shadow-2xl"
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <Logo size={80} className="w-full h-full object-contain" priority />
+              <Logo size={96} className="object-contain" priority />
             </motion.div>
             <h1 className="text-white text-3xl font-semibold tracking-tight drop-shadow-lg">
               Bigotes y Paticas
