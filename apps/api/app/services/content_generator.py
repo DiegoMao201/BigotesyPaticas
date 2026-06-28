@@ -4,7 +4,7 @@ Usa:
   - Claude Haiku 4.5 vía OpenRouter para rellenar templates y generar captions
   - GPT-image-1 (OpenAI) para generar imágenes editoriales
   - DO Spaces CDN para almacenamiento
-  - Pillow para logo overlay
+  - Pillow para logo overlay (8% ancho, 60% opacidad, esquina inferior-derecha)
 """
 from __future__ import annotations
 
