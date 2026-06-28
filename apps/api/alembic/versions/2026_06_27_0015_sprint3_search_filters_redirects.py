@@ -22,11 +22,6 @@ def upgrade() -> None:
         CREATE INDEX IF NOT EXISTS idx_products_name_trgm
         ON catalog.products USING GIN (name gin_trgm_ops);
     """)
-    op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_products_brand_trgm
-        ON catalog.products USING GIN (COALESCE(brand, '') gin_trgm_ops);
-    """)
-
     # ── 3. slug_redirects table ───────────────────────────────────────────
     op.execute("""
         CREATE TABLE IF NOT EXISTS catalog.slug_redirects (
@@ -58,6 +53,8 @@ def upgrade() -> None:
         ON catalog.products(size_range);
         CREATE INDEX IF NOT EXISTS idx_products_brand_norm
         ON catalog.products(brand_normalized);
+        CREATE INDEX IF NOT EXISTS idx_products_brand_trgm
+        ON catalog.products USING GIN (COALESCE(brand_normalized, '') gin_trgm_ops);
         CREATE INDEX IF NOT EXISTS idx_products_health
         ON catalog.products USING GIN(health_concerns);
         CREATE INDEX IF NOT EXISTS idx_products_pet_type
