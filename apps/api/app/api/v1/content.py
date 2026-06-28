@@ -423,6 +423,61 @@ async def update_engine_config(payload: EngineConfigUpdate, db: DBSession):
 
 # ─── Utilidades adicionales ───────────────────────────────────────────────────
 
+@router.get("/cost-summary")
+async def cost_summary(
+    db: DBSession,
+    period: str = Query("month", description="'month' o 'week'"),
+):
+    """Resumen de costos de generación IA para el período indicado."""
+    from datetime import date as _date, timedelta
+    import calendar
+
+    if period == "week":
+        date_filter = "created_at >= NOW() - INTERVAL '7 days'"
+    else:
+        date_filter = "DATE_TRUNC('month', created_at) = DATE_TRUNC('month', NOW())"
+
+    rows = (await db.execute(
+        text(f"""
+            SELECT image_model,
+                   COUNT(*) AS cnt,
+                   COALESCE(SUM(image_cost_usd), 0) AS total_cost
+            FROM content.scheduled_posts
+            WHERE {date_filter}
+              AND image_url IS NOT NULL
+            GROUP BY image_model
+        """)
+    )).mappings().all()
+
+    data: dict = {}
+    for r in rows:
+        data[r["image_model"]] = {"count": int(r["cnt"]), "cost": float(r["total_cost"])}
+
+    gpt  = data.get("gpt-image-1",  {"count": 0, "cost": 0.0})
+    flux = data.get("flux-1.1-pro", {"count": 0, "cost": 0.0})
+    total_cost  = gpt["cost"] + flux["cost"]
+    total_count = gpt["count"] + flux["count"]
+
+    today = _date.today()
+    days_in_month = calendar.monthrange(today.year, today.month)[1]
+    elapsed = today.day
+    projection      = round(total_cost / elapsed * days_in_month, 2) if elapsed else 0.0
+    gpt_projection  = round(total_count / elapsed * days_in_month * 0.50, 2) if elapsed else 0.0
+
+    return {
+        "period": period,
+        "gpt_count":    gpt["count"],
+        "gpt_cost":     round(gpt["cost"], 4),
+        "flux_count":   flux["count"],
+        "flux_cost":    round(flux["cost"], 4),
+        "total_count":  total_count,
+        "total_cost":   round(total_cost, 4),
+        "projection_end_of_month": projection,
+        "gpt_only_projection":     gpt_projection,
+        "savings_vs_gpt":          round(gpt_projection - projection, 2),
+    }
+
+
 @router.get("/templates")
 async def list_templates(db: DBSession):
     rows = (await db.execute(

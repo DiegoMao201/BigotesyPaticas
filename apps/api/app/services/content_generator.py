@@ -83,13 +83,36 @@ class ContentGenerator:
 
     # ── API pública ────────────────────────────────────────────────────────────
 
+    # ── Selección inteligente de modelo ──────────────────────────────────────
+
+    _CRITICAL_TEXT_KEYWORDS = [
+        "quotation", "quote", "cita", "frase", "tipográfic", "typographic",
+        "cliente verificado", "cliente fidelizado", "data point",
+        "porcentaje", "percent", "5 estrellas", "five stars",
+        "según estudios", "estudios veterinarios",
+    ]
+
+    def _select_image_model(self, template: dict, visual_prompt: str, fallback: str = "gpt-image-1") -> str:
+        """Elige modelo según: preferred_image_model del template → safety check → fallback config."""
+        preferred = template.get("preferred_image_model")
+        if preferred == "flux-1.1-pro":
+            prompt_lower = visual_prompt.lower()
+            if any(kw in prompt_lower for kw in self._CRITICAL_TEXT_KEYWORDS):
+                log.warning(
+                    "Template '%s' prefiere Flux pero el prompt contiene texto crítico — forzando GPT-image-1.",
+                    template.get("code", "?"),
+                )
+                return "gpt-image-1"
+            return "flux-1.1-pro"
+        return preferred or fallback
+
     async def generate_post(
         self,
         template: dict,
         context: dict,
         image_model: str = "gpt-image-1",
     ) -> dict:
-        """Genera un post completo y lo devuelve listo para insertar en DB."""
+        """Genera un post completo. El modelo se elige automáticamente según el template."""
         # Pre-sustituir hashtag rotativo antes de enviar a Claude
         brand_hashtag = random.choice(BRAND_HASHTAGS)
         tpl = dict(template)
@@ -105,12 +128,19 @@ class ContentGenerator:
             None, self._fill_template_with_claude, tpl, context
         )
 
-        # 2. Generar imagen según modelo configurado
+        # 2. Selección inteligente de modelo (template pref > safety check > config fallback)
+        effective_model = self._select_image_model(tpl, filled["visual_prompt"], fallback=image_model)
+        log.info(
+            "template=%s model_selected=%s (template_pref=%s fallback=%s)",
+            tpl.get("code"), effective_model, tpl.get("preferred_image_model"), image_model,
+        )
+
+        # 3. Generar imagen con modelo elegido
         cdn_url = None
         branded_path = None
-        cost = IMAGE_COSTS.get(image_model, 0.50)
+        cost = IMAGE_COSTS.get(effective_model, 0.50)
         try:
-            if image_model == "flux-1.1-pro":
+            if effective_model == "flux-1.1-pro":
                 raw_path = await asyncio.get_event_loop().run_in_executor(
                     None, self._generate_image_flux_pro, filled["visual_prompt"]
                 )
@@ -135,7 +165,7 @@ class ContentGenerator:
             "cta_url":          filled.get("cta_url"),
             "image_url":        cdn_url,
             "image_local_path": str(branded_path) if branded_path else None,
-            "image_model":      image_model,
+            "image_model":      effective_model,
             "image_cost_usd":   cost,
         }
 

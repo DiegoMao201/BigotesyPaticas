@@ -119,6 +119,17 @@ const content = {
   triggerWeekPlan: () =>
     api<{ ok: boolean; output: string }>('/v1/admin/content/generate-week-plan', { method: 'POST' }),
 
+  costSummary: (period = 'month') =>
+    api<{
+      period: string;
+      gpt_count: number; gpt_cost: number;
+      flux_count: number; flux_cost: number;
+      total_count: number; total_cost: number;
+      projection_end_of_month: number;
+      gpt_only_projection: number;
+      savings_vs_gpt: number;
+    }>(`/v1/admin/content/cost-summary?period=${period}`),
+
   testPublish: (post_id: string, target: 'instagram' | 'facebook') =>
     api('/v1/admin/content/test-publish', {
       method: 'POST',
@@ -159,6 +170,90 @@ const CAT_BADGE: Record<string, string> = {
   meme:        'bg-pink-100 text-pink-800',
   local:       'bg-green-100 text-green-800',
 };
+
+// ─── Cost Widget ──────────────────────────────────────────────────────────────
+
+function CostWidget() {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: ['cost-summary'],
+    queryFn: () => content.costSummary('month'),
+    refetchInterval: 120_000,
+  });
+
+  if (isLoading || !data) {
+    return (
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/50 text-muted-foreground"
+      >
+        <DollarSign className="w-3.5 h-3.5" /> Costos IA…
+      </button>
+    );
+  }
+
+  const hasMix = data.flux_count > 0 && data.gpt_count > 0;
+  const totalLabel = `$${data.total_cost.toFixed(2)} USD`;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+          hasMix
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            : 'border-amber-200 bg-amber-50 text-amber-700'
+        }`}
+      >
+        <DollarSign className="w-3.5 h-3.5" />
+        <span className="font-medium">Costos IA:</span>
+        <span className="font-mono">{totalLabel}</span>
+        {hasMix && <span className="text-emerald-500 font-medium">↓${data.savings_vs_gpt.toFixed(0)} ahorrado</span>}
+        {open ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 mt-1 w-72 bg-background border border-border rounded-xl shadow-lg p-4 z-30 text-xs">
+          <div className="font-semibold mb-2 text-sm">💰 Costo IA — {new Date().toLocaleString('es-CO', { month: 'long', year: 'numeric' })}</div>
+          <div className="space-y-1.5">
+            {data.gpt_count > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-amber-700">GPT-image-1 ({data.gpt_count} imgs)</span>
+                <span className="font-mono text-amber-600">${data.gpt_cost.toFixed(2)}</span>
+              </div>
+            )}
+            {data.flux_count > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-emerald-700">Flux 1.1 Pro ({data.flux_count} imgs)</span>
+                <span className="font-mono text-emerald-600">${data.flux_cost.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center border-t pt-1.5 font-medium">
+              <span>Total este mes</span>
+              <span className="font-mono">${data.total_cost.toFixed(2)}</span>
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t space-y-1 text-muted-foreground">
+            <div className="flex justify-between">
+              <span>Proyección fin de mes</span>
+              <span className="font-mono text-foreground">${data.projection_end_of_month}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Si fuera 100% GPT</span>
+              <span className="font-mono text-amber-600">${data.gpt_only_projection}</span>
+            </div>
+            {data.savings_vs_gpt > 0 && (
+              <div className="flex justify-between text-emerald-600 font-medium">
+                <span>Ahorro mix inteligente</span>
+                <span className="font-mono">${data.savings_vs_gpt.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── AB Test Modal ────────────────────────────────────────────────────────────
 
@@ -470,8 +565,15 @@ function PostDrawer({
 
   const regenMut = useMutation({
     mutationFn: () => content.regenerateImage(post.id, customPrompt || undefined),
-    onSuccess: () => {
-      toast.success('Nueva imagen generada');
+    onSuccess: () => { toast.success('Nueva imagen generada'); onUpdate(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const altModel = post.image_model === 'flux-1.1-pro' ? 'gpt-image-1' : 'flux-1.1-pro';
+  const regenWithModelMut = useMutation({
+    mutationFn: () => content.regenerateWithModel(post.id, altModel),
+    onSuccess: (res) => {
+      toast.success(`✅ Imagen regenerada con ${res.model} — $${res.cost_usd.toFixed(2)}`);
       onUpdate();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -516,11 +618,32 @@ function PostDrawer({
             </div>
           )}
 
-          {/* Modelo e info de costo */}
+          {/* Modelo IA + costo + botón regenerar con alternativo */}
           {post.image_model && (
-            <div className="text-xs text-muted-foreground">
-              Imagen: <span className="font-medium">{post.image_model}</span>
-              {post.image_cost_usd != null && ` · $${post.image_cost_usd.toFixed(2)} USD`}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              {post.image_model === 'flux-1.1-pro' ? (
+                <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+                  <Zap className="w-3 h-3" /> Flux 1.1 Pro
+                  <span className="font-mono bg-emerald-100 px-1 rounded text-emerald-600">$0.04</span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700">
+                  💰 GPT-image-1 (high)
+                  <span className="font-mono bg-amber-100 px-1 rounded">$0.50</span>
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => regenWithModelMut.mutate()}
+                disabled={regenWithModelMut.isPending}
+                className="text-xs h-7 px-2"
+              >
+                <RotateCcw className="w-3 h-3 mr-1" />
+                {regenWithModelMut.isPending
+                  ? 'Generando…'
+                  : `Regenerar con ${altModel === 'flux-1.1-pro' ? 'Flux' : 'GPT'}`}
+              </Button>
             </div>
           )}
 
@@ -870,7 +993,8 @@ export default function ContentCalendarPage() {
             {total} posts · {pendingCount} pendientes de aprobación
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          <CostWidget />
           <Button
             variant="outline"
             onClick={() => setShowAbTest(true)}
