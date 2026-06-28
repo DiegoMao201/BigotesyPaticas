@@ -8,12 +8,11 @@ import { ArrowRight, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { auth } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { Logo } from '@/components/brand/Logo';
 
 const VIDEO_MP4  = process.env.NEXT_PUBLIC_LOGIN_VIDEO_MP4  ?? '';
 const VIDEO_WEBM = process.env.NEXT_PUBLIC_LOGIN_VIDEO_WEBM ?? '';
 const VIDEO_POSTER = process.env.NEXT_PUBLIC_LOGIN_POSTER   ?? '';
-const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
-  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -97,10 +96,7 @@ export default function RegistroPage() {
 
       {/* Header */}
       <div className="relative z-10 flex flex-col items-center pt-10 px-6">
-        <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-xl border border-white/30 flex items-center justify-center mb-3 shadow-lg overflow-hidden p-1.5">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={LOGO_URL} alt="Bigotes y Paticas" className="w-full h-full object-contain" />
-        </div>
+        <Logo size={64} priority className="mb-3 drop-shadow-lg" />
         <h1 className="text-white text-2xl font-semibold tracking-tight drop-shadow-lg">Crear cuenta</h1>
         <p className="text-white/75 text-sm mt-1">Bigotes y Paticas — Portal de fidelización</p>
 

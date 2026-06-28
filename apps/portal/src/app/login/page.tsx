@@ -9,6 +9,7 @@ import { Phone, CreditCard, ArrowRight, Loader2 } from 'lucide-react';
 import { auth, pets, referral as referralApi, type LoginResponse } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 import { Logo } from '@/components/brand/Logo';
 
 const VIDEO_MP4  = process.env.NEXT_PUBLIC_LOGIN_VIDEO_MP4  ?? '';
@@ -144,11 +145,46 @@ function LoginPageInner() {
             transition={{ duration: 0.55 }}
           >
             <motion.div
-              className="mb-4 drop-shadow-2xl"
+              className="mb-4 relative inline-block"
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <Logo size={96} className="object-contain" priority />
+              {/* Halo teal pulsante */}
+              <div
+                className="absolute inset-0 rounded-full opacity-40"
+                style={{
+                  background: 'radial-gradient(circle, #187f77 0%, transparent 70%)',
+                  filter: 'blur(40px)',
+                  transform: 'scale(1.6)',
+                  animation: 'pulse-soft 3s ease-in-out infinite',
+                  zIndex: 0,
+                }}
+              />
+              {/* Destello amarillo arriba-derecha */}
+              <span
+                className="absolute -top-2 -right-2 w-3 h-3 rounded-full"
+                style={{ backgroundColor: '#f5a641', opacity: 0.7, animation: 'ping 3s cubic-bezier(0,0,0.2,1) infinite', zIndex: 1 }}
+              />
+              {/* Destello amarillo abajo-izquierda */}
+              <span
+                className="absolute -bottom-2 -left-2 w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: '#f5a641', opacity: 0.6, animation: 'ping 4s cubic-bezier(0,0,0.2,1) infinite', animationDelay: '1s', zIndex: 1 }}
+              />
+              {/* Destello amarillo arriba-izquierda */}
+              <span
+                className="absolute -top-4 -left-4 w-2 h-2 rounded-full"
+                style={{ backgroundColor: '#f5a641', opacity: 0.5, animation: 'ping 5s cubic-bezier(0,0,0.2,1) infinite', animationDelay: '2s', zIndex: 1 }}
+              />
+              <Image
+                src="/icon.svg"
+                alt="Bigotes y Paticas"
+                width={120}
+                height={120}
+                priority
+                className="relative z-10"
+                style={{ filter: 'drop-shadow(0 12px 30px rgba(13,74,69,0.35))' }}
+                unoptimized
+              />
             </motion.div>
             <h1 className="text-white text-3xl font-semibold tracking-tight drop-shadow-lg">
               Bigotes y Paticas

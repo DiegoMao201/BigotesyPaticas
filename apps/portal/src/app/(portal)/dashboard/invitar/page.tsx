@@ -7,9 +7,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { ArrowLeft, Copy, Share2, Check, Gift, Users, Star } from 'lucide-react';
 import { auth, referral } from '@/lib/api';
-
-const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
-  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
+import { Logo } from '@/components/brand/Logo';
 
 const WHATSAPP_MSG = (code: string) => {
   const url = `https://mi.bigotesypaticas.com/?ref=${code}`;
@@ -80,8 +78,7 @@ export default function InvitarPage() {
         </div>
 
         <div className="text-center text-white mb-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={LOGO_URL} alt="" className="w-20 h-20 object-contain mb-3" />
+          <Logo size={80} className="mb-3" />
           <p className="text-white/90 text-sm leading-relaxed">
             Por cada amigo que se registre con tu código,<br />
             <strong>ellos ganan 50 puntos</strong> y cuando hagan su <strong>primera compra</strong>,<br />

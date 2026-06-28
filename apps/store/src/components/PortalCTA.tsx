@@ -1,7 +1,5 @@
 import { ArrowRight } from 'lucide-react';
-
-const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
-  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
+import { Logo } from '@/components/brand/Logo';
 
 const FEATURES = [
   { icon: '🎁', label: 'Puntos de lealtad' },
@@ -75,10 +73,7 @@ export function PortalCTA() {
                 </div>
                 {/* App header */}
                 <div className="px-4 py-2.5 border-b border-white/10 flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-white/20 overflow-hidden p-0.5">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={LOGO_URL} alt="" className="w-full h-full object-contain" />
-                  </div>
+                  <Logo size={24} />
                   <span className="text-white text-xs font-semibold">Mi Portal</span>
                 </div>
                 {/* Mock UI */}

@@ -34,13 +34,11 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full glass border-b border-border/50">
       <div className="container-wide flex h-16 items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 group shrink-0">
-          <div className="w-9 h-9 rounded-2xl bg-teal-700 flex items-center justify-center shadow-elegant transition-transform group-hover:scale-105 overflow-hidden p-1.5">
-            <Logo size={36} className="w-full h-full object-contain" priority />
-          </div>
-          <div className="font-display font-bold text-lg leading-none tracking-tight">
+        <Link href="/" className="flex items-center gap-3 group shrink-0">
+          <Logo size={48} variant="header" priority />
+          <span className="font-display font-bold text-lg leading-none tracking-tight hidden md:inline">
             Bigotes <span className="text-gradient">y Paticas</span>
-          </div>
+          </span>
         </Link>
 
         {/* Nav central (desktop) */}

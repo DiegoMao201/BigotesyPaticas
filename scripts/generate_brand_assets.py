@@ -1,82 +1,88 @@
 """
 Genera todos los assets de marca desde packages/branding/logo-source.png
+Fuente: PNG cuadrado (casita teal + perro + gato, fondo sólido teal).
 Requiere: pip install Pillow
-Fuente: PNG 2048x2048 RGBA con fondo transparente
 """
-import base64
-import shutil
+import base64, shutil
 from pathlib import Path
-
 from PIL import Image
 
 SOURCE = Path("packages/branding/logo-source.png")
 assert SOURCE.exists(), f"NO ENCONTRADO: {SOURCE}"
 
 src_img = Image.open(SOURCE).convert("RGBA")
-assert src_img.mode == "RGBA", "La imagen fuente debe ser RGBA"
+print(f"Fuente: {SOURCE} ({src_img.size}, mode=RGBA)")
 
-
-def _square_resize(size: int) -> Image.Image:
-    """Redimensiona manteniendo aspect ratio, centra en lienzo cuadrado transparente."""
+def render_png(size, output, maskable=False):
     img = src_img.copy()
     img.thumbnail((size, size), Image.LANCZOS)
     square = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     offset = ((size - img.width) // 2, (size - img.height) // 2)
     square.paste(img, offset, img)
-    return square
+    img = square
 
-
-def render_png(size, output, bg=None, maskable=False, canvas_size=None):
-    if canvas_size:
-        w, h = canvas_size
-        canvas = Image.new("RGB", (w, h), (248, 249, 250))
-        logo_h = int(h * 0.6)
-        logo_img = src_img.copy()
-        logo_img.thumbnail((logo_h, logo_h), Image.LANCZOS)
-        x = (w - logo_img.width) // 2
-        y = (h - logo_img.height) // 2
-        canvas.paste(logo_img, (x, y), logo_img)
-        img = canvas
-    else:
-        img = _square_resize(size)
-
-        if maskable:
-            padded = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-            inner = int(size * 0.8)
-            resized = _square_resize(inner)
-            o = (size - inner) // 2
-            padded.paste(resized, (o, o), resized)
-            img = padded
-
-        if bg == "dark":
-            bg_img = Image.new("RGBA", img.size, (13, 74, 69, 255))
-            bg_img.paste(img, (0, 0), img)
-            img = bg_img.convert("RGB")
+    if maskable:
+        padded = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        inner = int(size * 0.8)
+        inner_img = src_img.copy()
+        inner_img.thumbnail((inner, inner), Image.LANCZOS)
+        sq = Image.new("RGBA", (inner, inner), (0, 0, 0, 0))
+        o = ((inner - inner_img.width) // 2, (inner - inner_img.height) // 2)
+        sq.paste(inner_img, o, inner_img)
+        po = (size - inner) // 2
+        padded.paste(sq, (po, po), sq)
+        img = padded
 
     output.parent.mkdir(parents=True, exist_ok=True)
     img.save(output, "PNG", optimize=True)
-    print(f"  ✓ {output} ({img.size[0]}x{img.size[1]}, {img.mode})")
-
+    kb = output.stat().st_size / 1024
+    print(f"  ✓ {output} ({img.size[0]}x{img.size[1]}, {kb:.1f} KB)")
 
 def render_ico(sizes, output):
     imgs = []
     for s in sizes:
-        imgs.append(_square_resize(s))
+        sq = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+        logo = src_img.copy()
+        logo.thumbnail((s, s), Image.LANCZOS)
+        offset = ((s - logo.width) // 2, (s - logo.height) // 2)
+        sq.paste(logo, offset, logo)
+        imgs.append(sq)
     output.parent.mkdir(parents=True, exist_ok=True)
     imgs[0].save(output, format="ICO", sizes=[(s, s) for s in sizes], append_images=imgs[1:])
-    print(f"  ✓ {output} (sizes: {sizes})")
+    print(f"  ✓ {output} (multi-size: {sizes})")
 
+def render_opengraph(output):
+    w, h = 1200, 630
+    canvas = Image.new("RGB", (w, h), (13, 74, 69))
+    pixels = canvas.load()
+    for y in range(h):
+        ratio = y / h
+        r = int(13 + (24 - 13) * ratio)
+        g = int(74 + (127 - 74) * ratio)
+        b = int(69 + (119 - 69) * ratio)
+        for x in range(w):
+            pixels[x, y] = (r, g, b)
+    logo = src_img.copy()
+    logo.thumbnail((480, 480), Image.LANCZOS)
+    x = (w - logo.width) // 2
+    y = (h - logo.height) // 2
+    canvas.paste(logo, (x, y), logo)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(output, "PNG", optimize=True)
+    kb = output.stat().st_size / 1024
+    print(f"  ✓ {output} (1200x630, {kb:.1f} KB)")
 
 def create_svg_wrapper(output):
-    """SVG wrapper que embebe el PNG transparente como data URI."""
-    with open(SOURCE, "rb") as f:
+    with open(SOURCE, 'rb') as f:
         png_b64 = base64.b64encode(f.read()).decode()
     w, h = src_img.size
-    svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">\n  <image href="data:image/png;base64,{png_b64}" width="{w}" height="{h}"/>\n</svg>\n'
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" '
+           f'viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
+           f'<image href="data:image/png;base64,{png_b64}" '
+           f'width="{w}" height="{h}"/></svg>')
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(svg)
     print(f"  ✓ {output}")
-
 
 # ── apps/store/public ──
 store = Path("apps/store/public")
@@ -87,7 +93,7 @@ render_png(32, store / "icon-32.png")
 render_png(192, store / "icon-192.png")
 render_png(512, store / "icon-512.png")
 render_png(180, store / "apple-touch-icon.png")
-render_png(0, store / "opengraph-image.png", canvas_size=(1200, 630))
+render_opengraph(store / "opengraph-image.png")
 
 # ── apps/admin/public ──
 admin = Path("apps/admin/public")
@@ -115,17 +121,9 @@ render_png(512, portal / "icon-maskable-512.png", maskable=True)
 cdn = Path("dist/brand/cdn-uploads")
 print(f"\n📁 {cdn}")
 create_svg_wrapper(cdn / "logo.svg")
-shutil.copy2(SOURCE, cdn / "logo-original.png")
+shutil.copy2(SOURCE, cdn / "logo-original-1254.png")
 render_png(256, cdn / "logo-256.png")
 render_png(512, cdn / "logo-512.png")
 render_png(1024, cdn / "logo-1024.png")
-render_png(2048, cdn / "logo-2048.png")
-render_png(2048, cdn / "logo-on-dark-2048.png", bg="dark")
 
-print("\n✅ Generación completa")
-print("\n📋 Resumen:")
-for d in [store, admin, portal, cdn]:
-    print(f"\n{d}:")
-    for f in sorted(d.iterdir()):
-        if f.is_file() and f.suffix in (".png", ".ico", ".svg", ".webmanifest"):
-            print(f"  {f.name:40} {f.stat().st_size/1024:7.1f} KB")
+print("\n✅ Generación completa.")

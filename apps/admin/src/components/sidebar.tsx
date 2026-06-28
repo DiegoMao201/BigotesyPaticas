@@ -8,6 +8,7 @@ import {
   Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain, PawPrint,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Logo } from '@/components/brand/Logo';
 import { useAuth } from '@/lib/auth-store';
 import { setToken } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -90,9 +91,7 @@ export function Sidebar({
       {/* Logo */}
       <div className="p-5 border-b border-border/60">
         <Link href="/dashboard" className="flex items-center gap-3 group" onClick={onNavigate}>
-          <div className="w-9 h-9 rounded-xl gradient-brand flex items-center justify-center text-white text-lg shadow-elegant group-hover:shadow-glow transition-shadow">
-            🐾
-          </div>
+          <Logo size={36} priority />
           <div>
             <div className="font-display font-bold text-sm leading-tight">Bigotes y Paticas</div>
             <div className="text-[10px] text-brand-600 uppercase tracking-widest font-medium">Nexus Pro</div>

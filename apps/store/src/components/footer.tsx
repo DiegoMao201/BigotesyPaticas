@@ -84,9 +84,7 @@ export function Footer() {
       <div className="container-wide py-16 grid gap-10 md:grid-cols-5">
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-10 h-10 rounded-2xl bg-teal-700 flex items-center justify-center overflow-hidden p-1.5">
-              <Logo size={40} className="w-full h-full object-contain" />
-            </div>
+            <Logo size={40} variant="footer" />
             <span className="font-display font-bold text-lg">
               Bigotes <span className="text-gradient">y Paticas</span>
             </span>

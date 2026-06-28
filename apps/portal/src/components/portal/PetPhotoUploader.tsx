@@ -6,9 +6,7 @@ import { motion } from 'framer-motion';
 import { Camera, ImagePlus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { pets } from '@/lib/api';
-
-const LOGO_URL = process.env.NEXT_PUBLIC_BRAND_LOGO
-  ?? 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png';
+import { Logo } from '@/components/brand/Logo';
 
 interface PetPhotoUploaderProps {
   petId: string;
@@ -89,8 +87,7 @@ export function PetPhotoUploader({
               {isPending ? (
                 <Loader2 className="h-8 w-8 animate-spin" style={{ color: accentColor }} />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={LOGO_URL} alt="" className="w-10 h-10 object-contain" />
+                <Logo size={40} />
               )}
             </div>
             <p className="font-semibold text-foreground text-sm">
