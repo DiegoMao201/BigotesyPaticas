@@ -125,7 +125,7 @@ def build_week_plan(products: list, reviews: list) -> list[dict]:
         result.append({
             "template_code": item["template_code"],
             "context": context,
-            "scheduled_at": scheduled_at.isoformat(),
+            "scheduled_at": scheduled_at.replace(tzinfo=None).isoformat(),
         })
 
     return result
