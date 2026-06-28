@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 import requests
 
@@ -76,7 +77,24 @@ def _publish_instagram(image_url: str, caption: str) -> dict:
     container_id = r1.json()["id"]
     log.info("IG container creado: %s", container_id)
 
-    # Paso 2: publicar
+    # Paso 2: esperar que Meta procese la imagen (FINISHED)
+    for attempt in range(12):
+        time.sleep(5)
+        rs = requests.get(
+            f"{META_BASE}/{container_id}",
+            params={"fields": "status_code", "access_token": token},
+            timeout=10,
+        )
+        status_code = rs.json().get("status_code", "")
+        log.info("IG container status (%d/12): %s", attempt + 1, status_code)
+        if status_code == "FINISHED":
+            break
+        if status_code == "ERROR":
+            raise RuntimeError(f"IG container procesamiento falló: {rs.json()}")
+    else:
+        raise RuntimeError("IG container no llegó a FINISHED en 60 segundos")
+
+    # Paso 3: publicar
     r2 = requests.post(
         f"{META_BASE}/{ig}/media_publish",
         params={"creation_id": container_id, "access_token": token},

@@ -20,10 +20,8 @@ sys.path.insert(0, "/app")
 
 try:
     import psycopg2
-    import psycopg2.extras
 except ModuleNotFoundError:
     import psycopg as psycopg2  # type: ignore[no-redef]
-    import psycopg.extras as _extras  # noqa: F401
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
