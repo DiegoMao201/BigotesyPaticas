@@ -54,7 +54,7 @@ def get_top_products(cur, limit=5) -> list[dict]:
 def get_recent_reviews(cur, limit=3) -> list[dict]:
     cur.execute("""
         SELECT r.rating, r.comment, r.title, r.pet_name,
-               c.first_name, c.last_name,
+               c.full_name,
                p.name as product_name
         FROM catalog.product_reviews r
         LEFT JOIN crm.customers c ON c.id = r.customer_id
@@ -143,7 +143,7 @@ def _build_context(key: str, products: list, reviews: list, pidx: int, ridx: int
         }
     if key == "review" and reviews:
         r = reviews[ridx % len(reviews)]
-        name = (r.get("first_name") or "Cliente").strip()
+        name = ((r.get("full_name") or "Cliente").strip().split()[0])
         return {
             "customer_first_name": name,
             "customer_location": "Pereira",
