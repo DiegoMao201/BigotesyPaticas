@@ -230,7 +230,7 @@ async def run():
 
     async with httpx.AsyncClient(timeout=120) as client:
         # Obtener token admin
-        r = await client.post(f"{api_base}/v1/auth/token",
+        r = await client.post(f"{api_base}/v1/auth/login",
             json={"email": os.environ.get("ADMIN_EMAIL",""), "password": os.environ.get("ADMIN_PASSWORD","")})
         if r.status_code != 200:
             print(f"❌ Login admin fallido: {r.text}", file=sys.stderr)
