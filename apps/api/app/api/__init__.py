@@ -7,6 +7,7 @@ from app.api.v1 import (
     analytics,
     auth,
     blog,
+    reviews,
     contact,
     customers,
     finance,
@@ -72,3 +73,7 @@ api_router.include_router(portal_notifications.router, prefix="/v1")
 api_router.include_router(portal_notifications.admin_router, prefix="/v1")
 api_router.include_router(portal_service_status.router, prefix="/v1")
 api_router.include_router(admin_portal.router, prefix="/v1")
+# Sprint 5: reseñas de productos + GBP sync
+api_router.include_router(reviews.router)
+api_router.include_router(reviews.admin_router)
+api_router.include_router(reviews.public_router)

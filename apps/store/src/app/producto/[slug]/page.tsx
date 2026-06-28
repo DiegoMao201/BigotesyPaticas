@@ -8,6 +8,7 @@ import { ProductTabs } from './ProductTabs';
 import { StickyCTAMobile } from './StickyCTAMobile';
 import { ProductSchema, BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
 import { ProductFAQ } from '@/components/seo/ProductFAQ';
+import { ProductReviews } from '@/components/reviews/ProductReviews';
 import { Truck, ShieldCheck, RefreshCw, ChevronRight, MessageCircle } from 'lucide-react';
 import { getOutOfStockWhatsAppUrl } from '@/lib/whatsapp-messages';
 
@@ -319,6 +320,15 @@ export default async function ProductPage({ params }: Props) {
             <ProductFAQ faqs={product.enriched_content.faqs} />
           </div>
         )}
+
+        {/* ── Reseñas ── */}
+        <div className="mt-14 border-t border-border pt-2">
+          <ProductReviews
+            productId={product.id}
+            initialRatingAvg={product.rating_avg ?? null}
+            initialRatingCount={product.rating_count ?? 0}
+          />
+        </div>
 
         {/* ── Productos relacionados ── */}
         {related.length > 0 && (

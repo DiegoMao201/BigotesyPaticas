@@ -417,6 +417,7 @@ async def order_timeline(
         "items": [
             {
                 "id": str(i.id),
+                "product_id": str(i.product_id) if i.product_id else None,
                 "name": i.name,
                 "image_url": i.image_url,
                 "quantity": i.quantity,

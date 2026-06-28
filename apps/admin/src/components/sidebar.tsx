@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Package, ShoppingCart, Boxes, Users, BarChart3,
   Settings, LogOut, AlertTriangle, TrendingUp, CreditCard, Tag,
-  Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain, PawPrint,
+  Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain, PawPrint, Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
@@ -35,6 +35,7 @@ const NAV_GROUPS = [
     label: 'Catálogo',
     items: [
       { href: '/products', label: 'Productos', icon: Package },
+      { href: '/reviews', label: 'Reseñas', icon: Star, highlight: true },
       { href: '/inventory', label: 'Inventario', icon: Boxes },
     ],
   },

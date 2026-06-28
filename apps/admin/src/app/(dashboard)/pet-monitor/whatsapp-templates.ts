@@ -5,7 +5,8 @@ export type TemplateKey =
   | 'changes_to_confirm'
   | 'order_invoiced'
   | 'ready_for_delivery'
-  | 'delivered';
+  | 'delivered'
+  | 'delivered_with_review_cta';
 
 export interface Template {
   key: TemplateKey;
@@ -68,5 +69,13 @@ export const TEMPLATES: Template[] = [
     label: '✅ Entregado',
     build: (o) =>
       `Hola ${firstName(o)}! Tu pedido fue entregado ✅🐾 Esperamos que ${firstName(o)} y su mascota estén felices!\n\nSi tienes algún inconveniente avísanos. Gracias por preferirnos!`,
+  },
+  {
+    key: 'delivered_with_review_cta',
+    label: '⭐ Entregado + Calificar',
+    build: (o) => {
+      const orderId = o.id?.slice(-8).toUpperCase() ?? '';
+      return `Hola ${firstName(o)}! Tu pedido #${orderId} fue entregado con éxito ✅🐾\n\nEsperamos que tu mascota disfrute cada producto. ¿Nos regalas 2 minutos para calificar tu compra?\n\n👇 Entra al portal y gana *20 Puntos Bigotes* por cada reseña (30 si subes foto):\nhttps://portal.bigotesypaticas.com/orders/${o.id}/calificar\n\n¡Tu opinión ayuda a otras familias con mascotas! 🐶🐱\n\nBigotes y Paticas 🏠🐾`;
+    },
   },
 ];

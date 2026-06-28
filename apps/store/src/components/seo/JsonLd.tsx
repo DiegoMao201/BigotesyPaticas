@@ -28,6 +28,15 @@ interface ProductData {
     descripcion_corta?: string;
     faqs?: FAQ[];
   } | null;
+  rating_avg?: number | null;
+  rating_count?: number;
+  recent_reviews?: Array<{
+    rating: number;
+    title: string | null;
+    comment: string | null;
+    reviewer_name: string;
+    created_at: string;
+  }>;
 }
 
 interface ArticleData {
@@ -189,6 +198,8 @@ export function ProductSchema({ product }: { product: ProductData }) {
   const priceValidUntil = new Date();
   priceValidUntil.setMonth(priceValidUntil.getMonth() + 6);
 
+  const hasRating = (product.rating_count ?? 0) > 0 && product.rating_avg != null;
+
   const schema: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -202,6 +213,31 @@ export function ProductSchema({ product }: { product: ProductData }) {
       name: product.brand?.name || 'Bigotes y Paticas',
     },
     ...(product.category?.name && { category: product.category.name }),
+    ...(hasRating && {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: product.rating_avg!.toFixed(1),
+        reviewCount: product.rating_count,
+        bestRating: '5',
+        worstRating: '1',
+      },
+    }),
+    ...(hasRating && product.recent_reviews && product.recent_reviews.length > 0 && {
+      review: product.recent_reviews.slice(0, 5).map((r) => ({
+        '@type': 'Review',
+        reviewRating: {
+          '@type': 'Rating',
+          ratingValue: r.rating,
+          bestRating: '5',
+          worstRating: '1',
+        },
+        name: r.title || `Reseña de ${r.reviewer_name}`,
+        reviewBody: r.comment || undefined,
+        author: { '@type': 'Person', name: r.reviewer_name },
+        datePublished: r.created_at.split('T')[0],
+        publisher: { '@type': 'Organization', name: 'Bigotes y Paticas' },
+      })),
+    }),
     offers: {
       '@type': 'Offer',
       url: `${BUSINESS_INFO.url}/producto/${product.slug}`,

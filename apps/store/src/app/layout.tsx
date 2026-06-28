@@ -8,6 +8,7 @@ import { OrganizationSchema, LocalBusinessSchema } from '@/components/seo/JsonLd
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 import { GoogleReviewPrompt } from '@/components/reviews/GoogleReviewPrompt';
 import { WhatsAppFloat } from '@/components/widgets/WhatsAppFloat';
+import { PWAInstallBanner } from '@/components/widgets/PWAInstallBanner';
 import { Toaster } from 'sonner';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
@@ -97,6 +98,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Footer />
           <GoogleReviewPrompt />
           <WhatsAppFloat />
+          <PWAInstallBanner />
           <Toaster position="bottom-left" richColors closeButton />
         </Providers>
       </body>

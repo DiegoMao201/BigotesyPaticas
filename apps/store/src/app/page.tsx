@@ -12,6 +12,7 @@ import { formatCurrency } from '@/lib/utils';
 import { HeroSection } from '@/components/HeroSection';
 import { PortalCTA } from '@/components/PortalCTA';
 import { NewsletterForm } from '@/components/NewsletterForm';
+import { RealReviewsSection } from '@/components/reviews/RealReviewsSection';
 
 const CATEGORIES = [
   { slug: 'perros',     name: 'Perros',     emoji: '🐕', tone: 'from-orange-100 to-amber-50', accent: 'text-orange-700' },
@@ -149,6 +150,9 @@ export default async function HomePage() {
 
       {/* PORTAL CTA */}
       <PortalCTA />
+
+      {/* REAL REVIEWS — Google Business Profile */}
+      <RealReviewsSection />
 
       {/* VALUES */}
       <section className="container-wide py-20">

@@ -46,6 +46,22 @@ export interface Product {
   enriched_content?: EnrichedContent | null;
   enriched_at?: string | null;
   enriched_model?: string | null;
+  rating_avg: number | null;
+  rating_count: number;
+  rating_distribution: Record<string, number> | null;
+  recent_reviews?: RecentReview[];
+}
+
+export interface RecentReview {
+  id: string;
+  rating: number;
+  title: string | null;
+  comment: string | null;
+  reviewer_name: string;
+  pet_name: string | null;
+  photo_urls: string[];
+  created_at: string;
+  helpful_count: number;
 }
 
 export interface FAQ {

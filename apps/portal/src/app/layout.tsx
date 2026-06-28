@@ -3,6 +3,7 @@ import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import { Toaster } from 'sonner';
 import './globals.css';
 import { Providers } from './providers';
+import { PWAInstallBanner } from '@/components/widgets/PWAInstallBanner';
 
 const fontSans = Inter({
   subsets: ['latin'],
@@ -58,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${fontSans.variable} ${fontDisplay.variable}`}>
         <Providers>{children}</Providers>
+        <PWAInstallBanner />
         <Toaster
           position="top-center"
           richColors
