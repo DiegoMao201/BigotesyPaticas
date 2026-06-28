@@ -46,7 +46,6 @@ def get_top_products(cur, limit=10) -> list[dict]:
         LEFT JOIN catalog.categories c ON c.id = p.category_id
         WHERE p.is_active = true AND p.is_published = true
           AND p.primary_image_url IS NOT NULL
-          AND p.stock > 0
         ORDER BY RANDOM()
         LIMIT %s
     """, (limit,))
