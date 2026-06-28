@@ -139,7 +139,7 @@ class ProductReview(UUIDPKMixin, Base):
         UUID(as_uuid=True), ForeignKey("catalog.products.id", ondelete="CASCADE"), nullable=False
     )
     customer_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("portal.customers.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("crm.customers.id", ondelete="CASCADE"), nullable=False
     )
     sales_order_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -183,7 +183,7 @@ class GBPReviewCache(UUIDPKMixin, Base):
     business_reply_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
     fetched_at: Mapped[datetime.datetime] = mapped_column(nullable=False, default=datetime.datetime.utcnow)
     matched_customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("portal.customers.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("crm.customers.id"), nullable=True
     )
     points_credited: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     points_credited_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)

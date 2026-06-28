@@ -25,7 +25,7 @@ def upgrade() -> None:
         CREATE TABLE IF NOT EXISTS catalog.product_reviews (
             id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             product_id            UUID NOT NULL REFERENCES catalog.products(id) ON DELETE CASCADE,
-            customer_id           UUID NOT NULL REFERENCES portal.customers(id) ON DELETE CASCADE,
+            customer_id           UUID NOT NULL REFERENCES crm.customers(id) ON DELETE CASCADE,
             sales_order_item_id   UUID,
             rating                INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
             title                 VARCHAR(200),
@@ -68,7 +68,7 @@ def upgrade() -> None:
             business_reply       TEXT,
             business_reply_at    TIMESTAMPTZ,
             fetched_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
-            matched_customer_id  UUID REFERENCES portal.customers(id),
+            matched_customer_id  UUID REFERENCES crm.customers(id),
             points_credited      INTEGER NOT NULL DEFAULT 0,
             points_credited_at   TIMESTAMPTZ
         );
