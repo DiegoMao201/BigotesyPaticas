@@ -140,6 +140,10 @@ async def generate_post(payload: GeneratePostRequest, db: DBSession):
 
     scheduled_at = await _get_next_scheduled_at(db, payload.scheduled_at)
 
+    import json as _json
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    # asyncpg no admite ::jsonb en text() — usar CAST con nombre distinto
     row = (await db.execute(
         text("""
             INSERT INTO content.scheduled_posts
@@ -147,7 +151,7 @@ async def generate_post(payload: GeneratePostRequest, db: DBSession):
                  hashtags, cta_url, image_url, image_local_path, scheduled_at,
                  status, dry_run)
             VALUES
-                (:tpl_id, :category, :src_data::jsonb, :visual_prompt, :caption,
+                (:tpl_id, :category, CAST(:src_data AS jsonb), :visual_prompt, :caption,
                  :hashtags, :cta_url, :image_url, :image_local_path, :scheduled_at,
                  'pending_approval', false)
             RETURNING *
@@ -155,12 +159,12 @@ async def generate_post(payload: GeneratePostRequest, db: DBSession):
         {
             "tpl_id":          str(template["id"]),
             "category":        template["category"],
-            "src_data":        __import__("json").dumps(payload.context),
+            "src_data":        _json.dumps(payload.context),
             "visual_prompt":   result["visual_prompt"],
             "caption":         result["caption"],
             "hashtags":        result.get("hashtags", []),
             "cta_url":         result.get("cta_url"),
-            "image_url":       result["image_url"],
+            "image_url":       result.get("image_url"),
             "image_local_path":result.get("image_local_path"),
             "scheduled_at":    scheduled_at,
         },
