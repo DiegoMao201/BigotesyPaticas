@@ -7,6 +7,7 @@ from app.api.v1 import (
     analytics,
     auth,
     blog,
+    content,
     reviews,
     contact,
     customers,
@@ -78,3 +79,5 @@ api_router.include_router(admin_portal.router, prefix="/v1")
 api_router.include_router(reviews.router)
 api_router.include_router(reviews.admin_router)
 api_router.include_router(reviews.public_router)
+# Sprint 6A: content engine IA
+api_router.include_router(content.router)

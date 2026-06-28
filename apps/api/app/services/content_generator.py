@@ -1,0 +1,251 @@
+"""Motor de generación de contenido IA — Sprint 6A.
+
+Usa:
+  - Claude Haiku 4.5 vía OpenRouter para rellenar templates y generar captions
+  - GPT-image-1 (OpenAI) para generar imágenes editoriales
+  - DO Spaces CDN para almacenamiento
+  - Pillow para logo overlay
+"""
+from __future__ import annotations
+
+import asyncio
+import base64
+import json
+import logging
+import os
+import uuid
+from datetime import datetime
+from functools import lru_cache
+from pathlib import Path
+
+import requests
+
+log = logging.getLogger(__name__)
+
+# ─── Constantes ───────────────────────────────────────────────────────────────
+
+CDN_BASE    = os.environ.get("S3_PUBLIC_URL", "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com")
+CDN_BUCKET  = os.environ.get("S3_BUCKET", "catalogo-ferreinox")
+CDN_ENDPOINT= os.environ.get("S3_ENDPOINT_URL", "https://nyc3.digitaloceanspaces.com")
+CDN_REGION  = os.environ.get("S3_REGION", "nyc3")
+S3_ACCESS   = os.environ.get("S3_ACCESS_KEY", "")
+S3_SECRET   = os.environ.get("S3_SECRET_KEY", "")
+
+LOGO_PATH   = Path("/app/apps/store/public/icon-192.png")
+TEMP_DIR    = Path("/tmp/content_engine")
+
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+@lru_cache(maxsize=1)
+def _openai_client():
+    from openai import OpenAI
+    key = os.environ.get("OPENAI_API_KEY", "")
+    if not key:
+        raise RuntimeError("OPENAI_API_KEY no configurada en environment")
+    return OpenAI(api_key=key)
+
+
+def _s3_client():
+    import boto3
+    from botocore.client import Config
+    return boto3.client(
+        "s3",
+        region_name=CDN_REGION,
+        endpoint_url=CDN_ENDPOINT,
+        aws_access_key_id=S3_ACCESS,
+        aws_secret_access_key=S3_SECRET,
+        config=Config(signature_version="s3v4"),
+    )
+
+
+# ─── ContentGenerator ─────────────────────────────────────────────────────────
+
+class ContentGenerator:
+    """Genera posts completos: caption + imagen + upload CDN."""
+
+    def __init__(self):
+        self._openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+        if not self._openrouter_key:
+            raise RuntimeError("OPENROUTER_API_KEY no configurada en environment")
+        TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    # ── API pública ────────────────────────────────────────────────────────────
+
+    async def generate_post(self, template: dict, context: dict) -> dict:
+        """Genera un post completo y lo devuelve listo para insertar en DB."""
+        # 1. Claude Haiku rellena las variables del template
+        filled = await asyncio.get_event_loop().run_in_executor(
+            None, self._fill_template_with_claude, template, context
+        )
+
+        # 2. GPT-image-1 genera la imagen
+        raw_path = await asyncio.get_event_loop().run_in_executor(
+            None, self._generate_image_gpt, filled["visual_prompt"]
+        )
+
+        # 3. Logo overlay
+        branded_path = await asyncio.get_event_loop().run_in_executor(
+            None, self._apply_logo_overlay, raw_path
+        )
+
+        # 4. Subir al CDN
+        cdn_url = await asyncio.get_event_loop().run_in_executor(
+            None, self._upload_to_cdn, branded_path
+        )
+
+        return {
+            "visual_prompt":    filled["visual_prompt"],
+            "caption":          filled["caption"],
+            "hashtags":         filled.get("hashtags", []),
+            "cta_url":          filled.get("cta_url"),
+            "image_url":        cdn_url,
+            "image_local_path": str(branded_path),
+        }
+
+    async def regenerate_image(self, visual_prompt: str) -> tuple[str, str]:
+        """Regenera solo la imagen. Retorna (cdn_url, local_path)."""
+        raw_path = await asyncio.get_event_loop().run_in_executor(
+            None, self._generate_image_gpt, visual_prompt
+        )
+        branded_path = await asyncio.get_event_loop().run_in_executor(
+            None, self._apply_logo_overlay, raw_path
+        )
+        cdn_url = await asyncio.get_event_loop().run_in_executor(
+            None, self._upload_to_cdn, branded_path
+        )
+        return cdn_url, str(branded_path)
+
+    # ── Paso 1: Claude Haiku rellena template ─────────────────────────────────
+
+    def _fill_template_with_claude(self, template: dict, context: dict) -> dict:
+        prompt = f"""Sos copywriter editorial de marca para Bigotes y Paticas, tienda premium de mascotas en Pereira/Dosquebradas Colombia.
+
+ADN DE MARCA: conciencia animal, amor real, esperanza, autoridad técnica, identidad regional Pereira/Eje Cafetero. NO clichés genéricos.
+
+Vas a generar contenido para post categoría "{template['category']}" usando este template:
+
+VISUAL PROMPT TEMPLATE:
+{template['visual_prompt_template']}
+
+CAPTION TEMPLATE:
+{template['caption_template']}
+
+CONTEXTO ESPECÍFICO DEL POST:
+{json.dumps(context, ensure_ascii=False, indent=2)}
+
+INSTRUCCIONES CRÍTICAS:
+1. Variables {{como_esta}}: rellenalas con datos ESPECÍFICOS y CREATIVOS, no genéricos.
+2. Datos numéricos: cifras reales investigables (animales sin hogar Risaralda, % esterilización Pereira, etc).
+3. Tono: adulto, técnico cuando aplica, empático. NUNCA cursi.
+4. Caption máximo 250 palabras.
+5. Hashtags: 5-7 que combinen marca + tema + local.
+6. Para "awareness/adoption": datos verificables o "estimaciones aproximadas" honesto.
+7. Para "product": beneficio ESPECÍFICO, no "es premium".
+8. Para "educational": dato que el 80% de dueños NO sabe.
+9. PROHIBIDO: "tu mejor amigo", "cuida tu mascota", "premium calidad", "amor incondicional".
+
+Respondé JSON estricto sin markdown:
+{{"visual_prompt": "...", "caption": "...", "hashtags": ["#..."], "cta_url": "..." }}"""
+
+        resp = requests.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {self._openrouter_key}",
+                "HTTP-Referer": "https://bigotesypaticas.com",
+                "X-Title": "Bigotes y Paticas Content Engine",
+            },
+            json={
+                "model": "anthropic/claude-haiku-4-5",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 2000,
+                "temperature": 0.8,
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"]
+        # Limpiar markdown si Claude lo agregó
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```", 2)[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            if "```" in raw:
+                raw = raw.rsplit("```", 1)[0]
+        return json.loads(raw.strip())
+
+    # ── Paso 2: GPT-image-1 ───────────────────────────────────────────────────
+
+    def _generate_image_gpt(self, visual_prompt: str) -> Path:
+        client = _openai_client()
+        response = client.images.generate(
+            model="gpt-image-1",
+            prompt=visual_prompt,
+            size="1024x1024",
+            quality="high",
+            n=1,
+        )
+        b64 = response.data[0].b64_json
+        image_bytes = base64.b64decode(b64)
+
+        out = TEMP_DIR / f"post_{uuid.uuid4()}.png"
+        out.write_bytes(image_bytes)
+        log.info("Imagen GPT-image-1 guardada: %s", out)
+        return out
+
+    # ── Paso 3: Logo overlay ──────────────────────────────────────────────────
+
+    def _apply_logo_overlay(self, image_path: Path) -> Path:
+        from PIL import Image
+
+        img = Image.open(image_path).convert("RGBA")
+
+        # Buscar logo en varias ubicaciones posibles
+        candidates = [
+            LOGO_PATH,
+            Path("/app/apps/store/public/icon-192.png"),
+            Path("/app/icon-192.png"),
+        ]
+        logo_src = next((p for p in candidates if p.exists()), None)
+
+        if logo_src:
+            logo = Image.open(logo_src).convert("RGBA")
+            logo_size = max(40, int(img.width * 0.08))
+            logo = logo.resize((logo_size, logo_size), Image.LANCZOS)
+            # Opacity 60%
+            r, g, b, a = logo.split()
+            a = a.point(lambda p: int(p * 0.6))
+            logo = Image.merge("RGBA", (r, g, b, a))
+            padding = int(img.width * 0.03)
+            pos = (img.width - logo.width - padding, img.height - logo.height - padding)
+            img.paste(logo, pos, logo)
+        else:
+            log.warning("Logo no encontrado, se omite overlay")
+
+        out = image_path.with_name(image_path.stem + "_branded.png")
+        img.convert("RGB").save(out, "PNG", optimize=True)
+        return out
+
+    # ── Paso 4: Subida CDN ────────────────────────────────────────────────────
+
+    def _upload_to_cdn(self, local_path: Path) -> str:
+        s3 = _s3_client()
+        date_path = datetime.now().strftime("%Y/%m/%d")
+        dst_key = f"bigotesypaticas/content/{date_path}/{local_path.name}"
+
+        s3.upload_file(
+            str(local_path),
+            CDN_BUCKET,
+            dst_key,
+            ExtraArgs={
+                "ACL": "public-read",
+                "ContentType": "image/png",
+                "CacheControl": "public, max-age=2592000",
+            },
+        )
+        url = f"{CDN_BASE}/{dst_key}"
+        log.info("Imagen subida a CDN: %s", url)
+        return url

@@ -1,0 +1,750 @@
+'use client';
+
+import { useState, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  CalendarDays, CheckCircle2, XCircle, RotateCcw, Save,
+  Power, TestTube2, Wand2, ChevronDown, ChevronUp, X,
+  AlertTriangle, Clock, Instagram, Facebook,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { api, API_BASE, getToken } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type PostStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'scheduled' | 'publishing' | 'published' | 'failed';
+
+interface ScheduledPost {
+  id: string;
+  template_id: string | null;
+  category: string;
+  visual_prompt: string;
+  caption: string;
+  hashtags: string[];
+  cta_url: string | null;
+  image_url: string | null;
+  scheduled_at: string;
+  optimal_time_slot: string | null;
+  target_platforms: string[];
+  status: PostStatus;
+  approved_at: string | null;
+  rejected_reason: string | null;
+  edited_by_admin: boolean;
+  published_at: string | null;
+  instagram_post_id: string | null;
+  facebook_post_id: string | null;
+  publish_error: string | null;
+  dry_run: boolean;
+  source_data: Record<string, unknown> | null;
+  created_at: string;
+}
+
+interface Template {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  visual_style: string;
+  cta_type: string | null;
+}
+
+interface EngineConfig {
+  [key: string]: { value: string; description: string };
+}
+
+// ─── Content API ──────────────────────────────────────────────────────────────
+
+const content = {
+  list: (status = 'all', page = 1) =>
+    api<{ items: ScheduledPost[]; total: number; page: number }>
+      (`/v1/admin/content/scheduled-posts?status=${status}&page=${page}&page_size=50`),
+
+  approve: (id: string) =>
+    api(`/v1/admin/content/scheduled-posts/${id}/approve`, { method: 'POST' }),
+
+  reject: (id: string, reason?: string) =>
+    api(`/v1/admin/content/scheduled-posts/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  edit: (id: string, data: Partial<Pick<ScheduledPost, 'caption' | 'hashtags' | 'scheduled_at' | 'target_platforms' | 'visual_prompt'>>) =>
+    api(`/v1/admin/content/scheduled-posts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  regenerateImage: (id: string, prompt?: string) =>
+    api<{ ok: boolean; image_url: string }>(
+      `/v1/admin/content/scheduled-posts/${id}/regenerate-image`,
+      { method: 'POST', body: JSON.stringify({ visual_prompt: prompt ?? null }) },
+    ),
+
+  approveAll: () =>
+    api<{ ok: boolean; approved: number }>('/v1/admin/content/approve-all-pending', { method: 'POST' }),
+
+  getConfig: () => api<EngineConfig>('/v1/admin/content/engine-config'),
+
+  setConfig: (key: string, value: string) =>
+    api('/v1/admin/content/engine-config', {
+      method: 'PATCH',
+      body: JSON.stringify({ key, value }),
+    }),
+
+  getTemplates: () => api<Template[]>('/v1/admin/content/templates'),
+
+  generate: (template_code: string, context: Record<string, unknown>, scheduled_at?: string) =>
+    api<ScheduledPost>('/v1/admin/content/generate', {
+      method: 'POST',
+      body: JSON.stringify({ template_code, context, scheduled_at }),
+    }),
+
+  triggerWeekPlan: () =>
+    api<{ ok: boolean; output: string }>('/v1/admin/content/generate-week-plan', { method: 'POST' }),
+
+  testPublish: (post_id: string, target: 'instagram' | 'facebook') =>
+    api('/v1/admin/content/test-publish', {
+      method: 'POST',
+      body: JSON.stringify({ post_id, target }),
+    }),
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const STATUS_COLOR: Record<PostStatus, string> = {
+  draft:            'bg-muted text-muted-foreground',
+  pending_approval: 'bg-amber-100 text-amber-800 border-amber-200',
+  approved:         'bg-emerald-100 text-emerald-800 border-emerald-200',
+  scheduled:        'bg-blue-100 text-blue-800 border-blue-200',
+  publishing:       'bg-purple-100 text-purple-800 border-purple-200',
+  published:        'bg-green-100 text-green-800 border-green-200',
+  rejected:         'bg-gray-100 text-gray-500 border-gray-200',
+  failed:           'bg-red-100 text-red-800 border-red-200',
+};
+
+const STATUS_LABEL: Record<PostStatus, string> = {
+  draft:            'Borrador',
+  pending_approval: 'Pendiente',
+  approved:         'Aprobado',
+  scheduled:        'Programado',
+  publishing:       'Publicando…',
+  published:        'Publicado',
+  rejected:         'Rechazado',
+  failed:           'Error',
+};
+
+const CAT_BADGE: Record<string, string> = {
+  product:     'bg-teal-100 text-teal-800',
+  educational: 'bg-blue-100 text-blue-800',
+  review:      'bg-purple-100 text-purple-800',
+  awareness:   'bg-orange-100 text-orange-800',
+  reminder:    'bg-yellow-100 text-yellow-800',
+  meme:        'bg-pink-100 text-pink-800',
+  local:       'bg-green-100 text-green-800',
+};
+
+// ─── Components ───────────────────────────────────────────────────────────────
+
+function EngineControls({ config, onToggle }: { config: EngineConfig; onToggle: (key: string, val: string) => void }) {
+  const isActive  = config['is_active']?.value === 'true';
+  const isDryRun  = config['dry_run_mode']?.value === 'true';
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <button
+        onClick={() => onToggle('is_active', isActive ? 'false' : 'true')}
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+          isActive ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-muted border-border text-muted-foreground'
+        }`}
+      >
+        <Power className="w-3.5 h-3.5" />
+        {isActive ? '✅ Engine activo' : '⏸ Engine pausado'}
+      </button>
+      <button
+        onClick={() => onToggle('dry_run_mode', isDryRun ? 'false' : 'true')}
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+          isDryRun ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-amber-50 border-amber-200 text-amber-700'
+        }`}
+      >
+        <TestTube2 className="w-3.5 h-3.5" />
+        {isDryRun ? '🧪 Dry-run ON' : '🚀 Publicación real'}
+      </button>
+    </div>
+  );
+}
+
+function PostCard({ post, onClick }: { post: ScheduledPost; onClick: () => void }) {
+  const dt = new Date(post.scheduled_at);
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left rounded-xl border-2 p-3 transition-all hover:shadow-md ${STATUS_COLOR[post.status]} cursor-pointer`}
+    >
+      {post.image_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={post.image_url} alt="" className="w-full aspect-square object-cover rounded-lg mb-2" />
+      )}
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase ${CAT_BADGE[post.category] || 'bg-muted text-muted-foreground'}`}>
+          {post.category}
+        </span>
+        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+          {dt.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+      <p className="text-xs line-clamp-2 mt-1 text-current/80">{post.caption}</p>
+      <div className="mt-1.5">
+        <Badge className={`text-[10px] border ${STATUS_COLOR[post.status]}`}>
+          {STATUS_LABEL[post.status]}
+        </Badge>
+      </div>
+    </button>
+  );
+}
+
+function PostDrawer({
+  post,
+  onClose,
+  onUpdate,
+}: {
+  post: ScheduledPost;
+  onClose: () => void;
+  onUpdate: () => void;
+}) {
+  const qc = useQueryClient();
+  const [caption, setCaption] = useState(post.caption);
+  const [hashtags, setHashtags] = useState((post.hashtags || []).join(' '));
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [showReject, setShowReject] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [showRegenPrompt, setShowRegenPrompt] = useState(false);
+
+  const saveMut = useMutation({
+    mutationFn: () => content.edit(post.id, {
+      caption,
+      hashtags: hashtags.split(/\s+/).filter(Boolean),
+    }),
+    onSuccess: () => { toast.success('Cambios guardados'); onUpdate(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const approveMut = useMutation({
+    mutationFn: () => content.approve(post.id),
+    onSuccess: () => { toast.success('✅ Post aprobado'); onUpdate(); onClose(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const rejectMut = useMutation({
+    mutationFn: () => content.reject(post.id, rejectReason || undefined),
+    onSuccess: () => { toast.success('Post rechazado'); onUpdate(); onClose(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const regenMut = useMutation({
+    mutationFn: () => content.regenerateImage(post.id, customPrompt || undefined),
+    onSuccess: (data) => {
+      toast.success('Nueva imagen generada');
+      onUpdate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button className="absolute inset-0 bg-black/40" onClick={onClose} aria-label="Cerrar" />
+      <div className="relative w-full max-w-xl bg-background shadow-2xl overflow-y-auto flex flex-col">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-5 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${CAT_BADGE[post.category] || 'bg-muted'}`}>
+              {post.category}
+            </span>
+            <Badge className={`text-xs border ${STATUS_COLOR[post.status]}`}>
+              {STATUS_LABEL[post.status]}
+            </Badge>
+            {post.dry_run && <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200">dry-run</Badge>}
+          </div>
+          <button onClick={onClose} className="rounded-md p-1.5 hover:bg-muted">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5 flex-1">
+          {/* Imagen */}
+          {post.image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={post.image_url} alt="" className="w-full aspect-square object-cover rounded-xl border border-border" />
+          )}
+
+          {/* Programación */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Clock className="w-4 h-4" />
+            <span>{new Date(post.scheduled_at).toLocaleString('es-CO', { dateStyle: 'full', timeStyle: 'short' })}</span>
+          </div>
+
+          {/* Plataformas */}
+          <div className="flex gap-2">
+            {(post.target_platforms || []).includes('instagram') && (
+              <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-pink-50 border border-pink-200 text-pink-700">
+                <Instagram className="w-3 h-3" /> Instagram
+              </span>
+            )}
+            {(post.target_platforms || []).includes('facebook') && (
+              <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700">
+                <Facebook className="w-3 h-3" /> Facebook
+              </span>
+            )}
+          </div>
+
+          {/* Visual prompt (toggle) */}
+          <div>
+            <button
+              onClick={() => setShowPrompt(!showPrompt)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-1"
+            >
+              {showPrompt ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {showPrompt ? 'Ocultar' : 'Ver'} visual prompt
+            </button>
+            {showPrompt && (
+              <p className="text-[11px] text-muted-foreground bg-muted/50 rounded-lg p-3 font-mono leading-relaxed">
+                {post.visual_prompt}
+              </p>
+            )}
+          </div>
+
+          {/* Caption editable */}
+          <div>
+            <label className="text-xs font-medium block mb-1.5">Caption</label>
+            <textarea
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              rows={8}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+          </div>
+
+          {/* Hashtags */}
+          <div>
+            <label className="text-xs font-medium block mb-1.5">Hashtags</label>
+            <input
+              value={hashtags}
+              onChange={(e) => setHashtags(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="#BigotesYPaticasPereira #MascotasPereira"
+            />
+          </div>
+
+          {/* Source data */}
+          {post.source_data && Object.keys(post.source_data).length > 0 && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">Datos fuente del post</summary>
+              <pre className="mt-1 p-2 bg-muted rounded text-[10px] overflow-x-auto">
+                {JSON.stringify(post.source_data, null, 2)}
+              </pre>
+            </details>
+          )}
+
+          {/* Error */}
+          {post.publish_error && (
+            <div className="text-xs text-destructive bg-destructive/10 rounded-lg p-3">
+              <AlertTriangle className="w-3 h-3 inline mr-1" />
+              {post.publish_error}
+            </div>
+          )}
+
+          {/* Published info */}
+          {post.status === 'published' && (
+            <div className="text-xs text-emerald-700 bg-emerald-50 rounded-lg p-3 space-y-0.5">
+              <div>✅ Publicado {post.published_at ? formatDistanceToNow(new Date(post.published_at), { locale: es, addSuffix: true }) : ''}</div>
+              {post.instagram_post_id && <div>IG: {post.instagram_post_id}</div>}
+              {post.facebook_post_id && <div>FB: {post.facebook_post_id}</div>}
+              {post.dry_run && <div className="text-blue-600">🧪 dry-run — no publicado en redes reales</div>}
+            </div>
+          )}
+        </div>
+
+        {/* Acciones sticky */}
+        <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t border-border p-4 space-y-2">
+          {/* Regenerar imagen */}
+          <div>
+            <button
+              onClick={() => setShowRegenPrompt(!showRegenPrompt)}
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mb-1"
+            >
+              {showRegenPrompt ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              Prompt personalizado para regenerar
+            </button>
+            {showRegenPrompt && (
+              <textarea
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                rows={3}
+                placeholder="Dejar vacío para usar prompt original..."
+                className="w-full px-3 py-2 text-xs rounded-lg border border-input bg-background focus:outline-none resize-none mb-1"
+              />
+            )}
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => regenMut.mutate()}
+              disabled={regenMut.isPending}
+              className="flex-1"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              {regenMut.isPending ? 'Generando…' : 'Regenerar imagen'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => saveMut.mutate()}
+              disabled={saveMut.isPending}
+              className="flex-1"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {saveMut.isPending ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </div>
+
+          {post.status === 'pending_approval' && (
+            <>
+              <Button
+                className="w-full gradient-brand text-white"
+                onClick={() => approveMut.mutate()}
+                disabled={approveMut.isPending}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                {approveMut.isPending ? 'Aprobando…' : '✅ Aprobar para publicar'}
+              </Button>
+
+              {!showReject ? (
+                <button
+                  onClick={() => setShowReject(true)}
+                  className="w-full text-sm text-muted-foreground hover:text-destructive text-center py-1"
+                >
+                  Rechazar post
+                </button>
+              ) : (
+                <div className="space-y-1.5">
+                  <input
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Motivo (opcional)"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-input bg-background focus:outline-none"
+                  />
+                  <Button
+                    variant="outline"
+                    className="w-full border-destructive text-destructive hover:bg-destructive/10"
+                    onClick={() => rejectMut.mutate()}
+                    disabled={rejectMut.isPending}
+                  >
+                    <XCircle className="w-4 h-4" />
+                    {rejectMut.isPending ? 'Rechazando…' : '❌ Confirmar rechazo'}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GenerateModal({ templates, onClose, onGenerated }: {
+  templates: Template[];
+  onClose: () => void;
+  onGenerated: () => void;
+}) {
+  const [templateCode, setTemplateCode] = useState('product_hero');
+  const [contextJson, setContextJson] = useState('{\n  "product_name": "Royal Canin Adult 15kg",\n  "product_price": 185000,\n  "slug": "royal-canin-adult-15kg"\n}');
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [error, setError] = useState('');
+
+  const genMut = useMutation({
+    mutationFn: () => {
+      let ctx: Record<string, unknown>;
+      try { ctx = JSON.parse(contextJson); } catch { throw new Error('Context JSON inválido'); }
+      return content.generate(templateCode, ctx, scheduledAt || undefined);
+    },
+    onSuccess: () => { toast.success('Post generado y en cola de aprobación'); onGenerated(); onClose(); },
+    onError: (e: Error) => { setError(e.message); toast.error(e.message); },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <button className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-background rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-lg flex items-center gap-2"><Wand2 className="w-5 h-5 text-brand-600" /> Generar post manual</h2>
+          <button onClick={onClose}><X className="w-4 h-4" /></button>
+        </div>
+
+        <div>
+          <label className="text-xs font-medium block mb-1">Template</label>
+          <select
+            value={templateCode}
+            onChange={(e) => setTemplateCode(e.target.value)}
+            className="w-full px-3 py-2 text-sm rounded-lg border border-input bg-background focus:outline-none"
+          >
+            {templates.map((t) => (
+              <option key={t.code} value={t.code}>{t.name} ({t.category})</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs font-medium block mb-1">Contexto (JSON)</label>
+          <textarea
+            value={contextJson}
+            onChange={(e) => setContextJson(e.target.value)}
+            rows={6}
+            className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-input bg-background focus:outline-none resize-none"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium block mb-1">Programar para (opcional)</label>
+          <input
+            type="datetime-local"
+            value={scheduledAt}
+            onChange={(e) => setScheduledAt(e.target.value)}
+            className="w-full px-3 py-2 text-sm rounded-lg border border-input bg-background focus:outline-none"
+          />
+        </div>
+
+        {error && <p className="text-xs text-destructive">{error}</p>}
+
+        <Button
+          className="w-full gradient-brand text-white"
+          onClick={() => genMut.mutate()}
+          disabled={genMut.isPending}
+        >
+          <Wand2 className="w-4 h-4" />
+          {genMut.isPending ? 'Generando (puede tardar 30-60s)…' : 'Generar con IA'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+type TabStatus = 'pending_approval' | 'approved' | 'published' | 'rejected' | 'all';
+
+const TABS: { label: string; value: TabStatus }[] = [
+  { label: 'Pendientes', value: 'pending_approval' },
+  { label: 'Aprobados', value: 'approved' },
+  { label: 'Publicados', value: 'published' },
+  { label: 'Rechazados', value: 'rejected' },
+  { label: 'Todos', value: 'all' },
+];
+
+export default function ContentCalendarPage() {
+  const qc = useQueryClient();
+  const [activeTab, setActiveTab] = useState<TabStatus>('pending_approval');
+  const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null);
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [triggeringPlan, setTriggeringPlan] = useState(false);
+
+  const { data: postsData, isLoading } = useQuery({
+    queryKey: ['content-posts', activeTab],
+    queryFn: () => content.list(activeTab),
+    refetchInterval: 30_000,
+  });
+
+  const { data: config } = useQuery({
+    queryKey: ['engine-config'],
+    queryFn: content.getConfig,
+    refetchInterval: 60_000,
+  });
+
+  const { data: templates } = useQuery({
+    queryKey: ['content-templates'],
+    queryFn: content.getTemplates,
+  });
+
+  const configMut = useMutation({
+    mutationFn: ({ key, value }: { key: string; value: string }) => content.setConfig(key, value),
+    onSuccess: () => { toast.success('Configuración actualizada'); qc.invalidateQueries({ queryKey: ['engine-config'] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const approveAllMut = useMutation({
+    mutationFn: content.approveAll,
+    onSuccess: (data) => {
+      toast.success(`✅ ${data.approved} posts aprobados`);
+      qc.invalidateQueries({ queryKey: ['content-posts'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  async function handleTriggerPlan() {
+    setTriggeringPlan(true);
+    try {
+      const result = await content.triggerWeekPlan();
+      if (result.ok) {
+        toast.success('Plan semanal generado correctamente');
+      } else {
+        toast.error('Error generando plan semanal');
+      }
+      qc.invalidateQueries({ queryKey: ['content-posts'] });
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error desconocido');
+    } finally {
+      setTriggeringPlan(false);
+    }
+  }
+
+  const posts = postsData?.items ?? [];
+  const total  = postsData?.total ?? 0;
+  const pendingCount = posts.filter((p) => p.status === 'pending_approval').length;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold font-display flex items-center gap-2">
+            <CalendarDays className="w-6 h-6 text-brand-600" /> Contenido IA
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            {total} posts · {pendingCount} pendientes de aprobación
+          </p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setShowGenerate(true)}>
+            <Wand2 className="w-4 h-4" /> Generar post
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleTriggerPlan}
+            disabled={triggeringPlan}
+          >
+            <CalendarDays className="w-4 h-4" />
+            {triggeringPlan ? 'Generando plan…' : 'Plan semanal'}
+          </Button>
+          {pendingCount > 0 && (
+            <Button
+              onClick={() => {
+                if (confirm(`¿Aprobar los ${pendingCount} posts pendientes?`)) {
+                  approveAllMut.mutate();
+                }
+              }}
+              disabled={approveAllMut.isPending}
+              className="gradient-brand text-white"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Aprobar todos ({pendingCount})
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Engine controls */}
+      {config && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <span className="text-sm font-medium text-muted-foreground">Control del engine:</span>
+            <EngineControls
+              config={config}
+              onToggle={(key, value) => configMut.mutate({ key, value })}
+            />
+          </div>
+          {config['dry_run_mode']?.value === 'false' && config['is_active']?.value === 'true' && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              ⚠️ Engine activo en modo PRODUCCIÓN — los posts aprobados se publicarán en Instagram y Facebook reales.
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border overflow-x-auto">
+        {TABS.map((tab) => {
+          const count = tab.value === 'all' ? total : undefined;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => setActiveTab(tab.value)}
+              className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                activeTab === tab.value
+                  ? 'border-brand-600 text-brand-700'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+              {tab.value === 'pending_approval' && pendingCount > 0 && (
+                <span className="ml-1.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Posts grid */}
+      {isLoading ? (
+        <div className="text-center py-12 text-muted-foreground">Cargando posts…</div>
+      ) : posts.length === 0 ? (
+        <Card className="p-12 text-center">
+          <CalendarDays className="h-12 w-12 mx-auto text-muted-foreground mb-4 opacity-30" />
+          <p className="text-muted-foreground">
+            {activeTab === 'pending_approval'
+              ? 'No hay posts pendientes de aprobación'
+              : `Sin posts con estado "${activeTab}"`}
+          </p>
+          {activeTab === 'pending_approval' && (
+            <Button className="mt-4" variant="outline" onClick={() => setShowGenerate(true)}>
+              <Wand2 className="w-4 h-4" /> Generar primer post
+            </Button>
+          )}
+        </Card>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {posts.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              onClick={() => setSelectedPost(post)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Drawer de detalle */}
+      {selectedPost && (
+        <PostDrawer
+          post={selectedPost}
+          onClose={() => setSelectedPost(null)}
+          onUpdate={() => {
+            qc.invalidateQueries({ queryKey: ['content-posts'] });
+            // Actualizar el post seleccionado con datos frescos
+            content.list(activeTab).then((data) => {
+              const updated = data.items.find((p) => p.id === selectedPost.id);
+              if (updated) setSelectedPost(updated);
+            });
+          }}
+        />
+      )}
+
+      {/* Modal generar */}
+      {showGenerate && templates && (
+        <GenerateModal
+          templates={templates}
+          onClose={() => setShowGenerate(false)}
+          onGenerated={() => qc.invalidateQueries({ queryKey: ['content-posts'] })}
+        />
+      )}
+    </div>
+  );
+}
