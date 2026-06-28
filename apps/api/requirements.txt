@@ -56,6 +56,7 @@ Pillow==10.4.0
 # Sprint 6A — Content Engine IA
 openai>=1.50.0
 requests>=2.31.0
+replicate>=0.34.0
 
 # PDF carnet — QR + cálculo edad relativa
 qrcode[pil]==7.4.2

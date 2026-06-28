@@ -47,6 +47,10 @@ class RegenerateImageRequest(BaseModel):
     visual_prompt: str | None = None
 
 
+class RegenerateWithModelRequest(BaseModel):
+    image_model: str  # 'gpt-image-1' | 'flux-1.1-pro'
+
+
 class EngineConfigUpdate(BaseModel):
     key: str
     value: str
@@ -131,29 +135,32 @@ async def generate_post(payload: GeneratePostRequest, db: DBSession):
             detail="Content engine desactivado (kill-switch). Activar en /engine-config.",
         )
 
+    # Leer modelo de imagen configurado dinámicamente
+    model_cfg = (await db.execute(
+        text("SELECT value FROM content.engine_config WHERE key = 'default_image_model'")
+    )).scalar_one_or_none() or "gpt-image-1"
+
     template = await _get_template_or_404(db, payload.template_code)
     gen = ContentGenerator()
     try:
-        result = await gen.generate_post(template, payload.context)
+        result = await gen.generate_post(template, payload.context, image_model=model_cfg)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando post: {e}")
 
     scheduled_at = await _get_next_scheduled_at(db, payload.scheduled_at)
 
     import json as _json
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    # asyncpg no admite ::jsonb en text() — usar CAST con nombre distinto
     row = (await db.execute(
         text("""
             INSERT INTO content.scheduled_posts
                 (template_id, category, source_data, visual_prompt, caption,
                  hashtags, cta_url, image_url, image_local_path, scheduled_at,
-                 status, dry_run)
+                 status, dry_run, image_model, image_cost_usd)
             VALUES
                 (:tpl_id, :category, CAST(:src_data AS jsonb), :visual_prompt, :caption,
                  :hashtags, :cta_url, :image_url, :image_local_path, :scheduled_at,
-                 'pending_approval', false)
+                 'pending_approval', false, :image_model, :image_cost_usd)
             RETURNING *
         """),
         {
@@ -167,6 +174,8 @@ async def generate_post(payload: GeneratePostRequest, db: DBSession):
             "image_url":       result.get("image_url"),
             "image_local_path":result.get("image_local_path"),
             "scheduled_at":    scheduled_at,
+            "image_model":     result.get("image_model", model_cfg),
+            "image_cost_usd":  result.get("image_cost_usd", 0.50),
         },
     )).mappings().first()
     await db.commit()
@@ -288,6 +297,41 @@ async def regenerate_image(post_id: uuid.UUID, payload: RegenerateImageRequest, 
     )
     await db.commit()
     return {"ok": True, "image_url": cdn_url}
+
+
+# ─── 4.5b Regenerar imagen con modelo alternativo (A/B test) ─────────────────
+
+@router.post("/scheduled-posts/{post_id}/regenerate-with-model")
+async def regenerate_with_model(post_id: uuid.UUID, payload: RegenerateWithModelRequest, db: DBSession):
+    """Genera imagen alternativa con modelo distinto y la guarda en image_url_alternative."""
+    from app.services.content_generator import ContentGenerator
+
+    allowed = {"gpt-image-1", "flux-1.1-pro"}
+    if payload.image_model not in allowed:
+        raise HTTPException(status_code=400, detail=f"image_model debe ser uno de: {allowed}")
+
+    post = await _get_post_or_404(db, post_id)
+    prompt = post["visual_prompt"]
+
+    gen = ContentGenerator()
+    try:
+        cdn_url, local_path, cost = await gen.regenerate_image_with_model(prompt, payload.image_model)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error regenerando imagen: {e}")
+
+    await db.execute(
+        text("""
+            UPDATE content.scheduled_posts
+            SET image_url_alternative = :alt_url,
+                alternative_image_model = :model,
+                alternative_cost_usd = :cost,
+                updated_at = NOW()
+            WHERE id = :id
+        """),
+        {"alt_url": cdn_url, "model": payload.image_model, "cost": cost, "id": str(post_id)},
+    )
+    await db.commit()
+    return {"ok": True, "image_url": cdn_url, "model": payload.image_model, "cost_usd": cost}
 
 
 # ─── 4.6 Aprobar post ────────────────────────────────────────────────────────

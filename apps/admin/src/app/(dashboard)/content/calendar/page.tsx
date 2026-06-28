@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarDays, CheckCircle2, XCircle, RotateCcw, Save,
   Power, TestTube2, Wand2, ChevronDown, ChevronUp, X,
-  AlertTriangle, Clock, Instagram, Facebook,
+  AlertTriangle, Clock, Instagram, Facebook, FlipHorizontal2,
+  Zap, DollarSign,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { api, API_BASE, getToken } from '@/lib/api';
+import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -28,6 +29,11 @@ interface ScheduledPost {
   hashtags: string[];
   cta_url: string | null;
   image_url: string | null;
+  image_url_alternative: string | null;
+  image_model: string | null;
+  alternative_image_model: string | null;
+  image_cost_usd: number | null;
+  alternative_cost_usd: number | null;
   scheduled_at: string;
   optimal_time_slot: string | null;
   target_platforms: string[];
@@ -83,6 +89,12 @@ const content = {
     api<{ ok: boolean; image_url: string }>(
       `/v1/admin/content/scheduled-posts/${id}/regenerate-image`,
       { method: 'POST', body: JSON.stringify({ visual_prompt: prompt ?? null }) },
+    ),
+
+  regenerateWithModel: (id: string, image_model: 'flux-1.1-pro' | 'gpt-image-1') =>
+    api<{ ok: boolean; image_url: string; model: string; cost_usd: number }>(
+      `/v1/admin/content/scheduled-posts/${id}/regenerate-with-model`,
+      { method: 'POST', body: JSON.stringify({ image_model }) },
     ),
 
   approveAll: () =>
@@ -148,6 +160,214 @@ const CAT_BADGE: Record<string, string> = {
   local:       'bg-green-100 text-green-800',
 };
 
+// ─── AB Test Modal ────────────────────────────────────────────────────────────
+
+function AbTestModal({
+  posts,
+  config,
+  onClose,
+  onModelChanged,
+}: {
+  posts: ScheduledPost[];
+  config: EngineConfig;
+  onClose: () => void;
+  onModelChanged: () => void;
+}) {
+  const qc = useQueryClient();
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+
+  const currentModel = config['default_image_model']?.value ?? 'gpt-image-1';
+
+  const setModelMut = useMutation({
+    mutationFn: (model: string) => content.setConfig('default_image_model', model),
+    onSuccess: (_, model) => {
+      toast.success(`✅ Modelo cambiado a ${model}`);
+      qc.invalidateQueries({ queryKey: ['engine-config'] });
+      onModelChanged();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  async function generateFlux(post: ScheduledPost) {
+    setGeneratingId(post.id);
+    try {
+      const res = await content.regenerateWithModel(post.id, 'flux-1.1-pro');
+      toast.success(`✅ Imagen Flux generada — $${res.cost_usd.toFixed(2)}`);
+      qc.invalidateQueries({ queryKey: ['content-posts'] });
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error generando imagen');
+    } finally {
+      setGeneratingId(null);
+    }
+  }
+
+  // Calcular totales
+  const gptTotal = posts.reduce((s, p) => s + (p.image_cost_usd ?? 0.50), 0);
+  const fluxTotal = posts.reduce((s, p) => s + (p.alternative_cost_usd ?? 0), 0);
+  const postsWithAlt = posts.filter((p) => p.image_url_alternative).length;
+  const MONTHLY_POSTS = 90;
+  const gptMonthly = MONTHLY_POSTS * 0.50;
+  const fluxMonthly = MONTHLY_POSTS * 0.04;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <button className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative bg-background rounded-2xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-background/95 backdrop-blur border-b border-border px-6 py-4 flex items-center justify-between z-10">
+          <div>
+            <h2 className="font-bold text-lg flex items-center gap-2">
+              <FlipHorizontal2 className="w-5 h-5 text-brand-600" />
+              Comparación A/B — GPT-image-1 vs Flux 1.1 Pro
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {postsWithAlt}/{posts.length} imágenes Flux generadas ·
+              Modelo actual: <span className="font-medium">{currentModel}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Comparación por post */}
+          {posts.map((post) => (
+            <Card key={post.id} className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${CAT_BADGE[post.category] || 'bg-muted'}`}>
+                  {post.category}
+                </span>
+                <span className="text-xs text-muted-foreground line-clamp-1 flex-1 mx-3">{post.caption.slice(0, 80)}…</span>
+                {!post.image_url_alternative && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => generateFlux(post)}
+                    disabled={generatingId === post.id}
+                    className="shrink-0 text-xs"
+                  >
+                    <Zap className="w-3 h-3 mr-1" />
+                    {generatingId === post.id ? 'Generando…' : 'Generar con Flux'}
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {/* GPT image */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">GPT-image-1</span>
+                    <span className="text-xs text-amber-600 font-mono">$0.50</span>
+                  </div>
+                  {post.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={post.image_url} alt="GPT" className="w-full aspect-square object-cover rounded-lg border border-border" />
+                  ) : (
+                    <div className="w-full aspect-square bg-muted rounded-lg flex items-center justify-center text-xs text-muted-foreground">
+                      Sin imagen
+                    </div>
+                  )}
+                </div>
+                {/* Flux image */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">Flux 1.1 Pro</span>
+                    <span className="text-xs text-emerald-600 font-mono">$0.04</span>
+                  </div>
+                  {post.image_url_alternative ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={post.image_url_alternative} alt="Flux" className="w-full aspect-square object-cover rounded-lg border border-border" />
+                  ) : (
+                    <div className="w-full aspect-square bg-muted/50 rounded-lg flex flex-col items-center justify-center text-xs text-muted-foreground border border-dashed border-border">
+                      <Zap className="w-5 h-5 mb-1 opacity-30" />
+                      {generatingId === post.id ? 'Generando…' : 'Pendiente'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          ))}
+
+          {/* Resumen de costos */}
+          <Card className="p-5 bg-gradient-to-br from-slate-50 to-slate-100/50 border-slate-200">
+            <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-brand-600" />
+              Análisis de costos
+            </h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Test actual ({posts.length} imágenes)</div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span>GPT-image-1</span>
+                    <span className="font-mono text-amber-600">${gptTotal.toFixed(2)}</span>
+                  </div>
+                  {postsWithAlt > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span>Flux 1.1 Pro ({postsWithAlt})</span>
+                      <span className="font-mono text-emerald-600">${fluxTotal.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Proyección mensual ({MONTHLY_POSTS} posts)</div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span>GPT-image-1</span>
+                    <span className="font-mono text-amber-600">${gptMonthly.toFixed(0)}/mes</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Flux 1.1 Pro</span>
+                    <span className="font-mono text-emerald-600">${fluxMonthly.toFixed(2)}/mes</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-semibold border-t pt-1 mt-1">
+                    <span>Ahorro anual</span>
+                    <span className="font-mono text-brand-600">${((gptMonthly - fluxMonthly) * 12).toFixed(0)}/año</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Decisión */}
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-center">¿Qué modelo usar a partir de ahora?</p>
+            <div className="grid grid-cols-3 gap-3">
+              <Button
+                variant={currentModel === 'gpt-image-1' ? 'default' : 'outline'}
+                onClick={() => setModelMut.mutate('gpt-image-1')}
+                disabled={setModelMut.isPending}
+                className={currentModel === 'gpt-image-1' ? 'gradient-brand text-white' : ''}
+              >
+                🤖 Mantener GPT-image-1
+                <span className="block text-[10px] font-normal opacity-75 mt-0.5">$45/mes</span>
+              </Button>
+              <Button
+                variant={currentModel === 'flux-1.1-pro' ? 'default' : 'outline'}
+                onClick={() => setModelMut.mutate('flux-1.1-pro')}
+                disabled={setModelMut.isPending}
+                className={currentModel === 'flux-1.1-pro' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'}
+              >
+                ⚡ Cambiar a Flux Pro
+                <span className="block text-[10px] font-normal opacity-75 mt-0.5">$3.60/mes</span>
+              </Button>
+              <Button variant="outline" onClick={onClose}>
+                🧐 Decidir más tarde
+              </Button>
+            </div>
+            {currentModel !== 'gpt-image-1' && (
+              <p className="text-xs text-center text-emerald-600">
+                ✅ Configurado: próximas imágenes se generan con {currentModel}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Components ───────────────────────────────────────────────────────────────
 
 function EngineControls({ config, onToggle }: { config: EngineConfig; onToggle: (key: string, val: string) => void }) {
@@ -197,10 +417,13 @@ function PostCard({ post, onClick }: { post: ScheduledPost; onClick: () => void 
         </span>
       </div>
       <p className="text-xs line-clamp-2 mt-1 text-current/80">{post.caption}</p>
-      <div className="mt-1.5">
+      <div className="mt-1.5 flex items-center gap-1 flex-wrap">
         <Badge className={`text-[10px] border ${STATUS_COLOR[post.status]}`}>
           {STATUS_LABEL[post.status]}
         </Badge>
+        {post.image_url_alternative && (
+          <span className="text-[10px] text-emerald-600">⚡ A/B</span>
+        )}
       </div>
     </button>
   );
@@ -247,7 +470,7 @@ function PostDrawer({
 
   const regenMut = useMutation({
     mutationFn: () => content.regenerateImage(post.id, customPrompt || undefined),
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast.success('Nueva imagen generada');
       onUpdate();
     },
@@ -279,6 +502,26 @@ function PostDrawer({
           {post.image_url && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={post.image_url} alt="" className="w-full aspect-square object-cover rounded-xl border border-border" />
+          )}
+
+          {/* Imagen alternativa (Flux) si existe */}
+          {post.image_url_alternative && (
+            <div>
+              <p className="text-[10px] text-muted-foreground mb-1 flex items-center gap-1">
+                <Zap className="w-3 h-3 text-emerald-500" />
+                Alternativa Flux 1.1 Pro (${(post.alternative_cost_usd ?? 0.04).toFixed(2)})
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={post.image_url_alternative} alt="Flux alt" className="w-full aspect-square object-cover rounded-xl border border-emerald-200" />
+            </div>
+          )}
+
+          {/* Modelo e info de costo */}
+          {post.image_model && (
+            <div className="text-xs text-muted-foreground">
+              Imagen: <span className="font-medium">{post.image_model}</span>
+              {post.image_cost_usd != null && ` · $${post.image_cost_usd.toFixed(2)} USD`}
+            </div>
           )}
 
           {/* Programación */}
@@ -552,12 +795,19 @@ export default function ContentCalendarPage() {
   const [activeTab, setActiveTab] = useState<TabStatus>('pending_approval');
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null);
   const [showGenerate, setShowGenerate] = useState(false);
+  const [showAbTest, setShowAbTest] = useState(false);
   const [triggeringPlan, setTriggeringPlan] = useState(false);
 
   const { data: postsData, isLoading } = useQuery({
     queryKey: ['content-posts', activeTab],
     queryFn: () => content.list(activeTab),
     refetchInterval: 30_000,
+  });
+
+  const { data: allPostsData } = useQuery({
+    queryKey: ['content-posts', 'all'],
+    queryFn: () => content.list('all'),
+    enabled: showAbTest,
   });
 
   const { data: config } = useQuery({
@@ -606,6 +856,7 @@ export default function ContentCalendarPage() {
   const posts = postsData?.items ?? [];
   const total  = postsData?.total ?? 0;
   const pendingCount = posts.filter((p) => p.status === 'pending_approval').length;
+  const allPosts = allPostsData?.items ?? [];
 
   return (
     <div className="space-y-6">
@@ -620,6 +871,13 @@ export default function ContentCalendarPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => setShowAbTest(true)}
+            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+          >
+            <FlipHorizontal2 className="w-4 h-4" /> Comparar modelos IA
+          </Button>
           <Button variant="outline" onClick={() => setShowGenerate(true)}>
             <Wand2 className="w-4 h-4" /> Generar post
           </Button>
@@ -728,7 +986,6 @@ export default function ContentCalendarPage() {
           onClose={() => setSelectedPost(null)}
           onUpdate={() => {
             qc.invalidateQueries({ queryKey: ['content-posts'] });
-            // Actualizar el post seleccionado con datos frescos
             content.list(activeTab).then((data) => {
               const updated = data.items.find((p) => p.id === selectedPost.id);
               if (updated) setSelectedPost(updated);
@@ -743,6 +1000,16 @@ export default function ContentCalendarPage() {
           templates={templates}
           onClose={() => setShowGenerate(false)}
           onGenerated={() => qc.invalidateQueries({ queryKey: ['content-posts'] })}
+        />
+      )}
+
+      {/* Modal A/B test */}
+      {showAbTest && config && (
+        <AbTestModal
+          posts={allPosts}
+          config={config}
+          onClose={() => setShowAbTest(false)}
+          onModelChanged={() => qc.invalidateQueries({ queryKey: ['engine-config'] })}
         />
       )}
     </div>

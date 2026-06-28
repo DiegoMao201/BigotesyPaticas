@@ -2,7 +2,7 @@
 
 Usa:
   - Claude Haiku 4.5 vía OpenRouter para rellenar templates y generar captions
-  - GPT-image-1 (OpenAI) para generar imágenes editoriales
+  - GPT-image-1 (OpenAI) o Flux 1.1 Pro (Replicate) para generar imágenes
   - DO Spaces CDN para almacenamiento
   - Pillow para logo overlay (8% ancho, 60% opacidad, esquina inferior-derecha)
 """
@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import json
 import logging
 import os
+import random
 import uuid
 from datetime import datetime
 from functools import lru_cache
@@ -35,6 +37,13 @@ LOGO_PATH   = Path("/app/apps/store/public/icon-192.png")
 TEMP_DIR    = Path("/tmp/content_engine")
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+BRAND_HASHTAGS = ["#BigotesYPaticasPereira", "#BigotesYPaticasDosquebradas"]
+
+IMAGE_COSTS = {
+    "gpt-image-1":  0.50,
+    "flux-1.1-pro": 0.04,
+}
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -74,20 +83,41 @@ class ContentGenerator:
 
     # ── API pública ────────────────────────────────────────────────────────────
 
-    async def generate_post(self, template: dict, context: dict) -> dict:
+    async def generate_post(
+        self,
+        template: dict,
+        context: dict,
+        image_model: str = "gpt-image-1",
+    ) -> dict:
         """Genera un post completo y lo devuelve listo para insertar en DB."""
-        # 1. Claude Haiku rellena las variables del template
-        filled = await asyncio.get_event_loop().run_in_executor(
-            None, self._fill_template_with_claude, template, context
+        # Pre-sustituir hashtag rotativo antes de enviar a Claude
+        brand_hashtag = random.choice(BRAND_HASHTAGS)
+        tpl = dict(template)
+        tpl["caption_template"] = tpl.get("caption_template", "").replace(
+            "{brand_hashtag_rotating}", brand_hashtag
+        )
+        tpl["visual_prompt_template"] = tpl.get("visual_prompt_template", "").replace(
+            "{brand_hashtag_rotating}", brand_hashtag
         )
 
-        # 2. GPT-image-1 genera la imagen (si falla por billing, el post se crea sin imagen)
+        # 1. Claude Haiku rellena las variables del template
+        filled = await asyncio.get_event_loop().run_in_executor(
+            None, self._fill_template_with_claude, tpl, context
+        )
+
+        # 2. Generar imagen según modelo configurado
         cdn_url = None
         branded_path = None
+        cost = IMAGE_COSTS.get(image_model, 0.50)
         try:
-            raw_path = await asyncio.get_event_loop().run_in_executor(
-                None, self._generate_image_gpt, filled["visual_prompt"]
-            )
+            if image_model == "flux-1.1-pro":
+                raw_path = await asyncio.get_event_loop().run_in_executor(
+                    None, self._generate_image_flux_pro, filled["visual_prompt"]
+                )
+            else:
+                raw_path = await asyncio.get_event_loop().run_in_executor(
+                    None, self._generate_image_gpt, filled["visual_prompt"]
+                )
             branded_path = await asyncio.get_event_loop().run_in_executor(
                 None, self._apply_logo_overlay, raw_path
             )
@@ -96,6 +126,7 @@ class ContentGenerator:
             )
         except Exception as e:
             log.warning("Imagen no generada (se puede agregar manualmente): %s", e)
+            cost = 0.0
 
         return {
             "visual_prompt":    filled["visual_prompt"],
@@ -104,20 +135,36 @@ class ContentGenerator:
             "cta_url":          filled.get("cta_url"),
             "image_url":        cdn_url,
             "image_local_path": str(branded_path) if branded_path else None,
+            "image_model":      image_model,
+            "image_cost_usd":   cost,
         }
 
-    async def regenerate_image(self, visual_prompt: str) -> tuple[str, str]:
-        """Regenera solo la imagen. Retorna (cdn_url, local_path)."""
-        raw_path = await asyncio.get_event_loop().run_in_executor(
-            None, self._generate_image_gpt, visual_prompt
-        )
+    async def regenerate_image(self, visual_prompt: str, image_model: str = "gpt-image-1") -> tuple[str, str, float]:
+        """Regenera solo la imagen. Retorna (cdn_url, local_path, cost_usd)."""
+        if image_model == "flux-1.1-pro":
+            raw_path = await asyncio.get_event_loop().run_in_executor(
+                None, self._generate_image_flux_pro, visual_prompt
+            )
+            cost = IMAGE_COSTS["flux-1.1-pro"]
+        else:
+            raw_path = await asyncio.get_event_loop().run_in_executor(
+                None, self._generate_image_gpt, visual_prompt
+            )
+            cost = IMAGE_COSTS["gpt-image-1"]
+
         branded_path = await asyncio.get_event_loop().run_in_executor(
             None, self._apply_logo_overlay, raw_path
         )
         cdn_url = await asyncio.get_event_loop().run_in_executor(
             None, self._upload_to_cdn, branded_path
         )
-        return cdn_url, str(branded_path)
+        return cdn_url, str(branded_path), cost
+
+    async def regenerate_image_with_model(
+        self, visual_prompt: str, image_model: str
+    ) -> tuple[str, str, float]:
+        """Alias explícito para test A/B — genera con modelo alternativo."""
+        return await self.regenerate_image(visual_prompt, image_model)
 
     # ── Paso 1: Claude Haiku rellena template ─────────────────────────────────
 
@@ -147,6 +194,8 @@ INSTRUCCIONES CRÍTICAS:
 7. Para "product": beneficio ESPECÍFICO, no "es premium".
 8. Para "educational": dato que el 80% de dueños NO sabe.
 9. PROHIBIDO: "tu mejor amigo", "cuida tu mascota", "premium calidad", "amor incondicional".
+10. CTAs siempre apuntan a bigotesypaticas.com o mi.bigotesypaticas.com o WhatsApp. NO tienda física como CTA principal.
+11. Domicilio: GRATIS en pedidos +$30.000. Solo $5.000 en pedidos menores.
 
 Respondé JSON estricto sin markdown:
 {{"visual_prompt": "...", "caption": "...", "hashtags": ["#..."], "cta_url": "..." }}"""
@@ -168,7 +217,6 @@ Respondé JSON estricto sin markdown:
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"]
-        # Limpiar markdown si Claude lo agregó
         raw = raw.strip()
         if raw.startswith("```"):
             raw = raw.split("```", 2)[1]
@@ -178,7 +226,7 @@ Respondé JSON estricto sin markdown:
                 raw = raw.rsplit("```", 1)[0]
         return json.loads(raw.strip())
 
-    # ── Paso 2: GPT-image-1 ───────────────────────────────────────────────────
+    # ── Paso 2a: GPT-image-1 ─────────────────────────────────────────────────
 
     def _generate_image_gpt(self, visual_prompt: str) -> Path:
         client = _openai_client()
@@ -197,6 +245,47 @@ Respondé JSON estricto sin markdown:
         log.info("Imagen GPT-image-1 guardada: %s", out)
         return out
 
+    # ── Paso 2b: Flux 1.1 Pro vía Replicate ──────────────────────────────────
+
+    def _generate_image_flux_pro(self, visual_prompt: str) -> Path:
+        """Genera imagen con Flux 1.1 Pro vía Replicate. Costo real ~$0.04/img."""
+        import replicate
+
+        token = os.environ.get("REPLICATE_API_TOKEN", "")
+        if not token:
+            raise RuntimeError("REPLICATE_API_TOKEN no configurada en environment")
+
+        client = replicate.Client(api_token=token)
+        output = client.run(
+            "black-forest-labs/flux-1.1-pro",
+            input={
+                "prompt": visual_prompt,
+                "aspect_ratio": "1:1",
+                "output_format": "webp",
+                "output_quality": 80,
+                "safety_tolerance": 2,
+                "prompt_upsampling": False,
+            },
+        )
+
+        # output puede ser FileOutput, lista o URL string
+        if isinstance(output, list):
+            image_url = str(output[0])
+        else:
+            image_url = str(output)
+
+        resp = requests.get(image_url, timeout=60)
+        resp.raise_for_status()
+
+        # Convertir webp → PNG con PIL
+        from PIL import Image as PilImage
+        img = PilImage.open(io.BytesIO(resp.content)).convert("RGB")
+        out = TEMP_DIR / f"post_flux_{uuid.uuid4()}.png"
+        img.save(out, "PNG")
+
+        log.info("Imagen Flux 1.1 Pro guardada: %s (%.1f KB)", out, out.stat().st_size / 1024)
+        return out
+
     # ── Paso 3: Logo overlay ──────────────────────────────────────────────────
 
     def _apply_logo_overlay(self, image_path: Path) -> Path:
@@ -204,7 +293,6 @@ Respondé JSON estricto sin markdown:
 
         img = Image.open(image_path).convert("RGBA")
 
-        # Buscar logo en varias ubicaciones posibles
         candidates = [
             LOGO_PATH,
             Path("/app/apps/store/public/icon-192.png"),
@@ -216,7 +304,6 @@ Respondé JSON estricto sin markdown:
             logo = Image.open(logo_src).convert("RGBA")
             logo_size = max(40, int(img.width * 0.08))
             logo = logo.resize((logo_size, logo_size), Image.LANCZOS)
-            # Opacity 60%
             r, g, b, a = logo.split()
             a = a.point(lambda p: int(p * 0.6))
             logo = Image.merge("RGBA", (r, g, b, a))
