@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowRight, Truck, ShieldCheck, Heart, Sparkles, Star } from 'lucide-react';
+import { ArrowRight, Truck, ShieldCheck, Heart, Sparkles, MapPin } from 'lucide-react';
 
 export const revalidate = 600; // 10 min
 
@@ -27,20 +27,6 @@ const VALUES = [
   { icon: Sparkles,    title: 'Premium siempre',   desc: 'Solo productos de la mejor calidad',            color: 'from-amber-500 to-orange-500'    },
 ];
 
-const TESTIMONIALS = [
-  {
-    name: 'Laura Gómez', pet: 'Max — Labrador', rating: 5, avatar: '🐕',
-    text: 'La comida llegó el mismo día y Max la adora. Nunca había visto un servicio tan rápido aquí en Dosquebradas.',
-  },
-  {
-    name: 'Carlos Restrepo', pet: 'Luna — Gata persa', rating: 5, avatar: '🐈',
-    text: 'Los accesorios son excelentes. El portal me recuerda las vacunas de Luna. ¡Totalmente recomendado!',
-  },
-  {
-    name: 'Valentina Torres', pet: 'Coco — Golden', rating: 5, avatar: '🐾',
-    text: 'Increíble variedad premium. Coco come Acana desde que lo encontré aquí. Precio y calidad insuperables.',
-  },
-];
 
 const MARQUEE_ITEMS = [
   '🐾 Envío gratis desde $30.000',
@@ -189,34 +175,41 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* TESTIMONIALS */}
-      <section className="container-wide py-20 bg-paw-pattern">
-        <div className="text-center mb-12">
-          <p className="text-brand-600 font-semibold text-sm mb-2">Lo que dicen nuestros clientes</p>
-          <h2 className="text-3xl md:text-4xl font-display font-extrabold">Mascotas felices, dueños felices</h2>
+      {/* ZONAS DE COBERTURA */}
+      <section className="container-wide py-20">
+        <div className="text-center mb-10">
+          <p className="text-brand-600 font-semibold text-sm mb-2">Cobertura de entrega</p>
+          <h2 className="text-3xl md:text-4xl font-display font-extrabold">Atendemos en Pereira y Dosquebradas</h2>
+          <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
+            Domicilio rápido a toda la zona urbana de Risaralda. Haz tu pedido y lo recibís en casa.
+          </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {TESTIMONIALS.map((t) => (
-            <div key={t.name} className="group rounded-3xl border border-border bg-card p-7 flex flex-col gap-4 transition-all hover:shadow-warm hover:-translate-y-1 duration-300">
-              <div className="flex items-center gap-1">
-                {Array.from({ length: t.rating }).map((_, i) => (
-                  <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
-                ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+          {[
+            { ciudad: 'Pereira', barrios: 'Circunvalar, Cuba, Álamos, Centro, Pinares, Cerritos', emoji: '🏙️' },
+            { ciudad: 'Dosquebradas', barrios: 'La Pradera, El Balso, Otún, Fermín López, Molinos', emoji: '🏘️' },
+          ].map((z) => (
+            <div key={z.ciudad} className="rounded-3xl border border-border bg-card p-7 flex gap-4 items-start">
+              <div className="w-12 h-12 rounded-2xl gradient-brand flex items-center justify-center text-2xl shrink-0">
+                {z.emoji}
               </div>
-              <p className="text-muted-foreground text-sm leading-relaxed flex-1">
-                &ldquo;{t.text}&rdquo;
-              </p>
-              <div className="flex items-center gap-3 pt-2 border-t border-border">
-                <div className="w-10 h-10 rounded-2xl gradient-brand flex items-center justify-center text-xl">
-                  {t.avatar}
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">{t.name}</p>
-                  <p className="text-xs text-muted-foreground">{t.pet}</p>
-                </div>
+              <div>
+                <p className="font-display font-bold text-lg">{z.ciudad}</p>
+                <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{z.barrios} y más.</p>
               </div>
             </div>
           ))}
+        </div>
+        <div className="text-center mt-8">
+          <a
+            href="https://wa.me/573206876633?text=Hola!%20Quiero%20saber%20si%20hacen%20domicilio%20a%20mi%20zona"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#187f77] text-white font-semibold hover:bg-[#0d4a45] transition-colors"
+          >
+            <MapPin className="h-4 w-4" />
+            Consultar cobertura por WhatsApp
+          </a>
         </div>
       </section>
 
