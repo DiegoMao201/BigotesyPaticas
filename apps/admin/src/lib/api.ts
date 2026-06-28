@@ -165,6 +165,12 @@ export interface Product {
   supplier_name?: string | null;
   stock_qty: number;
   in_stock: boolean;
+  // Filtros de catálogo
+  life_stage: string | null;
+  size_range: string | null;
+  pet_type: string | null;
+  brand_normalized: string | null;
+  health_concerns: string[] | null;
 }
 
 export interface PaginatedProducts {

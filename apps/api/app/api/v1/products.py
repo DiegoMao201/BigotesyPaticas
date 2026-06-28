@@ -237,17 +237,11 @@ async def catalog_products(
 
     if life_stage:
         stages = [s.strip() for s in life_stage.split(",")]
-        stmt = stmt.where(or_(
-            Product.life_stage.in_(stages),
-            Product.life_stage == "all",
-        ))
+        stmt = stmt.where(Product.life_stage.in_(stages))
 
     if size_range:
         sizes = [s.strip() for s in size_range.split(",")]
-        stmt = stmt.where(or_(
-            Product.size_range.in_(sizes),
-            Product.size_range == "all",
-        ))
+        stmt = stmt.where(Product.size_range.in_(sizes))
 
     if brand:
         brands_list = [b.strip() for b in brand.split(",")]
@@ -465,6 +459,14 @@ async def update_product(product_id: uuid.UUID, payload: ProductUpdate, db: DBSe
     supplier_id = data.pop("supplier_id", None)
     for k, v in data.items():
         setattr(p, k, v)
+    # Auto-sync brand_normalized cuando cambia la marca
+    if "brand_id" in data:
+        if data["brand_id"]:
+            brand_obj = (await db.execute(select(Brand).where(Brand.id == data["brand_id"]))).scalar_one_or_none()
+            if brand_obj and not data.get("brand_normalized"):
+                p.brand_normalized = brand_obj.slug.replace("-", "_")
+        elif "brand_normalized" not in data:
+            p.brand_normalized = None
     if supplier_id is not None:
         await _upsert_product_supplier(db, p, supplier_id)
     await db.commit()

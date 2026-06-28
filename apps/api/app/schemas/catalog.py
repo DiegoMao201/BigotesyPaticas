@@ -49,6 +49,12 @@ class ProductBase(BaseModel):
     seo_description: str | None = None
     attributes: dict = {}
     tags: list[str] = []
+    # Filtros de catálogo (columnas directas, no JSONB)
+    life_stage: str | None = None
+    size_range: str | None = None
+    pet_type: str | None = None
+    brand_normalized: str | None = None
+    health_concerns: list[str] | None = None
 
 
 class ProductCreate(ProductBase):
@@ -73,6 +79,12 @@ class ProductUpdate(BaseModel):
     attributes: dict | None = None
     tags: list[str] | None = None
     supplier_id: uuid.UUID | None = None
+    # Filtros de catálogo
+    life_stage: str | None = None
+    size_range: str | None = None
+    pet_type: str | None = None
+    brand_normalized: str | None = None
+    health_concerns: list[str] | None = None
 
 
 class ProductOut(ProductBase):

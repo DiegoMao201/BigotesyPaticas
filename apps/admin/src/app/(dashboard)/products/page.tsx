@@ -275,7 +275,10 @@ function ProductForm({ initial, brands, categories, suppliers, onSubmit, loading
     is_featured: initial?.is_featured ?? false,
     tags: initial?.tags?.join(', ') || '',
     tax_pct: initialAttrs.tax_pct != null ? String(initialAttrs.tax_pct) : '19',
-    pet_type: (initialAttrs.pet_type as string) || '',
+    // Filtros de catálogo — columnas directas (no attributes)
+    pet_type: initial?.pet_type || '',
+    life_stage: initial?.life_stage || '',
+    size_range: initial?.size_range || '',
     supplier_id: initial?.supplier_id || '',
   });
 
@@ -298,12 +301,15 @@ function ProductForm({ initial, brands, categories, suppliers, onSubmit, loading
       is_published: form.is_published,
       is_featured: form.is_featured,
       tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
-      // IVA y tipo de mascota se guardan en attributes (JSONB) preservando lo previo
+      // IVA en attributes (JSONB)
       attributes: {
         ...initialAttrs,
         tax_pct: form.tax_pct !== '' ? Number(form.tax_pct) : 0,
-        pet_type: form.pet_type || null,
       },
+      // Filtros de catálogo — columnas directas
+      pet_type: form.pet_type || null,
+      life_stage: form.life_stage || null,
+      size_range: form.size_range || null,
     };
     // Proveedor: solo enviar si cambia o se asigna (vincula via supplier_sku_map)
     if (form.supplier_id) {
@@ -391,11 +397,38 @@ function ProductForm({ initial, brands, categories, suppliers, onSubmit, loading
             <label className="text-xs font-medium mb-1 block">¿Para qué mascota?</label>
             <Select value={form.pet_type} onChange={(e) => set('pet_type', e.target.value)}>
               <option value="">Sin especificar</option>
-              <option value="perro">🐶 Perro</option>
-              <option value="gato">🐱 Gato</option>
-              <option value="mixto">🐾 Mixto (perro y gato)</option>
+              <option value="dog">🐶 Perro</option>
+              <option value="cat">🐱 Gato</option>
+              <option value="both">🐾 Perro y Gato</option>
+              <option value="small_pet">🐹 Mascota pequeña</option>
             </Select>
             <p className="text-[11px] text-muted-foreground mt-1">Define la especie objetivo del producto.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium mb-1 block">Etapa de vida</label>
+            <Select value={form.life_stage} onChange={(e) => set('life_stage', e.target.value)}>
+              <option value="">Sin especificar</option>
+              <option value="puppy">🐣 Cachorro</option>
+              <option value="adult">🐕 Adulto</option>
+              <option value="senior">🦮 Senior</option>
+              <option value="all">🐾 Todas las edades</option>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">Filtra por etapa de vida en la tienda.</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Tamaño de raza</label>
+            <Select value={form.size_range} onChange={(e) => set('size_range', e.target.value)}>
+              <option value="">Sin especificar</option>
+              <option value="mini">Mini (0–4 kg)</option>
+              <option value="small">Pequeño (5–10 kg)</option>
+              <option value="medium">Mediano (11–25 kg)</option>
+              <option value="large">Grande (26–45 kg)</option>
+              <option value="giant">Gigante (+45 kg)</option>
+              <option value="all">Todos los tamaños</option>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">Filtra por tamaño de raza en la tienda.</p>
           </div>
         </div>
         <div>
