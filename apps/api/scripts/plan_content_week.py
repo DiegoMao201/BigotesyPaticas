@@ -19,7 +19,10 @@ from pathlib import Path
 # Permitir imports desde /app
 sys.path.insert(0, "/app")
 
-import psycopg2
+try:
+    import psycopg2
+except ModuleNotFoundError:
+    import psycopg as psycopg2  # type: ignore[no-redef]
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -84,7 +87,7 @@ def build_week_plan(products: list, reviews: list) -> list[dict]:
         {"template_code": "product_hero",            "context_key": "product", "slot": "evening"},
         {"template_code": "sterilization_awareness", "context_key": "awareness", "slot": "morning"},
         # Sábado
-        {"template_code": "local_pereira_pride",     "context_key": "local", "slot": "morning"},
+        {"template_code": "local_eje_cafetero",       "context_key": "local", "slot": "morning"},
         {"template_code": "portal_promotion",        "context_key": "portal", "slot": "lunch"},
     ]
 
