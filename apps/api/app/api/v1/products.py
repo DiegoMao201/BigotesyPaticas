@@ -1,12 +1,15 @@
 """Endpoints de catálogo: productos, marcas, categorías."""
 from __future__ import annotations
 
+import io
 import math
 import uuid
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from slugify import slugify
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 
 from app.deps import DBSession, require_permission
 from app.models.catalog import Brand, Category, Product
@@ -24,6 +27,11 @@ from app.schemas.catalog import (
 router = APIRouter(prefix="/products", tags=["catalog"])
 brands_router = APIRouter(prefix="/brands", tags=["catalog"])
 categories_router = APIRouter(prefix="/categories", tags=["catalog"])
+admin_products_router = APIRouter(
+    prefix="/admin/products",
+    tags=["admin-catalog"],
+    dependencies=[Depends(require_permission("admin"))],
+)
 
 
 async def _supplier_map(db: DBSession, product_ids: list) -> dict:
@@ -477,6 +485,174 @@ async def update_product(product_id: uuid.UUID, payload: ProductUpdate, db: DBSe
         out.supplier_id = sup[0]
         out.supplier_name = sup[1]
     return out
+
+
+# ─── Admin: Export / Import filtros de catálogo ──────────────────────────────
+
+_FILTER_COLS = [
+    ("sku",              "SKU",                  True),
+    ("nombre",           "Nombre",               True),
+    ("categoria",        "Categoría",            True),
+    ("marca_display",    "Marca (actual)",        True),
+    ("precio",           "Precio",               True),
+    ("publicado",        "Publicado",            True),
+    ("marca_normalizada","Marca normalizada",     False),
+    ("tipo_mascota",     "Tipo de mascota",       False),
+    ("etapa_vida",       "Etapa de vida",         False),
+    ("tamaño_raza",      "Tamaño de raza",        False),
+    ("problemas_salud",  "Problemas de salud",    False),
+]
+
+_DROPDOWNS = {
+    "tipo_mascota":  '"dog,cat,both,small_pet"',
+    "etapa_vida":    '"puppy,adult,senior,all"',
+    "tamaño_raza":   '"mini,small,medium,large,giant,all"',
+}
+
+
+@admin_products_router.get("/export-xlsx")
+async def export_products_xlsx(db: DBSession):
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    rows = (
+        await db.execute(
+            select(Product)
+            .where(Product.deleted_at.is_(None))
+            .order_by(Product.name)
+        )
+    ).scalars().all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Productos"
+
+    hdr_fill  = PatternFill(start_color="1B5E20", fill_type="solid")
+    lock_fill = PatternFill(start_color="E8E8E8", fill_type="solid")
+    edit_fill = PatternFill(start_color="FFFDE7", fill_type="solid")
+    hdr_font  = Font(bold=True, color="FFFFFF")
+
+    # Encabezados
+    for col_i, (_, label, _locked) in enumerate(_FILTER_COLS, 1):
+        cell = ws.cell(row=1, column=col_i, value=label)
+        cell.fill = hdr_fill
+        cell.font = hdr_font
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    # Datos
+    for row_i, p in enumerate(rows, 2):
+        brand_name = p.brand.name if p.brand else ""
+        cat_name   = p.category.name if p.category else ""
+        hc_str     = ", ".join(p.health_concerns) if p.health_concerns else ""
+
+        values = [
+            p.sku,
+            p.name,
+            cat_name,
+            brand_name,
+            float(p.price) if p.price else 0,
+            "Sí" if p.is_published else "No",
+            p.brand_normalized or "",
+            p.pet_type or "",
+            p.life_stage or "",
+            p.size_range or "",
+            hc_str,
+        ]
+        for col_i, (val, (_key, _label, locked)) in enumerate(zip(values, _FILTER_COLS), 1):
+            cell = ws.cell(row=row_i, column=col_i, value=val)
+            cell.fill = lock_fill if locked else edit_fill
+            cell.alignment = Alignment(vertical="center")
+
+    # Data validation (dropdowns) para columnas editables
+    n = len(rows) + 1
+    for key, formula in _DROPDOWNS.items():
+        col_i = next(i for i, (k, _, _) in enumerate(_FILTER_COLS, 1) if k == key)
+        dv = DataValidation(type="list", formula1=formula, allow_blank=True, showDropDown=False)
+        col_letter = ws.cell(row=1, column=col_i).column_letter
+        dv.sqref = f"{col_letter}2:{col_letter}{n}"
+        ws.add_data_validation(dv)
+
+    # Anchos de columna
+    widths = [18, 45, 22, 22, 10, 10, 22, 16, 14, 16, 30]
+    for col_i, w in enumerate(widths, 1):
+        ws.column_dimensions[ws.cell(row=1, column=col_i).column_letter].width = w
+
+    ws.freeze_panes = "A2"
+    ws.row_dimensions[1].height = 30
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=productos_filtros.xlsx"},
+    )
+
+
+@admin_products_router.post("/import-xlsx")
+async def import_products_xlsx(file: UploadFile = File(...), db: DBSession = ...):
+    from openpyxl import load_workbook
+
+    if not file.filename or not file.filename.endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Se requiere un archivo .xlsx")
+
+    data = await file.read()
+    try:
+        wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Archivo Excel inválido o dañado")
+
+    ws = wb.active
+    updated = skipped = errors = 0
+    error_details: list[str] = []
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row or not row[0]:
+            continue
+        sku = str(row[0]).strip()
+        brand_normalized = str(row[6]).strip() if row[6] is not None else None
+        pet_type         = str(row[7]).strip() if row[7] is not None else None
+        life_stage       = str(row[8]).strip() if row[8] is not None else None
+        size_range       = str(row[9]).strip() if row[9] is not None else None
+        health_raw       = str(row[10]).strip() if row[10] is not None else None
+
+        health_concerns = (
+            [x.strip() for x in health_raw.split(",") if x.strip()]
+            if health_raw else None
+        ) or None
+
+        try:
+            result = await db.execute(
+                update(Product)
+                .where(Product.sku == sku, Product.deleted_at.is_(None))
+                .values(
+                    brand_normalized=brand_normalized or None,
+                    pet_type=pet_type or None,
+                    life_stage=life_stage or None,
+                    size_range=size_range or None,
+                    health_concerns=health_concerns,
+                    updated_at=datetime.now(UTC),
+                )
+            )
+            if result.rowcount > 0:
+                updated += 1
+            else:
+                skipped += 1
+        except Exception as e:
+            errors += 1
+            error_details.append(f"SKU {sku}: {e}")
+
+    await db.commit()
+    return {
+        "ok": errors == 0,
+        "updated": updated,
+        "skipped": skipped,
+        "errors": errors,
+        "error_details": error_details[:20],
+    }
 
 
 # ----------------------------- Brands ---------------------------------------

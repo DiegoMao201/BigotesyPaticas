@@ -199,6 +199,29 @@ export const products = {
     api<Product>(`/v1/products/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   brands: () => api<{ id: string; name: string; slug: string }[]>('/v1/brands'),
   categories: () => api<{ id: string; name: string; slug: string }[]>('/v1/categories'),
+  exportXlsx: async (): Promise<Blob> => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/v1/admin/products/export-xlsx`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error('Error al exportar');
+    return res.blob();
+  },
+  importXlsx: async (file: File): Promise<{ ok: boolean; updated: number; skipped: number; errors: number; error_details: string[] }> => {
+    const token = getToken();
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API_BASE}/v1/admin/products/import-xlsx`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+      cache: 'no-store',
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Error al importar');
+    return data;
+  },
 };
 
 export interface OrderItemOut {

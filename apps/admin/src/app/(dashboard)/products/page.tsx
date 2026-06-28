@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, Package, Pencil, Eye, EyeOff, Star, Filter, Truck, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Package, Pencil, Eye, EyeOff, Star, Filter, Truck, AlertTriangle, Download, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { products, suppliers, type Product } from '@/lib/api';
 import { Card } from '@/components/ui/card';
@@ -39,6 +39,8 @@ export default function ProductsPage() {
   const [filterSupplier, setFilterSupplier] = useState<string>('all');
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [openCreate, setOpenCreate] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['products', q, page, filterPublished, filterSupplier],
@@ -78,6 +80,44 @@ export default function ProductsPage() {
   const toggleFeatured = (p: Product) =>
     updateMut.mutate({ id: p.id, payload: { is_featured: !p.is_featured } });
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const blob = await products.exportXlsx();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'productos_filtros.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Excel descargado');
+    } catch {
+      toast.error('Error al exportar');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setImporting(true);
+    try {
+      const result = await products.importXlsx(file);
+      if (result.ok) {
+        toast.success(`✅ ${result.updated} productos actualizados · ${result.skipped} sin cambios`);
+      } else {
+        toast.error(`⚠️ ${result.updated} actualizados, ${result.errors} errores`);
+      }
+      qc.invalidateQueries({ queryKey: ['products'] });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Error al importar');
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4 flex-wrap">
@@ -89,9 +129,18 @@ export default function ProductsPage() {
             {data?.total ?? 0} productos · {data?.items.filter((p) => p.is_published).length ?? 0} publicados
           </p>
         </div>
-        <Button onClick={() => setOpenCreate(true)}>
-          <Plus className="h-4 w-4" /> Nuevo producto
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={handleExport} disabled={exporting}>
+            <Download className="h-4 w-4" /> {exporting ? 'Exportando…' : 'Exportar Excel'}
+          </Button>
+          <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border text-sm font-medium cursor-pointer transition-colors ${importing ? 'opacity-60 pointer-events-none' : 'border-input bg-background hover:bg-accent'}`}>
+            <Upload className="h-4 w-4" /> {importing ? 'Importando…' : 'Importar Excel'}
+            <input type="file" accept=".xlsx" className="hidden" onChange={handleImport} disabled={importing} />
+          </label>
+          <Button onClick={() => setOpenCreate(true)}>
+            <Plus className="h-4 w-4" /> Nuevo producto
+          </Button>
+        </div>
       </div>
 
       {/* Filtros */}
