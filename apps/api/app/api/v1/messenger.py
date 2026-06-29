@@ -11,7 +11,7 @@ from fastapi.responses import PlainTextResponse
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/webhooks/messenger", tags=["messenger"])
 
-_TOKEN        = lambda: os.environ.get("META_ACCESS_TOKEN", "")
+_TOKEN        = lambda: os.environ.get("META_MESSENGER_TOKEN") or os.environ.get("META_ACCESS_TOKEN", "")
 _VERIFY_TOKEN = os.environ.get("MESSENGER_WEBHOOK_VERIFY_TOKEN", "bigotesypaticas_verify")
 _META_BASE    = "https://graph.facebook.com/v18.0"
 
