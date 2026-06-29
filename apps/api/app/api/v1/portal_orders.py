@@ -14,6 +14,7 @@ from app.deps import DBSession
 from app.models.catalog import Product
 from app.models.crm import Customer
 from app.models.portal import ActivityLog, PortalOrder, PortalOrderItem
+from app.services import meta_conversion_api as capi
 from app.models.sales import Order as SalesOrder, OrderItem as SalesOrderItem
 
 router = APIRouter(prefix="/portal/orders", tags=["portal"])
@@ -128,6 +129,29 @@ async def create_order(
                 description=f"Pedido portal: {product.name} ×{order.quantity}",
                 db=db,
             )
+
+    # Meta Conversion API — Purchase event
+    if order.unit_price:
+        total_value = order.unit_price * order.quantity
+        capi.send_event(
+            "Purchase",
+            user_data={
+                "email": customer.email,
+                "phone": customer.phone,
+                "external_id": str(customer.id),
+                "first_name": customer.full_name.split()[0] if customer.full_name else "",
+            },
+            custom_data={
+                "value": round(total_value, 2),
+                "currency": "COP",
+                "content_ids": [product.sku or str(product.id)],
+                "content_type": "product",
+                "content_name": product.name,
+                "num_items": order.quantity,
+            },
+            event_id=f"portal_order_{order.id}",
+            event_source_url="https://mi.bigotesypaticas.com",
+        )
 
     return _order_out(order, points=points_earned if points_earned else None)
 

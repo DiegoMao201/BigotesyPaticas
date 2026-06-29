@@ -7,7 +7,9 @@ from app.api.v1 import (
     analytics,
     auth,
     blog,
+    catalog_feed,
     content,
+    messenger,
     stories,
     reviews,
     contact,
@@ -84,3 +86,7 @@ api_router.include_router(reviews.public_router)
 api_router.include_router(content.router)
 # Sprint Stories: stories IA + manual
 api_router.include_router(stories.router)
+# Meta Catalog feed XML
+api_router.include_router(catalog_feed.router)
+# Messenger webhook
+api_router.include_router(messenger.router)

@@ -7,6 +7,7 @@ import { useCart } from '@/lib/cart-store';
 import { formatCurrency } from '@/lib/utils';
 import { BUSINESS_INFO } from '@/lib/business-info';
 import { MessageCircle, ArrowLeft, Package, ShoppingBag, CheckCircle } from 'lucide-react';
+import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
 
 const FREE_SHIPPING_THRESHOLD = 30_000;
 const SHIPPING_COST = 8_000;
@@ -56,11 +57,18 @@ export default function CheckoutPage() {
     );
   }
 
+  const { track } = useMetaPixelEvent();
   const phone = (BUSINESS_INFO.whatsapp ?? '573206876633').replace(/\D/g, '');
   const waMsg = buildWhatsAppMessage(items, subtotal, shipping, total, name, address, notes);
   const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(waMsg)}`;
 
   async function openWhatsApp() {
+    track('InitiateCheckout', {
+      content_ids: items.map((i) => i.sku),
+      value: total,
+      currency: 'COP',
+      num_items: items.length,
+    });
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({ text: waMsg });

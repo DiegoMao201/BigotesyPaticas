@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import './globals.css';
 import { Providers } from './providers';
 import { PWAInstallBanner } from '@/components/widgets/PWAInstallBanner';
+import { MetaPixel } from '@/components/MetaPixel';
 
 const fontSans = Inter({
   subsets: ['latin'],
@@ -58,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-title" content="B&P Portal" />
       </head>
       <body className={`${fontSans.variable} ${fontDisplay.variable}`}>
+        <MetaPixel />
         <Providers>{children}</Providers>
         <PWAInstallBanner />
         <Toaster

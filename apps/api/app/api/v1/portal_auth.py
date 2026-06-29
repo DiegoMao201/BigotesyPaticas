@@ -200,6 +200,21 @@ async def signup(payload: SignupRequest, response: Response, db: DBSession) -> L
         secure=True,
     )
 
+    # Meta Conversion API — CompleteRegistration
+    from app.services import meta_conversion_api as capi
+    capi.send_event(
+        "CompleteRegistration",
+        user_data={
+            "email": customer.email,
+            "phone": customer.phone,
+            "external_id": str(customer.id),
+            "first_name": customer.full_name.split()[0] if customer.full_name else "",
+        },
+        custom_data={"content_name": "portal_signup", "status": True},
+        event_id=f"signup_{customer.id}",
+        event_source_url="https://mi.bigotesypaticas.com/registro",
+    )
+
     return LoginResponse(
         status="new",
         customer_id=str(customer.id),

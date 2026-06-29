@@ -6,11 +6,13 @@ import { Minus, Plus, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useCart, type CartItem } from '@/lib/cart-store';
+import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
 
 export function AddToCart({ product }: { product: Omit<CartItem, 'quantity'> }) {
   const [qty, setQty] = useState(1);
   const add = useCart((s) => s.add);
   const router = useRouter();
+  const { track } = useMetaPixelEvent();
 
   return (
     <div className="space-y-3">
@@ -37,6 +39,14 @@ export function AddToCart({ product }: { product: Omit<CartItem, 'quantity'> }) 
           className="flex-1"
           onClick={() => {
             add(product, qty);
+            track('AddToCart', {
+              content_ids: [product.sku],
+              content_name: product.name,
+              value: Number(product.price) * qty,
+              currency: 'COP',
+              contents: [{ id: product.sku, quantity: qty, item_price: Number(product.price) }],
+              content_type: 'product',
+            });
             toast.success(`${product.name.slice(0, 35)}… agregado al carrito`, {
               icon: '🛒',
               duration: 4000,

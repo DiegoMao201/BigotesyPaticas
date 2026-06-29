@@ -9,6 +9,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { auth } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
+import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
 
 const VIDEO_MP4  = process.env.NEXT_PUBLIC_LOGIN_VIDEO_MP4  ?? '';
 const VIDEO_WEBM = process.env.NEXT_PUBLIC_LOGIN_VIDEO_WEBM ?? '';
@@ -32,6 +33,7 @@ export default function RegistroPage() {
 
   const [step, setStep] = useState<Step>(1);
   const [loading, setLoading] = useState(false);
+  const { track } = useMetaPixelEvent();
 
   const [fullName,    setFullName]    = useState('');
   const [documentId,  setDocumentId]  = useState('');
@@ -69,6 +71,7 @@ export default function RegistroPage() {
       }
       const me = await auth.me();
       setCustomer(me);
+      track('CompleteRegistration', { content_name: 'portal_signup', status: true });
       router.replace('/dashboard');
     } catch (err: any) {
       toast.error(err.message ?? 'Error al registrarse');

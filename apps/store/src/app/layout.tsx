@@ -6,6 +6,7 @@ import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { OrganizationSchema, LocalBusinessSchema } from '@/components/seo/JsonLd';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
+import { MetaPixel } from '@/components/analytics/MetaPixel';
 import { GoogleReviewPrompt } from '@/components/reviews/GoogleReviewPrompt';
 import { WhatsAppFloat } from '@/components/widgets/WhatsAppFloat';
 import { PWAInstallBanner } from '@/components/widgets/PWAInstallBanner';
@@ -90,6 +91,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es" suppressHydrationWarning>
       <body className={`${inter.variable} ${jakarta.variable} ${mono.variable} font-sans`}>
         <GoogleAnalytics />
+        <MetaPixel />
         <OrganizationSchema />
         <LocalBusinessSchema />
         <Providers>

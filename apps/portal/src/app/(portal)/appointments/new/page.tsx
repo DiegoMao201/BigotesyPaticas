@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { ArrowLeft, Loader2, CalendarDays, Clock } from 'lucide-react';
 import { appointments, pets } from '@/lib/api';
+import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
 import { getSpeciesEmoji, cn } from '@/lib/utils';
 import 'react-day-picker/dist/style.css';
 
@@ -55,6 +56,7 @@ export default function NewAppointmentPage() {
   const [selectedDay, setSelectedDay] = useState<Date | undefined>();
   const [selectedSlot, setSelectedSlot] = useState('');
   const [notes, setNotes] = useState('');
+  const { track } = useMetaPixelEvent();
 
   const { data: petsData } = useQuery({ queryKey: ['portal-pets'], queryFn: pets.list });
 
@@ -79,6 +81,7 @@ export default function NewAppointmentPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['portal-appointments'] });
+      track('Schedule', { content_name: service, content_category: 'appointment' });
       toast.success('✅ ¡Cita solicitada! Te avisaremos cuando la aprueben.');
       router.replace('/appointments');
     },
