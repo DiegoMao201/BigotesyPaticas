@@ -40,13 +40,18 @@ def get_engine_config(cur) -> dict:
 def get_top_products(cur, limit=10) -> list[dict]:
     cur.execute("""
         SELECT p.id::text as product_id, p.sku, p.name, p.slug, p.price,
-               p.primary_image_url,
+               -- Preferir imagen transparente (sin fondo blanco) cuando existe
+               COALESCE(p.image_url_transparent, p.primary_image_url) as product_image_url,
+               p.image_url_transparent IS NOT NULL as has_transparent,
                c.name as category_name
         FROM catalog.products p
         LEFT JOIN catalog.categories c ON c.id = p.category_id
         WHERE p.is_active = true AND p.is_published = true
           AND p.primary_image_url IS NOT NULL
-        ORDER BY RANDOM()
+        ORDER BY
+          -- Priorizar productos con fondo transparente para mejor composición
+          (p.image_url_transparent IS NOT NULL) DESC,
+          RANDOM()
         LIMIT %s
     """, (limit,))
     cols = [d[0] for d in cur.description]
@@ -158,7 +163,7 @@ def _build_context(key: str, products: list, reviews: list, pidx: int, ridx: int
             "slug":              p["slug"],
             "category":          p.get("category_name", ""),
             "key_benefit":       f"Producto {p.get('category_name', 'para mascotas')} de alta calidad",
-            "product_image_url": p.get("primary_image_url", ""),
+            "product_image_url": p.get("product_image_url", ""),
             "product_id":        p.get("product_id", ""),
         }
     if key == "review" and reviews:

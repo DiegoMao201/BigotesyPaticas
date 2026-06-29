@@ -140,7 +140,7 @@ class ContentGenerator:
         branded_path = None
         cost = IMAGE_COSTS.get(effective_model, 0.50)
         try:
-            # product_hero: fondo IA + foto real del producto del CDN
+            # product_hero: fondo IA + foto real del producto (prefiere transparente si existe)
             if tpl.get("code") == "product_hero" and context.get("product_image_url"):
                 cdn_url, branded_path, cost = await self._compose_product_hero_image(
                     context["product_image_url"]
