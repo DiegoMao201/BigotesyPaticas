@@ -84,6 +84,9 @@ export const metadata: Metadata = {
   alternates: {
     types: { 'application/rss+xml': [{ url: '/feed.xml', title: 'Blog Bigotes y Paticas' }] },
   },
+  verification: {
+    google: 'Eh5nbpTENsmdblrIL4_gERvjZCRbJtldy266FQVYqLo',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

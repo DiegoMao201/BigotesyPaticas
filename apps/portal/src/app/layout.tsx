@@ -28,6 +28,9 @@ export const metadata: Metadata = {
     title: 'Mi Bigotes y Paticas',
   },
   formatDetection: { telephone: false },
+  verification: {
+    google: 'Eh5nbpTENsmdblrIL4_gERvjZCRbJtldy266FQVYqLo',
+  },
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: '48x48 32x32 16x16' },
