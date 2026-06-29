@@ -34,7 +34,7 @@ async def publish_to_meta(post: dict, target: str, dry_run: bool = True) -> dict
         log.info("[dry-run] publish_to_meta skipped — target=%s post_id=%s", target, post.get("id"))
         return {"dry_run": True, "target": target}
 
-    caption = _build_caption(post)
+    caption = _build_caption(post, platform=target)
     image_url = post.get("image_url", "")
     if not image_url:
         raise ValueError("Post sin image_url")
@@ -47,9 +47,30 @@ async def publish_to_meta(post: dict, target: str, dry_run: bool = True) -> dict
         raise ValueError(f"Target desconocido: {target}")
 
 
-def _build_caption(post: dict) -> str:
-    caption = post.get("caption", "")
+def _ensure_https(url: str) -> str:
+    if url and not url.startswith("http"):
+        return "https://" + url
+    return url
+
+
+def _build_caption(post: dict, platform: str = "facebook") -> str:
+    import re
+    caption = post.get("caption", "") or ""
     hashtags = post.get("hashtags", [])
+    cta_url  = _ensure_https(post.get("cta_url", "") or "")
+
+    # Normalizar todas las URLs sueltas (www.xxx) a https://
+    caption = re.sub(r'(?<![/\w])(www\.[a-zA-Z0-9.\-]+\.[a-z]{2,})', r'https://\1', caption)
+
+    if platform == "instagram":
+        # Instagram no permite links clicables en caption — guiar al bio
+        if cta_url and "bio" not in caption.lower() and "link en bio" not in caption.lower():
+            caption = caption + "\n\n🔗 Link en bio para visitar nuestra tienda"
+    else:
+        # Facebook: asegurar que el cta_url aparece con https:// al final
+        if cta_url and cta_url not in caption:
+            caption = caption + f"\n\n👉 {cta_url}"
+
     if hashtags:
         ht_str = " ".join(hashtags)
         if ht_str not in caption:
