@@ -3,6 +3,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends
+from app.db import get_db
 
 from app.services.email import send_email, STORE_EMAIL
 
@@ -18,6 +22,7 @@ class ContactForm(BaseModel):
 
 class NewsletterIn(BaseModel):
     email: EmailStr
+    source: str = "store_footer"
 
 
 @router.post("/send")
@@ -231,11 +236,80 @@ def _welcome_html(email: str) -> str:
 </html>"""
 
 
-@router.post("/newsletter")
-async def newsletter_subscribe(payload: NewsletterIn, bg: BackgroundTasks) -> dict:
-    """Log new subscriber and send welcome email with coupon."""
+ALREADY_SUBSCRIBED_HTML = lambda email: f"""<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f0f7f6;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f7f6;padding:32px 0;">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#fff;border-radius:20px;overflow:hidden;">
+      <tr><td style="background:#187f77;padding:32px;text-align:center;">
+        <h1 style="color:#fff;font-size:24px;margin:0;">¡Ya eres parte del club! 🐾</h1>
+      </td></tr>
+      <tr><td style="padding:32px 40px;text-align:center;">
+        <p style="font-size:28px;margin:0 0 12px;">🎉</p>
+        <p style="color:#1a1a1a;font-size:16px;line-height:1.6;margin:0 0 16px;">
+          Tu correo <strong>{email}</strong> ya está registrado en nuestra comunidad.
+        </p>
+        <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 24px;">
+          Si todavía no has usado tu cupón <strong style="color:#FF6B35;">PRIMERAPATA</strong>,
+          aplícalo al momento de pedir por WhatsApp o en tienda.<br>
+          ¡No caduca hasta que te animes a comprar!
+        </p>
+        <a href="https://mi.bigotesypaticas.com"
+           style="display:inline-block;background:#187f77;color:#fff;font-size:14px;font-weight:700;
+                  padding:12px 28px;border-radius:50px;text-decoration:none;">
+          Ver mi portal de puntos →
+        </a>
+      </td></tr>
+      <tr><td style="background:#0d4a45;padding:20px;text-align:center;">
+        <p style="color:#a8ddd9;font-size:12px;margin:0;">
+          Bigotes y Paticas · Dosquebradas · bigotesypaticas.com
+        </p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>"""
 
-    def _send() -> None:
+
+@router.post("/newsletter")
+async def newsletter_subscribe(
+    payload: NewsletterIn,
+    bg: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Suscribe email con deduplicado — un cupón por dirección, siempre."""
+
+    # Verificar si ya está suscrito
+    row = await db.execute(
+        text("SELECT id, coupon_sent_at FROM crm.newsletter_subscribers WHERE email = :e"),
+        {"e": payload.email.lower()},
+    )
+    existing = row.fetchone()
+
+    if existing:
+        # Ya suscrito → correo recordatorio sin nuevo cupón
+        def _remind() -> None:
+            send_email(
+                payload.email,
+                "¡Ya eres parte del club Bigotes y Paticas! 🐾",
+                ALREADY_SUBSCRIBED_HTML(payload.email),
+            )
+        bg.add_task(_remind)
+        return {"ok": True, "already_subscribed": True}
+
+    # Nuevo suscriptor → guardar y enviar bienvenida con cupón
+    await db.execute(
+        text("""
+            INSERT INTO crm.newsletter_subscribers (email, source, coupon_sent_at)
+            VALUES (:e, :s, NOW())
+            ON CONFLICT (email) DO NOTHING
+        """),
+        {"e": payload.email.lower(), "s": payload.source},
+    )
+    await db.commit()
+
+    def _welcome() -> None:
         send_email(
             STORE_EMAIL,
             f"🐾 Nueva suscripción: {payload.email}",
@@ -246,6 +320,5 @@ async def newsletter_subscribe(payload: NewsletterIn, bg: BackgroundTasks) -> di
             "🎁 Tu cupón de bienvenida + 50 Puntos Bigotes — Bigotes y Paticas",
             _welcome_html(payload.email),
         )
-
-    bg.add_task(_send)
-    return {"ok": True}
+    bg.add_task(_welcome)
+    return {"ok": True, "already_subscribed": False}
