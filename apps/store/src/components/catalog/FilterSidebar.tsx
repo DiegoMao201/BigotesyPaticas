@@ -122,12 +122,14 @@ export function FilterSidebar({ facets }: FilterSidebarProps) {
         existing.filter((v) => v !== value).forEach((v) => params.append(key, v));
       }
       router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      router.refresh();
     },
     [router, pathname, searchParams]
   );
 
   const clearAll = useCallback(() => {
     router.push(pathname, { scroll: false });
+    router.refresh();
   }, [router, pathname]);
 
   const activeFilters = [

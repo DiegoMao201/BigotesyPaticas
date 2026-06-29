@@ -198,7 +198,11 @@ export const storeApi = {
     if (params.page) qs.set('page', String(params.page));
     if (params.page_size) qs.set('page_size', String(params.page_size));
     try {
-      return await get<any>(`/v1/products/catalog?${qs.toString()}`);
+      const res = await fetch(`${API_BASE}/v1/products/catalog?${qs.toString()}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      return res.json();
     } catch {
       return { items: [], total: 0, page: 1, page_size: 40, facets: {} };
     }
