@@ -12,7 +12,8 @@ from slugify import slugify
 from sqlalchemy import func, or_, select, update
 
 from app.deps import DBSession, require_permission
-from app.models.catalog import Brand, Category, Product
+from app.models.catalog import Brand, Category, Product, ProductReview
+from app.models.crm import Customer
 from app.models.inventory import Stock
 from app.models.purchasing import Supplier, SupplierSkuMap
 from app.schemas.catalog import (
@@ -22,6 +23,7 @@ from app.schemas.catalog import (
     ProductListResponse,
     ProductOut,
     ProductUpdate,
+    RecentReviewOut,
 )
 
 router = APIRouter(prefix="/products", tags=["catalog"])
@@ -382,6 +384,29 @@ async def get_product_by_slug(slug: str, db: DBSession):
     )).scalar_one()
     p_out.stock_qty = int(stock_total or 0)
     p_out.in_stock = p_out.stock_qty > 0
+
+    # Reseñas recientes aprobadas para JSON-LD (max 5)
+    review_rows = (await db.execute(
+        select(ProductReview, Customer.full_name)
+        .join(Customer, Customer.id == ProductReview.customer_id, isouter=True)
+        .where(ProductReview.product_id == p.id)
+        .where(ProductReview.status == "approved")
+        .order_by(ProductReview.created_at.desc())
+        .limit(5)
+    )).all()
+    p_out.recent_reviews = [
+        RecentReviewOut(
+            id=rev.id,
+            rating=rev.rating,
+            title=rev.title,
+            comment=rev.comment,
+            reviewer_name=(full_name.split()[0] if full_name else "Cliente"),
+            photo_urls=rev.photo_urls or [],
+            helpful_count=rev.helpful_count,
+            created_at=rev.created_at,
+        )
+        for rev, full_name in review_rows
+    ]
     return p_out
 
 

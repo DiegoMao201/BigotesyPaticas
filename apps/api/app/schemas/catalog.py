@@ -87,6 +87,17 @@ class ProductUpdate(BaseModel):
     health_concerns: list[str] | None = None
 
 
+class RecentReviewOut(BaseModel):
+    id: uuid.UUID
+    rating: int
+    title: str | None
+    comment: str | None
+    reviewer_name: str
+    photo_urls: list[str]
+    helpful_count: int
+    created_at: datetime
+
+
 class ProductOut(ProductBase):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
@@ -101,6 +112,10 @@ class ProductOut(ProductBase):
     enriched_content: dict | None = None
     enriched_at: datetime | None = None
     enriched_model: str | None = None
+    rating_avg: float | None = None
+    rating_count: int = 0
+    rating_distribution: dict | None = None
+    recent_reviews: list[RecentReviewOut] = []
 
     @model_validator(mode="after")
     def _sync_image_url(self) -> "ProductOut":
