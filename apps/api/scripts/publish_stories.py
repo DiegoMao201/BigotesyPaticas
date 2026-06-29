@@ -111,32 +111,51 @@ def publish_ig_story(video_url: str, caption: str) -> str:
 
 
 def publish_fb_story(video_url: str) -> str:
-    """Publica video story en Facebook Page. Retorna fb_story_id."""
-    page_id = os.environ.get("META_PAGE_ID", "")
-    token   = _token()
+    """Publica video story en Facebook Page via resumable upload. Retorna fb_story_id."""
+    page_id    = os.environ.get("META_PAGE_ID", "")
+    page_token = os.environ.get("META_MESSENGER_TOKEN") or _token()
     if not page_id:
         raise RuntimeError("META_PAGE_ID no configurado")
 
-    # Obtener page access token
-    pt = requests.get(
-        f"{META_BASE}/{page_id}",
-        params={"fields": "access_token", "access_token": token},
+    # Descargar video desde CDN
+    video_bytes = requests.get(video_url, timeout=120).content
+    file_size   = len(video_bytes)
+
+    # Fase 1: iniciar sesión de upload
+    start_r = requests.post(
+        f"{META_BASE}/{page_id}/video_stories",
+        data={"upload_phase": "start", "file_size": file_size, "access_token": page_token},
         timeout=30,
     )
-    pt.raise_for_status()
-    page_token = pt.json().get("access_token", token)
+    start_r.raise_for_status()
+    start_data = start_r.json()
+    video_id   = start_data["video_id"]
+    upload_url = start_data["upload_url"]
+    log.info("FB story upload session: %s", video_id)
 
-    # Upload video story
-    r = requests.post(
-        f"{META_BASE}/{page_id}/video_stories",
-        params={
-            "file_url": video_url,
-            "access_token": page_token,
+    # Fase 2: transferir bytes
+    transfer_r = requests.post(
+        upload_url,
+        headers={
+            "Authorization": f"OAuth {page_token}",
+            "offset": "0",
+            "file_size": str(file_size),
+            "Content-Type": "video/mp4",
         },
-        timeout=120,
+        data=video_bytes,
+        timeout=180,
     )
-    r.raise_for_status()
-    story_id = r.json().get("post_id") or r.json().get("id", "")
+    transfer_r.raise_for_status()
+    log.info("FB story transferida: %s", transfer_r.json().get("message", "")[:80])
+
+    # Fase 3: finalizar
+    finish_r = requests.post(
+        f"{META_BASE}/{page_id}/video_stories",
+        data={"upload_phase": "finish", "video_id": video_id, "access_token": page_token},
+        timeout=30,
+    )
+    finish_r.raise_for_status()
+    story_id = finish_r.json().get("post_id") or finish_r.json().get("id", "")
     log.info("FB story publicada: %s", story_id)
     return story_id
 
