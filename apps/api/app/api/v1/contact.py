@@ -79,29 +79,173 @@ async def submit_review(payload: ReviewIn, bg: BackgroundTasks) -> dict:
     return {"ok": True}
 
 
+WELCOME_COUPON = "PRIMERAPATA"
+
+def _welcome_html(email: str) -> str:
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bienvenido</title></head>
+<body style="margin:0;padding:0;background:#f0f7f6;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f7f6;padding:32px 0;">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+      <!-- HEADER verde -->
+      <tr><td style="background:#187f77;border-radius:20px 20px 0 0;padding:36px 40px 28px;text-align:center;">
+        <img src="https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/logo-white.png"
+             alt="Bigotes y Paticas" width="120" style="display:block;margin:0 auto 16px;max-width:120px;"
+             onerror="this.style.display='none'">
+        <p style="color:#a8ddd9;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin:0 0 8px;">
+          BIGOTES Y PATICAS · DOSQUEBRADAS
+        </p>
+        <h1 style="color:#ffffff;font-size:28px;font-weight:800;margin:0;line-height:1.2;">
+          ¡Bienvenido al Club! 🐾
+        </h1>
+        <p style="color:#a8ddd9;font-size:16px;margin:10px 0 0;">
+          Tu familia de mascotas tiene un nuevo hogar
+        </p>
+      </td></tr>
+
+      <!-- CUERPO blanco -->
+      <tr><td style="background:#ffffff;padding:36px 40px;">
+
+        <!-- Saludo -->
+        <p style="color:#1a1a1a;font-size:16px;line-height:1.6;margin:0 0 20px;">
+          Gracias por suscribirte a nuestra comunidad. En Bigotes y Paticas encontrarás todo
+          lo que tu mascota necesita — alimento premium, accesorios, grooming y atención veterinaria —
+          con el calor de un negocio local que los quiere tanto como tú.
+        </p>
+
+        <!-- CUPÓN destacado -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0;">
+          <tr><td style="background:linear-gradient(135deg,#fff7f4 0%,#ffe8df 100%);border:2px dashed #FF6B35;border-radius:16px;padding:28px;text-align:center;">
+            <p style="color:#FF6B35;font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;margin:0 0 8px;">
+              🎁 TU REGALO DE BIENVENIDA
+            </p>
+            <p style="color:#1a1a1a;font-size:15px;margin:0 0 12px;">
+              <strong>$5.000 de descuento</strong> en tu primera compra
+            </p>
+            <div style="background:#ffffff;border:2px solid #FF6B35;border-radius:10px;display:inline-block;padding:10px 28px;margin:4px 0 12px;">
+              <span style="color:#FF6B35;font-size:24px;font-weight:900;letter-spacing:4px;">{WELCOME_COUPON}</span>
+            </div>
+            <p style="color:#888;font-size:12px;margin:8px 0 0;">
+              Compras desde $30.000 · Válido 30 días · Un uso por cliente
+            </p>
+          </td></tr>
+        </table>
+
+        <!-- PUNTOS -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+          <tr><td style="background:#f0f7f6;border-radius:14px;padding:20px 24px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="vertical-align:middle;width:48px;">
+                  <div style="width:44px;height:44px;background:#187f77;border-radius:50%;text-align:center;line-height:44px;font-size:22px;">⭐</div>
+                </td>
+                <td style="vertical-align:middle;padding-left:16px;">
+                  <p style="color:#187f77;font-weight:800;font-size:15px;margin:0 0 3px;">50 Puntos Bigotes te esperan</p>
+                  <p style="color:#555;font-size:13px;margin:0;">
+                    Regístrate en el portal de clientes y reclama tus puntos. ¡Acumula y canjea por descuentos!
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td></tr>
+        </table>
+
+        <!-- CTA PORTAL -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 8px;">
+          <tr><td align="center">
+            <a href="https://mi.bigotesypaticas.com/register"
+               style="display:inline-block;background:#187f77;color:#ffffff;font-size:15px;font-weight:700;
+                      padding:14px 36px;border-radius:50px;text-decoration:none;letter-spacing:0.3px;">
+              Registrarme y reclamar mis puntos →
+            </a>
+          </td></tr>
+          <tr><td align="center" style="padding-top:10px;">
+            <a href="https://bigotesypaticas.com"
+               style="color:#187f77;font-size:13px;text-decoration:none;">
+              Ver catálogo completo
+            </a>
+          </td></tr>
+        </table>
+
+        <!-- Qué encontrarás -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 8px;border-top:1px solid #f0f0f0;padding-top:24px;">
+          <tr>
+            <td width="25%" style="text-align:center;padding:8px;">
+              <p style="font-size:28px;margin:0 0 4px;">🛍️</p>
+              <p style="color:#187f77;font-size:11px;font-weight:700;margin:0;">Tienda online</p>
+            </td>
+            <td width="25%" style="text-align:center;padding:8px;">
+              <p style="font-size:28px;margin:0 0 4px;">🛵</p>
+              <p style="color:#187f77;font-size:11px;font-weight:700;margin:0;">Domicilio</p>
+            </td>
+            <td width="25%" style="text-align:center;padding:8px;">
+              <p style="font-size:28px;margin:0 0 4px;">🛁</p>
+              <p style="color:#187f77;font-size:11px;font-weight:700;margin:0;">Grooming</p>
+            </td>
+            <td width="25%" style="text-align:center;padding:8px;">
+              <p style="font-size:28px;margin:0 0 4px;">🩺</p>
+              <p style="color:#187f77;font-size:11px;font-weight:700;margin:0;">Veterinaria</p>
+            </td>
+          </tr>
+        </table>
+
+      </td></tr>
+
+      <!-- FOOTER verde oscuro -->
+      <tr><td style="background:#0d4a45;border-radius:0 0 20px 20px;padding:28px 40px;text-align:center;">
+        <p style="color:#a8ddd9;font-size:13px;margin:0 0 8px;">
+          <strong style="color:#ffffff;">Mall Zamara Plaza</strong> · Cl. 15 #3A-07 Local 2, Dosquebradas
+        </p>
+        <p style="color:#a8ddd9;font-size:13px;margin:0 0 16px;">
+          📱 <a href="https://wa.me/573206876633" style="color:#5ecdc7;text-decoration:none;">+57 320 687 6633</a>
+          &nbsp;·&nbsp; Lun–Sáb 10 AM–7 PM
+        </p>
+        <table cellpadding="0" cellspacing="0" style="margin:0 auto 16px;">
+          <tr>
+            <td style="padding:0 6px;">
+              <a href="https://instagram.com/bigotesypaticas" style="color:#5ecdc7;font-size:12px;text-decoration:none;">Instagram</a>
+            </td>
+            <td style="color:#a8ddd9;font-size:12px;">·</td>
+            <td style="padding:0 6px;">
+              <a href="https://facebook.com/BigotesyPaticas" style="color:#5ecdc7;font-size:12px;text-decoration:none;">Facebook</a>
+            </td>
+            <td style="color:#a8ddd9;font-size:12px;">·</td>
+            <td style="padding:0 6px;">
+              <a href="https://bigotesypaticas.com" style="color:#5ecdc7;font-size:12px;text-decoration:none;">bigotesypaticas.com</a>
+            </td>
+          </tr>
+        </table>
+        <p style="color:#4a8a85;font-size:11px;margin:0;">
+          Recibiste este correo porque te suscribiste en bigotesypaticas.com.<br>
+          Tu email: {email}
+        </p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>"""
+
+
 @router.post("/newsletter")
 async def newsletter_subscribe(payload: NewsletterIn, bg: BackgroundTasks) -> dict:
-    """Log new subscriber and send welcome email."""
+    """Log new subscriber and send welcome email with coupon."""
 
     def _send() -> None:
         send_email(
             STORE_EMAIL,
-            f"Nueva suscripción newsletter: {payload.email}",
+            f"🐾 Nueva suscripción: {payload.email}",
             f"<p>Nuevo suscriptor: <strong>{payload.email}</strong></p>",
         )
-        welcome_html = """
-        <h2 style="color:#187f77;">¡Bienvenido al club Bigotes y Paticas! 🐾</h2>
-        <p>Gracias por suscribirte. Te enviaremos las mejores ofertas, consejos y novedades para tu mascota.</p>
-        <p>Como regalo de bienvenida, usa el código
-           <strong style="color:#FF6B35;font-size:18px;">BIENVENIDO10</strong>
-           para obtener 10% de descuento en tu primera compra.</p>
-        <br>
-        <p>Con mucho cariño,<br><strong>El equipo de Bigotes y Paticas</strong></p>
-        <p style="color:#888;font-size:12px;">
-          📱 +57 320 687 6633 &nbsp;·&nbsp; bigotesypaticas.com
-        </p>
-        """
-        send_email(payload.email, "¡Bienvenido al club! 10% de descuento — Bigotes y Paticas", welcome_html)
+        send_email(
+            payload.email,
+            "🎁 Tu cupón de bienvenida + 50 Puntos Bigotes — Bigotes y Paticas",
+            _welcome_html(payload.email),
+        )
 
     bg.add_task(_send)
     return {"ok": True}
