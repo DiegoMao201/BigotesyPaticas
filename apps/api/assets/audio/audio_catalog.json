@@ -1,0 +1,22 @@
+{
+  "upbeat_corporate": {
+    "url": "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/audio/upbeat_corporate.mp3",
+    "license": "CC0 / royalty-free",
+    "duration_sec": 30
+  },
+  "gentle_acoustic": {
+    "url": "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/audio/gentle_acoustic.mp3",
+    "license": "CC0 / royalty-free",
+    "duration_sec": 30
+  },
+  "happy_pet": {
+    "url": "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/audio/happy_pet.mp3",
+    "license": "CC0 / royalty-free",
+    "duration_sec": 30
+  },
+  "calm_inspiring": {
+    "url": "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/audio/calm_inspiring.mp3",
+    "license": "CC0 / royalty-free",
+    "duration_sec": 30
+  }
+}

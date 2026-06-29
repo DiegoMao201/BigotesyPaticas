@@ -8,6 +8,7 @@ from app.api.v1 import (
     auth,
     blog,
     content,
+    stories,
     reviews,
     contact,
     customers,
@@ -81,3 +82,5 @@ api_router.include_router(reviews.admin_router)
 api_router.include_router(reviews.public_router)
 # Sprint 6A: content engine IA
 api_router.include_router(content.router)
+# Sprint Stories: stories IA + manual
+api_router.include_router(stories.router)
