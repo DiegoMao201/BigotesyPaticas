@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Star, CheckCircle, XCircle, MessageSquare, Package, User, RefreshCw } from 'lucide-react';
+import { Star, CheckCircle, XCircle, MessageSquare, Package, User, RefreshCw, Search, Award } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
+import { api, customers as customersApi } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
@@ -34,6 +34,21 @@ interface ReviewItem {
   points_awarded: number;
 }
 
+interface GBPReview {
+  id: string;
+  reviewer_name: string;
+  rating: number;
+  comment: string | null;
+  review_created_at: string | null;
+  points_credited: number;
+}
+
+interface CustomerOption {
+  id: string;
+  full_name: string;
+  phone: string | null;
+}
+
 // ── Star display ─────────────────────────────────────────────────────────────
 
 function Stars({ rating }: { rating: number }) {
@@ -45,6 +60,136 @@ function Stars({ rating }: { rating: number }) {
           className={`w-4 h-4 ${s <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}`}
         />
       ))}
+    </div>
+  );
+}
+
+// ── Customer search input ────────────────────────────────────────────────────
+
+function CustomerSearch({ onSelect }: { onSelect: (c: CustomerOption) => void }) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const { data } = useQuery({
+    queryKey: ['customer-search', q],
+    queryFn: () => customersApi.list({ q, page_size: 8 }),
+    enabled: q.length >= 2,
+  });
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <div className="flex items-center gap-2 border border-border rounded-xl px-3 py-2 bg-white">
+        <Search className="w-4 h-4 text-muted shrink-0" />
+        <input
+          className="flex-1 text-sm outline-none bg-transparent placeholder:text-muted"
+          placeholder="Buscar cliente por nombre o teléfono…"
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => q.length >= 2 && setOpen(true)}
+        />
+      </div>
+      {open && data?.items && data.items.length > 0 && (
+        <div className="absolute z-20 top-full mt-1 w-full rounded-xl border border-border bg-white shadow-lg overflow-hidden">
+          {data.items.map((c: CustomerOption) => (
+            <button
+              key={c.id}
+              type="button"
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-accent flex items-center gap-3"
+              onClick={() => {
+                onSelect(c);
+                setQ(c.full_name);
+                setOpen(false);
+              }}
+            >
+              <User className="w-4 h-4 text-muted shrink-0" />
+              <div>
+                <p className="font-medium">{c.full_name}</p>
+                {c.phone && <p className="text-xs text-muted">{c.phone}</p>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── GBP Review Card ──────────────────────────────────────────────────────────
+
+function GBPReviewCard({ review, onMatched }: { review: GBPReview; onMatched: () => void }) {
+  const [selected, setSelected] = useState<CustomerOption | null>(null);
+
+  const matchMut = useMutation({
+    mutationFn: () =>
+      api(`/v1/admin/gbp-reviews/${review.id}/match`, {
+        method: 'POST',
+        body: JSON.stringify({ customer_id: selected!.id }),
+      }),
+    onSuccess: () => {
+      toast.success(`✅ Asignado a ${selected!.full_name} · +50 puntos acreditados`);
+      onMatched();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-4">
+      {/* Header */}
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0 text-amber-700 font-bold text-sm">
+          {review.reviewer_name.charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm">{review.reviewer_name}</p>
+          {review.review_created_at && (
+            <p className="text-xs text-muted">
+              {new Date(review.review_created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-1 bg-white border border-amber-200 rounded-lg px-2 py-1">
+          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+          <span className="text-sm font-bold text-amber-700">{review.rating}</span>
+        </div>
+      </div>
+
+      {/* Stars */}
+      <Stars rating={review.rating} />
+
+      {/* Comentario */}
+      {review.comment && (
+        <p className="text-sm text-gray-700 italic">"{review.comment}"</p>
+      )}
+
+      {/* Asignar cliente */}
+      <div className="space-y-2 pt-1">
+        <p className="text-xs font-semibold text-amber-800">Asignar a cliente para acreditar 50 puntos:</p>
+        <CustomerSearch onSelect={setSelected} />
+        {selected && (
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-white border border-green-200 text-sm">
+            <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+            <span className="font-medium text-green-800">{selected.full_name}</span>
+            {selected.phone && <span className="text-muted text-xs">{selected.phone}</span>}
+          </div>
+        )}
+        <Button
+          className="w-full"
+          disabled={!selected || matchMut.isPending}
+          onClick={() => matchMut.mutate()}
+        >
+          <Award className="w-4 h-4" />
+          {matchMut.isPending ? 'Asignando…' : 'Asignar + 50 puntos'}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -240,15 +385,16 @@ export default function ReviewsPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('pending');
   const [page, setPage] = useState(1);
+  const [showGBP, setShowGBP] = useState(true);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-reviews', tab, page],
     queryFn: () => api<{ reviews: ReviewItem[]; total: number }>(`/v1/admin/reviews?status_filter=${tab}&page=${page}&page_size=20`),
   });
 
-  const { data: unmatched } = useQuery({
+  const { data: unmatched, refetch: refetchUnmatched } = useQuery({
     queryKey: ['gbp-unmatched'],
-    queryFn: () => api<Array<{ id: string; reviewer_name: string; rating: number; comment: string }>>('/v1/admin/gbp-reviews/unmatched'),
+    queryFn: () => api<GBPReview[]>('/v1/admin/gbp-reviews/unmatched'),
   });
 
   const moderateMut = useMutation({
@@ -263,13 +409,17 @@ export default function ReviewsPage() {
 
   const syncMut = useMutation({
     mutationFn: () => api('/v1/admin/gbp-sync/run', { method: 'POST' }),
-    onSuccess: () => { toast.success('Sync GBP completado'); qc.invalidateQueries({ queryKey: ['gbp-unmatched'] }); },
+    onSuccess: () => {
+      toast.success('Sync GBP completado');
+      refetchUnmatched();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const reviews = data?.reviews ?? [];
   const total = data?.total ?? 0;
   const pendingCount = tab === 'pending' ? total : undefined;
+  const gbpList = unmatched ?? [];
 
   return (
     <div className="space-y-6">
@@ -289,15 +439,38 @@ export default function ReviewsPage() {
         </Button>
       </div>
 
-      {/* GBP unmatched alert */}
-      {unmatched && unmatched.length > 0 && (
-        <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4">
-          <p className="text-amber-800 font-semibold text-sm">
-            ⚠️ {unmatched.length} reseña(s) de Google sin asignar a cliente
-          </p>
-          <p className="text-amber-700 text-xs mt-1">
-            Asígnalas manualmente para acreditar 50 puntos a cada cliente.
-          </p>
+      {/* GBP unmatched section */}
+      {gbpList.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowGBP((v) => !v)}
+            className="w-full flex items-center justify-between p-4 text-left"
+          >
+            <div>
+              <p className="text-amber-800 font-semibold text-sm">
+                ⚠️ {gbpList.length} reseña{gbpList.length > 1 ? 's' : ''} de Google sin asignar a cliente
+              </p>
+              <p className="text-amber-700 text-xs mt-0.5">
+                Asígnalas manualmente para acreditar 50 puntos a cada cliente.
+              </p>
+            </div>
+            <span className="text-amber-600 text-xs font-medium shrink-0 ml-4">
+              {showGBP ? 'Ocultar ▲' : 'Ver reseñas ▼'}
+            </span>
+          </button>
+
+          {showGBP && (
+            <div className="px-4 pb-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {gbpList.map((rev) => (
+                <GBPReviewCard
+                  key={rev.id}
+                  review={rev}
+                  onMatched={() => refetchUnmatched()}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
