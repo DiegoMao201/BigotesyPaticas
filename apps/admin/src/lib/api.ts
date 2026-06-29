@@ -1507,3 +1507,58 @@ export const inventoryCounts = {
   },
 };
 
+
+// ── Stories IA ──────────────────────────────────────────────────────────────
+
+export interface StoryItem {
+  id: string;
+  template_code: string | null;
+  template_name: string | null;
+  template_category: string | null;
+  creation_mode: string;
+  status: 'pending_approval' | 'approved' | 'rejected' | 'published' | 'failed' | 'scheduled';
+  video_url: string | null;
+  base_image_url: string | null;
+  caption: string | null;
+  swipe_up_url: string | null;
+  scheduled_at: string;
+  published_at: string | null;
+  instagram_story_id: string | null;
+  facebook_story_id: string | null;
+  dry_run: boolean;
+  image_cost_usd: number | null;
+  video_duration_sec: number | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface StoriesResponse {
+  stories: StoryItem[];
+  total: number;
+}
+
+export const stories = {
+  list: (status?: string) =>
+    api<StoriesResponse>(`/v1/admin/stories${status ? `?status=${status}` : '?limit=100'}`),
+
+  updateStatus: (id: string, status: 'approved' | 'rejected') =>
+    api<{ id: string; status: string }>(`/v1/admin/stories/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  getConfig: () =>
+    api<Record<string, { value: string; description: string }>>('/v1/admin/stories/config'),
+
+  updateConfig: (key: string, value: string) =>
+    api<{ key: string; value: string }>(`/v1/admin/stories/config/${key}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ value }),
+    }),
+
+  generate: () =>
+    api<{ queued: number; stories: string[] }>('/v1/admin/stories/manual', {
+      method: 'POST',
+      body: '{}',
+    }),
+};

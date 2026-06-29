@@ -64,7 +64,7 @@ export default function CheckoutPage() {
 
   async function openWhatsApp() {
     track('InitiateCheckout', {
-      content_ids: items.map((i) => i.sku),
+      content_ids: items.map((i) => i.productId),
       value: total,
       currency: 'COP',
       num_items: items.length,

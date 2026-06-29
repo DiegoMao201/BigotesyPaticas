@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Package, ShoppingCart, Boxes, Users, BarChart3,
   Settings, LogOut, AlertTriangle, TrendingUp, CreditCard, Tag,
-  Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain, PawPrint, Star, CalendarDays,
+  Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain, PawPrint, Star, CalendarDays, Film,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
@@ -60,6 +60,7 @@ const NAV_GROUPS = [
     label: 'Redes Sociales',
     items: [
       { href: '/content/calendar', label: 'Contenido IA', icon: CalendarDays, highlight: true },
+      { href: '/content/stories', label: 'Stories IA', icon: Film, highlight: true },
     ],
   },
   {
@@ -89,6 +90,17 @@ export function Sidebar({
     staleTime: 4 * 60 * 1000,
   });
   const pendingCount = pendingNotifs?.length ?? 0;
+
+  const { data: pendingStories } = useQuery({
+    queryKey: ['stories-pending-count'],
+    queryFn: async () => {
+      const { stories: s } = await import('@/lib/api');
+      return s.list('pending_approval');
+    },
+    refetchInterval: 2 * 60 * 1000,
+    staleTime: 90 * 1000,
+  });
+  const storiesPendingCount = pendingStories?.stories?.length ?? 0;
 
   function logout() {
     setToken(null);
@@ -148,6 +160,11 @@ export function Sidebar({
                       {item.href === '/pet-monitor' && pendingCount > 0 && (
                         <span className="text-[10px] font-bold bg-amber-400 text-amber-900 rounded-full px-1.5 py-0.5 leading-none">
                           {pendingCount}
+                        </span>
+                      )}
+                      {item.href === '/content/stories' && storiesPendingCount > 0 && (
+                        <span className="text-[10px] font-bold bg-amber-400 text-amber-900 rounded-full px-1.5 py-0.5 leading-none">
+                          {storiesPendingCount}
                         </span>
                       )}
                       {active && <ChevronRight className="h-3 w-3 text-brand-400" />}
