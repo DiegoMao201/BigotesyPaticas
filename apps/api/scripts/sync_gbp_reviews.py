@@ -24,32 +24,47 @@ import asyncpg
 import httpx
 from rapidfuzz import fuzz
 
-PLACE_ID = "ChIJP6-g7Y1gR44RiKlIhE1zS_A"  # Bigotes y Paticas Google Place ID
+PLACE_ID = os.environ.get("GBP_PLACE_ID", "ChIJUbZRoXGBOI4R8vrs6AsH7XQ")  # Mall Zamara Plaza
 API_KEY = os.environ.get("GBP_PLACES_API_KEY", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-PLACES_URL = "https://maps.googleapis.com/maps/api/place/details/json"
-FIELDS = "reviews,rating,user_ratings_total"
+PLACES_NEW_URL = f"https://places.googleapis.com/v1/places/{PLACE_ID}"
 
 # Umbral para fuzzy match de nombre (0-100)
 FUZZY_THRESHOLD = 72
 
 
 async def fetch_gbp_reviews() -> dict:
-    params = {
-        "place_id": PLACE_ID,
-        "fields": FIELDS,
-        "key": API_KEY,
-        "language": "es",
-        "reviews_sort": "newest",
-    }
+    """Usa Places API (New) — soporta hasta 5 reseñas recientes."""
     async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.get(PLACES_URL, params=params)
+        r = await client.get(
+            PLACES_NEW_URL,
+            headers={
+                "X-Goog-Api-Key": API_KEY,
+                "X-Goog-FieldMask": "id,displayName,rating,userRatingCount,reviews",
+            },
+            params={"languageCode": "es"},
+        )
         r.raise_for_status()
         data = r.json()
-    if data.get("status") != "OK":
-        raise RuntimeError(f"Places API error: {data.get('status')} — {data.get('error_message', '')}")
-    return data["result"]
+    if "error" in data:
+        raise RuntimeError(f"Places API error: {data['error'].get('message', data)}")
+    # Normalizar al formato que espera el resto del script
+    reviews_raw = data.get("reviews", [])
+    reviews = []
+    for rv in reviews_raw:
+        reviews.append({
+            "author_name": rv.get("authorAttribution", {}).get("displayName", "Anónimo"),
+            "profile_photo_url": rv.get("authorAttribution", {}).get("photoUri"),
+            "rating": rv.get("rating", 0),
+            "text": rv.get("text", {}).get("text", ""),
+            "time": rv.get("publishTime", ""),
+        })
+    return {
+        "rating": data.get("rating"),
+        "user_ratings_total": data.get("userRatingCount", 0),
+        "reviews": reviews,
+    }
 
 
 def stable_id(reviewer: str, rating: int, ts: int) -> str:
@@ -112,9 +127,16 @@ async def main():
             reviewer = rev.get("author_name", "Anónimo")
             rating = int(rev.get("rating", 0))
             comment = rev.get("text", "")
-            ts = int(rev.get("time", 0))
+            time_raw = rev.get("time", "")
+            # publishTime puede ser ISO string ("2024-03-15T...") o unix int
+            if isinstance(time_raw, str) and time_raw:
+                from dateutil.parser import parse as parse_dt
+                created_at = parse_dt(time_raw).replace(tzinfo=timezone.utc) if "+" not in time_raw else parse_dt(time_raw)
+                ts = int(created_at.timestamp())
+            else:
+                ts = int(time_raw) if time_raw else 0
+                created_at = datetime.fromtimestamp(ts, tz=timezone.utc)
             gbp_id = stable_id(reviewer, rating, ts)
-            created_at = datetime.fromtimestamp(ts, tz=timezone.utc)
             photo_url = rev.get("profile_photo_url")
 
             # Upsert en gbp_reviews_cache
