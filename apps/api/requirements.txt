@@ -36,6 +36,7 @@ google-auth==2.35.0
 
 # HTTP client (para integraciones)
 httpx==0.27.2
+rapidfuzz==3.9.7
 
 # Utilities
 python-slugify==8.0.4
