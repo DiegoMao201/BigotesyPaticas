@@ -3,21 +3,18 @@ import Link from 'next/link';
 import { LocalBusinessSchema, BreadcrumbSchema } from '@/components/seo/JsonLd';
 
 export const metadata: Metadata = {
-  title: 'Tienda de mascotas en Pereira y Dosquebradas — Domicilio 24-72h | Bigotes y Paticas',
+  title: 'Pet Shop y Tienda de Mascotas Pereira y Dosquebradas — Bigotes y Paticas',
   description:
-    'Bigotes y Paticas: tienda de mascotas con domicilio en Pereira y Dosquebradas. Concentrado, accesorios, medicamentos veterinarios. Envío gratis desde $30.000 en toda la zona urbana de Risaralda.',
+    'Pet shop con domicilio en Pereira y Dosquebradas. Concentrado, accesorios, medicamentos veterinarios. Envío gratis desde $30.000 en 24-72h. El petshop más completo de Risaralda.',
   keywords: [
-    'tienda mascotas Pereira',
-    'tienda mascotas Dosquebradas',
-    'domicilio mascotas Pereira',
-    'concentrado perros Pereira',
-    'comida gatos Dosquebradas',
-    'veterinaria Pereira',
-    'accesorios mascotas Risaralda',
-    'medicamentos veterinarios Pereira',
-    'Hills Pereira',
-    'Royal Canin Dosquebradas',
-    'Pro Plan Pereira',
+    'pet shop Pereira', 'petshop Pereira', 'pet shop Dosquebradas',
+    'domicilio pet shop Pereira', 'pet shop domicilio Risaralda',
+    'tienda mascotas Pereira', 'tienda mascotas Dosquebradas',
+    'domicilio mascotas Pereira', 'concentrado perros Pereira',
+    'comida gatos Dosquebradas', 'veterinaria Pereira',
+    'accesorios mascotas Risaralda', 'medicamentos veterinarios Pereira',
+    'Hills Pereira', 'Royal Canin Dosquebradas', 'Pro Plan Pereira',
+    'tienda animales Pereira', 'comida mascota domicilio Pereira',
   ],
   alternates: { canonical: 'https://bigotesypaticas.com/pereira-dosquebradas-mascotas' },
   openGraph: {
@@ -65,13 +62,15 @@ export default function PereiraPage() {
             Pereira · Dosquebradas · Risaralda
           </p>
           <h1 className="text-4xl md:text-5xl font-display font-extrabold leading-tight mb-5 text-[#0d4a45]">
-            Tienda de mascotas con domicilio en Pereira y Dosquebradas
+            Pet Shop con domicilio en Pereira y Dosquebradas
           </h1>
+          <p className="text-lg text-muted-foreground leading-relaxed mb-4">
+            <strong>Bigotes y Paticas</strong> es el pet shop de Pereira y Dosquebradas que lleva hasta tu puerta
+            todo lo que tu perro o gato necesita: concentrado premium, accesorios, medicamentos veterinarios y más.
+          </p>
           <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-            En <strong>Bigotes y Paticas</strong> llevamos hasta tu puerta todo lo que tu perro o
-            gato necesita: concentrado premium, accesorios, medicamentos veterinarios y más.
-            Servicio de entrega en <strong>24 a 72 horas</strong> en toda la zona urbana de
-            Pereira y Dosquebradas, Risaralda.
+            Nuestro petshop tiene servicio de domicilio en <strong>24 a 72 horas</strong> en toda
+            la zona urbana de Pereira y Dosquebradas, Risaralda. Más de 900 productos disponibles.
           </p>
           <div className="flex flex-wrap gap-3">
             <Link
@@ -233,6 +232,14 @@ export default function PereiraPage() {
               {
                 q: '¿Cómo hago un pedido de mascotas a domicilio en Dosquebradas?',
                 a: 'Puedes hacer tu pedido directamente en nuestra tienda online, seleccionando los productos y completando tu información de entrega. También puedes escribirnos por WhatsApp al +57 320 687 6633.',
+              },
+              {
+                q: '¿Bigotes y Paticas es un pet shop?',
+                a: 'Sí, somos el pet shop de Pereira y Dosquebradas con más variedad y el mejor servicio de domicilio de Risaralda. Nuestro petshop tiene más de 900 productos para perros, gatos y otras mascotas, con envío gratis desde $30.000.',
+              },
+              {
+                q: '¿Qué es un pet shop y qué venden?',
+                a: 'Un pet shop es una tienda especializada en productos para mascotas. En nuestro pet shop de Pereira encontrarás concentrado para perros y gatos, snacks, accesorios, correas, collares, camas, juguetes, medicamentos antiparasitarios y productos de aseo para mascotas.',
               },
             ].map((item) => (
               <div key={item.q} className="rounded-2xl border border-border bg-card p-6">

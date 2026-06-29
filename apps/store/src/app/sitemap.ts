@@ -35,7 +35,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/blog`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
     { url: `${BASE}/nosotros`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/contacto`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${BASE}/pereira-dosquebradas-mascotas`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
+    { url: `${BASE}/pereira-dosquebradas-mascotas`, lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
+    { url: `${BASE}/pet-shop-pereira`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
   ];
 
   // Todos los productos publicados
