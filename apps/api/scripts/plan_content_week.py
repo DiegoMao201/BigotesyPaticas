@@ -13,8 +13,11 @@ import os
 import sys
 import asyncio
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+_BOGOTA = ZoneInfo("America/Bogota")
 
 # Permitir imports desde /app
 sys.path.insert(0, "/app")
@@ -112,7 +115,8 @@ def build_week_plan(products: list, reviews: list) -> list[dict]:
     product_idx = 0
     review_idx  = 0
 
-    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    # Usar hora Colombia para que 7:30, 12:30, 19:00 coincidan con hora local
+    today = datetime.now(_BOGOTA).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
     days_until_monday = (7 - today.weekday()) % 7 or 7
     week_start = today + timedelta(days=days_until_monday)
 

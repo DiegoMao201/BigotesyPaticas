@@ -14,7 +14,10 @@ import logging
 import os
 import sys
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+_BOGOTA = ZoneInfo("America/Bogota")
 
 sys.path.insert(0, "/app")
 
@@ -39,7 +42,8 @@ def get_config(cur) -> dict:
 
 
 def get_pending_posts(cur) -> list[dict]:
-    now = datetime.now(UTC)
+    # scheduled_at se almacena como hora Colombia naive → comparar con hora Colombia
+    now = datetime.now(_BOGOTA).replace(tzinfo=None)
     window_start = now - timedelta(hours=1)
     cur.execute("""
         SELECT * FROM content.scheduled_posts
