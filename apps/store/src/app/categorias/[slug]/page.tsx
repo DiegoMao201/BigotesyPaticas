@@ -180,6 +180,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
         <div className="flex-1 min-w-0">
           {data.items.length > 0 ? (
             <CatalogGrid
+              key={[lifeStage, sizeRange, brand, petType].filter(Boolean).join('|') || 'default'}
               initialItems={data.items}
               totalCount={data.total}
               apiQuery={loadMoreParams.toString()}
