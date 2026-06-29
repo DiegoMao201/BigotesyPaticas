@@ -14,8 +14,10 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+
+UTC = timezone.utc
 
 _BOGOTA = ZoneInfo("America/Bogota")
 
@@ -76,21 +78,38 @@ async def publish_post(post: dict, dry_run: bool, cur, conn) -> bool:
     else:
         from app.services.meta_publisher import publish_to_meta
         platforms = post.get("target_platforms") or ["instagram", "facebook"]
+        ig_error = fb_error = None
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 # Solo publicar en plataformas que aún no tienen ID (evita duplicados en retry)
                 if "instagram" in platforms and not ig_id:
-                    result = await publish_to_meta(post, "instagram", dry_run=False)
-                    ig_id = result.get("instagram_post_id")
+                    try:
+                        result = await publish_to_meta(post, "instagram", dry_run=False)
+                        ig_id = result.get("instagram_post_id")
+                    except Exception as e_ig:
+                        ig_error = str(e_ig)
+                        log.warning("IG error intento %d: %s", attempt, e_ig)
                 if "facebook" in platforms and not fb_id:
-                    result = await publish_to_meta(post, "facebook", dry_run=False)
-                    fb_id = result.get("facebook_post_id")
-                break
-            except Exception as e:
-                error = str(e)
-                log.warning("Intento %d/%d fallido: %s", attempt, MAX_RETRIES, e)
+                    try:
+                        result = await publish_to_meta(post, "facebook", dry_run=False)
+                        fb_id = result.get("facebook_post_id")
+                    except Exception as e_fb:
+                        fb_error = str(e_fb)
+                        log.warning("FB error intento %d: %s", attempt, e_fb)
+                # Si al menos IG publicó, no hay que reintentar IG
+                if ig_id or (not ig_id and attempt == MAX_RETRIES):
+                    break
                 if attempt < MAX_RETRIES:
                     await asyncio.sleep(2 ** attempt)
+            except Exception as e:
+                error = str(e)
+                log.warning("Error general intento %d/%d: %s", attempt, MAX_RETRIES, e)
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(2 ** attempt)
+        # Consolidar error final
+        if not error:
+            errors = [e for e in [ig_error, fb_error] if e]
+            error = " | ".join(errors) if errors else None
 
     now = datetime.now(UTC)
     if error and not ig_id and not fb_id:
