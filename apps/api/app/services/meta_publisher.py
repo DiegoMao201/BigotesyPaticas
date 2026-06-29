@@ -15,10 +15,18 @@ IG_ID       = os.environ.get("META_INSTAGRAM_BUSINESS_ID", "")
 ACCESS_TOKEN= os.environ.get("META_ACCESS_TOKEN", "")
 
 
-def _token() -> str:
-    t = ACCESS_TOKEN or os.environ.get("META_ACCESS_TOKEN", "")
+def _token(platform: str = "instagram") -> str:
+    """Devuelve el token correcto según plataforma.
+
+    Facebook page posting requiere Page Access Token (pages_manage_posts).
+    Instagram y CAPI usan el System User Token.
+    """
+    if platform == "facebook":
+        t = os.environ.get("META_MESSENGER_TOKEN") or os.environ.get("META_ACCESS_TOKEN", "")
+    else:
+        t = os.environ.get("META_ACCESS_TOKEN", "")
     if not t:
-        raise RuntimeError("META_ACCESS_TOKEN no configurado")
+        raise RuntimeError(f"Token Meta no configurado para {platform}")
     return t
 
 
@@ -42,7 +50,7 @@ async def publish_to_meta(post: dict, target: str, dry_run: bool = True) -> dict
     if target == "instagram":
         return _publish_instagram(image_url, caption)
     elif target == "facebook":
-        return _publish_facebook(image_url, caption)
+        return _publish_facebook(image_url, caption, token=_token("facebook"))
     else:
         raise ValueError(f"Target desconocido: {target}")
 
@@ -80,7 +88,7 @@ def _build_caption(post: dict, platform: str = "facebook") -> str:
 
 def _publish_instagram(image_url: str, caption: str) -> dict:
     ig = IG_ID or os.environ.get("META_INSTAGRAM_BUSINESS_ID", "")
-    token = _token()
+    token = _token("instagram")
     if not ig:
         raise RuntimeError("META_INSTAGRAM_BUSINESS_ID no configurado")
 
@@ -127,9 +135,9 @@ def _publish_instagram(image_url: str, caption: str) -> dict:
     return {"instagram_post_id": post_id, "container_id": container_id}
 
 
-def _publish_facebook(image_url: str, caption: str) -> dict:
+def _publish_facebook(image_url: str, caption: str, token: str = "") -> dict:
     page = PAGE_ID or os.environ.get("META_PAGE_ID", "")
-    token = _token()
+    token = token or _token("facebook")
     if not page:
         raise RuntimeError("META_PAGE_ID no configurado")
 

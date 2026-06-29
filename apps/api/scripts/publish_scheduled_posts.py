@@ -94,6 +94,7 @@ async def publish_post(post: dict, dry_run: bool, cur, conn) -> bool:
 
     now = datetime.now(UTC)
     if error and not ig_id and not fb_id:
+        # Ambas plataformas fallaron — marcar como failed
         cur.execute("""
             UPDATE content.scheduled_posts
             SET status = 'failed', publish_error = %s, updated_at = %s
@@ -103,13 +104,18 @@ async def publish_post(post: dict, dry_run: bool, cur, conn) -> bool:
         conn.commit()
         return False
     else:
+        # Al menos una plataforma publicó — guardar error parcial si aplica
+        partial_error = error if (ig_id and not fb_id) or (fb_id and not ig_id) else None
+        if partial_error:
+            log.warning("Post %s publicación parcial — IG=%s FB=%s error=%s",
+                        post_id[:8], ig_id, fb_id, partial_error[:200])
         cur.execute("""
             UPDATE content.scheduled_posts
             SET status = 'published', published_at = %s, updated_at = %s,
                 instagram_post_id = %s, facebook_post_id = %s,
-                dry_run = %s, publish_error = NULL
+                dry_run = %s, publish_error = %s
             WHERE id = %s
-        """, (now, now, ig_id, fb_id, dry_run, post_id))
+        """, (now, now, ig_id, fb_id, dry_run, partial_error[:500] if partial_error else None, post_id))
         conn.commit()
         log.info("Post %s publicado IG=%s FB=%s dry=%s", post_id[:8], ig_id, fb_id, dry_run)
         return True
