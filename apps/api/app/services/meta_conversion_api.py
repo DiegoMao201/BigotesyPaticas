@@ -90,3 +90,28 @@ def send_event(
     except Exception as exc:
         log.warning("CAPI exception %s: %s", event_name, exc)
         return None
+
+
+class MetaConversionAPI:
+    """Wrapper async-compatible para uso como clase (tests + inyección)."""
+
+    def __init__(self) -> None:
+        self.pixel_id     = _PIXEL_ID
+        self.access_token = _ACCESS_TOKEN
+
+    async def send_event(
+        self,
+        event_name: str,
+        *,
+        user_data: dict | None = None,
+        custom_data: dict | None = None,
+        event_id: str | None = None,
+        event_source_url: str | None = None,
+    ) -> dict | None:
+        return send_event(
+            event_name,
+            user_data=user_data,
+            custom_data=custom_data,
+            event_id=event_id,
+            event_source_url=event_source_url,
+        )
