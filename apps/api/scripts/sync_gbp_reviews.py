@@ -74,7 +74,7 @@ def stable_id(reviewer: str, rating: int, ts: int) -> str:
 
 
 async def fuzzy_match_customer(conn: asyncpg.Connection, name: str) -> str | None:
-    rows = await conn.fetch("SELECT id, full_name FROM portal.customers WHERE full_name IS NOT NULL LIMIT 500")
+    rows = await conn.fetch("SELECT id, full_name FROM crm.customers WHERE full_name IS NOT NULL LIMIT 500")
     best_score, best_id = 0, None
     for row in rows:
         score = fuzz.token_sort_ratio(name.lower(), row["full_name"].lower())
@@ -85,8 +85,8 @@ async def fuzzy_match_customer(conn: asyncpg.Connection, name: str) -> str | Non
 
 async def award_gbp_points(conn: asyncpg.Connection, customer_id: str, gbp_review_id: str):
     already = await conn.fetchval(
-        "SELECT 1 FROM portal.loyalty_points WHERE customer_id=$1::uuid AND description LIKE $2 LIMIT 1",
-        customer_id, f"%{gbp_review_id}%",
+        "SELECT points_credited FROM catalog.gbp_reviews_cache WHERE google_review_id=$1 LIMIT 1",
+        gbp_review_id,
     )
     if already:
         return
@@ -96,6 +96,10 @@ async def award_gbp_points(conn: asyncpg.Connection, customer_id: str, gbp_revie
         VALUES ($1::uuid, 50, 'gbp_review', $2, NOW() + INTERVAL '1 year')
         """,
         customer_id, f"Reseña Google Business #{gbp_review_id}",
+    )
+    await conn.execute(
+        "UPDATE catalog.gbp_reviews_cache SET points_credited=1, points_credited_at=NOW() WHERE google_review_id=$1",
+        gbp_review_id,
     )
     print(f"  ✅ 50 pts acreditados a cliente {customer_id}")
 
@@ -118,7 +122,7 @@ async def main():
     print(f"⭐ Rating global: {overall_rating} ({total_ratings} reseñas)")
     print(f"📥 {len(reviews)} reseñas a procesar")
 
-    conn = await asyncpg.connect(DATABASE_URL)
+    conn = await asyncpg.connect(DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://"))
     try:
         inserted = 0
         matched = 0
@@ -139,9 +143,9 @@ async def main():
             gbp_id = stable_id(reviewer, rating, ts)
             photo_url = rev.get("profile_photo_url")
 
-            # Upsert en gbp_reviews_cache
+            # Upsert en gbp_reviews_cache (columna real: google_review_id)
             existing = await conn.fetchval(
-                "SELECT id FROM catalog.gbp_reviews_cache WHERE gbp_review_id=$1 LIMIT 1", gbp_id
+                "SELECT id FROM catalog.gbp_reviews_cache WHERE google_review_id=$1 LIMIT 1", gbp_id
             )
             if existing:
                 print(f"  ↩ Ya existe: {reviewer} ({rating}⭐)")
@@ -156,8 +160,8 @@ async def main():
             await conn.execute(
                 """
                 INSERT INTO catalog.gbp_reviews_cache
-                  (gbp_review_id, reviewer_name, reviewer_photo_url, rating, comment,
-                   created_at, matched_customer_id)
+                  (google_review_id, reviewer_name, reviewer_photo_url, rating, comment,
+                   review_created_at, matched_customer_id)
                 VALUES ($1, $2, $3, $4, $5, $6, $7::uuid)
                 """,
                 gbp_id, reviewer, photo_url, rating, comment, created_at,
