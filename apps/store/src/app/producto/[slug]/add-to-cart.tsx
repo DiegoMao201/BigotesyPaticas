@@ -40,11 +40,11 @@ export function AddToCart({ product }: { product: Omit<CartItem, 'quantity'> }) 
           onClick={() => {
             add(product, qty);
             track('AddToCart', {
-              content_ids: [product.sku],
+              content_ids: [product.productId],
               content_name: product.name,
               value: Number(product.price) * qty,
               currency: 'COP',
-              contents: [{ id: product.sku, quantity: qty, item_price: Number(product.price) }],
+              contents: [{ id: product.productId, quantity: qty, item_price: Number(product.price) }],
               content_type: 'product',
             });
             toast.success(`${product.name.slice(0, 35)}… agregado al carrito`, {
