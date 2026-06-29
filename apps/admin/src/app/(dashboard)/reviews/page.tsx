@@ -2,13 +2,12 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Star, CheckCircle, XCircle, MessageSquare, Package, User, MapPin, RefreshCw } from 'lucide-react';
+import { Star, CheckCircle, XCircle, MessageSquare, Package, User, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
-import { formatCurrency } from '@/lib/utils';
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -64,7 +63,7 @@ function ReplyModal({ review, onClose }: { review: ReviewItem; onClose: () => vo
   const [reply, setReply] = useState(review.admin_reply ?? REPLY_TEMPLATES[String(review.rating) as keyof typeof REPLY_TEMPLATES] ?? '');
   const qc = useQueryClient();
   const mut = useMutation({
-    mutationFn: () => api(`/admin/reviews/${review.id}/reply`, { method: 'POST', body: JSON.stringify({ reply }) }),
+    mutationFn: () => api(`/v1/admin/reviews/${review.id}/reply`, { method: 'POST', body: JSON.stringify({ reply }) }),
     onSuccess: () => { toast.success('Respuesta publicada'); qc.invalidateQueries({ queryKey: ['admin-reviews'] }); onClose(); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -244,17 +243,17 @@ export default function ReviewsPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-reviews', tab, page],
-    queryFn: () => api<{ reviews: ReviewItem[]; total: number }>(`/admin/reviews?status_filter=${tab}&page=${page}&page_size=20`),
+    queryFn: () => api<{ reviews: ReviewItem[]; total: number }>(`/v1/admin/reviews?status_filter=${tab}&page=${page}&page_size=20`),
   });
 
   const { data: unmatched } = useQuery({
     queryKey: ['gbp-unmatched'],
-    queryFn: () => api<Array<{ id: string; reviewer_name: string; rating: number; comment: string }>>('/admin/gbp-reviews/unmatched'),
+    queryFn: () => api<Array<{ id: string; reviewer_name: string; rating: number; comment: string }>>('/v1/admin/gbp-reviews/unmatched'),
   });
 
   const moderateMut = useMutation({
     mutationFn: ({ id, action, notes }: { id: string; action: 'approve' | 'reject'; notes?: string }) =>
-      api(`/admin/reviews/${id}`, { method: 'PATCH', body: JSON.stringify({ action, notes }) }),
+      api(`/v1/admin/reviews/${id}`, { method: 'PATCH', body: JSON.stringify({ action, notes }) }),
     onSuccess: (_, vars) => {
       toast.success(vars.action === 'approve' ? '✅ Reseña aprobada + puntos acreditados' : '❌ Reseña rechazada');
       qc.invalidateQueries({ queryKey: ['admin-reviews'] });
@@ -263,7 +262,7 @@ export default function ReviewsPage() {
   });
 
   const syncMut = useMutation({
-    mutationFn: () => api('/admin/gbp-sync/run', { method: 'POST' }),
+    mutationFn: () => api('/v1/admin/gbp-sync/run', { method: 'POST' }),
     onSuccess: () => { toast.success('Sync GBP completado'); qc.invalidateQueries({ queryKey: ['gbp-unmatched'] }); },
     onError: (e: Error) => toast.error(e.message),
   });
