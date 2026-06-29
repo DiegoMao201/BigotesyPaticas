@@ -45,8 +45,10 @@ DB_URL = os.environ.get("DATABASE_URL_SYNC", "").replace(
     "postgresql+psycopg://", "postgresql://"
 ).replace("postgresql+asyncpg://", "postgresql://")
 
-REPLICATE_MODEL = "cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003"
-COST_PER_IMAGE  = 0.002  # USD estimado
+REPLICATE_MODEL  = "cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003"
+COST_PER_IMAGE   = 0.002  # USD estimado
+# Rate limit Replicate: 6 req/min con saldo < $5 → 1 cada 11s (seguro)
+REQUEST_INTERVAL = 11.0
 
 
 def s3_client():
@@ -60,20 +62,29 @@ def s3_client():
     )
 
 
-def remove_background(replicate_client, image_url: str) -> bytes | None:
-    """Llama a rembg en Replicate. Retorna PNG bytes con transparencia."""
-    try:
-        output = replicate_client.run(
-            REPLICATE_MODEL,
-            input={"image": image_url},
-        )
-        result_url = str(output) if not isinstance(output, list) else str(output[0])
-        resp = requests.get(result_url, timeout=60)
-        resp.raise_for_status()
-        return resp.content
-    except Exception as e:
-        log.warning("rembg falló para %s: %s", image_url[:60], e)
-        return None
+def remove_background(replicate_client, image_url: str, max_retries: int = 3) -> bytes | None:
+    """Llama a rembg en Replicate con reintentos en 429. Retorna PNG bytes con transparencia."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            output = replicate_client.run(
+                REPLICATE_MODEL,
+                input={"image": image_url},
+            )
+            result_url = str(output) if not isinstance(output, list) else str(output[0])
+            resp = requests.get(result_url, timeout=60)
+            resp.raise_for_status()
+            return resp.content
+        except Exception as e:
+            err = str(e)
+            if "429" in err or "throttled" in err.lower() or "rate limit" in err.lower():
+                wait = REQUEST_INTERVAL * (2 ** (attempt - 1))
+                log.warning("429 rate limit (intento %d/%d) — esperando %.0fs...", attempt, max_retries, wait)
+                time.sleep(wait)
+            else:
+                log.warning("rembg falló para %s: %s", image_url[:60], e)
+                return None
+    log.error("rembg agotó reintentos para %s", image_url[:60])
+    return None
 
 
 def upload_transparent(s3, png_bytes: bytes, slug: str, sku: str) -> str:
@@ -167,15 +178,17 @@ def main():
             conn.rollback()
             failed += 1
 
+        # Respetar rate limit: 1 request cada REQUEST_INTERVAL segundos
+        time.sleep(REQUEST_INTERVAL)
+
         if i % 25 == 0:
             elapsed = time.time() - start
             rate = i / elapsed * 60
+            eta_min = (len(products) - i) * REQUEST_INTERVAL / 60
             log.info(
-                "--- Progreso: %d/%d OK | %d fallidos | $%.2f USD | %.1f imgs/min ---",
-                success, len(products), failed, total_cost, rate,
+                "--- Progreso: %d/%d OK | %d fallidos | $%.2f USD | ETA ~%.0f min ---",
+                success, len(products), failed, total_cost, eta_min,
             )
-            # Pausa breve para no saturar Replicate
-            time.sleep(1)
 
     conn.close()
     elapsed = time.time() - start
