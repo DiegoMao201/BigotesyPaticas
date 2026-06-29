@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
-from app.api.v1.auth import get_current_admin_user
+from app.deps import require_superadmin as get_current_admin_user
 
 router = APIRouter(prefix="/v1/admin/stories", tags=["stories"])
 _BOGOTA = ZoneInfo("America/Bogota")

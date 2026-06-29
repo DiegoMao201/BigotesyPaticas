@@ -6,6 +6,7 @@ import os
 
 import requests
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/webhooks/messenger", tags=["messenger"])
@@ -108,7 +109,7 @@ async def verify_webhook(request: Request):
         params.get("hub.mode") == "subscribe"
         and params.get("hub.verify_token") == _VERIFY_TOKEN
     ):
-        return int(params["hub.challenge"])
+        return PlainTextResponse(content=params["hub.challenge"])
     raise HTTPException(status_code=403, detail="Verificación fallida")
 
 

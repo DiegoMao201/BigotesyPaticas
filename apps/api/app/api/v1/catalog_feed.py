@@ -33,12 +33,12 @@ async def products_feed_xml(db: DBSession) -> Response:
             p.slug,
             b.name AS brand_name,
             c.name AS category_name,
-            COALESCE(i.qty_on_hand, 0) AS stock_qty
+            COALESCE(i.qty, 0) AS stock_qty
         FROM catalog.products p
         LEFT JOIN catalog.brands b ON b.id = p.brand_id
         LEFT JOIN catalog.categories c ON c.id = p.category_id
         LEFT JOIN (
-            SELECT product_id, SUM(qty_on_hand) AS qty_on_hand
+            SELECT product_id, SUM(quantity) AS qty
             FROM inventory.stock
             GROUP BY product_id
         ) i ON i.product_id = p.id
