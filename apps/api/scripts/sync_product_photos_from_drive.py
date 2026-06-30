@@ -10,14 +10,13 @@ Lógica idempotente:
 Uso:
   docker exec <api> python scripts/sync_product_photos_from_drive.py
 """
+
 from __future__ import annotations
 
-import asyncio
 import io
+import logging
 import os
 import sys
-import logging
-from pathlib import Path
 
 sys.path.insert(0, "/app")
 
@@ -37,16 +36,20 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1RstDcCH6J54U_f4TT1-XovgtnAoq4wZW"
 
-CDN_BUCKET   = os.environ.get("S3_BUCKET", "catalogo-ferreinox")
+CDN_BUCKET = os.environ.get("S3_BUCKET", "catalogo-ferreinox")
 CDN_ENDPOINT = os.environ.get("S3_ENDPOINT_URL", "https://nyc3.digitaloceanspaces.com")
-CDN_REGION   = os.environ.get("S3_REGION", "nyc3")
-CDN_BASE     = os.environ.get("S3_PUBLIC_URL", "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com")
-S3_ACCESS    = os.environ.get("S3_ACCESS_KEY", "")
-S3_SECRET    = os.environ.get("S3_SECRET_KEY", "")
+CDN_REGION = os.environ.get("S3_REGION", "nyc3")
+CDN_BASE = os.environ.get(
+    "S3_PUBLIC_URL", "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com"
+)
+S3_ACCESS = os.environ.get("S3_ACCESS_KEY", "")
+S3_SECRET = os.environ.get("S3_SECRET_KEY", "")
 
-DB_URL = os.environ.get("DATABASE_URL_SYNC", "").replace(
-    "postgresql+psycopg://", "postgresql://"
-).replace("postgresql+asyncpg://", "postgresql://")
+DB_URL = (
+    os.environ.get("DATABASE_URL_SYNC", "")
+    .replace("postgresql+psycopg://", "postgresql://")
+    .replace("postgresql+asyncpg://", "postgresql://")
+)
 
 MAX_SIDE = 1500  # px máximo por lado
 
@@ -62,7 +65,9 @@ def s3_client():
     )
 
 
-def upload_image_to_cdn(s3, image_bytes: bytes, slug: str, sku: str, content_type: str = "image/png") -> str:
+def upload_image_to_cdn(
+    s3, image_bytes: bytes, slug: str, sku: str, content_type: str = "image/png"
+) -> str:
     key_base = slug.strip() if slug and slug.strip() else sku.lower().strip()
     cdn_key = f"bigotesypaticas/products/{key_base}/main.png"
     s3.put_object(
@@ -116,7 +121,10 @@ def main():
     for f in drive_files:
         name = f.path.split("/")[-1]
         base = name.rsplit(".", 1)[0].lower().strip()
-        if base and base not in ("captura de pantalla 2026-06-28 183225", "captura de pantalla 2026-06-28 183351"):
+        if base and base not in (
+            "captura de pantalla 2026-06-28 183225",
+            "captura de pantalla 2026-06-28 183351",
+        ):
             drive_map[base] = f.id
     log.info("Drive: %d archivos válidos indexados", len(drive_map))
 
@@ -128,7 +136,7 @@ def main():
           AND (primary_image_url IS NULL OR primary_image_url = '')
     """)
     cols = [d[0] for d in cur.description]
-    sin_foto = [dict(zip(cols, row)) for row in cur.fetchall()]
+    sin_foto = [dict(zip(cols, row, strict=False)) for row in cur.fetchall()]
 
     to_upload = []
     for p in sin_foto:

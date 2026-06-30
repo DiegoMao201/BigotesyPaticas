@@ -1,4 +1,5 @@
 """Router agregador V1."""
+
 from fastapi import APIRouter
 
 from app.api.v1 import (
@@ -8,11 +9,8 @@ from app.api.v1 import (
     auth,
     blog,
     catalog_feed,
-    content,
-    messenger,
-    stories,
-    reviews,
     contact,
+    content,
     customers,
     finance,
     health,
@@ -20,6 +18,7 @@ from app.api.v1 import (
     inventory,
     inventory_counts,
     landings,
+    messenger,
     portal_appointments,
     portal_auth,
     portal_intelligence,
@@ -32,9 +31,11 @@ from app.api.v1 import (
     products,
     purchases,
     purchases_xml,
+    reviews,
     sales,
     search,
     seo,
+    stories,
     suppliers,
 )
 

@@ -4,6 +4,7 @@ Revision ID: 0009_customer_terms_notifications
 Revises: 0008_portal_schema
 Create Date: 2026-06-26 00:01:00.000000
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -47,9 +48,7 @@ def upgrade() -> None:
         schema="portal",
     )
     # Ampliar el check de tipos para admitir todos los tipos nuevos
-    op.execute(
-        "ALTER TABLE portal.notifications DROP CONSTRAINT IF EXISTS ck_notif_type"
-    )
+    op.execute("ALTER TABLE portal.notifications DROP CONSTRAINT IF EXISTS ck_notif_type")
     op.execute(
         "ALTER TABLE portal.notifications ADD CONSTRAINT ck_notif_type "
         "CHECK (type IN ('health_reminder','order_update','loyalty','appointment',"

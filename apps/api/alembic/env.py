@@ -1,14 +1,15 @@
 """Alembic env — usa el driver síncrono (psycopg) con asyncio compat."""
+
 from __future__ import annotations
 
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
 
 # Import metadata
 from app.config import get_settings
-from app.models import Base  # noqa: F401  — registra todos los modelos
+from app.models import Base
+from sqlalchemy import engine_from_config, pool
 
 config = context.config
 
@@ -25,8 +26,17 @@ target_metadata = Base.metadata
 def include_object(obj, name, type_, reflected, compare_to):
     """Sólo gestionamos los schemas que nos pertenecen."""
     managed_schemas = {
-        "catalog", "inventory", "sales", "purchasing", "crm",
-        "finance", "auth", "ops", "analytics", "portal", "public",
+        "catalog",
+        "inventory",
+        "sales",
+        "purchasing",
+        "crm",
+        "finance",
+        "auth",
+        "ops",
+        "analytics",
+        "portal",
+        "public",
     }
     if type_ == "table":
         return obj.schema in managed_schemas or obj.schema is None

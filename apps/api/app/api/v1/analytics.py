@@ -1,16 +1,15 @@
 """Analytics / BI — endpoints completos para el panel ejecutivo."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import case, func, literal, select, text
-from sqlalchemy.dialects.postgresql import aggregate_order_by
+from sqlalchemy import func, literal, select, text
 
 from app.deps import DBSession, require_permission
-from app.models.catalog import Product, Category
+from app.models.catalog import Category, Product
 from app.models.crm import Customer
 from app.models.inventory import Stock
 from app.models.ops import LegacyIdMap
@@ -174,11 +173,15 @@ async def get_dashboard(db: DBSession) -> DashboardOut:
                 OrderItem.name_snapshot,
                 OrderItem.sku_snapshot,
                 func.sum(OrderItem.quantity).label("units"),
-                func.sum(OrderItem.unit_price * OrderItem.quantity - OrderItem.discount).label("rev"),
+                func.sum(OrderItem.unit_price * OrderItem.quantity - OrderItem.discount).label(
+                    "rev"
+                ),
             )
             .where(OrderItem.order_id.in_(valid_order_ids_sub))
             .group_by(OrderItem.product_id, OrderItem.name_snapshot, OrderItem.sku_snapshot)
-            .order_by(func.sum(OrderItem.unit_price * OrderItem.quantity - OrderItem.discount).desc())
+            .order_by(
+                func.sum(OrderItem.unit_price * OrderItem.quantity - OrderItem.discount).desc()
+            )
             .limit(5)
         )
     ).all()
@@ -196,12 +199,10 @@ async def get_dashboard(db: DBSession) -> DashboardOut:
 
     # Últimas 5 órdenes
     recent_rows = (
-        await db.execute(
-            select(Order)
-            .order_by(Order.occurred_at.desc())
-            .limit(5)
-        )
-    ).scalars().all()
+        (await db.execute(select(Order).order_by(Order.occurred_at.desc()).limit(5)))
+        .scalars()
+        .all()
+    )
 
     recent_orders = [
         {
@@ -282,6 +283,7 @@ async def stock_alerts(db: DBSession, threshold: int = 10) -> list[StockAlertOut
 #  BI FULL — Un solo endpoint con TODO lo que necesita el panel
 # ═══════════════════════════════════════════════════════════════
 
+
 class ChannelBreakdown(BaseModel):
     channel: str
     revenue: float
@@ -319,7 +321,7 @@ class CategoryRevenue(BaseModel):
 
 
 class HeatmapCell(BaseModel):
-    weekday: int   # 0=Lun, 6=Dom
+    weekday: int  # 0=Lun, 6=Dom
     hour: int
     orders: int
 
@@ -367,41 +369,47 @@ async def get_bi_full(
     since = now - timedelta(days=days)
 
     # ── Revenue & orders totals ────────────────────────────────
-    rev_total, ord_total = (await db.execute(
-        select(
-            func.coalesce(func.sum(Order.grand_total), 0),
-            func.count(Order.id),
+    rev_total, ord_total = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(Order.grand_total), 0),
+                func.count(Order.id),
+            )
+            .where(Order.occurred_at >= since)
+            .where(Order.status.notin_(["cancelled", "refunded"]))
         )
-        .where(Order.occurred_at >= since)
-        .where(Order.status.notin_(["cancelled", "refunded"]))
-    )).one()
+    ).one()
     rev_total = float(rev_total or 0)
     ord_total = int(ord_total or 0)
     avg_ticket = rev_total / ord_total if ord_total else 0
 
-    # ── COGS (stock cost × qty from order items) ───────────────
-    cogs_result = (await db.execute(
-        select(func.coalesce(func.sum(OrderItem.unit_cost * OrderItem.quantity), 0))
-        .join(Order, Order.id == OrderItem.order_id)
-        .where(Order.occurred_at >= since)
-        .where(Order.status.notin_(["cancelled", "refunded"]))
-    )).scalar_one()
+    # ── COGS (stock cost x qty from order items) ───────────────
+    cogs_result = (
+        await db.execute(
+            select(func.coalesce(func.sum(OrderItem.unit_cost * OrderItem.quantity), 0))
+            .join(Order, Order.id == OrderItem.order_id)
+            .where(Order.occurred_at >= since)
+            .where(Order.status.notin_(["cancelled", "refunded"]))
+        )
+    ).scalar_one()
     cogs = float(cogs_result or 0)
     gross_profit = rev_total - cogs
     gross_margin_pct = round(gross_profit / rev_total * 100, 1) if rev_total > 0 else 0
 
     # ── By channel ─────────────────────────────────────────────
-    ch_rows = (await db.execute(
-        select(
-            Order.channel,
-            func.sum(Order.grand_total).label("rev"),
-            func.count(Order.id).label("cnt"),
+    ch_rows = (
+        await db.execute(
+            select(
+                Order.channel,
+                func.sum(Order.grand_total).label("rev"),
+                func.count(Order.id).label("cnt"),
+            )
+            .where(Order.occurred_at >= since)
+            .where(Order.status.notin_(["cancelled", "refunded"]))
+            .group_by(Order.channel)
+            .order_by(func.sum(Order.grand_total).desc())
         )
-        .where(Order.occurred_at >= since)
-        .where(Order.status.notin_(["cancelled", "refunded"]))
-        .group_by(Order.channel)
-        .order_by(func.sum(Order.grand_total).desc())
-    )).all()
+    ).all()
     by_channel = [
         ChannelBreakdown(
             channel=r.channel,
@@ -413,18 +421,22 @@ async def get_bi_full(
     ]
 
     # ── By payment method ──────────────────────────────────────
-    pm_rows = (await db.execute(
-        select(
-            func.coalesce(Order.payment_method, Payment.method, literal("Sin método")).label("meth"),
-            func.sum(Order.grand_total).label("rev"),
-            func.count(func.distinct(Order.id)).label("cnt"),
+    pm_rows = (
+        await db.execute(
+            select(
+                func.coalesce(Order.payment_method, Payment.method, literal("Sin método")).label(
+                    "meth"
+                ),
+                func.sum(Order.grand_total).label("rev"),
+                func.count(func.distinct(Order.id)).label("cnt"),
+            )
+            .outerjoin(Payment, Payment.order_id == Order.id)
+            .where(Order.occurred_at >= since)
+            .where(Order.status.notin_(["cancelled", "refunded"]))
+            .group_by(text("1"))
+            .order_by(func.sum(Order.grand_total).desc())
         )
-        .outerjoin(Payment, Payment.order_id == Order.id)
-        .where(Order.occurred_at >= since)
-        .where(Order.status.notin_(["cancelled", "refunded"]))
-        .group_by(text("1"))
-        .order_by(func.sum(Order.grand_total).desc())
-    )).all()
+    ).all()
     by_method = [
         MethodBreakdown(
             method=str(r.meth or "Desconocido"),
@@ -437,17 +449,19 @@ async def get_bi_full(
 
     # ── Monthly trend ──────────────────────────────────────────
     month_trunc = func.date_trunc("month", Order.occurred_at)
-    mo_rows = (await db.execute(
-        select(
-            month_trunc.label("mo"),
-            func.sum(Order.grand_total).label("rev"),
-            func.count(Order.id).label("cnt"),
+    mo_rows = (
+        await db.execute(
+            select(
+                month_trunc.label("mo"),
+                func.sum(Order.grand_total).label("rev"),
+                func.count(Order.id).label("cnt"),
+            )
+            .where(Order.occurred_at >= now - timedelta(days=365))
+            .where(Order.status.notin_(["cancelled", "refunded"]))
+            .group_by(month_trunc)
+            .order_by(month_trunc)
         )
-        .where(Order.occurred_at >= now - timedelta(days=365))
-        .where(Order.status.notin_(["cancelled", "refunded"]))
-        .group_by(month_trunc)
-        .order_by(month_trunc)
-    )).all()
+    ).all()
     monthly_trend = [
         MonthlyPoint(
             year_month=r.mo.strftime("%Y-%m"),
@@ -459,21 +473,26 @@ async def get_bi_full(
     ]
 
     # ── Top customers ──────────────────────────────────────────
-    top_cust_rows = (await db.execute(
-        select(
-            Order.customer_id,
-            func.coalesce(Customer.full_name, func.coalesce(text("metadata->>'cliente_nombre'"), literal("Anónimo"))).label("cname"),
-            func.count(Order.id).label("cnt"),
-            func.sum(Order.grand_total).label("rev"),
-            func.max(Order.occurred_at).label("last"),
+    top_cust_rows = (
+        await db.execute(
+            select(
+                Order.customer_id,
+                func.coalesce(
+                    Customer.full_name,
+                    func.coalesce(text("metadata->>'cliente_nombre'"), literal("Anónimo")),
+                ).label("cname"),
+                func.count(Order.id).label("cnt"),
+                func.sum(Order.grand_total).label("rev"),
+                func.max(Order.occurred_at).label("last"),
+            )
+            .outerjoin(Customer, Customer.id == Order.customer_id)
+            .where(Order.occurred_at >= since)
+            .where(Order.status.notin_(["cancelled", "refunded"]))
+            .group_by(Order.customer_id, text("2"))
+            .order_by(func.sum(Order.grand_total).desc())
+            .limit(15)
         )
-        .outerjoin(Customer, Customer.id == Order.customer_id)
-        .where(Order.occurred_at >= since)
-        .where(Order.status.notin_(["cancelled", "refunded"]))
-        .group_by(Order.customer_id, text("2"))
-        .order_by(func.sum(Order.grand_total).desc())
-        .limit(15)
-    )).all()
+    ).all()
     top_customers = [
         TopCustomer(
             customer_id=str(r.customer_id) if r.customer_id else None,
@@ -486,22 +505,28 @@ async def get_bi_full(
     ]
 
     # ── By category ────────────────────────────────────────────
-    cat_rows = (await db.execute(
-        select(
-            func.coalesce(Category.name, literal("Sin categoría")).label("cat"),
-            func.sum(OrderItem.unit_price * OrderItem.quantity - OrderItem.discount).label("rev"),
-            func.sum(OrderItem.quantity).label("units"),
+    cat_rows = (
+        await db.execute(
+            select(
+                func.coalesce(Category.name, literal("Sin categoría")).label("cat"),
+                func.sum(OrderItem.unit_price * OrderItem.quantity - OrderItem.discount).label(
+                    "rev"
+                ),
+                func.sum(OrderItem.quantity).label("units"),
+            )
+            .select_from(OrderItem)
+            .join(Order, Order.id == OrderItem.order_id)
+            .outerjoin(Product, Product.id == OrderItem.product_id)
+            .outerjoin(Category, Category.id == Product.category_id)
+            .where(Order.occurred_at >= since)
+            .where(Order.status.notin_(["cancelled", "refunded"]))
+            .group_by(text("1"))
+            .order_by(
+                func.sum(OrderItem.unit_price * OrderItem.quantity - OrderItem.discount).desc()
+            )
+            .limit(20)
         )
-        .select_from(OrderItem)
-        .join(Order, Order.id == OrderItem.order_id)
-        .outerjoin(Product, Product.id == OrderItem.product_id)
-        .outerjoin(Category, Category.id == Product.category_id)
-        .where(Order.occurred_at >= since)
-        .where(Order.status.notin_(["cancelled", "refunded"]))
-        .group_by(text("1"))
-        .order_by(func.sum(OrderItem.unit_price * OrderItem.quantity - OrderItem.discount).desc())
-        .limit(20)
-    )).all()
+    ).all()
     cat_total_rev = sum(float(r.rev or 0) for r in cat_rows) or 1
     by_category = [
         CategoryRevenue(
@@ -513,19 +538,21 @@ async def get_bi_full(
         for r in cat_rows
     ]
 
-    # ── Heatmap day×hour ───────────────────────────────────────
+    # ── Heatmap day x hour ─────────────────────────────────────
     # Extract weekday (0=Sun PG style) and hour from occurred_at
-    hm_rows = (await db.execute(
-        select(
-            func.extract("dow", Order.occurred_at).label("wd"),
-            func.extract("hour", Order.occurred_at).label("hr"),
-            func.count(Order.id).label("cnt"),
+    hm_rows = (
+        await db.execute(
+            select(
+                func.extract("dow", Order.occurred_at).label("wd"),
+                func.extract("hour", Order.occurred_at).label("hr"),
+                func.count(Order.id).label("cnt"),
+            )
+            .where(Order.occurred_at >= since)
+            .where(Order.status.notin_(["cancelled", "refunded"]))
+            .group_by(text("1, 2"))
+            .order_by(text("1, 2"))
         )
-        .where(Order.occurred_at >= since)
-        .where(Order.status.notin_(["cancelled", "refunded"]))
-        .group_by(text("1, 2"))
-        .order_by(text("1, 2"))
-    )).all()
+    ).all()
     heatmap = [
         HeatmapCell(
             weekday=int(r.wd) % 7,
@@ -536,10 +563,9 @@ async def get_bi_full(
     ]
 
     # ── Expenses (P&L) ─────────────────────────────────────────
-    expense_rows = (await db.execute(
-        select(LegacyIdMap)
-        .where(LegacyIdMap.entity == "gasto")
-    )).scalars().all()
+    expense_rows = (
+        (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "gasto"))).scalars().all()
+    )
 
     expenses_total = 0.0
     cat_exp: dict[str, float] = {}
@@ -587,6 +613,7 @@ async def get_bi_full(
 
 # ── Sales detail with period comparison ───────────────────────────
 
+
 class SalesPeriodComparison(BaseModel):
     current_revenue: float
     prev_revenue: float
@@ -631,10 +658,16 @@ async def sales_comparison(
 
     def _daily(start, end):
         return (
-            select(day_trunc.label("d"), func.sum(Order.grand_total).label("rev"), func.count(Order.id).label("cnt"))
-            .where(Order.occurred_at >= start).where(Order.occurred_at < end)
+            select(
+                day_trunc.label("d"),
+                func.sum(Order.grand_total).label("rev"),
+                func.count(Order.id).label("cnt"),
+            )
+            .where(Order.occurred_at >= start)
+            .where(Order.occurred_at < end)
             .where(Order.status.notin_(["cancelled", "refunded"]))
-            .group_by(day_trunc).order_by(day_trunc)
+            .group_by(day_trunc)
+            .order_by(day_trunc)
         )
 
     curr_rows = (await db.execute(_daily(since, now))).all()
@@ -646,6 +679,16 @@ async def sales_comparison(
         delta_pct=_delta(cur_rev, prev_rev),
         current_orders=int(cur_ord or 0),
         prev_orders=int(prev_ord or 0),
-        daily_current=[DailySale(date=r.d.strftime("%Y-%m-%d"), revenue=float(r.rev or 0), orders=int(r.cnt or 0)) for r in curr_rows],
-        daily_prev=[DailySale(date=r.d.strftime("%Y-%m-%d"), revenue=float(r.rev or 0), orders=int(r.cnt or 0)) for r in prev_rows],
+        daily_current=[
+            DailySale(
+                date=r.d.strftime("%Y-%m-%d"), revenue=float(r.rev or 0), orders=int(r.cnt or 0)
+            )
+            for r in curr_rows
+        ],
+        daily_prev=[
+            DailySale(
+                date=r.d.strftime("%Y-%m-%d"), revenue=float(r.rev or 0), orders=int(r.cnt or 0)
+            )
+            for r in prev_rows
+        ],
     )

@@ -18,29 +18,30 @@ SEGURIDAD:
   - No otorga puntos retroactivos si points_awarded ya > 0.
   - No procesa referidos si reward_paid_at ya fue seteado.
 """
+
 from __future__ import annotations
 
 import asyncio
 import os
 import sys
 import uuid
-from typing import Sequence
+from collections.abc import Sequence
 
 # Ruta base del proyecto
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 async def main(order_ids: Sequence[str]) -> None:
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-    from sqlalchemy.orm import sessionmaker
-    from sqlalchemy import select
-    from app.models.portal import PortalOrder, PortalOrderItem
     from app.models.crm import Customer
+    from app.models.portal import PortalOrder, PortalOrderItem
     from app.services.portal_order_actions import (
         bridge_to_sales,
         credit_loyalty_points,
         process_referral_reward,
     )
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from sqlalchemy.orm import sessionmaker
 
     db_url = os.environ.get("DATABASE_URL", "")
     if not db_url:
@@ -55,15 +56,19 @@ async def main(order_ids: Sequence[str]) -> None:
             print("\n=== CANDIDATOS PARA BACKFILL ===")
             print("(portal_orders delivered SIN sales_order_id)\n")
             rows = (
-                await db.execute(
-                    select(PortalOrder)
-                    .where(
-                        PortalOrder.workflow_status == "delivered",
-                        PortalOrder.sales_order_id == None,  # noqa: E711
+                (
+                    await db.execute(
+                        select(PortalOrder)
+                        .where(
+                            PortalOrder.workflow_status == "delivered",
+                            PortalOrder.sales_order_id == None,  # noqa: E711
+                        )
+                        .order_by(PortalOrder.delivered_at.desc())
                     )
-                    .order_by(PortalOrder.delivered_at.desc())
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
             if not rows:
                 print("No hay pedidos pendientes de backfill.")
@@ -74,13 +79,17 @@ async def main(order_ids: Sequence[str]) -> None:
                     await db.execute(select(Customer).where(Customer.id == o.customer_id))
                 ).scalar_one_or_none()
                 items = (
-                    await db.execute(
-                        select(PortalOrderItem).where(
-                            PortalOrderItem.portal_order_id == o.id,
-                            PortalOrderItem.is_removed == False,  # noqa: E712
+                    (
+                        await db.execute(
+                            select(PortalOrderItem).where(
+                                PortalOrderItem.portal_order_id == o.id,
+                                PortalOrderItem.is_removed == False,  # noqa: E712
+                            )
                         )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 total = sum(float(i.subtotal or 0) for i in items)
                 if not total and o.unit_price:
                     total = float(o.unit_price) * (o.quantity or 1)
@@ -120,12 +129,16 @@ async def main(order_ids: Sequence[str]) -> None:
                     continue
 
                 if order.sales_order_id:
-                    print(f"  ⏭  {raw_id}: Ya tiene sales_order_id={order.sales_order_id} — omitido")
+                    print(
+                        f"  ⏭  {raw_id}: Ya tiene sales_order_id={order.sales_order_id} — omitido"
+                    )
                     skipped += 1
                     continue
 
                 if order.workflow_status != "delivered":
-                    print(f"  ⚠️  {raw_id}: workflow_status={order.workflow_status}, esperado 'delivered' — omitido")
+                    print(
+                        f"  ⚠️  {raw_id}: workflow_status={order.workflow_status}, esperado 'delivered' — omitido"
+                    )
                     skipped += 1
                     continue
 

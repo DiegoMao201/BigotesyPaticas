@@ -6,6 +6,7 @@ Reglas:
   referral                : 200 puntos
   Vigencia                : 12 meses desde la creación
 """
+
 from __future__ import annotations
 
 import uuid
@@ -28,6 +29,7 @@ POINTS_REFERRAL = 200
 
 
 # ── helper usado por otros routers ────────────────────────────────────
+
 
 async def award_points(
     *,
@@ -56,6 +58,7 @@ async def award_points(
 
 # ── schemas ───────────────────────────────────────────────────────────
 
+
 class LoyaltyOut(BaseModel):
     id: str
     points: int
@@ -72,6 +75,7 @@ class BalanceOut(BaseModel):
 
 
 # ── endpoints ─────────────────────────────────────────────────────────
+
 
 @router.get("/balance", response_model=BalanceOut)
 async def get_balance(db: DBSession, customer: Customer = PortalUser) -> BalanceOut:
@@ -96,13 +100,17 @@ async def get_balance(db: DBSession, customer: Customer = PortalUser) -> Balance
     total_lifetime = (await db.execute(lifetime_q)).scalar_one()
 
     history = (
-        await db.execute(
-            select(LoyaltyPoint)
-            .where(LoyaltyPoint.customer_id == customer.id)
-            .order_by(LoyaltyPoint.created_at.desc())
-            .limit(50)
+        (
+            await db.execute(
+                select(LoyaltyPoint)
+                .where(LoyaltyPoint.customer_id == customer.id)
+                .order_by(LoyaltyPoint.created_at.desc())
+                .limit(50)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return BalanceOut(
         total_active=int(total_active),

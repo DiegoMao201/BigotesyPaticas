@@ -1,4 +1,5 @@
 """Endpoints SEO — sitemap-data, IndexNow ping."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -49,8 +50,9 @@ async def sitemap_data(db: DBSession):
     )
 
     def row_to_dict(row):
-        return {k: (v.isoformat() if hasattr(v, 'isoformat') else v)
-                for k, v in row._mapping.items()}
+        return {
+            k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row._mapping.items()
+        }
 
     return {
         "products": [row_to_dict(r) for r in products],

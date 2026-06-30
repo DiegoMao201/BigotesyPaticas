@@ -11,12 +11,12 @@ La app Streamlit puede consultar:
     if get_flag("USE_PG_CATALOG_READ"):
         ...
 """
+
 from __future__ import annotations
 
 import os
-from typing import Dict
 
-_DEFAULTS: Dict[str, bool] = {
+_DEFAULTS: dict[str, bool] = {
     "USE_PG_CATALOG_READ": False,
     "USE_PG_CATALOG_WRITE": False,
     "USE_PG_POS": False,
@@ -25,7 +25,7 @@ _DEFAULTS: Dict[str, bool] = {
     "BACKUP_ENABLED": True,
 }
 
-_OVERRIDES: Dict[str, bool] = {}
+_OVERRIDES: dict[str, bool] = {}
 
 
 def _parse_bool(raw: str | None) -> bool | None:
@@ -59,6 +59,6 @@ def reset_overrides() -> None:
     _OVERRIDES.clear()
 
 
-def all_flags() -> Dict[str, bool]:
+def all_flags() -> dict[str, bool]:
     """Snapshot completo de flags actuales (útil para mostrar en sidebar)."""
     return {name: get_flag(name) for name in _DEFAULTS}

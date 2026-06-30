@@ -1,12 +1,12 @@
 """Modelos del schema `finance`."""
+
 from __future__ import annotations
 
-import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import CheckConstraint, Date, DateTime, Numeric, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.common import AuditMixin, Base, TimestampMixin, UUIDPKMixin

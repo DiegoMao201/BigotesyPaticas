@@ -1,4 +1,5 @@
 """Admin endpoint — /v1/admin/pet-monitor: KPIs + feeds del portal (polling 30s)."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -8,12 +9,18 @@ from pydantic import BaseModel
 from sqlalchemy import and_, func, select
 
 from app.deps import CurrentUser, DBSession
-from app.models.portal import Appointment, LoyaltyPoint, PortalNotification, PortalOrder, PortalSession
+from app.models.portal import (
+    Appointment,
+    LoyaltyPoint,
+    PortalOrder,
+    PortalSession,
+)
 
 router = APIRouter(prefix="/admin/pet-monitor", tags=["admin"])
 
 
 # ── schemas ───────────────────────────────────────────────────────────
+
 
 class MonitorKPIs(BaseModel):
     active_sessions_24h: int
@@ -48,6 +55,7 @@ class MonitorResponse(BaseModel):
 
 
 # ── endpoint ──────────────────────────────────────────────────────────
+
 
 @router.get("", response_model=MonitorResponse)
 async def pet_monitor(

@@ -1,4 +1,5 @@
 """Información de versión / build — visible en sidebar y en logs."""
+
 from __future__ import annotations
 
 import os
@@ -44,6 +45,4 @@ def render_streamlit_badge(st) -> None:
     forzar la dependencia en quien sólo usa lógica pura).
     """
     info = get_build_info()
-    st.sidebar.caption(
-        f"v{info['version']} · {info['git_sha']} · {info['env']}"
-    )
+    st.sidebar.caption(f"v{info['version']} · {info['git_sha']} · {info['env']}")

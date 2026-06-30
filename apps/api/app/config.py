@@ -1,10 +1,11 @@
 """Configuración global vía pydantic-settings."""
+
 from __future__ import annotations
 
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,12 +27,8 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://localhost:3100"
 
     # Database
-    database_url: str = (
-        "postgresql+asyncpg://postgres:devpass@localhost:5432/bp_dev"
-    )
-    database_url_sync: str = (
-        "postgresql+psycopg://postgres:devpass@localhost:5432/bp_dev"
-    )
+    database_url: str = "postgresql+asyncpg://postgres:devpass@localhost:5432/bp_dev"
+    database_url_sync: str = "postgresql+psycopg://postgres:devpass@localhost:5432/bp_dev"
     db_pool_size: int = 10
     db_max_overflow: int = 20
 
@@ -41,8 +38,8 @@ class Settings(BaseSettings):
     # JWT
     jwt_secret: str = "dev-only-change-me"
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 480   # 8 horas — jornada laboral completa
-    jwt_refresh_token_expire_days: int = 30      # 30 días — refresh dura un mes
+    jwt_access_token_expire_minutes: int = 480  # 8 horas — jornada laboral completa
+    jwt_refresh_token_expire_days: int = 30  # 30 días — refresh dura un mes
 
     # Bootstrap admin
     admin_email: str = "admin@bigotesypaticas.com"
@@ -75,6 +72,7 @@ class Settings(BaseSettings):
         # En producción, NO permitir el dev secret
         if v == "dev-only-change-me":
             import os
+
             if os.getenv("ENVIRONMENT") == "production":
                 raise ValueError("JWT_SECRET debe configurarse en producción.")
         return v

@@ -3,6 +3,7 @@
 Idempotente. Ejecutar tras `alembic upgrade head`.
     python -m app.cli.seed
 """
+
 from __future__ import annotations
 
 import asyncio

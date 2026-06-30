@@ -7,13 +7,15 @@ Uso:
   python scripts/generate_seo_landings.py --limit=5
   python scripts/generate_seo_landings.py
 
-Costo estimado: 40 landings × ~2500 tokens = ~$0.04 USD con Gemini 2.5 Flash
+Costo estimado: 40 landings x ~2500 tokens = ~$0.04 USD con Gemini 2.5 Flash
 """
-import os
-import sys
-import json
-import re
+
 import asyncio
+import json
+import os
+import re
+import sys
+
 import httpx
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
@@ -29,59 +31,259 @@ for arg in sys.argv:
 
 STRATEGIC_KEYWORDS = [
     # Geografía + producto
-    {"keyword": "comida perros Pereira", "slug": "comida-perros-pereira", "geo": "Pereira", "category_slug": "perros"},
-    {"keyword": "comida gatos Pereira", "slug": "comida-gatos-pereira", "geo": "Pereira", "category_slug": "gatos"},
-    {"keyword": "concentrado perro Dosquebradas", "slug": "concentrado-perro-dosquebradas", "geo": "Dosquebradas", "category_slug": "perros"},
-    {"keyword": "concentrado gato Dosquebradas", "slug": "concentrado-gato-dosquebradas", "geo": "Dosquebradas", "category_slug": "gatos"},
-    {"keyword": "domicilio mascotas Pereira", "slug": "domicilio-mascotas-pereira", "geo": "Pereira", "category_slug": "todos"},
-    {"keyword": "domicilio mascotas Dosquebradas", "slug": "domicilio-mascotas-dosquebradas", "geo": "Dosquebradas", "category_slug": "todos"},
-    {"keyword": "tienda mascotas Risaralda", "slug": "tienda-mascotas-risaralda", "geo": "Risaralda", "category_slug": "todos"},
-    {"keyword": "veterinaria Pereira productos", "slug": "veterinaria-pereira-productos", "geo": "Pereira", "category_slug": "todos"},
+    {
+        "keyword": "comida perros Pereira",
+        "slug": "comida-perros-pereira",
+        "geo": "Pereira",
+        "category_slug": "perros",
+    },
+    {
+        "keyword": "comida gatos Pereira",
+        "slug": "comida-gatos-pereira",
+        "geo": "Pereira",
+        "category_slug": "gatos",
+    },
+    {
+        "keyword": "concentrado perro Dosquebradas",
+        "slug": "concentrado-perro-dosquebradas",
+        "geo": "Dosquebradas",
+        "category_slug": "perros",
+    },
+    {
+        "keyword": "concentrado gato Dosquebradas",
+        "slug": "concentrado-gato-dosquebradas",
+        "geo": "Dosquebradas",
+        "category_slug": "gatos",
+    },
+    {
+        "keyword": "domicilio mascotas Pereira",
+        "slug": "domicilio-mascotas-pereira",
+        "geo": "Pereira",
+        "category_slug": "todos",
+    },
+    {
+        "keyword": "domicilio mascotas Dosquebradas",
+        "slug": "domicilio-mascotas-dosquebradas",
+        "geo": "Dosquebradas",
+        "category_slug": "todos",
+    },
+    {
+        "keyword": "tienda mascotas Risaralda",
+        "slug": "tienda-mascotas-risaralda",
+        "geo": "Risaralda",
+        "category_slug": "todos",
+    },
+    {
+        "keyword": "veterinaria Pereira productos",
+        "slug": "veterinaria-pereira-productos",
+        "geo": "Pereira",
+        "category_slug": "todos",
+    },
     # Marca + ciudad
-    {"keyword": "Hills Pereira", "slug": "hills-pereira", "geo": "Pereira", "category_slug": "perros"},
-    {"keyword": "Royal Canin Pereira", "slug": "royal-canin-pereira", "geo": "Pereira", "category_slug": "perros"},
-    {"keyword": "Pro Plan Dosquebradas", "slug": "pro-plan-dosquebradas", "geo": "Dosquebradas", "category_slug": "perros"},
-    {"keyword": "Bravecto Pereira", "slug": "bravecto-pereira", "geo": "Pereira", "category_slug": "medicamentos"},
-    {"keyword": "Frontline Pereira", "slug": "frontline-pereira", "geo": "Pereira", "category_slug": "medicamentos"},
+    {
+        "keyword": "Hills Pereira",
+        "slug": "hills-pereira",
+        "geo": "Pereira",
+        "category_slug": "perros",
+    },
+    {
+        "keyword": "Royal Canin Pereira",
+        "slug": "royal-canin-pereira",
+        "geo": "Pereira",
+        "category_slug": "perros",
+    },
+    {
+        "keyword": "Pro Plan Dosquebradas",
+        "slug": "pro-plan-dosquebradas",
+        "geo": "Dosquebradas",
+        "category_slug": "perros",
+    },
+    {
+        "keyword": "Bravecto Pereira",
+        "slug": "bravecto-pereira",
+        "geo": "Pereira",
+        "category_slug": "medicamentos",
+    },
+    {
+        "keyword": "Frontline Pereira",
+        "slug": "frontline-pereira",
+        "geo": "Pereira",
+        "category_slug": "medicamentos",
+    },
     # Tipo + edad
-    {"keyword": "comida cachorro Pereira", "slug": "comida-cachorro-pereira", "geo": "Pereira", "category_slug": "perros"},
-    {"keyword": "comida gato senior", "slug": "comida-gato-senior", "geo": None, "category_slug": "gatos"},
-    {"keyword": "concentrado puppy razas pequeñas", "slug": "concentrado-puppy-razas-pequenas", "geo": None, "category_slug": "perros"},
+    {
+        "keyword": "comida cachorro Pereira",
+        "slug": "comida-cachorro-pereira",
+        "geo": "Pereira",
+        "category_slug": "perros",
+    },
+    {
+        "keyword": "comida gato senior",
+        "slug": "comida-gato-senior",
+        "geo": None,
+        "category_slug": "gatos",
+    },
+    {
+        "keyword": "concentrado puppy razas pequeñas",
+        "slug": "concentrado-puppy-razas-pequenas",
+        "geo": None,
+        "category_slug": "perros",
+    },
     # Servicios
-    {"keyword": "grooming Dosquebradas", "slug": "grooming-dosquebradas", "geo": "Dosquebradas", "category_slug": "accesorios"},
-    {"keyword": "baño perros Pereira", "slug": "bano-perros-pereira", "geo": "Pereira", "category_slug": "accesorios"},
-    {"keyword": "vacunación gatos Pereira", "slug": "vacunacion-gatos-pereira", "geo": "Pereira", "category_slug": "medicamentos"},
+    {
+        "keyword": "grooming Dosquebradas",
+        "slug": "grooming-dosquebradas",
+        "geo": "Dosquebradas",
+        "category_slug": "accesorios",
+    },
+    {
+        "keyword": "baño perros Pereira",
+        "slug": "bano-perros-pereira",
+        "geo": "Pereira",
+        "category_slug": "accesorios",
+    },
+    {
+        "keyword": "vacunación gatos Pereira",
+        "slug": "vacunacion-gatos-pereira",
+        "geo": "Pereira",
+        "category_slug": "medicamentos",
+    },
     # Categorías
-    {"keyword": "accesorios perros Colombia", "slug": "accesorios-perros-colombia", "geo": None, "category_slug": "accesorios"},
-    {"keyword": "juguetes perros premium", "slug": "juguetes-perros-premium", "geo": None, "category_slug": "accesorios"},
-    {"keyword": "camas perros grandes", "slug": "camas-perros-grandes", "geo": None, "category_slug": "accesorios"},
-    {"keyword": "antipulgas perros Colombia", "slug": "antipulgas-perros-colombia", "geo": None, "category_slug": "medicamentos"},
+    {
+        "keyword": "accesorios perros Colombia",
+        "slug": "accesorios-perros-colombia",
+        "geo": None,
+        "category_slug": "accesorios",
+    },
+    {
+        "keyword": "juguetes perros premium",
+        "slug": "juguetes-perros-premium",
+        "geo": None,
+        "category_slug": "accesorios",
+    },
+    {
+        "keyword": "camas perros grandes",
+        "slug": "camas-perros-grandes",
+        "geo": None,
+        "category_slug": "accesorios",
+    },
+    {
+        "keyword": "antipulgas perros Colombia",
+        "slug": "antipulgas-perros-colombia",
+        "geo": None,
+        "category_slug": "medicamentos",
+    },
     # Diferenciadores únicos
-    {"keyword": "app mascotas Colombia", "slug": "app-mascotas-colombia", "geo": None, "category_slug": "todos"},
-    {"keyword": "carnet digital mascota", "slug": "carnet-digital-mascota", "geo": None, "category_slug": "todos"},
-    {"keyword": "puntos fidelidad mascotas", "slug": "puntos-fidelidad-mascotas", "geo": None, "category_slug": "todos"},
-    {"keyword": "portal cliente veterinaria", "slug": "portal-cliente-veterinaria", "geo": None, "category_slug": "todos"},
+    {
+        "keyword": "app mascotas Colombia",
+        "slug": "app-mascotas-colombia",
+        "geo": None,
+        "category_slug": "todos",
+    },
+    {
+        "keyword": "carnet digital mascota",
+        "slug": "carnet-digital-mascota",
+        "geo": None,
+        "category_slug": "todos",
+    },
+    {
+        "keyword": "puntos fidelidad mascotas",
+        "slug": "puntos-fidelidad-mascotas",
+        "geo": None,
+        "category_slug": "todos",
+    },
+    {
+        "keyword": "portal cliente veterinaria",
+        "slug": "portal-cliente-veterinaria",
+        "geo": None,
+        "category_slug": "todos",
+    },
     # Barrios Pereira
-    {"keyword": "mascotas Pinares Pereira", "slug": "mascotas-pinares-pereira", "geo": "Pinares, Pereira", "category_slug": "todos"},
-    {"keyword": "mascotas Cuba Pereira", "slug": "mascotas-cuba-pereira", "geo": "Cuba, Pereira", "category_slug": "todos"},
-    {"keyword": "mascotas Belmonte Pereira", "slug": "mascotas-belmonte-pereira", "geo": "Belmonte, Pereira", "category_slug": "todos"},
+    {
+        "keyword": "mascotas Pinares Pereira",
+        "slug": "mascotas-pinares-pereira",
+        "geo": "Pinares, Pereira",
+        "category_slug": "todos",
+    },
+    {
+        "keyword": "mascotas Cuba Pereira",
+        "slug": "mascotas-cuba-pereira",
+        "geo": "Cuba, Pereira",
+        "category_slug": "todos",
+    },
+    {
+        "keyword": "mascotas Belmonte Pereira",
+        "slug": "mascotas-belmonte-pereira",
+        "geo": "Belmonte, Pereira",
+        "category_slug": "todos",
+    },
     # Barrios Dosquebradas
-    {"keyword": "mascotas La Capilla Dosquebradas", "slug": "mascotas-la-capilla-dosquebradas", "geo": "La Capilla, Dosquebradas", "category_slug": "todos"},
-    {"keyword": "mascotas Frailes Dosquebradas", "slug": "mascotas-frailes-dosquebradas", "geo": "Frailes, Dosquebradas", "category_slug": "todos"},
+    {
+        "keyword": "mascotas La Capilla Dosquebradas",
+        "slug": "mascotas-la-capilla-dosquebradas",
+        "geo": "La Capilla, Dosquebradas",
+        "category_slug": "todos",
+    },
+    {
+        "keyword": "mascotas Frailes Dosquebradas",
+        "slug": "mascotas-frailes-dosquebradas",
+        "geo": "Frailes, Dosquebradas",
+        "category_slug": "todos",
+    },
     # Preguntas
-    {"keyword": "precio concentrado perro Pereira", "slug": "precio-concentrado-perro-pereira", "geo": "Pereira", "category_slug": "perros"},
-    {"keyword": "dónde comprar comida mascotas Dosquebradas", "slug": "donde-comprar-comida-mascotas-dosquebradas", "geo": "Dosquebradas", "category_slug": "todos"},
-    {"keyword": "mejor tienda mascotas Pereira", "slug": "mejor-tienda-mascotas-pereira", "geo": "Pereira", "category_slug": "todos"},
+    {
+        "keyword": "precio concentrado perro Pereira",
+        "slug": "precio-concentrado-perro-pereira",
+        "geo": "Pereira",
+        "category_slug": "perros",
+    },
+    {
+        "keyword": "dónde comprar comida mascotas Dosquebradas",
+        "slug": "donde-comprar-comida-mascotas-dosquebradas",
+        "geo": "Dosquebradas",
+        "category_slug": "todos",
+    },
+    {
+        "keyword": "mejor tienda mascotas Pereira",
+        "slug": "mejor-tienda-mascotas-pereira",
+        "geo": "Pereira",
+        "category_slug": "todos",
+    },
     # Comparativos
-    {"keyword": "Hills vs Royal Canin perros", "slug": "hills-vs-royal-canin-perros", "geo": None, "category_slug": "perros"},
-    {"keyword": "Pro Plan vs Eukanuba", "slug": "pro-plan-vs-eukanuba", "geo": None, "category_slug": "perros"},
+    {
+        "keyword": "Hills vs Royal Canin perros",
+        "slug": "hills-vs-royal-canin-perros",
+        "geo": None,
+        "category_slug": "perros",
+    },
+    {
+        "keyword": "Pro Plan vs Eukanuba",
+        "slug": "pro-plan-vs-eukanuba",
+        "geo": None,
+        "category_slug": "perros",
+    },
     # Urgentes / problema
-    {"keyword": "garrapatas perro qué hacer", "slug": "garrapatas-perro-que-hacer", "geo": None, "category_slug": "medicamentos"},
-    {"keyword": "mi gato no come qué hago", "slug": "gato-no-come-que-hago", "geo": None, "category_slug": "gatos"},
-    {"keyword": "primeros auxilios mascotas Pereira", "slug": "primeros-auxilios-mascotas-pereira", "geo": "Pereira", "category_slug": "medicamentos"},
+    {
+        "keyword": "garrapatas perro qué hacer",
+        "slug": "garrapatas-perro-que-hacer",
+        "geo": None,
+        "category_slug": "medicamentos",
+    },
+    {
+        "keyword": "mi gato no come qué hago",
+        "slug": "gato-no-come-que-hago",
+        "geo": None,
+        "category_slug": "gatos",
+    },
+    {
+        "keyword": "primeros auxilios mascotas Pereira",
+        "slug": "primeros-auxilios-mascotas-pereira",
+        "geo": "Pereira",
+        "category_slug": "medicamentos",
+    },
 ]
 
-PROMPT_LANDING = '''Eres experto en SEO y copywriting para e-commerce de mascotas en Colombia.
+PROMPT_LANDING = """Eres experto en SEO y copywriting para e-commerce de mascotas en Colombia.
 Escribe contenido optimizado para la landing page de Bigotes y Paticas, tienda premium ubicada en
 Dosquebradas, Risaralda, con domicilio a toda Pereira y Dosquebradas.
 
@@ -105,7 +307,7 @@ DEVUELVE SOLO JSON VÁLIDO (sin markdown):
   "meta_description": "...",
   "intro_content": "<h2>...</h2><p>...</p>...",
   "cta_text": "..."
-}}'''
+}}"""
 
 
 async def call_ai(client: httpx.AsyncClient, kw: dict) -> dict | None:
@@ -123,7 +325,10 @@ async def call_ai(client: httpx.AsyncClient, kw: dict) -> dict | None:
         try:
             res = await client.post(
                 OPENROUTER_URL,
-                headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                },
                 json={
                     "model": MODEL,
                     "messages": [{"role": "user", "content": prompt}],
@@ -134,7 +339,7 @@ async def call_ai(client: httpx.AsyncClient, kw: dict) -> dict | None:
             )
             res.raise_for_status()
             raw = res.json()["choices"][0]["message"]["content"].strip()
-            match = re.search(r'\{.*\}', raw, re.DOTALL)
+            match = re.search(r"\{.*\}", raw, re.DOTALL)
             if match:
                 raw = match.group()
             return json.loads(raw)
@@ -205,7 +410,7 @@ async def main():
     if not DRY_RUN:
         print(f"✓ {ok} landings generadas")
         print(f"✗ {errors} errores")
-        print(f"\nRevisa en: https://bigotesypaticas.com/landing/comida-perros-pereira")
+        print("\nRevisa en: https://bigotesypaticas.com/landing/comida-perros-pereira")
 
 
 if __name__ == "__main__":

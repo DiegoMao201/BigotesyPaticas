@@ -1,4 +1,5 @@
 """Smoke tests que NO requieren base de datos (no I/O)."""
+
 from __future__ import annotations
 
 

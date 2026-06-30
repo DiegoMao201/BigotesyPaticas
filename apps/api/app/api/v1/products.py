@@ -1,4 +1,5 @@
 """Endpoints de catálogo: productos, marcas, categorías."""
+
 from __future__ import annotations
 
 import io
@@ -55,14 +56,14 @@ async def _supplier_map(db: DBSession, product_ids: list) -> dict:
             .where(Supplier.is_active == True)  # noqa: E712
         )
     ).all()
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    _MIN = datetime.min.replace(tzinfo=timezone.utc)
+    _MIN = datetime.min.replace(tzinfo=UTC)
 
     def _norm(dt):
         if dt is None:
             return _MIN
-        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
     best: dict = {}
     for pid, sid, sname, last_seen, created in rows:
@@ -83,7 +84,9 @@ async def _upsert_product_supplier(db: DBSession, product: Product, supplier_id)
 
     if supplier_id is None:
         return
-    sup = (await db.execute(select(Supplier).where(Supplier.id == supplier_id))).scalar_one_or_none()
+    sup = (
+        await db.execute(select(Supplier).where(Supplier.id == supplier_id))
+    ).scalar_one_or_none()
     if sup is None:
         raise HTTPException(status_code=404, detail="Proveedor no encontrado")
     existing = (
@@ -116,8 +119,12 @@ async def list_products(
     q: str | None = Query(None, description="Búsqueda por nombre/sku"),
     brand_id: uuid.UUID | None = None,
     category_id: uuid.UUID | None = None,
-    category_slug: str | None = Query(None, description="Filtrar por slug de categoría (resuelve UUID internamente)"),
-    species: str | None = Query(None, description="Filtrar por especie: perro, gato (incluye mixto automáticamente)"),
+    category_slug: str | None = Query(
+        None, description="Filtrar por slug de categoría (resuelve UUID internamente)"
+    ),
+    species: str | None = Query(
+        None, description="Filtrar por especie: perro, gato (incluye mixto automáticamente)"
+    ),
     supplier_id: uuid.UUID | None = Query(None, description="Filtrar por proveedor asociado"),
     without_supplier: bool = Query(False, description="Solo productos sin proveedor"),
     is_published: bool | None = None,
@@ -130,7 +137,6 @@ async def list_products(
 
     if q:
         # Multi-token AND: each word must appear in name or sku (order-independent)
-        from sqlalchemy import and_
         tokens = q.split()
         for token in tokens:
             like = f"%{token}%"
@@ -144,11 +150,13 @@ async def list_products(
         stmt = stmt.where(Product.category_id == category_id)
         count_stmt = count_stmt.where(Product.category_id == category_id)
     if category_slug:
-        cat = (await db.execute(
-            select(Category)
-            .where(func.lower(Category.slug) == category_slug.lower())
-            .where(Category.deleted_at.is_(None))
-        )).scalar_one_or_none()
+        cat = (
+            await db.execute(
+                select(Category)
+                .where(func.lower(Category.slug) == category_slug.lower())
+                .where(Category.deleted_at.is_(None))
+            )
+        ).scalar_one_or_none()
         if cat:
             stmt = stmt.where(Product.category_id == cat.id)
             count_stmt = count_stmt.where(Product.category_id == cat.id)
@@ -184,11 +192,13 @@ async def list_products(
     product_ids = [r.id for r in rows]
     stock_map: dict = {}
     if product_ids:
-        stock_rows = (await db.execute(
-            select(Stock.product_id, func.sum(Stock.quantity).label("qty"))
-            .where(Stock.product_id.in_(product_ids))
-            .group_by(Stock.product_id)
-        )).all()
+        stock_rows = (
+            await db.execute(
+                select(Stock.product_id, func.sum(Stock.quantity).label("qty"))
+                .where(Stock.product_id.in_(product_ids))
+                .group_by(Stock.product_id)
+            )
+        ).all()
         stock_map = {r.product_id: int(r.qty or 0) for r in stock_rows}
 
     supplier_map = await _supplier_map(db, product_ids)
@@ -231,7 +241,7 @@ async def catalog_products(
     page_size: int = Query(40, ge=1, le=100),
 ):
     """Advanced catalog endpoint with facet filtering and counts."""
-    from sqlalchemy import cast, String, text as sql_text
+    from sqlalchemy import text as sql_text
 
     stmt = select(Product).where(
         Product.is_published == True,  # noqa: E712
@@ -239,9 +249,11 @@ async def catalog_products(
     )
 
     if category_slug:
-        cat = (await db.execute(
-            select(Category).where(func.lower(Category.slug) == category_slug.lower())
-        )).scalar_one_or_none()
+        cat = (
+            await db.execute(
+                select(Category).where(func.lower(Category.slug) == category_slug.lower())
+            )
+        ).scalar_one_or_none()
         if cat:
             stmt = stmt.where(Product.category_id == cat.id)
 
@@ -258,10 +270,12 @@ async def catalog_products(
         stmt = stmt.where(Product.brand_normalized.in_(brands_list))
 
     if pet_type:
-        stmt = stmt.where(or_(
-            Product.pet_type == pet_type,
-            Product.pet_type == "both",
-        ))
+        stmt = stmt.where(
+            or_(
+                Product.pet_type == pet_type,
+                Product.pet_type == "both",
+            )
+        )
 
     if price_min is not None:
         stmt = stmt.where(Product.price >= price_min)
@@ -271,9 +285,7 @@ async def catalog_products(
     if health_concerns:
         concerns = [c.strip() for c in health_concerns.split(",")]
         stmt = stmt.where(
-            sql_text("health_concerns && ARRAY[:concerns]::text[]").bindparams(
-                concerns=concerns
-            )
+            sql_text("health_concerns && ARRAY[:concerns]::text[]").bindparams(concerns=concerns)
         )
 
     if sort == "price_asc":
@@ -294,11 +306,13 @@ async def catalog_products(
     product_ids = [r.id for r in rows]
     stock_map: dict = {}
     if product_ids:
-        stock_rows = (await db.execute(
-            select(Stock.product_id, func.sum(Stock.quantity).label("qty"))
-            .where(Stock.product_id.in_(product_ids))
-            .group_by(Stock.product_id)
-        )).all()
+        stock_rows = (
+            await db.execute(
+                select(Stock.product_id, func.sum(Stock.quantity).label("qty"))
+                .where(Stock.product_id.in_(product_ids))
+                .group_by(Stock.product_id)
+            )
+        ).all()
         stock_map = {r.product_id: int(r.qty or 0) for r in stock_rows}
 
     items = []
@@ -358,9 +372,9 @@ async def get_product(product_id: uuid.UUID, db: DBSession):
     if p is None or p.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     p_out = ProductOut.model_validate(p)
-    stock_rows = (await db.execute(
-        select(func.sum(Stock.quantity)).where(Stock.product_id == p.id)
-    )).scalar_one()
+    stock_rows = (
+        await db.execute(select(func.sum(Stock.quantity)).where(Stock.product_id == p.id))
+    ).scalar_one()
     p_out.stock_qty = int(stock_rows or 0)
     p_out.in_stock = p_out.stock_qty > 0
     supplier_map = await _supplier_map(db, [p.id])
@@ -373,27 +387,27 @@ async def get_product(product_id: uuid.UUID, db: DBSession):
 
 @router.get("/by-slug/{slug}", response_model=ProductOut)
 async def get_product_by_slug(slug: str, db: DBSession):
-    p = (
-        await db.execute(select(Product).where(Product.slug == slug))
-    ).scalar_one_or_none()
+    p = (await db.execute(select(Product).where(Product.slug == slug))).scalar_one_or_none()
     if p is None or p.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     p_out = ProductOut.model_validate(p)
-    stock_total = (await db.execute(
-        select(func.sum(Stock.quantity)).where(Stock.product_id == p.id)
-    )).scalar_one()
+    stock_total = (
+        await db.execute(select(func.sum(Stock.quantity)).where(Stock.product_id == p.id))
+    ).scalar_one()
     p_out.stock_qty = int(stock_total or 0)
     p_out.in_stock = p_out.stock_qty > 0
 
     # Reseñas recientes aprobadas para JSON-LD (max 5)
-    review_rows = (await db.execute(
-        select(ProductReview, Customer.full_name)
-        .join(Customer, Customer.id == ProductReview.customer_id, isouter=True)
-        .where(ProductReview.product_id == p.id)
-        .where(ProductReview.status == "approved")
-        .order_by(ProductReview.created_at.desc())
-        .limit(5)
-    )).all()
+    review_rows = (
+        await db.execute(
+            select(ProductReview, Customer.full_name)
+            .join(Customer, Customer.id == ProductReview.customer_id, isouter=True)
+            .where(ProductReview.product_id == p.id)
+            .where(ProductReview.status == "approved")
+            .order_by(ProductReview.created_at.desc())
+            .limit(5)
+        )
+    ).all()
     p_out.recent_reviews = [
         RecentReviewOut(
             id=rev.id,
@@ -417,9 +431,11 @@ async def related_products(
     limit: int = Query(4, ge=1, le=12),
 ):
     """Productos relacionados (misma categoría, sin el propio producto)."""
-    product = (await db.execute(
-        select(Product).where(Product.id == product_id).where(Product.deleted_at.is_(None))
-    )).scalar_one_or_none()
+    product = (
+        await db.execute(
+            select(Product).where(Product.id == product_id).where(Product.deleted_at.is_(None))
+        )
+    ).scalar_one_or_none()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
 
@@ -437,11 +453,13 @@ async def related_products(
     product_ids = [r.id for r in rows]
     stock_map: dict = {}
     if product_ids:
-        stock_rows = (await db.execute(
-            select(Stock.product_id, func.sum(Stock.quantity).label("qty"))
-            .where(Stock.product_id.in_(product_ids))
-            .group_by(Stock.product_id)
-        )).all()
+        stock_rows = (
+            await db.execute(
+                select(Stock.product_id, func.sum(Stock.quantity).label("qty"))
+                .where(Stock.product_id.in_(product_ids))
+                .group_by(Stock.product_id)
+            )
+        ).all()
         stock_map = {r.product_id: int(r.qty or 0) for r in stock_rows}
 
     items = []
@@ -495,7 +513,9 @@ async def update_product(product_id: uuid.UUID, payload: ProductUpdate, db: DBSe
     # Auto-sync brand_normalized cuando cambia la marca
     if "brand_id" in data:
         if data["brand_id"]:
-            brand_obj = (await db.execute(select(Brand).where(Brand.id == data["brand_id"]))).scalar_one_or_none()
+            brand_obj = (
+                await db.execute(select(Brand).where(Brand.id == data["brand_id"]))
+            ).scalar_one_or_none()
             if brand_obj and not data.get("brand_normalized"):
                 p.brand_normalized = brand_obj.slug.replace("-", "_")
         elif "brand_normalized" not in data:
@@ -515,23 +535,23 @@ async def update_product(product_id: uuid.UUID, payload: ProductUpdate, db: DBSe
 # ─── Admin: Export / Import filtros de catálogo ──────────────────────────────
 
 _FILTER_COLS = [
-    ("sku",              "SKU",                  True),
-    ("nombre",           "Nombre",               True),
-    ("categoria",        "Categoría",            True),
-    ("marca_display",    "Marca (actual)",        True),
-    ("precio",           "Precio",               True),
-    ("publicado",        "Publicado",            True),
-    ("marca_normalizada","Marca normalizada",     False),
-    ("tipo_mascota",     "Tipo de mascota",       False),
-    ("etapa_vida",       "Etapa de vida",         False),
-    ("tamaño_raza",      "Tamaño de raza",        False),
-    ("problemas_salud",  "Problemas de salud",    False),
+    ("sku", "SKU", True),
+    ("nombre", "Nombre", True),
+    ("categoria", "Categoría", True),
+    ("marca_display", "Marca (actual)", True),
+    ("precio", "Precio", True),
+    ("publicado", "Publicado", True),
+    ("marca_normalizada", "Marca normalizada", False),
+    ("tipo_mascota", "Tipo de mascota", False),
+    ("etapa_vida", "Etapa de vida", False),
+    ("tamaño_raza", "Tamaño de raza", False),
+    ("problemas_salud", "Problemas de salud", False),
 ]
 
 _DROPDOWNS = {
-    "tipo_mascota":  '"dog,cat,both,small_pet"',
-    "etapa_vida":    '"puppy,adult,senior,all"',
-    "tamaño_raza":   '"mini,small,medium,large,giant,all"',
+    "tipo_mascota": '"dog,cat,both,small_pet"',
+    "etapa_vida": '"puppy,adult,senior,all"',
+    "tamaño_raza": '"mini,small,medium,large,giant,all"',
 }
 
 
@@ -542,21 +562,23 @@ async def export_products_xlsx(db: DBSession):
     from openpyxl.worksheet.datavalidation import DataValidation
 
     rows = (
-        await db.execute(
-            select(Product)
-            .where(Product.deleted_at.is_(None))
-            .order_by(Product.name)
+        (
+            await db.execute(
+                select(Product).where(Product.deleted_at.is_(None)).order_by(Product.name)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Productos"
 
-    hdr_fill  = PatternFill(start_color="1B5E20", fill_type="solid")
+    hdr_fill = PatternFill(start_color="1B5E20", fill_type="solid")
     lock_fill = PatternFill(start_color="E8E8E8", fill_type="solid")
     edit_fill = PatternFill(start_color="FFFDE7", fill_type="solid")
-    hdr_font  = Font(bold=True, color="FFFFFF")
+    hdr_font = Font(bold=True, color="FFFFFF")
 
     # Encabezados
     for col_i, (_, label, _locked) in enumerate(_FILTER_COLS, 1):
@@ -568,8 +590,8 @@ async def export_products_xlsx(db: DBSession):
     # Datos
     for row_i, p in enumerate(rows, 2):
         brand_name = p.brand.name if p.brand else ""
-        cat_name   = p.category.name if p.category else ""
-        hc_str     = ", ".join(p.health_concerns) if p.health_concerns else ""
+        cat_name = p.category.name if p.category else ""
+        hc_str = ", ".join(p.health_concerns) if p.health_concerns else ""
 
         values = [
             p.sku,
@@ -584,7 +606,9 @@ async def export_products_xlsx(db: DBSession):
             p.size_range or "",
             hc_str,
         ]
-        for col_i, (val, (_key, _label, locked)) in enumerate(zip(values, _FILTER_COLS), 1):
+        for col_i, (val, (_key, _label, locked)) in enumerate(
+            zip(values, _FILTER_COLS, strict=False), 1
+        ):
             cell = ws.cell(row=row_i, column=col_i, value=val)
             cell.fill = lock_fill if locked else edit_fill
             cell.alignment = Alignment(vertical="center")
@@ -627,8 +651,8 @@ async def import_products_xlsx(file: UploadFile = File(...), db: DBSession = ...
     data = await file.read()
     try:
         wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Archivo Excel inválido o dañado")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Archivo Excel inválido o dañado") from exc
 
     ws = wb.active
     updated = skipped = errors = 0
@@ -639,14 +663,13 @@ async def import_products_xlsx(file: UploadFile = File(...), db: DBSession = ...
             continue
         sku = str(row[0]).strip()
         brand_normalized = str(row[6]).strip() if row[6] is not None else None
-        pet_type         = str(row[7]).strip() if row[7] is not None else None
-        life_stage       = str(row[8]).strip() if row[8] is not None else None
-        size_range       = str(row[9]).strip() if row[9] is not None else None
-        health_raw       = str(row[10]).strip() if row[10] is not None else None
+        pet_type = str(row[7]).strip() if row[7] is not None else None
+        life_stage = str(row[8]).strip() if row[8] is not None else None
+        size_range = str(row[9]).strip() if row[9] is not None else None
+        health_raw = str(row[10]).strip() if row[10] is not None else None
 
         health_concerns = (
-            [x.strip() for x in health_raw.split(",") if x.strip()]
-            if health_raw else None
+            [x.strip() for x in health_raw.split(",") if x.strip()] if health_raw else None
         ) or None
 
         try:
@@ -684,8 +707,10 @@ async def import_products_xlsx(file: UploadFile = File(...), db: DBSession = ...
 @brands_router.get("", response_model=list[BrandOut])
 async def list_brands(db: DBSession):
     rows = (
-        await db.execute(select(Brand).where(Brand.deleted_at.is_(None)).order_by(Brand.name))
-    ).scalars().all()
+        (await db.execute(select(Brand).where(Brand.deleted_at.is_(None)).order_by(Brand.name)))
+        .scalars()
+        .all()
+    )
     return rows
 
 
@@ -693,10 +718,14 @@ async def list_brands(db: DBSession):
 @categories_router.get("", response_model=list[CategoryOut])
 async def list_categories(db: DBSession):
     rows = (
-        await db.execute(
-            select(Category)
-            .where(Category.deleted_at.is_(None))
-            .order_by(Category.sort_order, Category.name)
+        (
+            await db.execute(
+                select(Category)
+                .where(Category.deleted_at.is_(None))
+                .order_by(Category.sort_order, Category.name)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return rows

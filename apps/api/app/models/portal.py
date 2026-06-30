@@ -1,18 +1,30 @@
 """Modelos del schema `portal` — App de Fidelización de Clientes."""
+
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING, ClassVar
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, Date, DateTime, ForeignKey,
-    Integer, Numeric, String, Text,
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.common import Base, TimestampMixin, UUIDPKMixin
+
+if TYPE_CHECKING:
+    from app.models.crm import Customer
 
 
 class Pet(UUIDPKMixin, TimestampMixin, Base):
@@ -45,10 +57,10 @@ class Pet(UUIDPKMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True, default=None, index=True
     )
 
-    health_records: Mapped[list["HealthRecord"]] = relationship(
+    health_records: Mapped[list[HealthRecord]] = relationship(
         "HealthRecord", back_populates="pet", cascade="all, delete-orphan", lazy="selectin"
     )
-    appointments: Mapped[list["Appointment"]] = relationship(
+    appointments: Mapped[list[Appointment]] = relationship(
         "Appointment", back_populates="pet", cascade="all, delete-orphan"
     )
 
@@ -73,7 +85,7 @@ class HealthRecord(UUIDPKMixin, Base):
     vet_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    pet: Mapped["Pet"] = relationship("Pet", back_populates="health_records")
+    pet: Mapped[Pet] = relationship("Pet", back_populates="health_records")
 
 
 class Appointment(UUIDPKMixin, TimestampMixin, Base):
@@ -111,7 +123,7 @@ class Appointment(UUIDPKMixin, TimestampMixin, Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    pet: Mapped["Pet"] = relationship("Pet", back_populates="appointments")
+    pet: Mapped[Pet] = relationship("Pet", back_populates="appointments")
 
 
 class PortalOrder(UUIDPKMixin, TimestampMixin, Base):
@@ -158,14 +170,24 @@ class PortalOrder(UUIDPKMixin, TimestampMixin, Base):
     payment_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     shipping_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     # sprint-2 workflow
-    workflow_status: Mapped[str] = mapped_column(String(40), nullable=False, default="received", index=True)
+    workflow_status: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="received", index=True
+    )
     internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     customer_facing_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    last_status_change_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_status_changed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
-    customer_confirmed_changes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_status_change_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_status_changed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    customer_confirmed_changes_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     customer_confirmation_channel: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    discount_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0"))
+    discount_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0")
+    )
     discount_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     total_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
 
@@ -217,7 +239,9 @@ class ActivityLog(Base):
     changes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     visible_to_customer: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    notification_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notification_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     notification_channel: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default="now()", nullable=False
@@ -271,9 +295,7 @@ class LoyaltyPoint(UUIDPKMixin, Base):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
-    redeemed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    redeemed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class PortalNotification(UUIDPKMixin, Base):
@@ -325,20 +347,16 @@ class PendingNotification(UUIDPKMixin, Base):
     template_code: Mapped[str] = mapped_column(String(80), nullable=False)
     rendered_message: Mapped[str] = mapped_column(Text, nullable=False)
     whatsapp_link: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="pending", index=True
-    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     sent_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
 
 class PortalReferral(Base):
     __tablename__ = "referrals"
-    __table_args__ = {"schema": "portal"}
+    __table_args__: ClassVar[dict] = {"schema": "portal"}
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     referrer_customer_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("crm.customers.id", ondelete="CASCADE"),
@@ -358,13 +376,11 @@ class PortalReferral(Base):
     first_purchase_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    reward_paid_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    reward_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    referrer: Mapped["Customer"] = relationship(  # type: ignore[name-defined]
+    referrer: Mapped[Customer] = relationship(  # type: ignore[name-defined]
         "Customer", foreign_keys=[referrer_customer_id]
     )
-    referred: Mapped["Customer"] = relationship(  # type: ignore[name-defined]
+    referred: Mapped[Customer] = relationship(  # type: ignore[name-defined]
         "Customer", foreign_keys=[referred_customer_id]
     )

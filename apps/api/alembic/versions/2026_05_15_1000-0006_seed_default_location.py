@@ -7,6 +7,7 @@ Revision ID: 0006
 Revises: 0005
 Create Date: 2026-05-15 10:00:00.000000
 """
+
 from __future__ import annotations
 
 import uuid
@@ -50,6 +51,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        sa.text("UPDATE inventory.stock_locations SET is_default = 0 WHERE is_default = 1")
-    )
+    op.execute(sa.text("UPDATE inventory.stock_locations SET is_default = 0 WHERE is_default = 1"))

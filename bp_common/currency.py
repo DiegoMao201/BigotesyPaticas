@@ -1,4 +1,5 @@
 """Currency parsing — equivalente exacto a `clean_currency` en BigotesyPaticas.py."""
+
 from __future__ import annotations
 
 import re
@@ -6,6 +7,7 @@ from typing import Any
 
 try:  # opcional, sólo si pandas/numpy están disponibles
     import numpy as np  # type: ignore
+
     _NP_INT = (np.integer,)
     _NP_FLOAT = (np.floating,)
 except Exception:  # pragma: no cover
@@ -29,9 +31,9 @@ def clean_currency(val: Any) -> int:
     """
     if isinstance(val, bool):  # bool es subclass de int — descartar
         return int(val)
-    if isinstance(val, _NP_INT) or isinstance(val, int):
+    if isinstance(val, (*_NP_INT, int)):
         return int(val)
-    if isinstance(val, _NP_FLOAT) or isinstance(val, float):
+    if isinstance(val, (*_NP_FLOAT, float)):
         return int(round(float(val)))
 
     s = str(val or "").strip().replace("$", "").replace(" ", "")

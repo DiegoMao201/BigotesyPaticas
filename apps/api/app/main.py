@@ -1,4 +1,5 @@
 """Bigotes y Paticas API — entrypoint FastAPI."""
+
 from __future__ import annotations
 
 import os

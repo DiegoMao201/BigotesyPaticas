@@ -4,17 +4,16 @@ Acepta archivo .xml plano (Invoice) o AttachedDocument con CDATA.
 Devuelve estructura normalizada lista para revisión + auto-match con productos
 internos via memoria SupplierSkuMap + fuzzy match.
 """
+
 from __future__ import annotations
 
 import re
 import unicodedata
 import uuid
 import xml.etree.ElementTree as ET
-from datetime import datetime
 from difflib import SequenceMatcher
-from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -32,6 +31,7 @@ NS = {
 
 # ─── Schemas ────────────────────────────────────────────────────────
 
+
 class ParsedItem(BaseModel):
     sku_proveedor: str
     descripcion: str
@@ -44,7 +44,9 @@ class ParsedItem(BaseModel):
     suggested_product_id: str | None = None
     suggested_product_name: str | None = None
     suggested_product_sku: str | None = None
-    match_reason: str | None = None  # "memoria_proveedor", "sku_exacto", "nombre_exacto", "fuzzy_85"
+    match_reason: str | None = (
+        None  # "memoria_proveedor", "sku_exacto", "nombre_exacto", "fuzzy_85"
+    )
     match_score: float = 0
 
 
@@ -69,6 +71,7 @@ class ParsedInvoice(BaseModel):
 
 
 # ─── Helpers ────────────────────────────────────────────────────────
+
 
 def _txt(node, default=""):
     return node.text.strip() if node is not None and node.text else default
@@ -96,7 +99,7 @@ def _extract_invoice_root(content: bytes) -> ET.Element:
     try:
         root = ET.fromstring(content)
     except ET.ParseError as e:
-        raise HTTPException(400, f"XML inválido: {e}")
+        raise HTTPException(400, f"XML inválido: {e}") from e
 
     if root.tag.endswith("AttachedDocument"):
         # Buscar el CDATA con el Invoice anidado
@@ -107,7 +110,7 @@ def _extract_invoice_root(content: bytes) -> ET.Element:
             inner = ET.fromstring(desc.text.encode())
             return inner
         except ET.ParseError as e:
-            raise HTTPException(400, f"Invoice anidado inválido: {e}")
+            raise HTTPException(400, f"Invoice anidado inválido: {e}") from e
     return root
 
 
@@ -144,16 +147,21 @@ def _resolver_costo_unitario(qty, price_amount, base_qty, line_extension, discou
             return pa
 
     # PriceAmount representa total de línea: pa ~= total
-    if pa > 0 and line_before_discount > 0:
-        if abs(pa - line_before_discount) <= max(1.0, line_before_discount * 0.03):
-            return pa / qty
+    if (
+        pa > 0
+        and line_before_discount > 0
+        and abs(pa - line_before_discount) <= max(1.0, line_before_discount * 0.03)
+    ):
+        return pa / qty
 
     # PriceAmount por base_qty unidades (cuando BaseQuantity viene en el XML)
     if pa > 0 and base_qty > 0:
         est_unit = pa / base_qty
         if line_before_discount > 0:
             est_total_from_base = est_unit * qty
-            if abs(est_total_from_base - line_before_discount) <= max(1.0, line_before_discount * 0.03):
+            if abs(est_total_from_base - line_before_discount) <= max(
+                1.0, line_before_discount * 0.03
+            ):
                 return est_unit
         # Fallback conservador: preferir PriceAmount como unitario si no hay señal clara.
         if base_qty == 1:
@@ -211,15 +219,17 @@ def _parse_items(root: ET.Element) -> list[dict]:
             descuento_total,
         )
 
-        items.append({
-            "sku_proveedor": sku_prov,
-            "descripcion": desc,
-            "cantidad": qty,
-            "costo_base_unitario": round(costo_unit, 2),
-            "iva_pct": iva_pct,
-            "descuento": round(descuento_total, 2),
-            "total_linea": round(line_ext, 2),
-        })
+        items.append(
+            {
+                "sku_proveedor": sku_prov,
+                "descripcion": desc,
+                "cantidad": qty,
+                "costo_base_unitario": round(costo_unit, 2),
+                "iva_pct": iva_pct,
+                "descuento": round(descuento_total, 2),
+                "total_linea": round(line_ext, 2),
+            }
+        )
     return items
 
 
@@ -243,11 +253,16 @@ async def _suggest_match(
 
     # 1) Memoria proveedor
     if supplier_id_db and sku_prov:
-        row = (await db.execute(
-            select(SupplierSkuMap, Product)
-            .join(Product, Product.id == SupplierSkuMap.product_id)
-            .where(SupplierSkuMap.supplier_id == supplier_id_db, SupplierSkuMap.sku_proveedor == sku_prov)
-        )).first()
+        row = (
+            await db.execute(
+                select(SupplierSkuMap, Product)
+                .join(Product, Product.id == SupplierSkuMap.product_id)
+                .where(
+                    SupplierSkuMap.supplier_id == supplier_id_db,
+                    SupplierSkuMap.sku_proveedor == sku_prov,
+                )
+            )
+        ).first()
         if row:
             mp, prod = row
             return {
@@ -308,6 +323,7 @@ async def _suggest_match(
 
 
 # ─── Endpoints ──────────────────────────────────────────────────────
+
 
 @router.post(
     "/parse",

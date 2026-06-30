@@ -9,20 +9,18 @@ Uso:
   docker exec <api> python3 scripts/generate_story.py --template producto_destacado_dia
   docker exec <api> python3 scripts/generate_story.py --scheduled "2026-06-30 10:00:00"
 """
+
 from __future__ import annotations
 
 import argparse
 import asyncio
 import io
-import json
 import logging
 import os
 import random
-import shutil
 import subprocess
 import sys
 import tempfile
-import time
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -45,14 +43,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 _BOGOTA = ZoneInfo("America/Bogota")
 
-CDN_BUCKET   = os.environ.get("S3_BUCKET", "catalogo-ferreinox")
+CDN_BUCKET = os.environ.get("S3_BUCKET", "catalogo-ferreinox")
 CDN_ENDPOINT = os.environ.get("S3_ENDPOINT_URL", "https://nyc3.digitaloceanspaces.com")
-CDN_REGION   = os.environ.get("S3_REGION", "nyc3")
-CDN_BASE     = os.environ.get("S3_PUBLIC_URL", "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com")
-OPENAI_KEY   = os.environ.get("OPENAI_API_KEY", "")
-DB_URL       = os.environ.get("DATABASE_URL_SYNC", "").replace(
-    "postgresql+asyncpg://", "postgresql://"
-).replace("postgresql+psycopg://", "postgresql://")
+CDN_REGION = os.environ.get("S3_REGION", "nyc3")
+CDN_BASE = os.environ.get(
+    "S3_PUBLIC_URL", "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com"
+)
+OPENAI_KEY = os.environ.get("OPENAI_API_KEY", "")
+DB_URL = (
+    os.environ.get("DATABASE_URL_SYNC", "")
+    .replace("postgresql+asyncpg://", "postgresql://")
+    .replace("postgresql+psycopg://", "postgresql://")
+)
 
 AUDIO_CDN_BASE = f"{CDN_BASE}/bigotesypaticas/audio"
 STORY_DURATION = 7  # segundos del video final
@@ -67,16 +69,30 @@ _TIPS = [
     "Los gatos necesitan al menos 12 horas de sueño — un ambiente tranquilo es esencial para su salud.",
 ]
 _STATS = [
-    {"number": "38%", "context": "de los perros en Colombia presentan sobrepeso según estudios nutricionales"},
-    {"number": "72h", "context": "es el tiempo máximo sin agua que tolera un gato antes de sufrir daño renal"},
-    {"number": "80%", "context": "de perros mayores de 3 años tienen algún grado de enfermedad periodontal"},
-    {"number": "1 de 4", "context": "gatos domésticos en Colombia desarrolla cálculos urinarios por dieta seca"},
+    {
+        "number": "38%",
+        "context": "de los perros en Colombia presentan sobrepeso según estudios nutricionales",
+    },
+    {
+        "number": "72h",
+        "context": "es el tiempo máximo sin agua que tolera un gato antes de sufrir daño renal",
+    },
+    {
+        "number": "80%",
+        "context": "de perros mayores de 3 años tienen algún grado de enfermedad periodontal",
+    },
+    {
+        "number": "1 de 4",
+        "context": "gatos domésticos en Colombia desarrolla cálculos urinarios por dieta seca",
+    },
 ]
 
 
 def s3_client():
     return boto3.client(
-        "s3", region_name=CDN_REGION, endpoint_url=CDN_ENDPOINT,
+        "s3",
+        region_name=CDN_REGION,
+        endpoint_url=CDN_ENDPOINT,
         aws_access_key_id=os.environ.get("S3_ACCESS_KEY", ""),
         aws_secret_access_key=os.environ.get("S3_SECRET_KEY", ""),
         config=Config(signature_version="s3v4"),
@@ -86,15 +102,17 @@ def s3_client():
 def generate_image_gpt(prompt: str, tmp_dir: Path) -> Path:
     """Genera imagen 1024x1792 (9:16) con GPT-image-1."""
     import openai
+
     client = openai.OpenAI(api_key=OPENAI_KEY)
     resp = client.images.generate(
         model="gpt-image-1",
         prompt=prompt,
-        size="1024x1792",
+        size="1024x1536",  # closest 9:16 soportado; ffmpeg escala a 1080x1920
         quality="medium",
         n=1,
     )
     import base64
+
     img_b64 = resp.data[0].b64_json
     img_bytes = base64.b64decode(img_b64)
     out = tmp_dir / "base_image.png"
@@ -139,10 +157,23 @@ def download_audio(genre: str, tmp_dir: Path) -> Path:
         # Generar 7s de silencio con ffmpeg
         silence = tmp_dir / "silence.mp3"
         subprocess.run(
-            ["ffmpeg", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-             "-t", str(STORY_DURATION), "-q:a", "9", "-acodec", "libmp3lame",
-             str(silence), "-y"],
-            check=True, capture_output=True
+            [
+                "ffmpeg",
+                "-f",
+                "lavfi",
+                "-i",
+                "anullsrc=r=44100:cl=stereo",
+                "-t",
+                str(STORY_DURATION),
+                "-q:a",
+                "9",
+                "-acodec",
+                "libmp3lame",
+                str(silence),
+                "-y",
+            ],
+            check=True,
+            capture_output=True,
         )
         return silence
 
@@ -151,15 +182,32 @@ def image_to_video(img_path: Path, audio_path: Path, duration: int, tmp_dir: Pat
     """Convierte imagen + audio a MP4 H.264 9:16 con ffmpeg."""
     out = tmp_dir / "story.mp4"
     cmd = [
-        "ffmpeg", "-y",
-        "-loop", "1", "-i", str(img_path),
-        "-i", str(audio_path),
-        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-        "-c:a", "aac", "-b:a", "128k",
-        "-t", str(duration),
-        "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2",
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
+        "ffmpeg",
+        "-y",
+        "-loop",
+        "1",
+        "-i",
+        str(img_path),
+        "-i",
+        str(audio_path),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "23",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-t",
+        str(duration),
+        "-vf",
+        "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
         str(out),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -171,9 +219,14 @@ def image_to_video(img_path: Path, audio_path: Path, duration: int, tmp_dir: Pat
 def upload_video(s3, video_path: Path, story_id: str) -> str:
     cdn_key = f"bigotesypaticas/stories/{story_id}.mp4"
     s3.upload_file(
-        str(video_path), CDN_BUCKET, cdn_key,
-        ExtraArgs={"ACL": "public-read", "ContentType": "video/mp4",
-                   "CacheControl": "public, max-age=86400"},
+        str(video_path),
+        CDN_BUCKET,
+        cdn_key,
+        ExtraArgs={
+            "ACL": "public-read",
+            "ContentType": "video/mp4",
+            "CacheControl": "public, max-age=86400",
+        },
     )
     return f"{CDN_BASE}/{cdn_key}"
 
@@ -195,9 +248,15 @@ def build_context(template: dict, conn) -> dict:
         """)
         row = cur.fetchone()
         if row:
-            ctx.update({"product_id": row[0], "product_name": row[1],
-                        "product_slug": row[2], "product_price": float(row[3] or 0),
-                        "product_image_url": row[4]})
+            ctx.update(
+                {
+                    "product_id": row[0],
+                    "product_name": row[1],
+                    "product_slug": row[2],
+                    "product_price": float(row[3] or 0),
+                    "product_image_url": row[4],
+                }
+            )
 
     if template["requires_real_review"]:
         cur.execute("""
@@ -210,7 +269,9 @@ def build_context(template: dict, conn) -> dict:
         """)
         row = cur.fetchone()
         if row:
-            ctx.update({"review_text": row[0][:120], "customer_name": (row[1] or "Cliente").split()[0]})
+            ctx.update(
+                {"review_text": row[0][:120], "customer_name": (row[1] or "Cliente").split()[0]}
+            )
 
     # Templates educativos
     if template["category"] == "educational":
@@ -234,12 +295,14 @@ async def generate_story(template_code: str, scheduled_at: str, conn, s3) -> str
     cur = conn.cursor()
 
     # Obtener template
-    cur.execute("SELECT * FROM content.story_templates WHERE code=%s AND active=true", (template_code,))
+    cur.execute(
+        "SELECT * FROM content.story_templates WHERE code=%s AND active=true", (template_code,)
+    )
     cols = [d[0] for d in cur.description]
     row = cur.fetchone()
     if not row:
         raise ValueError(f"Template no encontrado: {template_code}")
-    template = dict(zip(cols, row))
+    template = dict(zip(cols, row, strict=False))
 
     log.info("Generando story: %s → %s", template_code, scheduled_at)
     ctx = build_context(template, conn)
@@ -259,10 +322,11 @@ async def generate_story(template_code: str, scheduled_at: str, conn, s3) -> str
         else:
             # flux via Replicate
             import replicate
-            rc = replicate.Client(api_token=os.environ.get("REPLICATE_API_TOKEN",""))
+
+            rc = replicate.Client(api_token=os.environ.get("REPLICATE_API_TOKEN", ""))
             output = rc.run(
                 "black-forest-labs/flux-1.1-pro",
-                input={"prompt": prompt, "width": 1024, "height": 1792, "output_format": "png"}
+                input={"prompt": prompt, "width": 1024, "height": 1792, "output_format": "png"},
             )
             img_url = str(output) if not isinstance(output, list) else str(output[0])
             r = requests.get(img_url, timeout=60)
@@ -272,8 +336,12 @@ async def generate_story(template_code: str, scheduled_at: str, conn, s3) -> str
 
         # Subir imagen base al CDN
         base_key = f"bigotesypaticas/stories/base/{story_id}.png"
-        s3.upload_file(str(img_path), CDN_BUCKET, base_key,
-                       ExtraArgs={"ACL": "public-read", "ContentType": "image/png"})
+        s3.upload_file(
+            str(img_path),
+            CDN_BUCKET,
+            base_key,
+            ExtraArgs={"ACL": "public-read", "ContentType": "image/png"},
+        )
         base_image_url = f"{CDN_BASE}/{base_key}"
 
         # 2. Composite producto si aplica
@@ -310,7 +378,8 @@ async def generate_story(template_code: str, scheduled_at: str, conn, s3) -> str
 
     # 8. Insertar en DB
     product_id = ctx.get("product_id")
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO content.story_posts
           (id, template_code, creation_mode, media_type, video_url,
            video_duration_sec, video_size_bytes, video_resolution, video_has_audio,
@@ -325,13 +394,23 @@ async def generate_story(template_code: str, scheduled_at: str, conn, s3) -> str
            %s, %s, %s::uuid,
            'pending_approval', false, %s, %s::timestamp + INTERVAL '24 hours',
            NOW(), NOW())
-    """, (
-        story_id, template_code, video_url,
-        duration, video_size, "1080x1920",
-        base_image_url, model, cost,
-        caption, swipe_up, product_id,
-        scheduled_at, scheduled_at,
-    ))
+    """,
+        (
+            story_id,
+            template_code,
+            video_url,
+            duration,
+            video_size,
+            base_image_url,
+            model,
+            cost,
+            caption,
+            swipe_up,
+            product_id,
+            scheduled_at,
+            scheduled_at,
+        ),
+    )
     conn.commit()
 
     log.info("✓ Story creada: %s | video: %s | costo: $%.3f", story_id[:8], video_url[-40:], cost)
@@ -346,12 +425,14 @@ def main():
     args = parser.parse_args()
 
     if not DB_URL:
-        print("❌ DATABASE_URL_SYNC no configurada"); sys.exit(1)
+        print("❌ DATABASE_URL_SYNC no configurada")
+        sys.exit(1)
     if not OPENAI_KEY:
-        print("❌ OPENAI_API_KEY no configurada"); sys.exit(1)
+        print("❌ OPENAI_API_KEY no configurada")
+        sys.exit(1)
 
     conn = psycopg2.connect(DB_URL, connect_timeout=10)
-    s3   = s3_client()
+    s3 = s3_client()
 
     # Calcular scheduled_at si no se dio
     if args.scheduled:
@@ -368,10 +449,12 @@ def main():
                 break
         if not scheduled_at:
             tomorrow = now + timedelta(days=1)
-            scheduled_at = tomorrow.replace(hour=10, minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+            scheduled_at = tomorrow.replace(hour=10, minute=0, second=0, microsecond=0).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
 
     for i in range(args.count):
-        log.info("Generando story %d/%d...", i+1, args.count)
+        log.info("Generando story %d/%d...", i + 1, args.count)
         story_id = asyncio.run(generate_story(args.template, scheduled_at, conn, s3))
         print(f"✅ Story {i+1}: {story_id}")
 
@@ -386,7 +469,9 @@ def main():
                     next_slot = candidate
                     break
             if not next_slot:
-                next_slot = (dt + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+                next_slot = (dt + timedelta(days=1)).replace(
+                    hour=10, minute=0, second=0, microsecond=0
+                )
             scheduled_at = next_slot.strftime("%Y-%m-%d %H:%M:%S")
 
     conn.close()

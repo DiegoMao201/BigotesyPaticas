@@ -1,4 +1,5 @@
 """Endpoints CRUD reales de proveedores (purchasing.suppliers)."""
+
 from __future__ import annotations
 
 import uuid
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
 
 # ─── Schemas ────────────────────────────────────────────────────────
+
 
 class SupplierIn(BaseModel):
     nit: str = Field(min_length=1, max_length=40)
@@ -65,6 +67,7 @@ class SupplierOut(BaseModel):
 
 # ─── Endpoints ──────────────────────────────────────────────────────
 
+
 @router.get("")
 async def list_suppliers(
     db: DBSession,
@@ -92,11 +95,13 @@ async def list_suppliers(
 
     # Conteo de SKUs por supplier
     sku_counts = dict(
-        (await db.execute(
-            select(SupplierSkuMap.supplier_id, func.count())
-            .where(SupplierSkuMap.supplier_id.in_([r.id for r in rows] or [uuid.uuid4()]))
-            .group_by(SupplierSkuMap.supplier_id)
-        )).all()
+        (
+            await db.execute(
+                select(SupplierSkuMap.supplier_id, func.count())
+                .where(SupplierSkuMap.supplier_id.in_([r.id for r in rows] or [uuid.uuid4()]))
+                .group_by(SupplierSkuMap.supplier_id)
+            )
+        ).all()
     )
 
     items = []
@@ -114,15 +119,21 @@ async def get_supplier(supplier_id: uuid.UUID, db: DBSession, user: CurrentUser)
     s = (await db.execute(select(Supplier).where(Supplier.id == supplier_id))).scalar_one_or_none()
     if s is None:
         raise HTTPException(404, "Proveedor no encontrado")
-    cnt = (await db.execute(
-        select(func.count()).select_from(SupplierSkuMap).where(SupplierSkuMap.supplier_id == supplier_id)
-    )).scalar_one()
+    cnt = (
+        await db.execute(
+            select(func.count())
+            .select_from(SupplierSkuMap)
+            .where(SupplierSkuMap.supplier_id == supplier_id)
+        )
+    ).scalar_one()
     out = SupplierOut.model_validate(s)
     out.sku_count = cnt
     return out
 
 
-@router.post("", response_model=SupplierOut, dependencies=[Depends(require_permission("purchasing:write"))])
+@router.post(
+    "", response_model=SupplierOut, dependencies=[Depends(require_permission("purchasing:write"))]
+)
 async def create_supplier(payload: SupplierIn, db: DBSession, user: CurrentUser) -> SupplierOut:
     # Validación NIT único (case-insensitive trim)
     nit = payload.nit.strip()
@@ -150,8 +161,14 @@ async def create_supplier(payload: SupplierIn, db: DBSession, user: CurrentUser)
     return out
 
 
-@router.patch("/{supplier_id}", response_model=SupplierOut, dependencies=[Depends(require_permission("purchasing:write"))])
-async def update_supplier(supplier_id: uuid.UUID, payload: SupplierUpdate, db: DBSession, user: CurrentUser) -> SupplierOut:
+@router.patch(
+    "/{supplier_id}",
+    response_model=SupplierOut,
+    dependencies=[Depends(require_permission("purchasing:write"))],
+)
+async def update_supplier(
+    supplier_id: uuid.UUID, payload: SupplierUpdate, db: DBSession, user: CurrentUser
+) -> SupplierOut:
     s = (await db.execute(select(Supplier).where(Supplier.id == supplier_id))).scalar_one_or_none()
     if s is None:
         raise HTTPException(404, "Proveedor no encontrado")
@@ -162,9 +179,13 @@ async def update_supplier(supplier_id: uuid.UUID, payload: SupplierUpdate, db: D
     await db.commit()
     await db.refresh(s)
     out = SupplierOut.model_validate(s)
-    cnt = (await db.execute(
-        select(func.count()).select_from(SupplierSkuMap).where(SupplierSkuMap.supplier_id == supplier_id)
-    )).scalar_one()
+    cnt = (
+        await db.execute(
+            select(func.count())
+            .select_from(SupplierSkuMap)
+            .where(SupplierSkuMap.supplier_id == supplier_id)
+        )
+    ).scalar_one()
     out.sku_count = cnt
     return out
 
@@ -182,6 +203,7 @@ async def delete_supplier(supplier_id: uuid.UUID, db: DBSession, user: CurrentUs
 
 
 # ─── SKU map (memoria proveedor → producto interno) ─────────────────
+
 
 class SkuMapOut(BaseModel):
     id: uuid.UUID
@@ -301,23 +323,29 @@ async def list_supplier_skus(
         summary["recommended_units_15d"] += reorder_15d
         summary["recommended_units_20d"] += reorder_20d
 
-        items.append({
-            "id": str(sku_map.id),
-            "sku_proveedor": sku_map.sku_proveedor,
-            "product_id": str(product.id),
-            "product_sku": product.sku,
-            "product_name": product.name,
-            "factor_pack": sku_map.factor_pack,
-            "last_unit_cost": float(sku_map.last_unit_cost) if sku_map.last_unit_cost is not None else None,
-            "last_tax_pct": float(sku_map.last_tax_pct) if sku_map.last_tax_pct is not None else None,
-            "last_seen_at": sku_map.last_seen_at.isoformat() if sku_map.last_seen_at else None,
-            "stock_available": available,
-            "avg_daily_sales": round(avg_daily, 3),
-            "days_cover": round(days_cover, 1) if days_cover is not None else None,
-            "reorder_qty_8d": reorder_8d,
-            "reorder_qty_15d": reorder_15d,
-            "reorder_qty_20d": reorder_20d,
-            "urgency": urgency,
-        })
+        items.append(
+            {
+                "id": str(sku_map.id),
+                "sku_proveedor": sku_map.sku_proveedor,
+                "product_id": str(product.id),
+                "product_sku": product.sku,
+                "product_name": product.name,
+                "factor_pack": sku_map.factor_pack,
+                "last_unit_cost": float(sku_map.last_unit_cost)
+                if sku_map.last_unit_cost is not None
+                else None,
+                "last_tax_pct": float(sku_map.last_tax_pct)
+                if sku_map.last_tax_pct is not None
+                else None,
+                "last_seen_at": sku_map.last_seen_at.isoformat() if sku_map.last_seen_at else None,
+                "stock_available": available,
+                "avg_daily_sales": round(avg_daily, 3),
+                "days_cover": round(days_cover, 1) if days_cover is not None else None,
+                "reorder_qty_8d": reorder_8d,
+                "reorder_qty_15d": reorder_15d,
+                "reorder_qty_20d": reorder_20d,
+                "urgency": urgency,
+            }
+        )
 
     return {"items": items, "summary": summary}

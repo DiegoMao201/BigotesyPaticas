@@ -3,6 +3,7 @@
 Cada caso documenta el input y el output esperado bit-exact respecto a
 `BigotesyPaticas.py::clean_currency`.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -28,14 +29,14 @@ from bp_common.currency import clean_currency, format_cop, money_float, money_in
         ("-100", -100),
         ("$1.200", 1200),
         ("$ 1.200 ", 1200),
-        ("1,200", 1200),       # 3 dígitos a la derecha + 1 izquierda → miles
+        ("1,200", 1200),  # 3 dígitos a la derecha + 1 izquierda → miles
         ("1.200", 1200),
         ("12,500", 12500),
         ("12.500", 12500),
         ("1.234.567", 1234567),
         ("1,234,567", 1234567),
         # mezclas
-        ("1.234,56", 1235),    # 1234.56 → 1235 (round half-up)
+        ("1.234,56", 1235),  # 1234.56 → 1235 (round half-up)
         ("1,234.56", 1235),
         # decimales — la heurística legacy con 1-2 dígitos tras el separador trata
         # el separador como decimal y trunca al int (sin redondeo float→int explícito

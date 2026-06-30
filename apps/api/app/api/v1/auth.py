@@ -1,4 +1,5 @@
 """Endpoints de autenticación."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -72,9 +73,7 @@ async def refresh(payload: RefreshRequest, db: DBSession) -> TokenResponse:
             raise ValueError("Tipo de token inválido")
         user_id = claims["sub"]
     except (ValueError, KeyError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
     user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if user is None or not user.is_active:

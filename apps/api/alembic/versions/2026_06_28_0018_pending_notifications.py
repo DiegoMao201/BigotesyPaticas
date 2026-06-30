@@ -4,7 +4,9 @@ Revision ID: 0018_pending_notifications
 Revises: 0017_content_engine
 Create Date: 2026-06-28
 """
+
 from __future__ import annotations
+
 from alembic import op
 
 revision = "0018_pending_notifications"

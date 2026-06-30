@@ -1,4 +1,5 @@
 """Endpoints de ventas: crear órdenes (atómico), consultar, cancelar, factura PDF."""
+
 from __future__ import annotations
 
 import io
@@ -70,15 +71,11 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
 
     # Resolver location default (fallback: primera disponible si ninguna tiene is_default=1)
     loc = (
-        await db.execute(
-            select(StockLocation).where(StockLocation.is_default == 1).limit(1)
-        )
+        await db.execute(select(StockLocation).where(StockLocation.is_default == 1).limit(1))
     ).scalar_one_or_none()
     if loc is None:
         loc = (
-            await db.execute(
-                select(StockLocation).order_by(StockLocation.created_at).limit(1)
-            )
+            await db.execute(select(StockLocation).order_by(StockLocation.created_at).limit(1))
         ).scalar_one_or_none()
     if loc is None:
         raise HTTPException(status_code=500, detail="No hay location default")
@@ -89,9 +86,7 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
     products: dict[uuid.UUID, Product] = {}
     for pid in product_ids:
         p = (
-            await db.execute(
-                select(Product).where(Product.id == pid).with_for_update(of=Product)
-            )
+            await db.execute(select(Product).where(Product.id == pid).with_for_update(of=Product))
         ).scalar_one_or_none()
         if p is None or p.deleted_at is not None or not p.is_active:
             raise HTTPException(status_code=400, detail=f"Producto inválido: {pid}")
@@ -203,7 +198,11 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
     for item in order.items:
         # buscar el movimiento que insertamos arriba para este producto
         for mv in [
-            obj for obj in db.new if isinstance(obj, StockMovement) and obj.product_id == item.product_id and obj.reference_id is None
+            obj
+            for obj in db.new
+            if isinstance(obj, StockMovement)
+            and obj.product_id == item.product_id
+            and obj.reference_id is None
         ]:
             mv.reference_id = order.id
 
@@ -233,8 +232,9 @@ async def list_orders(
     date_to: str | None = None,
 ):
     """Lista órdenes con búsqueda por número o cliente, filtros y paginación."""
-    from sqlalchemy import or_, cast, String, Date as SADate
     from datetime import date as dt_date
+
+    from sqlalchemy import String, cast, or_
 
     stmt = select(Order).order_by(desc(Order.occurred_at))
     count_stmt = select(func.count()).select_from(Order)
@@ -267,6 +267,7 @@ async def list_orders(
         try:
             d = dt_date.fromisoformat(date_to)
             from datetime import timedelta
+
             d_end = d + timedelta(days=1)
             stmt = stmt.where(Order.occurred_at < d_end)
             count_stmt = count_stmt.where(Order.occurred_at < d_end)
@@ -276,10 +277,14 @@ async def list_orders(
     total = (await db.execute(count_stmt)).scalar_one()
 
     # Revenue aggregate (same filters, excludes cancelled)
-    rev_stmt = select(
-        func.coalesce(func.sum(Order.grand_total), 0).label("revenue"),
-        func.count().label("cnt"),
-    ).select_from(Order).where(Order.status != "cancelled")
+    rev_stmt = (
+        select(
+            func.coalesce(func.sum(Order.grand_total), 0).label("revenue"),
+            func.count().label("cnt"),
+        )
+        .select_from(Order)
+        .where(Order.status != "cancelled")
+    )
     if status_filter and status_filter != "cancelled":
         rev_stmt = rev_stmt.where(Order.status == status_filter)
     if channel:
@@ -303,6 +308,7 @@ async def list_orders(
         try:
             d = dt_date.fromisoformat(date_to)
             from datetime import timedelta
+
             d_end = d + timedelta(days=1)
             rev_stmt = rev_stmt.where(Order.occurred_at < d_end)
         except ValueError:
@@ -346,22 +352,24 @@ async def cancel_order(
         raise HTTPException(status_code=409, detail="Ya reembolsada")
 
     # Revertir stock para cada item
-    default_loc = (await db.execute(
-        select(StockLocation).where(StockLocation.is_default == 1).limit(1)
-    )).scalar_one_or_none()
+    default_loc = (
+        await db.execute(select(StockLocation).where(StockLocation.is_default == 1).limit(1))
+    ).scalar_one_or_none()
     if default_loc is None:
-        default_loc = (await db.execute(
-            select(StockLocation).order_by(StockLocation.created_at).limit(1)
-        )).scalar_one_or_none()
+        default_loc = (
+            await db.execute(select(StockLocation).order_by(StockLocation.created_at).limit(1))
+        ).scalar_one_or_none()
     location_id = default_loc.id if default_loc else None
 
     for item in o.items:
-        stock = (await db.execute(
-            select(Stock).where(
-                Stock.product_id == item.product_id,
-                Stock.location_id == location_id,
+        stock = (
+            await db.execute(
+                select(Stock).where(
+                    Stock.product_id == item.product_id,
+                    Stock.location_id == location_id,
+                )
             )
-        )).scalar_one_or_none()
+        ).scalar_one_or_none()
         if stock:
             stock.quantity += item.quantity
         mv = StockMovement(
@@ -379,7 +387,12 @@ async def cancel_order(
         db.add(mv)
 
     o.status = "cancelled"
-    o.metadata_ = {**(o.metadata_ or {}), "cancelled_at": datetime.now(UTC).isoformat(), "cancelled_by": user.email, "cancel_reason": reason or ""}
+    o.metadata_ = {
+        **(o.metadata_ or {}),
+        "cancelled_at": datetime.now(UTC).isoformat(),
+        "cancelled_by": user.email,
+        "cancel_reason": reason or "",
+    }
     await db.commit()
     return {"ok": True, "order_number": o.order_number}
 
@@ -464,9 +477,10 @@ async def get_invoice_pdf(
     cust_doc = ""
     if o.customer_id:
         from app.models.crm import Customer as CRMCustomer
-        c = (await db.execute(
-            select(CRMCustomer).where(CRMCustomer.id == o.customer_id)
-        )).scalar_one_or_none()
+
+        c = (
+            await db.execute(select(CRMCustomer).where(CRMCustomer.id == o.customer_id))
+        ).scalar_one_or_none()
         if c:
             cust_name = c.full_name or "Consumidor Final"
             cust_doc = c.document_id or ""
@@ -499,7 +513,9 @@ async def get_invoice_pdf(
     payments_rows = ""
     for pay in o.payments:
         method = (pay.method or "").replace("_", " ").title()
-        payments_rows += f"<tr><td>{method}</td><td class='right bold'>${float(pay.amount):,.0f}</td></tr>"
+        payments_rows += (
+            f"<tr><td>{method}</td><td class='right bold'>${float(pay.amount):,.0f}</td></tr>"
+        )
 
     html = f"""<!DOCTYPE html>
 <html>

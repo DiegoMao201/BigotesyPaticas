@@ -1,4 +1,5 @@
 """Portal Notifications — SSE stream + helpers para crear notificaciones bidireccionales."""
+
 from __future__ import annotations
 
 import asyncio
@@ -11,7 +12,7 @@ import redis.asyncio as aioredis
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import and_, select, update
+from sqlalchemy import select, update
 
 from app.api.v1.portal_auth import PortalUser
 from app.config import get_settings
@@ -26,6 +27,7 @@ _HEARTBEAT_SEC = 20
 
 
 # ── helpers (llamados desde otros módulos) ────────────────────────────────────
+
 
 async def _get_redis() -> aioredis.Redis:
     return aioredis.from_url(_SETTINGS.redis_url, decode_responses=True)
@@ -53,14 +55,16 @@ async def notify_customer(
     db.add(notif)
     await db.flush()
 
-    payload = json.dumps({
-        "id": str(notif.id),
-        "type": notif_type,
-        "title": title,
-        "body": body,
-        "created_at": datetime.now(UTC).isoformat(),
-        "data": data or {},
-    })
+    payload = json.dumps(
+        {
+            "id": str(notif.id),
+            "type": notif_type,
+            "title": title,
+            "body": body,
+            "created_at": datetime.now(UTC).isoformat(),
+            "data": data or {},
+        }
+    )
     try:
         r = await _get_redis()
         await r.publish(f"portal:notify:{cid}", payload)
@@ -89,14 +93,16 @@ async def notify_admins(
     db.add(notif)
     await db.flush()
 
-    payload = json.dumps({
-        "id": str(notif.id),
-        "type": notif_type,
-        "title": title,
-        "body": body,
-        "created_at": datetime.now(UTC).isoformat(),
-        "data": data or {},
-    })
+    payload = json.dumps(
+        {
+            "id": str(notif.id),
+            "type": notif_type,
+            "title": title,
+            "body": body,
+            "created_at": datetime.now(UTC).isoformat(),
+            "data": data or {},
+        }
+    )
     try:
         r = await _get_redis()
         await r.publish("admin:notify", payload)
@@ -106,6 +112,7 @@ async def notify_admins(
 
 
 # ── schemas ───────────────────────────────────────────────────────────────────
+
 
 class NotificationOut(BaseModel):
     id: str
@@ -133,6 +140,7 @@ def _notif_out(n: PortalNotification) -> NotificationOut:
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.get("", response_model=list[NotificationOut])
 async def list_notifications(
     db: DBSession,
@@ -156,6 +164,7 @@ async def unread_count(
     customer: Customer = PortalUser,
 ) -> dict:
     from sqlalchemy import func
+
     result = await db.execute(
         select(func.count()).where(
             PortalNotification.customer_id == customer.id,
@@ -194,7 +203,7 @@ async def portal_events(customer: Customer = PortalUser):
             r = await _get_redis()
             pubsub = r.pubsub()
             await pubsub.subscribe(f"portal:notify:{customer_id}")
-            yield "data: {\"type\": \"connected\"}\n\n"
+            yield 'data: {"type": "connected"}\n\n'
             last_heartbeat = asyncio.get_event_loop().time()
             while True:
                 now = asyncio.get_event_loop().time()
@@ -206,7 +215,7 @@ async def portal_events(customer: Customer = PortalUser):
                     yield f"data: {msg['data']}\n\n"
                 await asyncio.sleep(0)
         except Exception:
-            yield "data: {\"type\": \"error\"}\n\n"
+            yield 'data: {"type": "error"}\n\n'
         finally:
             try:
                 await pubsub.unsubscribe(f"portal:notify:{customer_id}")
@@ -226,6 +235,7 @@ async def portal_events(customer: Customer = PortalUser):
 
 
 # ── Endpoint interno para alertas del sistema (llamado por cron del servidor) ───
+
 
 @router.post("/internal/disk-alert")
 async def disk_alert_internal(request: Request, db: DBSession) -> dict:
@@ -255,12 +265,13 @@ admin_router = APIRouter(prefix="/admin/portal-events", tags=["admin"])
 @admin_router.get("")
 async def admin_events():
     """SSE stream para el panel admin — recibe notificaciones de nuevos pedidos/citas/clientes."""
+
     async def stream():
         try:
             r = await _get_redis()
             pubsub = r.pubsub()
             await pubsub.subscribe("admin:notify")
-            yield "data: {\"type\": \"connected\"}\n\n"
+            yield 'data: {"type": "connected"}\n\n'
             last_heartbeat = asyncio.get_event_loop().time()
             while True:
                 now = asyncio.get_event_loop().time()
@@ -272,7 +283,7 @@ async def admin_events():
                     yield f"data: {msg['data']}\n\n"
                 await asyncio.sleep(0)
         except Exception:
-            yield "data: {\"type\": \"error\"}\n\n"
+            yield 'data: {"type": "error"}\n\n'
         finally:
             try:
                 await pubsub.unsubscribe("admin:notify")
@@ -283,5 +294,9 @@ async def admin_events():
     return StreamingResponse(
         stream(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )

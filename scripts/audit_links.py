@@ -2,6 +2,7 @@
 Auditoría de links rotos en bigotesypaticas.com.
 Correr: python scripts/audit_links.py [--prod]
 """
+
 import asyncio
 import sys
 from urllib.parse import urljoin, urlparse
@@ -44,12 +45,11 @@ async def crawl_and_check():
                         "bigotesypaticas.com" in parsed.netloc
                         or parsed.netloc == ""
                         or "localhost" in parsed.netloc
-                    ):
+                    ) and not link.startswith(("mailto:", "tel:", "#")):
                         # Exclude mailto, tel, anchors
-                        if not link.startswith(("mailto:", "tel:", "#")):
-                            norm = link.split("#")[0].rstrip("/")
-                            if norm not in visited and norm not in to_visit:
-                                to_visit.append(norm)
+                        norm = link.split("#")[0].rstrip("/")
+                        if norm not in visited and norm not in to_visit:
+                            to_visit.append(norm)
             except Exception as e:
                 broken.append((url, str(e)))
 

@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, date
 from urllib.parse import quote
 import unicodedata
 
+
 def money_int(val):
     if isinstance(val, (int, float)):
         return int(round(float(val)))
@@ -56,14 +57,15 @@ def money_int(val):
         out = int(re.sub(r"[^0-9]", "", s) or 0)
     return -out if neg else out
 
+
 # ==========================================
 # 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME)
 # ==========================================
 
-COLOR_PRIMARIO = "#187f77"      # Cian Oscuro (Teal)
-COLOR_SECUNDARIO = "#125e58"    # Variante más oscura
-COLOR_ACENTO = "#f5a641"        # Naranja (Alertas)
-COLOR_FONDO = "#f8f9fa"         # Gris claro
+COLOR_PRIMARIO = "#187f77"  # Cian Oscuro (Teal)
+COLOR_SECUNDARIO = "#125e58"  # Variante más oscura
+COLOR_ACENTO = "#f5a641"  # Naranja (Alertas)
+COLOR_FONDO = "#f8f9fa"  # Gris claro
 COLOR_BLANCO = "#ffffff"
 COLOR_TEXTO = "#262730"
 
@@ -71,11 +73,12 @@ st.set_page_config(
     page_title="Nexus Loyalty | Bigotes y Patitas",
     page_icon="🐾",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 # Estilos CSS
-st.markdown(f"""
+st.markdown(
+    f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
@@ -163,11 +166,14 @@ st.markdown(f"""
         font-size: 1.2rem;
     }}
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ==========================================
 # 2.B UTILIDADES ROBUSTAS (ANTI-ERRORES)
 # ==========================================
+
 
 def _norm_col(s: str) -> str:
     s = "" if s is None else str(s)
@@ -175,6 +181,7 @@ def _norm_col(s: str) -> str:
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
     s = s.replace(" ", "_")
     return s
+
 
 def _find_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
     """Encuentra columna aunque tenga tildes/espacios/cambios menores."""
@@ -193,24 +200,39 @@ def _find_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
                 return orig
     return None
 
+
 def _safe_to_datetime(s: pd.Series) -> pd.Series:
     return pd.to_datetime(s, errors="coerce")
+
 
 def _safe_to_num(s: pd.Series) -> pd.Series:
     return pd.to_numeric(s, errors="coerce").fillna(0.0)
 
+
 def _clean_tel_basic(tel: str) -> str:
     t = "" if tel is None else str(tel)
-    t = t.replace(" ", "").replace("+", "").replace("-", "").replace(".", "").replace("(", "").replace(")", "").strip()
+    t = (
+        t.replace(" ", "")
+        .replace("+", "")
+        .replace("-", "")
+        .replace(".", "")
+        .replace("(", "")
+        .replace(")", "")
+        .strip()
+    )
     if len(t) == 10 and not t.startswith("57"):
         t = "57" + t
     return t
+
 
 # ==========================================
 # 2.C INTEGRACIÓN CON EL FLUJO DE LA APP (SESSION_STATE.DB)
 # ==========================================
 
-def _preparar_fuente_cli_ven(df_cli: pd.DataFrame, df_ven: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+
+def _preparar_fuente_cli_ven(
+    df_cli: pd.DataFrame, df_ven: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Normaliza columnas mínimas para evitar master vacío o sin campos críticos."""
     df_cli = df_cli.copy() if df_cli is not None else pd.DataFrame()
     df_ven = df_ven.copy() if df_ven is not None else pd.DataFrame()
@@ -275,7 +297,9 @@ def _preparar_fuente_cli_ven(df_cli: pd.DataFrame, df_ven: pd.DataFrame) -> tupl
         df_ven = df_ven.rename(columns={col_ced_v: "Cedula_Cliente"})
     if "Cedula_Cliente" not in df_ven.columns:
         df_ven["Cedula_Cliente"] = ""
-    df_ven["Cedula_Cliente"] = df_ven["Cedula_Cliente"].astype(str).str.replace(r"\.0$", "", regex=True).str.strip()
+    df_ven["Cedula_Cliente"] = (
+        df_ven["Cedula_Cliente"].astype(str).str.replace(r"\.0$", "", regex=True).str.strip()
+    )
 
     col_items = _find_col(df_ven, ["Items", "Items_Detalle"])
     if col_items and col_items != "Items":
@@ -284,6 +308,7 @@ def _preparar_fuente_cli_ven(df_cli: pd.DataFrame, df_ven: pd.DataFrame) -> tupl
         df_ven["Items"] = ""
 
     return df_cli, df_ven
+
 
 def procesar_inteligencia_df(df_cli: pd.DataFrame, df_ven: pd.DataFrame):
     """
@@ -303,20 +328,29 @@ def procesar_inteligencia_df(df_cli: pd.DataFrame, df_ven: pd.DataFrame):
         df_cli["Total_Gastado"] = 0.0
         df_cli["Ultimo_Producto"] = "N/A"
     else:
-        resumen = (
-            df_ven.groupby("Cedula_Cliente", as_index=False)
-            .agg(Ultima_Compra_Dt=("Fecha", "max"), Total_Gastado=("Total", "sum"), Ultimo_Producto=("Items", "last"))
+        resumen = df_ven.groupby("Cedula_Cliente", as_index=False).agg(
+            Ultima_Compra_Dt=("Fecha", "max"),
+            Total_Gastado=("Total", "sum"),
+            Ultimo_Producto=("Items", "last"),
         )
 
         df_cli = df_cli.merge(resumen, left_on="Cedula", right_on="Cedula_Cliente", how="left")
         hoy = pd.Timestamp.now()
-        df_cli["Dias_Sin_Compra"] = (hoy - pd.to_datetime(df_cli["Ultima_Compra_Dt"], errors="coerce")).dt.days.fillna(999).astype(int)
+        df_cli["Dias_Sin_Compra"] = (
+            (hoy - pd.to_datetime(df_cli["Ultima_Compra_Dt"], errors="coerce"))
+            .dt.days.fillna(999)
+            .astype(int)
+        )
 
         def clasificar(dias: int) -> str:
-            if dias <= 30: return "🟢 Activo"
-            if 31 <= dias <= 60: return "🟡 Recompra (Alerta)"
-            if 61 <= dias <= 90: return "🟠 Riesgo"
-            if dias > 90 and dias != 999: return "🔴 Perdido"
+            if dias <= 30:
+                return "🟢 Activo"
+            if 31 <= dias <= 60:
+                return "🟡 Recompra (Alerta)"
+            if 61 <= dias <= 90:
+                return "🟠 Riesgo"
+            if dias > 90 and dias != 999:
+                return "🔴 Perdido"
             return "⚪ Nuevo"
 
         df_cli["Estado"] = df_cli["Dias_Sin_Compra"].apply(clasificar)
@@ -330,7 +364,10 @@ def procesar_inteligencia_df(df_cli: pd.DataFrame, df_ven: pd.DataFrame):
     df_cli["Es_Cumple_Hoy"] = False
     df_cli["Cumple_Mascota_DT"] = pd.NaT
 
-    col_nac = _find_col(df_cli, ["Cumpleaños_mascota", "Cumpleanos_mascota", "Cumpleaños Mascota", "Cumpleanos Mascota"])
+    col_nac = _find_col(
+        df_cli,
+        ["Cumpleaños_mascota", "Cumpleanos_mascota", "Cumpleaños Mascota", "Cumpleanos Mascota"],
+    )
     if col_nac:
         if "Cumpleaños_mascota" not in df_cli.columns:
             df_cli["Cumpleaños_mascota"] = df_cli[col_nac]
@@ -338,16 +375,18 @@ def procesar_inteligencia_df(df_cli: pd.DataFrame, df_ven: pd.DataFrame):
 
         hoy_dt = datetime.now()
         mask_valid = df_cli["Cumple_Mascota_DT"].notna()
-        df_cli.loc[mask_valid, "Es_Cumple_Mes"] = df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.month == hoy_dt.month
-        df_cli.loc[mask_valid, "Es_Cumple_Hoy"] = (
-            (df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.month == hoy_dt.month) &
-            (df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.day == hoy_dt.day)
+        df_cli.loc[mask_valid, "Es_Cumple_Mes"] = (
+            df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.month == hoy_dt.month
         )
+        df_cli.loc[mask_valid, "Es_Cumple_Hoy"] = (
+            df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.month == hoy_dt.month
+        ) & (df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.day == hoy_dt.day)
     else:
         if "Cumpleaños_mascota" not in df_cli.columns:
             df_cli["Cumpleaños_mascota"] = None
 
     return df_cli, df_ven, "OK (Session DB)"
+
 
 def cargar_datos_loyalty():
     """
@@ -369,9 +408,11 @@ def cargar_datos_loyalty():
     master, df_ven, status = procesar_inteligencia(ws_cli, ws_ven)
     return master, df_ven, status
 
+
 # ==========================================
 # 2.D CALENDARIO DE CAMPAÑAS (FECHAS ESPECIALES)
 # ==========================================
+
 
 def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
     """weekday: lunes=0 ... domingo=6"""
@@ -380,11 +421,14 @@ def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
     d = d + timedelta(days=shift + 7 * (n - 1))
     return d
 
+
 def _third_sunday_of_june(year: int) -> date:
     return _nth_weekday(year, 6, 6, 3)
 
+
 def _second_sunday_of_may(year: int) -> date:
     return _nth_weekday(year, 5, 6, 2)
+
 
 def calendario_campanas(year: int | None = None) -> pd.DataFrame:
     y = year or datetime.now().year
@@ -402,6 +446,7 @@ def calendario_campanas(year: int | None = None) -> pd.DataFrame:
     df["Fecha"] = pd.to_datetime(df["Fecha"])
     return df.sort_values("Fecha")
 
+
 def plantilla_evento(tag: str) -> str:
     # Templates cortos, claros, “bonitos” y accionables
     base = {
@@ -416,17 +461,22 @@ def plantilla_evento(tag: str) -> str:
     }
     return base.get(tag, "Hola {Nombre} 🐾\n🎁 Promo: {Promo}\n¿Te lo separamos?")
 
+
 def construir_links_campana(master: pd.DataFrame, template: str, promo: str) -> pd.DataFrame:
     tel_col = _find_col(master, ["Telefono", "Teléfono", "Celular", "Movil"])
     nom_col = _find_col(master, ["Nombre", "Nombre_Cliente"])
     mas_col = _find_col(master, ["Mascota", "Nombre Mascota Principal", "Mascota_Principal"])
 
     out = master.copy()
-    if nom_col is None: out["__Nombre"] = "Cliente"
-    else: out["__Nombre"] = out[nom_col].fillna("Cliente").astype(str)
+    if nom_col is None:
+        out["__Nombre"] = "Cliente"
+    else:
+        out["__Nombre"] = out[nom_col].fillna("Cliente").astype(str)
 
-    if mas_col is None: out["__Mascota"] = "tu peludito"
-    else: out["__Mascota"] = out[mas_col].fillna("tu peludito").astype(str)
+    if mas_col is None:
+        out["__Mascota"] = "tu peludito"
+    else:
+        out["__Mascota"] = out[mas_col].fillna("tu peludito").astype(str)
 
     if tel_col is None:
         out["__Telefono"] = ""
@@ -438,19 +488,29 @@ def construir_links_campana(master: pd.DataFrame, template: str, promo: str) -> 
         return msg
 
     out["Mensaje"] = out.apply(_render, axis=1)
-    out["Link"] = out["__Telefono"].apply(lambda t: f"https://wa.me/{t}?text={quote('')}" if not t else f"https://wa.me/{t}?text={quote('')}")
+    out["Link"] = out["__Telefono"].apply(
+        lambda t: f"https://wa.me/{t}?text={quote('')}"
+        if not t
+        else f"https://wa.me/{t}?text={quote('')}"
+    )
     # Usar tu helper existente si quieres: [`link_whatsapp`](BigotesyPaticas/pages/Nexus_Loyalty.py)
-    out["Link"] = out.apply(lambda r: link_whatsapp(r["__Telefono"], r["Mensaje"]) if r["__Telefono"] else None, axis=1)
+    out["Link"] = out.apply(
+        lambda r: link_whatsapp(r["__Telefono"], r["Mensaje"]) if r["__Telefono"] else None, axis=1
+    )
 
     return out[["__Nombre", "__Mascota", "__Telefono", "Mensaje", "Link"]].rename(
         columns={"__Nombre": "Nombre", "__Mascota": "Mascota", "__Telefono": "Telefono"}
     )
 
+
 # ==========================================
 # 2.E MOTOR CUMPLEAÑOS (VENTANA -8 / +8 DÍAS)
 # ==========================================
 
-def _nearest_bday_occurrence(bday_dt: pd.Timestamp, today: pd.Timestamp) -> tuple[pd.Timestamp, int]:
+
+def _nearest_bday_occurrence(
+    bday_dt: pd.Timestamp, today: pd.Timestamp
+) -> tuple[pd.Timestamp, int]:
     """
     Retorna (fecha_ocurrencia_mas_cercana, diff_dias)
     diff_dias = (ocurrencia - today).days  -> negativo: ya pasó, positivo: falta
@@ -478,7 +538,10 @@ def _nearest_bday_occurrence(bday_dt: pd.Timestamp, today: pd.Timestamp) -> tupl
     best = min(((c, int((c - today0).days)) for c in candidates), key=lambda x: abs(x[1]))
     return best[0], best[1]
 
-def construir_campana_cumple(master: pd.DataFrame, days_before: int = 8, days_after: int = 8) -> pd.DataFrame:
+
+def construir_campana_cumple(
+    master: pd.DataFrame, days_before: int = 8, days_after: int = 8
+) -> pd.DataFrame:
     """
     Filtra clientes con Cumple_Mascota_DT dentro de ventana [-days_after, +days_before]
     alrededor de HOY (por día/mes, cruzando año si aplica).
@@ -516,7 +579,9 @@ def construir_campana_cumple(master: pd.DataFrame, days_before: int = 8, days_af
     df["Cumple_Ocurrencia"] = occ_list
     df["Cumple_Diff_Dias"] = diff_list
 
-    df = df[(df["Cumple_Diff_Dias"] >= -int(days_after)) & (df["Cumple_Diff_Dias"] <= int(days_before))].copy()
+    df = df[
+        (df["Cumple_Diff_Dias"] >= -int(days_after)) & (df["Cumple_Diff_Dias"] <= int(days_before))
+    ].copy()
 
     def _estado(diff: int) -> str:
         if diff == 0:
@@ -525,15 +590,19 @@ def construir_campana_cumple(master: pd.DataFrame, days_before: int = 8, days_af
             return f"⏳ Faltan {diff} días"
         return f"✅ Pasó hace {abs(diff)} días"
 
-    df["Estado_Cumple"] = df["Cumple_Diff_Dias"].apply(lambda x: _estado(int(x)) if pd.notna(x) else "N/D")
+    df["Estado_Cumple"] = df["Cumple_Diff_Dias"].apply(
+        lambda x: _estado(int(x)) if pd.notna(x) else "N/D"
+    )
 
     # orden: primero los que vienen pronto, luego los recientes
     df = df.sort_values(["Cumple_Diff_Dias", "Nombre"], ascending=[False, True])
     return df
 
+
 # ==========================================
 # 2. CONEXIÓN Y PROCESAMIENTO
 # ==========================================
+
 
 @st.cache_resource(ttl=600)
 def conectar_crm():
@@ -542,26 +611,32 @@ def conectar_crm():
         if "google_service_account" not in st.secrets:
             st.error("🚨 Falta configuración de secretos (google_service_account).")
             return None, None
-        
+
         gc = gspread.service_account_from_dict(st.secrets["google_service_account"])
         sh = gc.open_by_url(st.secrets["SHEET_URL"])
-        
-        try: ws_cli = sh.worksheet("Clientes")
-        except: ws_cli = None
-        
-        try: ws_ven = sh.worksheet("Ventas")
-        except: ws_ven = None
-            
+
+        try:
+            ws_cli = sh.worksheet("Clientes")
+        except:
+            ws_cli = None
+
+        try:
+            ws_ven = sh.worksheet("Ventas")
+        except:
+            ws_ven = None
+
         return ws_cli, ws_ven
     except Exception as e:
         st.error(f"Error de conexión con Google Sheets: {e}")
         return None, None
+
 
 def limpiar_columnas(df):
     """Elimina espacios en blanco al inicio y final de los nombres de columnas"""
     if not df.empty:
         df.columns = df.columns.str.strip()
     return df
+
 
 def procesar_inteligencia(ws_cli, ws_ven):
     # 1) Cargar Datos
@@ -614,23 +689,29 @@ def procesar_inteligencia(ws_cli, ws_ven):
             df_ven["Items"] = ""
             col_items = "Items"
 
-        resumen_ventas = df_ven.groupby(col_ced_v).agg({
-            col_fecha_v: "max",
-            col_total_v: "sum",
-            col_items: "last"
-        }).reset_index()
+        resumen_ventas = (
+            df_ven.groupby(col_ced_v)
+            .agg({col_fecha_v: "max", col_total_v: "sum", col_items: "last"})
+            .reset_index()
+        )
 
         resumen_ventas.columns = ["Cedula", "Ultima_Compra_Dt", "Total_Gastado", "Ultimo_Producto"]
 
         df_cli = pd.merge(df_cli, resumen_ventas, left_on=col_ced, right_on="Cedula", how="left")
         hoy = pd.Timestamp.now()
-        df_cli["Dias_Sin_Compra"] = (hoy - pd.to_datetime(df_cli["Ultima_Compra_Dt"], errors="coerce")).dt.days.fillna(999)
+        df_cli["Dias_Sin_Compra"] = (
+            hoy - pd.to_datetime(df_cli["Ultima_Compra_Dt"], errors="coerce")
+        ).dt.days.fillna(999)
 
         def clasificar(dias):
-            if dias <= 30: return "🟢 Activo"
-            if 31 <= dias <= 60: return "🟡 Recompra (Alerta)"
-            if 61 <= dias <= 90: return "🟠 Riesgo"
-            if dias > 90 and dias != 999: return "🔴 Perdido"
+            if dias <= 30:
+                return "🟢 Activo"
+            if 31 <= dias <= 60:
+                return "🟡 Recompra (Alerta)"
+            if 61 <= dias <= 90:
+                return "🟠 Riesgo"
+            if dias > 90 and dias != 999:
+                return "🔴 Perdido"
             return "⚪ Nuevo"
 
         df_cli["Estado"] = df_cli["Dias_Sin_Compra"].apply(clasificar)
@@ -640,7 +721,10 @@ def procesar_inteligencia(ws_cli, ws_ven):
     df_cli["Es_Cumple_Hoy"] = False
     df_cli["Cumple_Mascota_DT"] = pd.NaT
 
-    col_nac = _find_col(df_cli, ["Cumpleaños_mascota", "Cumpleanos_mascota", "Cumpleaños Mascota", "Cumpleanos Mascota"])
+    col_nac = _find_col(
+        df_cli,
+        ["Cumpleaños_mascota", "Cumpleanos_mascota", "Cumpleaños Mascota", "Cumpleanos Mascota"],
+    )
     if col_nac:
         # Mantener una columna display con el nombre esperado por la UI, aunque la fuente sea distinta
         if "Cumpleaños_mascota" not in df_cli.columns:
@@ -651,11 +735,12 @@ def procesar_inteligencia(ws_cli, ws_ven):
 
         hoy_dt = datetime.now()
         mask_valid = df_cli["Cumple_Mascota_DT"].notna()
-        df_cli.loc[mask_valid, "Es_Cumple_Mes"] = df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.month == hoy_dt.month
-        df_cli.loc[mask_valid, "Es_Cumple_Hoy"] = (
-            (df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.month == hoy_dt.month) &
-            (df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.day == hoy_dt.day)
+        df_cli.loc[mask_valid, "Es_Cumple_Mes"] = (
+            df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.month == hoy_dt.month
         )
+        df_cli.loc[mask_valid, "Es_Cumple_Hoy"] = (
+            df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.month == hoy_dt.month
+        ) & (df_cli.loc[mask_valid, "Cumple_Mascota_DT"].dt.day == hoy_dt.day)
     else:
         # asegurar la columna para que la UI no truene
         if "Cumpleaños_mascota" not in df_cli.columns:
@@ -663,24 +748,40 @@ def procesar_inteligencia(ws_cli, ws_ven):
 
     return df_cli, df_ven, "OK"
 
+
 # ==========================================
 # 3. GENERADOR DE LINKS WHATSAPP
 # ==========================================
 
+
 def link_whatsapp(telefono, mensaje):
-    if not telefono: return None
+    if not telefono:
+        return None
     # Limpieza agresiva del teléfono
-    tel = str(telefono).replace(" ", "").replace("+", "").replace("-", "").replace(".", "").replace("(", "").replace(")", "").strip()
-    
-    if len(tel) < 7: return None
+    tel = (
+        str(telefono)
+        .replace(" ", "")
+        .replace("+", "")
+        .replace("-", "")
+        .replace(".", "")
+        .replace("(", "")
+        .replace(")", "")
+        .strip()
+    )
+
+    if len(tel) < 7:
+        return None
     # Asumimos código país 57 (Colombia) si es un número de 10 dígitos, ajústalo si estás en otro país
-    if len(tel) == 10: tel = "57" + tel
-    
+    if len(tel) == 10:
+        tel = "57" + tel
+
     return f"https://wa.me/{tel}?text={quote(mensaje)}"
+
 
 # ==========================================
 # 4. INTERFAZ PRINCIPAL
 # ==========================================
+
 
 # =============================
 # UTILIDADES Y MENSAJES PROACTIVOS
@@ -697,6 +798,7 @@ def _extraer_producto_bonito(ultimo_producto: str) -> str:
     prod = " ".join(prod.split())
     return prod.title()
 
+
 def msg_cumple_5pct(nombre: str, mascota: str, estado: str) -> str:
     """
     Mensaje de cumpleaños con incentivo de recompra (5% de descuento).
@@ -711,6 +813,7 @@ def msg_cumple_5pct(nombre: str, mascota: str, estado: str) -> str:
         f"¡Gracias por ser parte de nuestra familia! {estado if estado else ''}"
     )
 
+
 def msg_recompra(nombre: str, mascota: str, producto: str) -> str:
     """
     Mensaje estándar para la sección 'Plato Vacío' (30-60 días).
@@ -724,6 +827,7 @@ def msg_recompra(nombre: str, mascota: str, producto: str) -> str:
         f"Te escribo para ayudarte: ¿necesitas más de *{producto}*?\n"
         f"Si me confirmas, te lo dejamos listo hoy (y si quieres, lo enviamos a domicilio)."
     )
+
 
 def msg_recompra_20(nombre: str, mascota: str, producto: str, dias: int) -> str:
     """
@@ -740,6 +844,7 @@ def msg_recompra_20(nombre: str, mascota: str, producto: str, dias: int) -> str:
         f"Solo responde este mensaje y te asesoramos con mucho gusto."
     )
 
+
 def msg_inactivo(nombre: str, mascota: str, gancho: str) -> str:
     """
     Mensaje para clientes inactivos, muy cálido y proactivo.
@@ -752,31 +857,50 @@ def msg_inactivo(nombre: str, mascota: str, gancho: str) -> str:
         f"¿Cómo han estado? ¡Nos encantaría saber de ustedes! {gancho if gancho else ''} ✨🚚"
     )
 
+
 # ==========================================
 # 4. INTERFAZ PRINCIPAL
 # ==========================================
 
+
 def main():
     # Sidebar
     with st.sidebar:
-        st.markdown(f"<h1 style='color:{COLOR_PRIMARIO}; text-align: center;'>Nexus Loyalty</h1>", unsafe_allow_html=True)
-        st.markdown(f"<h4 style='color:{COLOR_TEXTO}; text-align: center; margin-top: -20px;'>Bigotes y Patitas 🐾</h4>", unsafe_allow_html=True)
+        st.markdown(
+            f"<h1 style='color:{COLOR_PRIMARIO}; text-align: center;'>Nexus Loyalty</h1>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<h4 style='color:{COLOR_TEXTO}; text-align: center; margin-top: -20px;'>Bigotes y Patitas 🐾</h4>",
+            unsafe_allow_html=True,
+        )
         st.markdown("---")
-        
+
         hoy_dt = datetime.now()
-        hoy_str = hoy_dt.strftime('%d/%m/%Y')
-        
+        hoy_str = hoy_dt.strftime("%d/%m/%Y")
+
         # Diccionario de meses para mostrar nombre en español
-        meses_es = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6:"Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
+        meses_es = {
+            1: "Enero",
+            2: "Febrero",
+            3: "Marzo",
+            4: "Abril",
+            5: "Mayo",
+            6: "Junio",
+            7: "Julio",
+            8: "Agosto",
+            9: "Septiembre",
+            10: "Octubre",
+            11: "Noviembre",
+            12: "Diciembre",
+        }
         mes_actual_nombre = meses_es[hoy_dt.month]
 
         st.success(f"📅 Hoy es: {hoy_str}")
         st.info(f"🎂 Mes de: **{mes_actual_nombre}**")
 
-
     # Carga de datos (conectado al flujo de la app)
     master, df_ven, status = cargar_datos_loyalty()
-
 
     # --- MAPEO DE PRODUCTOS A CATEGORÍA (solo concentrados) ---
     # Intentar obtener inventario desde session_state (como en Inventario_Nexus)
@@ -807,7 +931,6 @@ def main():
         prod_to_cat = {}
         nombres_concentrado = set()
 
-
     def es_concentrado(prod):
         """
         Detecta si alguno de los productos vendidos (en una cadena separada por comas) es de la categoría CONCENTRADO
@@ -822,7 +945,10 @@ def main():
             p_limpio = p
             # Quitar cantidades tipo '1x', '2x', '1.0x', 'x1', '(x1)', etc.
             import re
-            p_limpio = re.sub(r"^\d+(\.\d+)?x\s*", "", p_limpio, flags=re.IGNORECASE)  # 1x, 1.0x, 2x
+
+            p_limpio = re.sub(
+                r"^\d+(\.\d+)?x\s*", "", p_limpio, flags=re.IGNORECASE
+            )  # 1x, 1.0x, 2x
             p_limpio = re.sub(r"\(x?\d+\)", "", p_limpio, flags=re.IGNORECASE)  # (x1), (1)
             p_limpio = re.sub(r"x\d+$", "", p_limpio, flags=re.IGNORECASE)  # x1 al final
             p_limpio = p_limpio.strip()
@@ -849,16 +975,25 @@ def main():
         return
 
     # --- KPI HEADER (igual que tienes) ---
-    st.markdown(f"### <span style='color:{COLOR_PRIMARIO}'>📊</span> Tablero de Control", unsafe_allow_html=True)
+    st.markdown(
+        f"### <span style='color:{COLOR_PRIMARIO}'>📊</span> Tablero de Control",
+        unsafe_allow_html=True,
+    )
     col1, col2, col3, col4 = st.columns(4)
-    
-    activos = len(master[master['Estado'] == "🟢 Activo"]) if 'Estado' in master.columns else 0
-    alertas = len(master[master['Estado'] == "🟡 Recompra (Alerta)"]) if 'Estado' in master.columns else 0
-    
+
+    activos = len(master[master["Estado"] == "🟢 Activo"]) if "Estado" in master.columns else 0
+    alertas = (
+        len(master[master["Estado"] == "🟡 Recompra (Alerta)"]) if "Estado" in master.columns else 0
+    )
+
     # Contadores de Cumpleaños
-    cumple_hoy_count = len(master[master['Es_Cumple_Hoy'] == True]) if 'Es_Cumple_Hoy' in master.columns else 0
+    cumple_hoy_count = (
+        len(master[master["Es_Cumple_Hoy"] == True]) if "Es_Cumple_Hoy" in master.columns else 0
+    )
     # Cumple mes (excluyendo los de hoy para no duplicar en lógica visual, aunque el filtro de abajo lo maneja)
-    cumple_mes_total = len(master[master['Es_Cumple_Mes'] == True]) if 'Es_Cumple_Mes' in master.columns else 0
+    cumple_mes_total = (
+        len(master[master["Es_Cumple_Mes"] == True]) if "Es_Cumple_Mes" in master.columns else 0
+    )
 
     col1.metric("Clientes Totales", len(master))
     col2.metric("Activos (Mes)", activos)
@@ -868,20 +1003,27 @@ def main():
     st.markdown("---")
 
     # --- TABS DE GESTIÓN ---
-    tabs = st.tabs([
-        "🎂 Cumpleaños", 
-        "🔄 Smart Rebuy", 
-        "💁‍♀️ Servicios (Ángela)", 
-        "📅 Campañas (Fechas especiales)",
-        "🚑 Recuperación"
-    ])
+    tabs = st.tabs(
+        [
+            "🎂 Cumpleaños",
+            "🔄 Smart Rebuy",
+            "💁‍♀️ Servicios (Ángela)",
+            "📅 Campañas (Fechas especiales)",
+            "🚑 Recuperación",
+        ]
+    )
 
     # ==========================================
     # TAB 1: CUMPLEAÑOS (PRO + CAMPAÑA ±8 DÍAS)
     # ==========================================
     with tabs[0]:
-        st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>🎂</span> Centro de Cumpleaños (Campaña -8/+8 días)", unsafe_allow_html=True)
-        st.caption("Objetivo: activar recompra con un gesto de servicio + oferta clara (5% OFF snacks y concentrados).")
+        st.markdown(
+            f"#### <span style='color:{COLOR_PRIMARIO}'>🎂</span> Centro de Cumpleaños (Campaña -8/+8 días)",
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "Objetivo: activar recompra con un gesto de servicio + oferta clara (5% OFF snacks y concentrados)."
+        )
 
         if "Cumple_Mascota_DT" not in master.columns:
             master["Cumple_Mascota_DT"] = pd.NaT
@@ -891,8 +1033,13 @@ def main():
 
         c1, c2, c3 = st.columns(3)
         c1.metric("En ventana (-8/+8)", len(df_camp))
-        c2.metric("Cumple HOY", int((df_camp["Cumple_Diff_Dias"] == 0).sum()) if not df_camp.empty else 0)
-        c3.metric("Próximos 8 días", int((df_camp["Cumple_Diff_Dias"] > 0).sum()) if not df_camp.empty else 0)
+        c2.metric(
+            "Cumple HOY", int((df_camp["Cumple_Diff_Dias"] == 0).sum()) if not df_camp.empty else 0
+        )
+        c3.metric(
+            "Próximos 8 días",
+            int((df_camp["Cumple_Diff_Dias"] > 0).sum()) if not df_camp.empty else 0,
+        )
 
         st.markdown("---")
         st.markdown("##### 🎯 Campaña activa: *5% OFF Cumpleaños*")
@@ -900,7 +1047,18 @@ def main():
         if df_camp.empty:
             st.info("No hay peluditos en ventana de cumpleaños (-8/+8) con fecha válida.")
         else:
-            cols_show = [c for c in ["Nombre", "Mascota", "Telefono", "Cumple_Ocurrencia", "Estado_Cumple", "Cumple_Diff_Dias"] if c in df_camp.columns]
+            cols_show = [
+                c
+                for c in [
+                    "Nombre",
+                    "Mascota",
+                    "Telefono",
+                    "Cumple_Ocurrencia",
+                    "Estado_Cumple",
+                    "Cumple_Diff_Dias",
+                ]
+                if c in df_camp.columns
+            ]
             st.dataframe(df_camp[cols_show], use_container_width=True, hide_index=True)
 
             st.markdown("##### 📲 Envío 1 a 1 (WhatsApp listo):")
@@ -915,7 +1073,9 @@ def main():
                 link = link_whatsapp(tel, msg)
 
                 if link:
-                    st.markdown(f"- **{mascota}** (Dueño: {nom}) — {estado} → [Enviar WhatsApp]({link})")
+                    st.markdown(
+                        f"- **{mascota}** (Dueño: {nom}) — {estado} → [Enviar WhatsApp]({link})"
+                    )
                 else:
                     st.write(f"- **{mascota}** (Dueño: {nom}) — {estado} → Teléfono no válido")
 
@@ -923,19 +1083,27 @@ def main():
     # TAB 2: RECOMPRA INTELIGENTE
     # ==========================================
     with tabs[1]:
-        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>🥣</span> Smart Rebuy (Recompras automáticas)", unsafe_allow_html=True)
+        st.markdown(
+            f"#### <span style='color:{COLOR_ACENTO}'>🥣</span> Smart Rebuy (Recompras automáticas)",
+            unsafe_allow_html=True,
+        )
 
         # --- NUEVO: Recompra rápida 20 días ---
         st.markdown("##### Recompra rápida (20 días sin compra)")
         cth1, cth2 = st.columns([1, 2])
         with cth1:
-            umbral = st.slider("Umbral (días sin compra)", min_value=10, max_value=45, value=20, step=1)
+            umbral = st.slider(
+                "Umbral (días sin compra)", min_value=10, max_value=45, value=20, step=1
+            )
         with cth2:
-            st.caption("Mensaje pensado para activar volumen: corto, directo, con el nombre del peludito y el último alimento.")
-
+            st.caption(
+                "Mensaje pensado para activar volumen: corto, directo, con el nombre del peludito y el último alimento."
+            )
 
         if "Dias_Sin_Compra" in master.columns:
-            df_fast = master[(master["Dias_Sin_Compra"] >= umbral) & (master["Dias_Sin_Compra"] <= umbral + 10)].copy()
+            df_fast = master[
+                (master["Dias_Sin_Compra"] >= umbral) & (master["Dias_Sin_Compra"] <= umbral + 10)
+            ].copy()
             # Filtrar solo clientes cuyo último producto es concentrado
             if not df_fast.empty and "Ultimo_Producto" in df_fast.columns:
                 df_fast = df_fast[df_fast["Ultimo_Producto"].apply(es_concentrado)]
@@ -945,7 +1113,11 @@ def main():
         if df_fast.empty:
             st.success("No hay clientes en la ventana de recompra rápida de concentrados.")
         else:
-            cols = [c for c in ["Nombre", "Mascota", "Telefono", "Ultimo_Producto", "Dias_Sin_Compra"] if c in df_fast.columns]
+            cols = [
+                c
+                for c in ["Nombre", "Mascota", "Telefono", "Ultimo_Producto", "Dias_Sin_Compra"]
+                if c in df_fast.columns
+            ]
             st.dataframe(df_fast[cols], use_container_width=True, hide_index=True)
 
             st.markdown("##### Envío 1 a 1 (WhatsApp listo):")
@@ -965,10 +1137,13 @@ def main():
         st.divider()
 
         # --- EXISTENTE: Alerta 30-60 días (mantener lo tuyo) ---
-        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>🥣</span> Alerta: Plato Vacío (30-60 días)", unsafe_allow_html=True)
+        st.markdown(
+            f"#### <span style='color:{COLOR_ACENTO}'>🥣</span> Alerta: Plato Vacío (30-60 días)",
+            unsafe_allow_html=True,
+        )
 
-        if 'Estado' in master.columns:
-            df_rebuy = master[master['Estado'] == "🟡 Recompra (Alerta)"].copy()
+        if "Estado" in master.columns:
+            df_rebuy = master[master["Estado"] == "🟡 Recompra (Alerta)"].copy()
             # Filtrar solo clientes cuyo último producto es concentrado
             if not df_rebuy.empty and "Ultimo_Producto" in df_rebuy.columns:
                 df_rebuy = df_rebuy[df_rebuy["Ultimo_Producto"].apply(es_concentrado)]
@@ -978,20 +1153,20 @@ def main():
         if df_rebuy.empty:
             st.success("✅ Todo al día. No hay alertas de recompra urgentes de concentrados.")
         else:
-            cols_mostrar = ['Nombre', 'Mascota', 'Telefono', 'Ultimo_Producto', 'Dias_Sin_Compra']
+            cols_mostrar = ["Nombre", "Mascota", "Telefono", "Ultimo_Producto", "Dias_Sin_Compra"]
             cols_existentes = [c for c in cols_mostrar if c in df_rebuy.columns]
             st.dataframe(df_rebuy[cols_existentes], use_container_width=True, hide_index=True)
-            
+
             st.markdown("##### 🚀 Click para enviar Recordatorio Bonito:")
             for idx, row in df_rebuy.iterrows():
-                nom = row.get('Nombre', 'Cliente')
-                mascota = row.get('Mascota', 'tu mascota')
-                prod = str(row.get('Ultimo_Producto', 'su alimento')).split('(')[0]
-                tel = row.get('Telefono', '')
-                
+                nom = row.get("Nombre", "Cliente")
+                mascota = row.get("Mascota", "tu mascota")
+                prod = str(row.get("Ultimo_Producto", "su alimento")).split("(")[0]
+                tel = row.get("Telefono", "")
+
                 msg = msg_recompra(nom, mascota, prod)
                 link = link_whatsapp(tel, msg)
-                
+
                 if link:
                     st.markdown(f"🔸 **{mascota}** (Dueño: {nom}) → [📲 WhatsApp Recompra]({link})")
 
@@ -999,25 +1174,33 @@ def main():
     # TAB 3: SERVICIOS (ÁNGELA)
     # ==========================================
     with tabs[2]:
-        st.markdown(f"#### <span style='color:{COLOR_PRIMARIO}'>💁‍♀️</span> Mensajes de Ángela", unsafe_allow_html=True)
-        
-        if 'Estado' in master.columns:
-            df_angela = master[master['Estado'].isin(["🟠 Riesgo", "🔴 Perdido", "⚪ Nuevo"])].copy()
+        st.markdown(
+            f"#### <span style='color:{COLOR_PRIMARIO}'>💁‍♀️</span> Mensajes de Ángela",
+            unsafe_allow_html=True,
+        )
+
+        if "Estado" in master.columns:
+            df_angela = master[
+                master["Estado"].isin(["🟠 Riesgo", "🔴 Perdido", "⚪ Nuevo"])
+            ].copy()
         else:
             df_angela = master.copy()
-        
+
         st.write(f"**Lista de envío ({len(df_angela)} clientes inactivos o nuevos):**")
-        
+
         with st.expander("Ver lista detallada"):
-            cols_angela = ['Nombre', 'Mascota', 'Telefono', 'Email']
-            st.dataframe(df_angela[[c for c in cols_angela if c in df_angela.columns]], use_container_width=True)
+            cols_angela = ["Nombre", "Mascota", "Telefono", "Email"]
+            st.dataframe(
+                df_angela[[c for c in cols_angela if c in df_angela.columns]],
+                use_container_width=True,
+            )
 
         st.markdown("##### 💌 Enviar Saludo:")
         gancho = "Envío Gratis + una Sorpresa 🎁"  # Valor por defecto para evitar UnboundLocalError
         for idx, row in df_angela.iterrows():
-            nom = row.get('Nombre', 'Vecino')
-            mascota = row.get('Mascota', 'tu mascota')
-            tel = row.get('Telefono', '')
+            nom = row.get("Nombre", "Vecino")
+            mascota = row.get("Mascota", "tu mascota")
+            tel = row.get("Telefono", "")
             # Si quieres permitir personalización, podrías leer gancho de un input aquí
             msg_serv = f"¡Hola {nom}! 🌈 Hace tiempo no vemos la colita feliz de {mascota} y los extrañamos mucho en Bigotes y Patitas 🥺🐾. Soy Ángela 👋. Solo pasaba a saludarte y recordarte que aquí seguimos con el corazón abierto. ❤️ ¿Cómo han estado? ¡Nos encantaría saber de ustedes! {gancho if gancho else ''} ✨🚚"
             link = link_whatsapp(tel, msg_serv)
@@ -1028,11 +1211,16 @@ def main():
     # TAB 4: CAMPAÑAS (NUEVO CENTRO)
     # ==========================================
     with tabs[3]:
-        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>📅</span> Campañas activas (calendario + segmentación)", unsafe_allow_html=True)
+        st.markdown(
+            f"#### <span style='color:{COLOR_ACENTO}'>📅</span> Campañas activas (calendario + segmentación)",
+            unsafe_allow_html=True,
+        )
 
         cal = calendario_campanas()
         hoy = pd.Timestamp.now().normalize()
-        proximas = cal[(cal["Fecha"] >= hoy) & (cal["Fecha"] <= hoy + pd.Timedelta(days=120))].copy()
+        proximas = cal[
+            (cal["Fecha"] >= hoy) & (cal["Fecha"] <= hoy + pd.Timedelta(days=120))
+        ].copy()
 
         c1, c2 = st.columns([1, 1])
         with c1:
@@ -1042,15 +1230,26 @@ def main():
         with c2:
             evento_sel = st.selectbox(
                 "Elegir evento",
-                options=proximas["Evento"].tolist() if not proximas.empty else cal["Evento"].tolist()
+                options=proximas["Evento"].tolist()
+                if not proximas.empty
+                else cal["Evento"].tolist(),
             )
             tag_sel = cal[cal["Evento"] == evento_sel]["Tag"].iloc[0]
-            promo = st.text_input("Promo / Gancho", value="10% OFF + Domicilio gratis (hoy)", help="Corto, claro, con urgencia suave.")
-            template = st.text_area("Mensaje (editable)", value=plantilla_evento(tag_sel), height=160)
+            promo = st.text_input(
+                "Promo / Gancho",
+                value="10% OFF + Domicilio gratis (hoy)",
+                help="Corto, claro, con urgencia suave.",
+            )
+            template = st.text_area(
+                "Mensaje (editable)", value=plantilla_evento(tag_sel), height=160
+            )
 
         st.markdown("---")
         st.markdown("**Segmentación (a quién se le envía):**")
-        seg = st.selectbox("Segmento", ["Todos", "🟢 Activo", "🟡 Recompra (Alerta)", "🟠 Riesgo", "🔴 Perdido", "⚪ Nuevo"])
+        seg = st.selectbox(
+            "Segmento",
+            ["Todos", "🟢 Activo", "🟡 Recompra (Alerta)", "🟠 Riesgo", "🔴 Perdido", "⚪ Nuevo"],
+        )
         df_target = master.copy()
         if seg != "Todos" and "Estado" in df_target.columns:
             df_target = df_target[df_target["Estado"] == seg].copy()
@@ -1070,7 +1269,7 @@ def main():
                 data=csv,
                 file_name=f"campana_{tag_sel}_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv",
-                use_container_width=True
+                use_container_width=True,
             )
 
             st.markdown("##### Links listos para enviar:")
@@ -1082,33 +1281,37 @@ def main():
     # TAB 5: RECUPERACIÓN
     # ==========================================
     with tabs[4]:
-        st.markdown(f"#### <span style='color:{COLOR_ACENTO}'>🚑</span> Rescate con Oferta", unsafe_allow_html=True)
-        
-        if 'Estado' in master.columns:
-            df_risk = master[master['Estado'].isin(["🟠 Riesgo", "🔴 Perdido"])].copy()
+        st.markdown(
+            f"#### <span style='color:{COLOR_ACENTO}'>🚑</span> Rescate con Oferta",
+            unsafe_allow_html=True,
+        )
+
+        if "Estado" in master.columns:
+            df_risk = master[master["Estado"].isin(["🟠 Riesgo", "🔴 Perdido"])].copy()
             # Filtrar solo clientes cuyo último producto es concentrado
             if not df_risk.empty and "Ultimo_Producto" in df_risk.columns:
                 df_risk = df_risk[df_risk["Ultimo_Producto"].apply(es_concentrado)]
         else:
             df_risk = pd.DataFrame()
-        
+
         if df_risk.empty:
             st.success("¡Excelente! No tienes clientes perdidos de concentrados.")
         else:
             st.write(f"Detectamos {len(df_risk)} clientes para recuperar (concentrados).")
             gancho = st.text_input("Oferta Gancho:", "Envío Gratis + una Sorpresa 🎁")
-            
+
             with st.expander("Ver lista de recuperación"):
                 for idx, row in df_risk.iterrows():
-                    nom = row.get('Nombre', 'Cliente')
-                    mascota = row.get('Mascota', 'tu mascota')
-                    tel = row.get('Telefono', '')
-                    
+                    nom = row.get("Nombre", "Cliente")
+                    mascota = row.get("Mascota", "tu mascota")
+                    tel = row.get("Telefono", "")
+
                     msg = msg_inactivo(nom, mascota, gancho)
                     link = link_whatsapp(tel, msg)
-                    
+
                     if link:
                         st.markdown(f"🎣 **Recuperar a {nom}**: [Enviar Oferta]({link})")
+
 
 if __name__ == "__main__":
     main()

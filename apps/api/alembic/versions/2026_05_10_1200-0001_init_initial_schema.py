@@ -4,21 +4,32 @@ Revision ID: 0001_init
 Revises:
 Create Date: 2026-05-10 12:00:00
 """
+
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0001_init"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
-SCHEMAS = ["catalog", "inventory", "sales", "purchasing", "crm", "finance", "auth", "ops", "analytics"]
+SCHEMAS = [
+    "catalog",
+    "inventory",
+    "sales",
+    "purchasing",
+    "crm",
+    "finance",
+    "auth",
+    "ops",
+    "analytics",
+]
 
 
 def upgrade() -> None:
@@ -34,12 +45,29 @@ def upgrade() -> None:
     # ---- auth.roles
     op.create_table(
         "roles",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("name", sa.String(50), nullable=False),
         sa.Column("description", sa.String(255), nullable=True),
-        sa.Column("permissions", postgresql.ARRAY(sa.String()), server_default="{}", nullable=False),
+        sa.Column(
+            "permissions", postgresql.ARRAY(sa.String()), server_default="{}", nullable=False
+        ),
         sa.UniqueConstraint("name", name="uq_roles_name"),
         schema="auth",
     )
@@ -47,9 +75,24 @@ def upgrade() -> None:
     # ---- auth.users
     op.create_table(
         "users",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_by", sa.String(100), nullable=True),
         sa.Column("updated_by", sa.String(100), nullable=True),
@@ -68,17 +111,42 @@ def upgrade() -> None:
     # ---- auth.user_roles
     op.create_table(
         "user_roles",
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("auth.users.id", ondelete="CASCADE"), primary_key=True),
-        sa.Column("role_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("auth.roles.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column(
+            "user_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("auth.users.id", ondelete="CASCADE"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "role_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("auth.roles.id", ondelete="CASCADE"),
+            primary_key=True,
+        ),
         schema="auth",
     )
 
     # ---- catalog.brands
     op.create_table(
         "brands",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("name", sa.String(120), nullable=False),
         sa.Column("slug", sa.String(140), nullable=False),
@@ -93,15 +161,35 @@ def upgrade() -> None:
     # ---- catalog.categories
     op.create_table(
         "categories",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("name", sa.String(120), nullable=False),
         sa.Column("slug", sa.String(140), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("image_url", sa.String(500), nullable=True),
-        sa.Column("parent_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("catalog.categories.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "parent_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("catalog.categories.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("sort_order", sa.Integer(), server_default="0", nullable=False),
         sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.UniqueConstraint("slug", name="uq_categories_slug"),
@@ -113,9 +201,24 @@ def upgrade() -> None:
     # ---- catalog.products
     op.create_table(
         "products",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_by", sa.String(100), nullable=True),
         sa.Column("updated_by", sa.String(100), nullable=True),
@@ -124,8 +227,18 @@ def upgrade() -> None:
         sa.Column("slug", sa.String(280), nullable=False),
         sa.Column("short_description", sa.String(500), nullable=True),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("brand_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("catalog.brands.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("category_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("catalog.categories.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "brand_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("catalog.brands.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "category_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("catalog.categories.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("cost", sa.Numeric(14, 2), server_default="0", nullable=False),
         sa.Column("price", sa.Numeric(14, 2), server_default="0", nullable=False),
         sa.Column("compare_at_price", sa.Numeric(14, 2), nullable=True),
@@ -154,9 +267,24 @@ def upgrade() -> None:
     # ---- inventory.stock_locations
     op.create_table(
         "stock_locations",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("code", sa.String(40), nullable=False),
         sa.Column("name", sa.String(120), nullable=False),
         sa.Column("is_default", sa.Integer(), server_default="0", nullable=False),
@@ -167,11 +295,36 @@ def upgrade() -> None:
     # ---- inventory.stock
     op.create_table(
         "stock",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("product_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("catalog.products.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("location_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("inventory.stock_locations.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "product_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("catalog.products.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "location_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("inventory.stock_locations.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("quantity", sa.Integer(), server_default="0", nullable=False),
         sa.Column("reserved", sa.Integer(), server_default="0", nullable=False),
         sa.Column("reorder_point", sa.Integer(), server_default="0", nullable=False),
@@ -186,13 +339,38 @@ def upgrade() -> None:
     # ---- inventory.stock_movements
     op.create_table(
         "stock_movements",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("created_by", sa.String(100), nullable=True),
         sa.Column("updated_by", sa.String(100), nullable=True),
-        sa.Column("product_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("catalog.products.id", ondelete="RESTRICT"), nullable=False),
-        sa.Column("location_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("inventory.stock_locations.id", ondelete="RESTRICT"), nullable=False),
+        sa.Column(
+            "product_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("catalog.products.id", ondelete="RESTRICT"),
+            nullable=False,
+        ),
+        sa.Column(
+            "location_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("inventory.stock_locations.id", ondelete="RESTRICT"),
+            nullable=False,
+        ),
         sa.Column("movement_type", sa.String(20), nullable=False),
         sa.Column("quantity_delta", sa.Integer(), nullable=False),
         sa.Column("quantity_after", sa.Integer(), nullable=False),
@@ -206,15 +384,32 @@ def upgrade() -> None:
     op.create_index("ix_sm_product_id", "stock_movements", ["product_id"], schema="inventory")
     op.create_index("ix_sm_location_id", "stock_movements", ["location_id"], schema="inventory")
     op.create_index("ix_sm_movement_type", "stock_movements", ["movement_type"], schema="inventory")
-    op.create_index("ix_sm_reference", "stock_movements", ["reference_type", "reference_id"], schema="inventory")
+    op.create_index(
+        "ix_sm_reference", "stock_movements", ["reference_type", "reference_id"], schema="inventory"
+    )
     op.create_index("ix_sm_occurred_at", "stock_movements", ["occurred_at"], schema="inventory")
 
     # ---- crm.customers
     op.create_table(
         "customers",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("full_name", sa.String(255), nullable=False),
         sa.Column("document_id", sa.String(40), nullable=True),
@@ -239,15 +434,35 @@ def upgrade() -> None:
     # ---- sales.orders
     op.create_table(
         "orders",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("created_by", sa.String(100), nullable=True),
         sa.Column("updated_by", sa.String(100), nullable=True),
         sa.Column("order_number", sa.String(40), nullable=False),
         sa.Column("channel", sa.String(30), server_default="POS_NEW", nullable=False),
         sa.Column("status", sa.String(30), server_default="confirmed", nullable=False),
-        sa.Column("customer_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("crm.customers.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "customer_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("crm.customers.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("subtotal", sa.Numeric(14, 2), server_default="0", nullable=False),
         sa.Column("discount_total", sa.Numeric(14, 2), server_default="0", nullable=False),
         sa.Column("tax_total", sa.Numeric(14, 2), server_default="0", nullable=False),
@@ -273,11 +488,36 @@ def upgrade() -> None:
     # ---- sales.order_items
     op.create_table(
         "order_items",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("order_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("sales.orders.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("product_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("catalog.products.id", ondelete="RESTRICT"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "order_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("sales.orders.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "product_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("catalog.products.id", ondelete="RESTRICT"),
+            nullable=False,
+        ),
         sa.Column("sku_snapshot", sa.String(64), nullable=False),
         sa.Column("name_snapshot", sa.String(255), nullable=False),
         sa.Column("quantity", sa.Integer(), nullable=False),
@@ -294,12 +534,32 @@ def upgrade() -> None:
     # ---- sales.payments
     op.create_table(
         "payments",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("created_by", sa.String(100), nullable=True),
         sa.Column("updated_by", sa.String(100), nullable=True),
-        sa.Column("order_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("sales.orders.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "order_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("sales.orders.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("method", sa.String(40), nullable=False),
         sa.Column("amount", sa.Numeric(14, 2), nullable=False),
         sa.Column("received_at", sa.DateTime(timezone=True), nullable=False),
@@ -313,9 +573,24 @@ def upgrade() -> None:
     # ---- ops.legacy_id_map
     op.create_table(
         "legacy_id_map",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("entity", sa.String(40), nullable=False),
         sa.Column("legacy_id", sa.String(120), nullable=False),
         sa.Column("new_id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -330,7 +605,12 @@ def upgrade() -> None:
     # ---- ops.audit_log
     op.create_table(
         "audit_log",
-        sa.Column("id", postgresql.UUID(as_uuid=True), server_default=sa.text("gen_random_uuid()"), primary_key=True),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("actor", sa.String(120), nullable=False),
         sa.Column("action", sa.String(80), nullable=False),

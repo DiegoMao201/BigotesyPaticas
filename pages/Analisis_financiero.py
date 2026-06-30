@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 
+
 def money_int(val):
     if isinstance(val, (np.integer, int)):
         return int(val)
@@ -56,6 +57,7 @@ def money_int(val):
     except Exception:
         out = int(re.sub(r"[^0-9]", "", s) or 0)
     return -out if neg else out
+
 
 # ==========================================================
 # CENTRO DE CONTROL FINANCIERO (Nexus Executive Finance)
@@ -133,17 +135,20 @@ st.markdown(
 # UTILIDADES
 # ==========================================================
 
+
 def _money(x: float) -> str:
     try:
         return f"${float(x):,.0f}"
     except Exception:
         return "$0"
 
+
 def _pct(x: float, digits: int = 1) -> str:
     try:
         return f"{float(x) * 100:.{digits}f}%"
     except Exception:
         return "0.0%"
+
 
 def _col_pick(df: pd.DataFrame, candidates: list[str]) -> str | None:
     """Retorna la primera columna que exista (case-insensitive, strip)."""
@@ -155,11 +160,13 @@ def _col_pick(df: pd.DataFrame, candidates: list[str]) -> str | None:
             return norm[cand.strip().lower()]
     return None
 
+
 def _safe_datetime(df: pd.DataFrame, col: str) -> pd.DataFrame:
     df = df.copy()
     if col in df.columns:
         df[col] = pd.to_datetime(df[col], errors="coerce")
     return df
+
 
 def _date_bounds(*series_list: pd.Series):
     mins = []
@@ -178,15 +185,17 @@ def _date_bounds(*series_list: pd.Series):
         return hoy - pd.Timedelta(days=30), hoy
     return min(mins), max(maxs)
 
+
 def _periodize(dt: pd.Series, freq: str) -> pd.Series:
     # freq: 'D', 'W', 'M'
     if freq == "D":
         return dt.dt.floor("D")
     if freq == "W":
         # semana iniciando lunes
-        return (dt.dt.to_period("W-MON").dt.start_time)
+        return dt.dt.to_period("W-MON").dt.start_time
     # mensual por defecto
     return dt.dt.to_period("M").dt.to_timestamp()
+
 
 def _rolling_growth(series: pd.Series, periods: int = 3) -> float:
     """Crecimiento promedio reciente (para sugerir un g)."""
@@ -195,15 +204,17 @@ def _rolling_growth(series: pd.Series, periods: int = 3) -> float:
         return 0.0
     # crecimiento compuesto aproximado vs hace 'periods'
     s = s.sort_index()
-    a = float(s.iloc[-periods-1])
+    a = float(s.iloc[-periods - 1])
     b = float(s.iloc[-1])
     if a <= 0:
         return 0.0
     return (b / a) ** (1 / periods) - 1
 
+
 # ==========================================================
 # CARGA DE DATOS DESDE SESSION_STATE (TU BASE REAL)
 # ==========================================================
+
 
 def cargar_datos():
     """Carga ventas/gastos/cierres desde st.session_state.db (si existe)."""
@@ -216,6 +227,7 @@ def cargar_datos():
     df_cie = st.session_state.db.get("cie", pd.DataFrame()).copy()  # opcional
 
     return df_ven, df_gas, df_cie
+
 
 def preparar_ventas(df_ven: pd.DataFrame) -> pd.DataFrame:
     df = df_ven.copy()
@@ -261,6 +273,7 @@ def preparar_ventas(df_ven: pd.DataFrame) -> pd.DataFrame:
     df = df[df["Fecha"].notna()].copy()
     return df
 
+
 def preparar_gastos(df_gas: pd.DataFrame) -> pd.DataFrame:
     df = df_gas.copy()
     if df.empty:
@@ -305,6 +318,7 @@ def preparar_gastos(df_gas: pd.DataFrame) -> pd.DataFrame:
     df = df[df["Fecha"].notna()].copy()
     return df
 
+
 def preparar_cierres(df_cie: pd.DataFrame) -> pd.DataFrame:
     df = df_cie.copy()
     if df.empty:
@@ -325,6 +339,7 @@ def preparar_cierres(df_cie: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+
 def filtrar_por_fecha(df: pd.DataFrame, desde: pd.Timestamp, hasta: pd.Timestamp) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame()
@@ -333,9 +348,11 @@ def filtrar_por_fecha(df: pd.DataFrame, desde: pd.Timestamp, hasta: pd.Timestamp
         return pd.DataFrame()
     return df[(df["Fecha"] >= desde) & (df["Fecha"] <= hasta)].copy()
 
+
 # ==========================================================
 # MOTORES: P&L, CAJA, FORECAST
 # ==========================================================
+
 
 def construir_pl(df_ven_f: pd.DataFrame, df_gas_f: pd.DataFrame, freq: str) -> pd.DataFrame:
     """Estado de Resultados (P&L) agregado por período."""
@@ -360,16 +377,39 @@ def construir_pl(df_ven_f: pd.DataFrame, df_gas_f: pd.DataFrame, freq: str) -> p
         g["Periodo"] = _periodize(g["Fecha"], freq)
         g["Tipo_Gasto"] = g["Tipo_Gasto"].astype(str).str.strip().str.title()
         g["Es_Fijo"] = g["Tipo_Gasto"].isin(["Fijo", "Fija", "Fixed"])
-        gas_all = g.groupby("Periodo", as_index=False)["Monto"].sum().rename(columns={"Monto": "Gastos"})
-        gas_fx = g[g["Es_Fijo"]].groupby("Periodo", as_index=False)["Monto"].sum().rename(columns={"Monto": "Gastos_Fijos"})
-        gas_vr = g[~g["Es_Fijo"]].groupby("Periodo", as_index=False)["Monto"].sum().rename(columns={"Monto": "Gastos_Variables"})
+        gas_all = (
+            g.groupby("Periodo", as_index=False)["Monto"].sum().rename(columns={"Monto": "Gastos"})
+        )
+        gas_fx = (
+            g[g["Es_Fijo"]]
+            .groupby("Periodo", as_index=False)["Monto"]
+            .sum()
+            .rename(columns={"Monto": "Gastos_Fijos"})
+        )
+        gas_vr = (
+            g[~g["Es_Fijo"]]
+            .groupby("Periodo", as_index=False)["Monto"]
+            .sum()
+            .rename(columns={"Monto": "Gastos_Variables"})
+        )
     else:
         gas_all = pd.DataFrame(columns=["Periodo", "Gastos"])
         gas_fx = pd.DataFrame(columns=["Periodo", "Gastos_Fijos"])
         gas_vr = pd.DataFrame(columns=["Periodo", "Gastos_Variables"])
 
-    pl = ven.merge(gas_all, on="Periodo", how="outer").merge(gas_fx, on="Periodo", how="outer").merge(gas_vr, on="Periodo", how="outer")
-    for c in ["Ventas", "Costo_Ventas", "Gastos", "Gastos_Fijos", "Gastos_Variables", "Transacciones"]:
+    pl = (
+        ven.merge(gas_all, on="Periodo", how="outer")
+        .merge(gas_fx, on="Periodo", how="outer")
+        .merge(gas_vr, on="Periodo", how="outer")
+    )
+    for c in [
+        "Ventas",
+        "Costo_Ventas",
+        "Gastos",
+        "Gastos_Fijos",
+        "Gastos_Variables",
+        "Transacciones",
+    ]:
         if c not in pl.columns:
             pl[c] = 0.0
         pl[c] = pd.to_numeric(pl[c], errors="coerce").fillna(0.0)
@@ -383,16 +423,31 @@ def construir_pl(df_ven_f: pd.DataFrame, df_gas_f: pd.DataFrame, freq: str) -> p
 
     return pl
 
-def construir_caja(df_ven_f: pd.DataFrame, df_gas_f: pd.DataFrame, df_cie_f: pd.DataFrame, desde: pd.Timestamp, hasta: pd.Timestamp):
+
+def construir_caja(
+    df_ven_f: pd.DataFrame,
+    df_gas_f: pd.DataFrame,
+    df_cie_f: pd.DataFrame,
+    desde: pd.Timestamp,
+    hasta: pd.Timestamp,
+):
     """Modelo de caja simple (entrada/salida) con conciliación si hay cierres."""
     # Entradas por método
     ingresos = pd.DataFrame()
     if df_ven_f is not None and not df_ven_f.empty:
-        ingresos = df_ven_f.groupby("Metodo_Pago", as_index=False)["Total"].sum().rename(columns={"Total": "Ingresos"})
+        ingresos = (
+            df_ven_f.groupby("Metodo_Pago", as_index=False)["Total"]
+            .sum()
+            .rename(columns={"Total": "Ingresos"})
+        )
 
     egresos = pd.DataFrame()
     if df_gas_f is not None and not df_gas_f.empty:
-        egresos = df_gas_f.groupby("Metodo_Pago", as_index=False)["Monto"].sum().rename(columns={"Monto": "Egresos"})
+        egresos = (
+            df_gas_f.groupby("Metodo_Pago", as_index=False)["Monto"]
+            .sum()
+            .rename(columns={"Monto": "Egresos"})
+        )
 
     mix = ingresos.merge(egresos, on="Metodo_Pago", how="outer").fillna(0.0)
     mix["Neto"] = mix["Ingresos"] - mix["Egresos"]
@@ -408,14 +463,24 @@ def construir_caja(df_ven_f: pd.DataFrame, df_gas_f: pd.DataFrame, df_cie_f: pd.
         if not prev.empty:
             saldo_inicial = float(prev.iloc[0]["Saldo_Real"])
         # saldo final: último cierre dentro del rango
-        dentro = df_cie_f[(df_cie_f["Fecha"] >= desde) & (df_cie_f["Fecha"] <= hasta)].sort_values("Fecha", ascending=False)
+        dentro = df_cie_f[(df_cie_f["Fecha"] >= desde) & (df_cie_f["Fecha"] <= hasta)].sort_values(
+            "Fecha", ascending=False
+        )
         if not dentro.empty:
             saldo_final = float(dentro.iloc[0]["Saldo_Real"])
             cierre_ref = dentro.iloc[0]
 
     return mix, saldo_inicial, saldo_final, cierre_ref
 
-def forecast_escenarios(pl_m: pd.DataFrame, meses: int, g_ventas: float, margen_obj: float, inflacion_gastos: float, gastos_fijos_base: float | None = None):
+
+def forecast_escenarios(
+    pl_m: pd.DataFrame,
+    meses: int,
+    g_ventas: float,
+    margen_obj: float,
+    inflacion_gastos: float,
+    gastos_fijos_base: float | None = None,
+):
     """Proyección mensual basada en series históricas + supuestos."""
     if pl_m is None or pl_m.empty:
         return pd.DataFrame()
@@ -425,13 +490,27 @@ def forecast_escenarios(pl_m: pd.DataFrame, meses: int, g_ventas: float, margen_
 
     # último mes observado
     last_period = hist["Periodo"].max()
-    last_sales = float(hist[hist["Periodo"] == last_period]["Ventas"].iloc[0]) if "Ventas" in hist.columns and not hist.empty else 0.0
+    last_sales = (
+        float(hist[hist["Periodo"] == last_period]["Ventas"].iloc[0])
+        if "Ventas" in hist.columns and not hist.empty
+        else 0.0
+    )
 
     # baseline de gastos: últimos 3 meses promedio
     tail = hist.tail(3)
-    base_gastos = float(tail["Gastos"].mean()) if "Gastos" in tail.columns and not tail.empty else 0.0
-    base_fijos = float(tail["Gastos_Fijos"].mean()) if "Gastos_Fijos" in tail.columns and not tail.empty else 0.0
-    base_vars = float(tail["Gastos_Variables"].mean()) if "Gastos_Variables" in tail.columns and not tail.empty else max(0.0, base_gastos - base_fijos)
+    base_gastos = (
+        float(tail["Gastos"].mean()) if "Gastos" in tail.columns and not tail.empty else 0.0
+    )
+    base_fijos = (
+        float(tail["Gastos_Fijos"].mean())
+        if "Gastos_Fijos" in tail.columns and not tail.empty
+        else 0.0
+    )
+    base_vars = (
+        float(tail["Gastos_Variables"].mean())
+        if "Gastos_Variables" in tail.columns and not tail.empty
+        else max(0.0, base_gastos - base_fijos)
+    )
 
     if gastos_fijos_base is not None:
         base_fijos = float(gastos_fijos_base)
@@ -468,9 +547,11 @@ def forecast_escenarios(pl_m: pd.DataFrame, meses: int, g_ventas: float, margen_
 
     return pd.DataFrame(rows)
 
+
 # ==========================================================
 # UI PRINCIPAL
 # ==========================================================
+
 
 def main():
     df_ven_raw, df_gas_raw, df_cie_raw = cargar_datos()
@@ -495,7 +576,12 @@ def main():
         st.divider()
 
         # Fechas
-        desde = st.date_input("Desde", value=max(min_date, (max_dt - pd.Timedelta(days=90)).date()), min_value=min_date, max_value=max_date)
+        desde = st.date_input(
+            "Desde",
+            value=max(min_date, (max_dt - pd.Timedelta(days=90)).date()),
+            min_value=min_date,
+            max_value=max_date,
+        )
         hasta = st.date_input("Hasta", value=max_date, min_value=min_date, max_value=max_date)
 
         desde_dt = pd.to_datetime(desde)
@@ -515,14 +601,33 @@ def main():
             filtrar_por_fecha(df_gas, min_dt, max_dt),
             "M",
         )
-        g_sug = _rolling_growth(pl_m_ref.set_index("Periodo")["Ventas"] if not pl_m_ref.empty else pd.Series(dtype=float), periods=3)
+        g_sug = _rolling_growth(
+            pl_m_ref.set_index("Periodo")["Ventas"]
+            if not pl_m_ref.empty
+            else pd.Series(dtype=float),
+            periods=3,
+        )
 
-        g_ventas = st.number_input("Crecimiento mensual ventas", value=float(max(-0.3, min(0.5, g_sug))), step=0.01, format="%.2f")
-        margen_obj = st.number_input("Margen bruto objetivo", value=float(pl_m_ref["Margen_Bruto_%"].tail(3).mean() if not pl_m_ref.empty else 0.30), step=0.01, format="%.2f")
-        inflacion_gastos = st.number_input("Inflación mensual gastos", value=0.01, step=0.01, format="%.2f")
+        g_ventas = st.number_input(
+            "Crecimiento mensual ventas",
+            value=float(max(-0.3, min(0.5, g_sug))),
+            step=0.01,
+            format="%.2f",
+        )
+        margen_obj = st.number_input(
+            "Margen bruto objetivo",
+            value=float(pl_m_ref["Margen_Bruto_%"].tail(3).mean() if not pl_m_ref.empty else 0.30),
+            step=0.01,
+            format="%.2f",
+        )
+        inflacion_gastos = st.number_input(
+            "Inflación mensual gastos", value=0.01, step=0.01, format="%.2f"
+        )
 
         # Caja inicial (si no hay cierres)
-        caja_inicial = st.number_input("Caja inicial (si no hay cierre)", value=40_000_000.0, step=100_000.0)
+        caja_inicial = st.number_input(
+            "Caja inicial (si no hay cierre)", value=40_000_000.0, step=100_000.0
+        )
 
     # Filtro por fecha
     df_ven_f = filtrar_por_fecha(df_ven, desde_dt, hasta_dt)
@@ -562,9 +667,19 @@ def main():
     ticket = (ventas / tx) if tx > 0 else 0.0
 
     # Caja / conciliación
-    mix, saldo_ini, saldo_fin, cierre_ref = construir_caja(df_ven_f, df_gas_f, df_cie_f, desde_dt, hasta_dt)
-    cash_sales = float(df_ven_f[df_ven_f["Metodo_Pago"] == "Efectivo"]["Total"].sum()) if not df_ven_f.empty else 0.0
-    cash_exp = float(df_gas_f[df_gas_f["Metodo_Pago"] == "Efectivo"]["Monto"].sum()) if not df_gas_f.empty else 0.0
+    mix, saldo_ini, saldo_fin, cierre_ref = construir_caja(
+        df_ven_f, df_gas_f, df_cie_f, desde_dt, hasta_dt
+    )
+    cash_sales = (
+        float(df_ven_f[df_ven_f["Metodo_Pago"] == "Efectivo"]["Total"].sum())
+        if not df_ven_f.empty
+        else 0.0
+    )
+    cash_exp = (
+        float(df_gas_f[df_gas_f["Metodo_Pago"] == "Efectivo"]["Monto"].sum())
+        if not df_gas_f.empty
+        else 0.0
+    )
 
     # Caja estimada (si hay saldo inicial, simula delta efectivo)
     caja_est = None
@@ -576,7 +691,11 @@ def main():
     if not pl_m.empty:
         ebitda_m = float(pl_m.tail(3)["EBITDA"].mean())
     burn = -ebitda_m if ebitda_m < 0 else 0.0
-    caja_base_runway = saldo_fin if saldo_fin is not None else (caja_est if caja_est is not None else float(caja_inicial))
+    caja_base_runway = (
+        saldo_fin
+        if saldo_fin is not None
+        else (caja_est if caja_est is not None else float(caja_inicial))
+    )
     runway_meses = (caja_base_runway / burn) if burn > 0 else np.inf
 
     # Grid de KPIs (tipo ejecutivo)
@@ -594,7 +713,16 @@ def main():
         unsafe_allow_html=True,
     )
 
-    tabs = st.tabs(["📌 Resumen Ejecutivo", "📈 P&L (Estado de Resultados)", "💵 Caja & Mix de Pagos", "🔮 Proyección & Escenarios", "🚨 Alertas & Recomendaciones", "⬇️ Exportar"])
+    tabs = st.tabs(
+        [
+            "📌 Resumen Ejecutivo",
+            "📈 P&L (Estado de Resultados)",
+            "💵 Caja & Mix de Pagos",
+            "🔮 Proyección & Escenarios",
+            "🚨 Alertas & Recomendaciones",
+            "⬇️ Exportar",
+        ]
+    )
 
     # ==========================================================
     # TAB 1: RESUMEN
@@ -610,10 +738,36 @@ def main():
                 st.info("No hay datos suficientes en el rango.")
             else:
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=pl["Periodo"], y=pl["Ventas"], mode="lines+markers", name="Ventas", line=dict(color=COLOR_PRIMARIO, width=3)))
-                fig.add_trace(go.Scatter(x=pl["Periodo"], y=pl["Gastos"], mode="lines+markers", name="Gastos", line=dict(color=COLOR_ACENTO, width=3)))
-                fig.add_trace(go.Bar(x=pl["Periodo"], y=pl["EBITDA"], name="EBITDA", marker_color="#64748b", opacity=0.55))
-                fig.update_layout(height=380, margin=dict(l=10, r=10, t=20, b=10), legend=dict(orientation="h"))
+                fig.add_trace(
+                    go.Scatter(
+                        x=pl["Periodo"],
+                        y=pl["Ventas"],
+                        mode="lines+markers",
+                        name="Ventas",
+                        line=dict(color=COLOR_PRIMARIO, width=3),
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=pl["Periodo"],
+                        y=pl["Gastos"],
+                        mode="lines+markers",
+                        name="Gastos",
+                        line=dict(color=COLOR_ACENTO, width=3),
+                    )
+                )
+                fig.add_trace(
+                    go.Bar(
+                        x=pl["Periodo"],
+                        y=pl["EBITDA"],
+                        name="EBITDA",
+                        marker_color="#64748b",
+                        opacity=0.55,
+                    )
+                )
+                fig.update_layout(
+                    height=380, margin=dict(l=10, r=10, t=20, b=10), legend=dict(orientation="h")
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
             st.markdown("</div>", unsafe_allow_html=True)
@@ -624,8 +778,20 @@ def main():
 
             # Mix de gastos por categoría (top)
             if df_gas_f is not None and not df_gas_f.empty:
-                top_cat = df_gas_f.groupby("Categoria", as_index=False)["Monto"].sum().sort_values("Monto", ascending=False).head(8)
-                fig2 = px.bar(top_cat, x="Monto", y="Categoria", orientation="h", title="Top categorías de gasto", color_discrete_sequence=[COLOR_ACENTO])
+                top_cat = (
+                    df_gas_f.groupby("Categoria", as_index=False)["Monto"]
+                    .sum()
+                    .sort_values("Monto", ascending=False)
+                    .head(8)
+                )
+                fig2 = px.bar(
+                    top_cat,
+                    x="Monto",
+                    y="Categoria",
+                    orientation="h",
+                    title="Top categorías de gasto",
+                    color_discrete_sequence=[COLOR_ACENTO],
+                )
                 fig2.update_layout(height=330, margin=dict(l=10, r=10, t=40, b=10))
                 st.plotly_chart(fig2, use_container_width=True)
             else:
@@ -648,7 +814,20 @@ def main():
             df_pl_view["EBITDA_%"] = (df_pl_view["EBITDA_%"] * 100).round(1)
 
             st.dataframe(
-                df_pl_view[["Periodo", "Ventas", "Costo_Ventas", "Utilidad_Bruta", "Margen_Bruto_%", "Gastos", "EBITDA", "EBITDA_%", "Transacciones", "Ticket_Prom"]],
+                df_pl_view[
+                    [
+                        "Periodo",
+                        "Ventas",
+                        "Costo_Ventas",
+                        "Utilidad_Bruta",
+                        "Margen_Bruto_%",
+                        "Gastos",
+                        "EBITDA",
+                        "EBITDA_%",
+                        "Transacciones",
+                        "Ticket_Prom",
+                    ]
+                ],
                 use_container_width=True,
                 hide_index=True,
             )
@@ -662,11 +841,20 @@ def main():
                     measure=["relative", "relative", "relative", "total"],
                     x=["Ventas", "Costo Ventas", "Gastos", "EBITDA"],
                     y=[last["Ventas"], -last["Costo_Ventas"], -last["Gastos"], last["EBITDA"]],
-                    text=[_money(last["Ventas"]), _money(-last["Costo_Ventas"]), _money(-last["Gastos"]), _money(last["EBITDA"])],
+                    text=[
+                        _money(last["Ventas"]),
+                        _money(-last["Costo_Ventas"]),
+                        _money(-last["Gastos"]),
+                        _money(last["EBITDA"]),
+                    ],
                     connector={"line": {"color": "rgba(0,0,0,0.2)"}},
                 )
             )
-            wf.update_layout(title="Waterfall del último período", height=340, margin=dict(l=10, r=10, t=50, b=10))
+            wf.update_layout(
+                title="Waterfall del último período",
+                height=340,
+                margin=dict(l=10, r=10, t=50, b=10),
+            )
             st.plotly_chart(wf, use_container_width=True)
 
         st.markdown("</div>", unsafe_allow_html=True)
@@ -684,8 +872,22 @@ def main():
                 st.info("No hay movimientos suficientes.")
             else:
                 fig = go.Figure()
-                fig.add_trace(go.Bar(x=mix["Metodo_Pago"], y=mix["Ingresos"], name="Ingresos", marker_color=COLOR_PRIMARIO))
-                fig.add_trace(go.Bar(x=mix["Metodo_Pago"], y=mix["Egresos"], name="Egresos", marker_color=COLOR_ACENTO))
+                fig.add_trace(
+                    go.Bar(
+                        x=mix["Metodo_Pago"],
+                        y=mix["Ingresos"],
+                        name="Ingresos",
+                        marker_color=COLOR_PRIMARIO,
+                    )
+                )
+                fig.add_trace(
+                    go.Bar(
+                        x=mix["Metodo_Pago"],
+                        y=mix["Egresos"],
+                        name="Egresos",
+                        marker_color=COLOR_ACENTO,
+                    )
+                )
                 fig.update_layout(barmode="group", height=360, margin=dict(l=10, r=10, t=30, b=10))
                 st.plotly_chart(fig, use_container_width=True)
                 st.dataframe(mix, use_container_width=True, hide_index=True)
@@ -698,7 +900,9 @@ def main():
             if saldo_ini is None and saldo_fin is None:
                 st.info("No detecté cierres en `db['cie']`. Usaré caja inicial manual para runway.")
             else:
-                st.write(f"**Saldo inicial (previo):** {_money(saldo_ini) if saldo_ini is not None else 'N/D'}")
+                st.write(
+                    f"**Saldo inicial (previo):** {_money(saldo_ini) if saldo_ini is not None else 'N/D'}"
+                )
                 st.write(f"**Ventas Efectivo:** {_money(cash_sales)}")
                 st.write(f"**Gastos Efectivo:** {_money(cash_exp)}")
                 if caja_est is not None:
@@ -738,18 +942,55 @@ def main():
             else:
                 # Combinar histórico + proyección para gráfico
                 hist = pl_m[["Periodo", "Ventas", "Gastos", "EBITDA"]].copy()
-                hist = hist.rename(columns={"Ventas": "Ventas_Proy", "Gastos": "Gastos_Proy", "EBITDA": "EBITDA_Proy"})
+                hist = hist.rename(
+                    columns={
+                        "Ventas": "Ventas_Proy",
+                        "Gastos": "Gastos_Proy",
+                        "EBITDA": "EBITDA_Proy",
+                    }
+                )
                 hist["Tipo"] = "Histórico"
                 proj2 = proj[["Periodo", "Ventas_Proy", "Gastos_Proy", "EBITDA_Proy"]].copy()
                 proj2["Tipo"] = "Proyección"
                 comb = pd.concat([hist, proj2], ignore_index=True).sort_values("Periodo")
 
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=comb["Periodo"], y=comb["Ventas_Proy"], mode="lines+markers", name="Ventas", line=dict(color=COLOR_PRIMARIO, width=3)))
-                fig.add_trace(go.Scatter(x=comb["Periodo"], y=comb["Gastos_Proy"], mode="lines+markers", name="Gastos", line=dict(color=COLOR_ACENTO, width=3)))
-                fig.add_trace(go.Bar(x=comb["Periodo"], y=comb["EBITDA_Proy"], name="EBITDA", marker_color="#64748b", opacity=0.45))
-                fig.add_vline(x=pl_m["Periodo"].max(), line_width=2, line_dash="dash", line_color="rgba(0,0,0,0.35)")
-                fig.update_layout(height=420, margin=dict(l=10, r=10, t=20, b=10), legend=dict(orientation="h"))
+                fig.add_trace(
+                    go.Scatter(
+                        x=comb["Periodo"],
+                        y=comb["Ventas_Proy"],
+                        mode="lines+markers",
+                        name="Ventas",
+                        line=dict(color=COLOR_PRIMARIO, width=3),
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=comb["Periodo"],
+                        y=comb["Gastos_Proy"],
+                        mode="lines+markers",
+                        name="Gastos",
+                        line=dict(color=COLOR_ACENTO, width=3),
+                    )
+                )
+                fig.add_trace(
+                    go.Bar(
+                        x=comb["Periodo"],
+                        y=comb["EBITDA_Proy"],
+                        name="EBITDA",
+                        marker_color="#64748b",
+                        opacity=0.45,
+                    )
+                )
+                fig.add_vline(
+                    x=pl_m["Periodo"].max(),
+                    line_width=2,
+                    line_dash="dash",
+                    line_color="rgba(0,0,0,0.35)",
+                )
+                fig.update_layout(
+                    height=420, margin=dict(l=10, r=10, t=20, b=10), legend=dict(orientation="h")
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
                 cA, cB, cC = st.columns(3)
@@ -762,7 +1003,9 @@ def main():
 
                 st.markdown("#### Tabla de proyección")
                 view = proj.copy()
-                view["Margen_Bruto_%_Proy"] = np.where(view["Ventas_Proy"] > 0, view["Utilidad_Bruta_Proy"] / view["Ventas_Proy"], 0.0)
+                view["Margen_Bruto_%_Proy"] = np.where(
+                    view["Ventas_Proy"] > 0, view["Utilidad_Bruta_Proy"] / view["Ventas_Proy"], 0.0
+                )
                 view["Margen_Bruto_%_Proy"] = (view["Margen_Bruto_%_Proy"] * 100).round(1)
                 view["EBITDA_%_Proy"] = (view["EBITDA_%_Proy"] * 100).round(1)
 
@@ -796,28 +1039,57 @@ def main():
 
         # Alertas de margen
         if ventas > 0 and margen_bruto < 0.25:
-            alerts.append(("🟠 Margen bajo", f"Margen bruto actual {_pct(margen_bruto)}. Revisa precios/costos y descuentos."))
+            alerts.append(
+                (
+                    "🟠 Margen bajo",
+                    f"Margen bruto actual {_pct(margen_bruto)}. Revisa precios/costos y descuentos.",
+                )
+            )
         if ventas > 0 and ebitda_pct < 0:
-            alerts.append(("🔴 EBITDA negativo", f"EBITDA {_money(ebitda)} ({_pct(ebitda_pct)}). Estás perdiendo caja en el período."))
+            alerts.append(
+                (
+                    "🔴 EBITDA negativo",
+                    f"EBITDA {_money(ebitda)} ({_pct(ebitda_pct)}). Estás perdiendo caja en el período.",
+                )
+            )
 
         # Spike de gastos vs promedio
         if not pl_m.empty and len(pl_m) >= 4:
             g_last = float(pl_m.tail(1)["Gastos"].iloc[0])
             g_avg = float(pl_m.tail(4)["Gastos"].mean())
             if g_avg > 0 and (g_last / g_avg) > 1.35:
-                alerts.append(("🟠 Pico de gastos", f"Último mes gastaste {_money(g_last)} vs promedio {_money(g_avg)} (↑{(g_last/g_avg-1)*100:.0f}%)."))
+                alerts.append(
+                    (
+                        "🟠 Pico de gastos",
+                        f"Último mes gastaste {_money(g_last)} vs promedio {_money(g_avg)} (↑{(g_last/g_avg-1)*100:.0f}%).",
+                    )
+                )
 
         # Concentración de gastos por categoría
         if df_gas_f is not None and not df_gas_f.empty:
-            by_cat = df_gas_f.groupby("Categoria", as_index=False)["Monto"].sum().sort_values("Monto", ascending=False)
+            by_cat = (
+                df_gas_f.groupby("Categoria", as_index=False)["Monto"]
+                .sum()
+                .sort_values("Monto", ascending=False)
+            )
             if not by_cat.empty and gastos > 0:
                 share = float(by_cat.iloc[0]["Monto"]) / gastos
                 if share > 0.45:
-                    alerts.append(("🟡 Concentración de gasto", f"'{by_cat.iloc[0]['Categoria']}' representa {share*100:.0f}% de tus gastos del período."))
+                    alerts.append(
+                        (
+                            "🟡 Concentración de gasto",
+                            f"'{by_cat.iloc[0]['Categoria']}' representa {share*100:.0f}% de tus gastos del período.",
+                        )
+                    )
 
         # Runway
         if runway_meses != np.inf and runway_meses < 3:
-            alerts.append(("🔴 Runway crítico", f"Con el burn actual, runway estimado: {runway_meses:.1f} meses."))
+            alerts.append(
+                (
+                    "🔴 Runway crítico",
+                    f"Con el burn actual, runway estimado: {runway_meses:.1f} meses.",
+                )
+            )
 
         if not alerts:
             st.success("Sin alertas críticas detectadas con los umbrales actuales.")
@@ -830,18 +1102,28 @@ def main():
         acciones = []
 
         if ventas > 0 and margen_bruto < 0.30:
-            acciones.append("Revisar lista de precios: subir precios en SKUs con alta rotación o costo subiendo.")
-            acciones.append("Auditar compras: validar prorrateos (transporte/descuentos) y costo neto.")
+            acciones.append(
+                "Revisar lista de precios: subir precios en SKUs con alta rotación o costo subiendo."
+            )
+            acciones.append(
+                "Auditar compras: validar prorrateos (transporte/descuentos) y costo neto."
+            )
         if gastos > 0:
-            acciones.append("Recortar gastos variables no esenciales esta semana (top 3 categorías).")
+            acciones.append(
+                "Recortar gastos variables no esenciales esta semana (top 3 categorías)."
+            )
         if cash_sales > 0 and saldo_fin is None:
-            acciones.append("Registrar cierre de caja diariamente (para conciliación real y control de fugas).")
+            acciones.append(
+                "Registrar cierre de caja diariamente (para conciliación real y control de fugas)."
+            )
 
         if acciones:
             for a in acciones:
                 st.write(f"- {a}")
         else:
-            st.write("- Mantener disciplina: cierres diarios + revisión semanal de margen y top gastos.")
+            st.write(
+                "- Mantener disciplina: cierres diarios + revisión semanal de margen y top gastos."
+            )
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -854,7 +1136,9 @@ def main():
 
         exp = {}
 
-        exp["P&L_" + ("Mensual" if freq_key == "M" else "Periodo")] = pl.copy() if not pl.empty else pd.DataFrame()
+        exp["P&L_" + ("Mensual" if freq_key == "M" else "Periodo")] = (
+            pl.copy() if not pl.empty else pd.DataFrame()
+        )
         exp["P&L_Mensual_Base"] = pl_m.copy() if not pl_m.empty else pd.DataFrame()
         exp["Mix_Pagos"] = mix.copy() if mix is not None and not mix.empty else pd.DataFrame()
 
@@ -862,6 +1146,7 @@ def main():
         output = None
         try:
             import io
+
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
                 for name, df in exp.items():
@@ -882,7 +1167,9 @@ def main():
                 use_container_width=True,
             )
 
-        st.caption("Incluye P&L, P&L mensual base, y mix de pagos/egresos. (Se puede extender a inventario y compras si lo conectamos.)")
+        st.caption(
+            "Incluye P&L, P&L mensual base, y mix de pagos/egresos. (Se puede extender a inventario y compras si lo conectamos.)"
+        )
         st.markdown("</div>", unsafe_allow_html=True)
 
 

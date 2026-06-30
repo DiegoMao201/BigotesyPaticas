@@ -4,6 +4,7 @@ Pensado para crecer una tienda petshop: detectar a quién contactar HOY para
 vender más (recompra de alimento), qué clientes valiosos se están enfriando, y
 qué capital está atrapado en inventario sin rotación.
 """
+
 from __future__ import annotations
 
 import re
@@ -144,8 +145,9 @@ async def intelligence_overview(
     if cust_ids:
         crows = (
             await db.execute(
-                select(Customer.id, Customer.full_name, Customer.phone, Customer.rfm_segment)
-                .where(Customer.id.in_(cust_ids))
+                select(Customer.id, Customer.full_name, Customer.phone, Customer.rfm_segment).where(
+                    Customer.id.in_(cust_ids)
+                )
             )
         ).all()
         customers = {c.id: c for c in crows}
@@ -300,7 +302,9 @@ async def intelligence_overview(
             .join(last_sale_sub, last_sale_sub.c.pid == Product.id, isouter=True)
             .where(Product.is_active == True)  # noqa: E712
             .where(Product.deleted_at == None)  # noqa: E711
-            .group_by(Product.id, Product.sku, Product.name, Product.cost, last_sale_sub.c.last_sale)
+            .group_by(
+                Product.id, Product.sku, Product.name, Product.cost, last_sale_sub.c.last_sale
+            )
         )
     ).all()
 
@@ -531,20 +535,22 @@ async def _velocity_rows(db: DBSession, days: int) -> list[dict]:
         velocity = sold / float(days)  # unidades/día
         days_cover = (available / velocity) if velocity > 0 else None
         sup = sup_best.get(r.id)
-        out.append({
-            "product_id": str(r.id),
-            "sku": r.sku,
-            "name": r.name,
-            "cost": float(r[3] or 0),
-            "price": float(r[4] or 0),
-            "available": available,
-            "sold_period": sold,
-            "velocity": velocity,
-            "days_cover": days_cover,
-            "supplier_id": sup[1] if sup else None,
-            "supplier_name": sup[2] if sup else None,
-            "supplier_phone": sup[3] if sup else None,
-        })
+        out.append(
+            {
+                "product_id": str(r.id),
+                "sku": r.sku,
+                "name": r.name,
+                "cost": float(r[3] or 0),
+                "price": float(r[4] or 0),
+                "available": available,
+                "sold_period": sold,
+                "velocity": velocity,
+                "days_cover": days_cover,
+                "supplier_id": sup[1] if sup else None,
+                "supplier_name": sup[2] if sup else None,
+                "supplier_phone": sup[3] if sup else None,
+            }
+        )
     return out
 
 
@@ -553,12 +559,12 @@ class StockoutItem(BaseModel):
     sku: str
     name: str
     available: int
-    velocity: float           # unidades/día
+    velocity: float  # unidades/día
     days_cover: float | None  # días hasta agotarse
     stockout_date: str | None
-    suggested_reorder: int    # para cubrir target_days
+    suggested_reorder: int  # para cubrir target_days
     supplier_name: str | None = None
-    level: str                # "agotado" | "critico" | "bajo" | "ok"
+    level: str  # "agotado" | "critico" | "bajo" | "ok"
 
 
 class StockoutForecastOut(BaseModel):
@@ -577,7 +583,9 @@ async def stockout_forecast(
     db: DBSession,
     velocity_days: int = Query(30, ge=7, le=120),
     target_days: int = Query(15, ge=5, le=60),
-    horizon_days: int = Query(21, ge=5, le=90, description="Solo productos que se agotan dentro de N días"),
+    horizon_days: int = Query(
+        21, ge=5, le=90, description="Solo productos que se agotan dentro de N días"
+    ),
 ) -> StockoutForecastOut:
     now = datetime.now(UTC)
     rows = await _velocity_rows(db, velocity_days)
@@ -592,26 +600,35 @@ async def stockout_forecast(
         days_cover = r["days_cover"]
         if days_cover is None or days_cover > horizon_days:
             continue
-        stockout_dt = (now + timedelta(days=days_cover)).date().isoformat() if days_cover is not None else None
+        stockout_dt = (
+            (now + timedelta(days=days_cover)).date().isoformat()
+            if days_cover is not None
+            else None
+        )
         suggested = max(0, ceil(velocity * target_days - available))
         if available <= 0:
-            level = "agotado"; agotado += 1
+            level = "agotado"
+            agotado += 1
         elif days_cover <= 5:
-            level = "critico"; critico += 1
+            level = "critico"
+            critico += 1
         else:
-            level = "bajo"; bajo += 1
-        items.append(StockoutItem(
-            product_id=r["product_id"],
-            sku=r["sku"],
-            name=r["name"],
-            available=available,
-            velocity=round(velocity, 2),
-            days_cover=round(days_cover, 1) if days_cover is not None else None,
-            stockout_date=stockout_dt,
-            suggested_reorder=suggested,
-            supplier_name=r["supplier_name"],
-            level=level,
-        ))
+            level = "bajo"
+            bajo += 1
+        items.append(
+            StockoutItem(
+                product_id=r["product_id"],
+                sku=r["sku"],
+                name=r["name"],
+                available=available,
+                velocity=round(velocity, 2),
+                days_cover=round(days_cover, 1) if days_cover is not None else None,
+                stockout_date=stockout_dt,
+                suggested_reorder=suggested,
+                supplier_name=r["supplier_name"],
+                level=level,
+            )
+        )
     items.sort(key=lambda x: (x.days_cover if x.days_cover is not None else 9999))
 
     return StockoutForecastOut(
@@ -665,7 +682,9 @@ async def replenishment(
     db: DBSession,
     velocity_days: int = Query(30, ge=7, le=120),
     target_days: int = Query(15, ge=5, le=60),
-    coverage_threshold_days: int = Query(15, ge=5, le=60, description="Reabastecer si cobertura ≤ N días"),
+    coverage_threshold_days: int = Query(
+        15, ge=5, le=60, description="Reabastecer si cobertura ≤ N días"
+    ),
 ) -> ReplenishmentOut:
     now = datetime.now(UTC)
     rows = await _velocity_rows(db, velocity_days)
@@ -691,22 +710,26 @@ async def replenishment(
                 "lines": [],
             }
         unit_cost = r["cost"]
-        groups[key]["lines"].append(ReplenishLine(
-            product_id=r["product_id"],
-            sku=r["sku"],
-            name=r["name"],
-            available=r["available"],
-            velocity=round(velocity, 2),
-            days_cover=round(days_cover, 1) if days_cover is not None else None,
-            suggested_qty=suggested,
-            unit_cost=unit_cost,
-            line_cost=round(unit_cost * suggested, 2),
-        ))
+        groups[key]["lines"].append(
+            ReplenishLine(
+                product_id=r["product_id"],
+                sku=r["sku"],
+                name=r["name"],
+                available=r["available"],
+                velocity=round(velocity, 2),
+                days_cover=round(days_cover, 1) if days_cover is not None else None,
+                suggested_qty=suggested,
+                unit_cost=unit_cost,
+                line_cost=round(unit_cost * suggested, 2),
+            )
+        )
 
     suppliers_out: list[ReplenishSupplier] = []
     grand_total = 0.0
     for g in groups.values():
-        lines = sorted(g["lines"], key=lambda x: (x.days_cover if x.days_cover is not None else 9999))
+        lines = sorted(
+            g["lines"], key=lambda x: (x.days_cover if x.days_cover is not None else 9999)
+        )
         total_units = sum(line.suggested_qty for line in lines)
         total_cost = round(sum(line.line_cost for line in lines), 2)
         grand_total += total_cost
@@ -717,15 +740,17 @@ async def replenishment(
         msg_lines.append("")
         msg_lines.append("Gracias, quedamos atentos a disponibilidad y tiempo de entrega.")
         msg = "\n".join(msg_lines)
-        suppliers_out.append(ReplenishSupplier(
-            supplier_id=g["supplier_id"],
-            supplier_name=g["supplier_name"],
-            supplier_phone=g["supplier_phone"],
-            lines=lines,
-            total_units=total_units,
-            total_cost=total_cost,
-            whatsapp_url=_wa_link(g["supplier_phone"], msg),
-        ))
+        suppliers_out.append(
+            ReplenishSupplier(
+                supplier_id=g["supplier_id"],
+                supplier_name=g["supplier_name"],
+                supplier_phone=g["supplier_phone"],
+                lines=lines,
+                total_units=total_units,
+                total_cost=total_cost,
+                whatsapp_url=_wa_link(g["supplier_phone"], msg),
+            )
+        )
     suppliers_out.sort(key=lambda x: -x.total_cost)
 
     return ReplenishmentOut(
@@ -745,7 +770,7 @@ class PetReminder(BaseModel):
     phone: str | None
     pet_name: str | None
     pet_type: str | None
-    reason: str           # "cumple" | "desparasitacion" | "vacuna"
+    reason: str  # "cumple" | "desparasitacion" | "vacuna"
     detail: str
     whatsapp_url: str | None = None
 
@@ -778,11 +803,14 @@ async def pet_care(
     today = datetime.now(UTC).date()
 
     rows = (
-        await db.execute(
-            select(Customer)
-            .where(Customer.deleted_at == None)  # noqa: E711
+        (
+            await db.execute(
+                select(Customer).where(Customer.deleted_at == None)  # noqa: E711
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     birthdays: list[PetReminder] = []
     deworming: list[PetReminder] = []
@@ -803,16 +831,18 @@ async def pet_care(
                 f"¡Hola {first_name}! 🎉🐾 Este mes {pet_label} está de cumpleaños. "
                 f"En Bigotes y Paticas tenemos un regalito especial para celebrarlo. ¡Te esperamos!"
             )
-            birthdays.append(PetReminder(
-                customer_id=str(c.id),
-                customer_name=c.full_name,
-                phone=c.phone,
-                pet_name=pet_name,
-                pet_type=pet_type,
-                reason="cumple",
-                detail=f"Cumple el {bday.day}/{bday.month}",
-                whatsapp_url=_wa_link(c.phone, msg),
-            ))
+            birthdays.append(
+                PetReminder(
+                    customer_id=str(c.id),
+                    customer_name=c.full_name,
+                    phone=c.phone,
+                    pet_name=pet_name,
+                    pet_type=pet_type,
+                    reason="cumple",
+                    detail=f"Cumple el {bday.day}/{bday.month}",
+                    whatsapp_url=_wa_link(c.phone, msg),
+                )
+            )
 
         # Desparasitación / control
         last_dew = _parse_date(extra.get("last_deworming"))
@@ -824,16 +854,18 @@ async def pet_care(
                     f"desparasitación de {pet_label}. Es momento del refuerzo — tenemos el producto "
                     f"ideal y te lo llevamos a domicilio. ¿Lo reservamos?"
                 )
-                deworming.append(PetReminder(
-                    customer_id=str(c.id),
-                    customer_name=c.full_name,
-                    phone=c.phone,
-                    pet_name=pet_name,
-                    pet_type=pet_type,
-                    reason="desparasitacion",
-                    detail=f"Última hace {days_since} días",
-                    whatsapp_url=_wa_link(c.phone, msg),
-                ))
+                deworming.append(
+                    PetReminder(
+                        customer_id=str(c.id),
+                        customer_name=c.full_name,
+                        phone=c.phone,
+                        pet_name=pet_name,
+                        pet_type=pet_type,
+                        reason="desparasitacion",
+                        detail=f"Última hace {days_since} días",
+                        whatsapp_url=_wa_link(c.phone, msg),
+                    )
+                )
 
     deworming.sort(key=lambda x: x.detail, reverse=True)
 

@@ -1,4 +1,5 @@
 """Modelos del bounded context `sales`."""
+
 from __future__ import annotations
 
 import uuid
@@ -65,10 +66,10 @@ class Order(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
-    items: Mapped[list["OrderItem"]] = relationship(
+    items: Mapped[list[OrderItem]] = relationship(
         "OrderItem", back_populates="order", cascade="all, delete-orphan", lazy="selectin"
     )
-    payments: Mapped[list["Payment"]] = relationship(
+    payments: Mapped[list[Payment]] = relationship(
         "Payment", back_populates="order", cascade="all, delete-orphan", lazy="selectin"
     )
 

@@ -1,10 +1,22 @@
 """Modelos del bounded context `catalog` — productos, categorías, marcas, variantes."""
+
 from __future__ import annotations
 
 import datetime
 import uuid
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, Index, ARRAY
+from sqlalchemy import (
+    ARRAY,
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -45,10 +57,12 @@ class Category(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    children: Mapped[list["Category"]] = relationship(
+    children: Mapped[list[Category]] = relationship(
         "Category", back_populates="parent", remote_side="Category.parent_id"
     )
-    parent: Mapped["Category | None"] = relationship("Category", back_populates="children", remote_side="Category.id")
+    parent: Mapped[Category | None] = relationship(
+        "Category", back_populates="children", remote_side="Category.id"
+    )
 
 
 class Product(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
@@ -56,7 +70,12 @@ class Product(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __table_args__ = (
         UniqueConstraint("sku", name="uq_products_sku"),
         UniqueConstraint("slug", name="uq_products_slug"),
-        Index("ix_products_name_trgm", "name", postgresql_using="gin", postgresql_ops={"name": "gin_trgm_ops"}),
+        Index(
+            "ix_products_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
         {"schema": "catalog"},
     )
 
@@ -123,6 +142,7 @@ class Product(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
 
 class ProductReview(UUIDPKMixin, Base):
     """Reseñas verificadas de productos por clientes con pedido entregado."""
+
     __tablename__ = "product_reviews"
     __table_args__ = (
         UniqueConstraint("customer_id", "product_id", name="uq_review_customer_product"),
@@ -157,14 +177,19 @@ class ProductReview(UUIDPKMixin, Base):
     is_verified_purchase: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     points_awarded: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     helpful_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime.datetime] = mapped_column(nullable=False, default=datetime.datetime.utcnow)
-    updated_at: Mapped[datetime.datetime] = mapped_column(nullable=False, default=datetime.datetime.utcnow)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False, default=datetime.datetime.utcnow
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False, default=datetime.datetime.utcnow
+    )
 
     product: Mapped[Product] = relationship(Product, backref="reviews", lazy="select")
 
 
 class GBPReviewCache(UUIDPKMixin, Base):
     """Cache local de reseñas de Google Business Profile."""
+
     __tablename__ = "gbp_reviews_cache"
     __table_args__ = (
         Index("idx_gbp_reviews_matched", "matched_customer_id"),
@@ -181,7 +206,9 @@ class GBPReviewCache(UUIDPKMixin, Base):
     review_created_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
     business_reply: Mapped[str | None] = mapped_column(Text, nullable=True)
     business_reply_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
-    fetched_at: Mapped[datetime.datetime] = mapped_column(nullable=False, default=datetime.datetime.utcnow)
+    fetched_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False, default=datetime.datetime.utcnow
+    )
     matched_customer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("crm.customers.id"), nullable=True
     )

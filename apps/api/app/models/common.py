@@ -1,4 +1,5 @@
 """Modelos base y mixins compartidos."""
+
 from __future__ import annotations
 
 import uuid
@@ -59,5 +60,6 @@ class TablenameMixin:
     def __tablename__(cls) -> str:  # type: ignore[override]
         # CamelCase → snake_case
         import re
+
         name = re.sub(r"(?<!^)(?=[A-Z])", "_", cls.__name__).lower()
         return name

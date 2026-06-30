@@ -1,4 +1,5 @@
 """Fuzzy product search using pg_trgm trigram similarity."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Query
@@ -77,19 +78,23 @@ async def search_products(
     results = []
     for product, sim in products:
         stock_qty = stock_map.get(product.id, 0)
-        results.append({
-            "id": str(product.id),
-            "sku": product.sku,
-            "name": product.name,
-            "slug": product.slug,
-            "price": float(product.price) if product.price else 0,
-            "compare_at_price": float(product.compare_at_price) if product.compare_at_price else None,
-            "primary_image_url": product.primary_image_url,
-            "brand": product.brand.name if product.brand else None,
-            "is_in_stock": stock_qty > 0,
-            "stock_qty": stock_qty,
-            "similarity": round(float(sim), 3) if sim is not None else None,
-        })
+        results.append(
+            {
+                "id": str(product.id),
+                "sku": product.sku,
+                "name": product.name,
+                "slug": product.slug,
+                "price": float(product.price) if product.price else 0,
+                "compare_at_price": float(product.compare_at_price)
+                if product.compare_at_price
+                else None,
+                "primary_image_url": product.primary_image_url,
+                "brand": product.brand.name if product.brand else None,
+                "is_in_stock": stock_qty > 0,
+                "stock_qty": stock_qty,
+                "similarity": round(float(sim), 3) if sim is not None else None,
+            }
+        )
 
     return {"results": results, "query": q_clean, "total": len(results)}
 
@@ -111,5 +116,6 @@ async def slug_redirect(
     result = row.fetchone()
     if not result:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="No redirect found")
     return {"new_slug": result[0]}

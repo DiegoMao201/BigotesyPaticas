@@ -15,6 +15,7 @@ Y `SHEET_URL` desde las mismas fuentes.
 
 Recomendado: agendar como cron diario (ver SPRINT0_HARDENING.md).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -75,7 +76,9 @@ def _load_sheet_url() -> str:
     raise SystemExit("No se encontró SHEET_URL en ENV ni en .streamlit/secrets.toml.")
 
 
-def export_workbook(out_dir: Path, *, formats: tuple[str, ...] = ("csv", "parquet")) -> dict[str, int]:
+def export_workbook(
+    out_dir: Path, *, formats: tuple[str, ...] = ("csv", "parquet")
+) -> dict[str, int]:
     """Descarga TODAS las tabs y las guarda en out_dir. Devuelve {tab: nrows}."""
     sa = _load_service_account()
     url = _load_sheet_url()
@@ -88,7 +91,7 @@ def export_workbook(out_dir: Path, *, formats: tuple[str, ...] = ("csv", "parque
         title = ws.title
         try:
             values = ws.get_all_values()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             LOG.error("read_failed", extra={"tab": title, "error": str(exc)})
             continue
         if not values:
@@ -103,7 +106,7 @@ def export_workbook(out_dir: Path, *, formats: tuple[str, ...] = ("csv", "parque
         if "parquet" in formats:
             try:
                 df.to_parquet(out_dir / f"{title}.parquet", index=False)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 LOG.warning("parquet_failed", extra={"tab": title, "error": str(exc)})
         summary[title] = len(df)
         LOG.info("tab_exported", extra={"tab": title, "rows": len(df)})
@@ -129,9 +132,7 @@ def main() -> int:
         default=f"backups/{now_co().strftime('%Y-%m-%d')}",
         help="Directorio destino (relativo al repo o absoluto).",
     )
-    parser.add_argument(
-        "--no-parquet", action="store_true", help="Sólo CSV, sin parquet."
-    )
+    parser.add_argument("--no-parquet", action="store_true", help="Sólo CSV, sin parquet.")
     args = parser.parse_args()
 
     out_dir = Path(args.out)

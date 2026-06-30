@@ -1,8 +1,6 @@
 """Tests para flags + version_info + logging."""
-from __future__ import annotations
 
-import logging
-import os
+from __future__ import annotations
 
 from bp_common.flags import all_flags, get_flag, reset_overrides, set_flag
 from bp_common.logging_setup import get_logger, setup_logging

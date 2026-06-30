@@ -1,4 +1,5 @@
 """Endpoints financieros: gastos, cierres de caja, P&L, cash flow."""
+
 from __future__ import annotations
 
 import uuid
@@ -15,7 +16,6 @@ from app.deps import CurrentUser, DBSession, require_permission
 from app.models.finance import CashClosing as CashClosingModel
 from app.models.ops import LegacyIdMap
 
-
 router = APIRouter(prefix="/finance", tags=["finance"])
 expenses_router = APIRouter(prefix="/expenses", tags=["finance"])
 suppliers_router = APIRouter(prefix="/suppliers", tags=["finance"])
@@ -23,6 +23,7 @@ closings_router = APIRouter(prefix="/cash-closings", tags=["finance"])
 
 
 # ────────────────── Schemas ──────────────────────
+
 
 class ExpenseOut(BaseModel):
     id: str
@@ -109,6 +110,7 @@ class FinanceSummary(BaseModel):
 
 # ────────────────── Helpers ──────────────────────
 
+
 def _f(x: Any, default: float = 0.0) -> float:
     try:
         if x is None or x == "":
@@ -119,6 +121,7 @@ def _f(x: Any, default: float = 0.0) -> float:
 
 
 # ────────────────── Expenses ──────────────────────
+
 
 @expenses_router.get("", response_model=dict)
 async def list_expenses(
@@ -153,22 +156,24 @@ async def list_expenses(
             continue
         monto = _f(e.get("monto"))
         total_monto += monto
-        items.append({
-            "id": str(r.id),
-            "legacy_id": r.legacy_id,
-            "fecha": f[:10] if f else "",
-            "tipo": str(e.get("tipo", "")),
-            "categoria": str(e.get("categoria", "")),
-            "descripcion": str(e.get("descripcion", "")),
-            "monto": monto,
-            "metodo_pago": str(e.get("metodo_pago", "")),
-            "banco_origen": str(e.get("banco_origen", "")),
-        })
+        items.append(
+            {
+                "id": str(r.id),
+                "legacy_id": r.legacy_id,
+                "fecha": f[:10] if f else "",
+                "tipo": str(e.get("tipo", "")),
+                "categoria": str(e.get("categoria", "")),
+                "descripcion": str(e.get("descripcion", "")),
+                "monto": monto,
+                "metodo_pago": str(e.get("metodo_pago", "")),
+                "banco_origen": str(e.get("banco_origen", "")),
+            }
+        )
 
     items.sort(key=lambda x: x["fecha"], reverse=True)
     total = len(items)
     start_idx = (page - 1) * page_size
-    paged = items[start_idx:start_idx + page_size]
+    paged = items[start_idx : start_idx + page_size]
 
     return {
         "items": paged,
@@ -179,7 +184,9 @@ async def list_expenses(
     }
 
 
-@expenses_router.post("", response_model=ExpenseOut, dependencies=[Depends(require_permission("finance:write"))])
+@expenses_router.post(
+    "", response_model=ExpenseOut, dependencies=[Depends(require_permission("finance:write"))]
+)
 async def create_expense(
     payload: ExpenseCreate,
     db: DBSession,
@@ -220,7 +227,9 @@ async def create_expense(
 
 @expenses_router.get("/categories")
 async def list_expense_categories(db: DBSession, user: CurrentUser):
-    rows = (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "gasto"))).scalars().all()
+    rows = (
+        (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "gasto"))).scalars().all()
+    )
     cats: dict[str, dict] = {}
     for r in rows:
         e = r.extra or {}
@@ -245,8 +254,9 @@ def _today_in_business_tz() -> date:
 
 async def _compute_live_totals(db: DBSession, fecha: date) -> dict[str, Any]:
     """Calcula totales en vivo desde sales.payments para una fecha."""
-    method_rows = (await db.execute(
-        text("""
+    method_rows = (
+        await db.execute(
+            text("""
             WITH base AS (
                 SELECT o.id AS order_id,
                        o.grand_total::numeric AS grand_total,
@@ -280,13 +290,15 @@ async def _compute_live_totals(db: DBSession, fecha: date) -> dict[str, Any]:
             FROM normalized
             GROUP BY method
         """),
-        {"fecha": fecha},
-    )).all()
+            {"fecha": fecha},
+        )
+    ).all()
     ventas_por_metodo: dict[str, float] = {r.method: float(r.total) for r in method_rows}
     total_ventas = sum(ventas_por_metodo.values())
 
-    refund_rows = (await db.execute(
-        text("""
+    refund_rows = (
+        await db.execute(
+            text("""
             SELECT COALESCE(o.payment_method, 'Otro') AS method,
                    COALESCE(SUM(o.grand_total), 0) AS total
             FROM sales.orders o
@@ -294,18 +306,21 @@ async def _compute_live_totals(db: DBSession, fecha: date) -> dict[str, Any]:
               AND o.status = 'refunded'
             GROUP BY o.payment_method
         """),
-        {"fecha": fecha},
-    )).all()
+            {"fecha": fecha},
+        )
+    ).all()
     creditos_por_metodo: dict[str, float] = {r.method: float(r.total) for r in refund_rows}
 
-    order_count = (await db.execute(
-        text("""
+    order_count = (
+        await db.execute(
+            text("""
             SELECT COUNT(*) FROM sales.orders
             WHERE DATE(occurred_at AT TIME ZONE 'America/Bogota') = :fecha
               AND status NOT IN ('cancelled')
         """),
-        {"fecha": fecha},
-    )).scalar()
+            {"fecha": fecha},
+        )
+    ).scalar()
 
     return {
         "ventas_por_metodo": ventas_por_metodo,
@@ -320,7 +335,12 @@ def _build_closing_out(closing: CashClosingModel, live: dict[str, Any]) -> CashC
     creditos_pm = live["creditos_por_metodo"]
     ventas_efectivo = ventas_pm.get("Efectivo", 0.0)
     creditos_efectivo = creditos_pm.get("Efectivo", 0.0)
-    saldo_final = float(closing.saldo_inicial) + ventas_efectivo - creditos_efectivo - float(closing.gastos_efectivo)
+    saldo_final = (
+        float(closing.saldo_inicial)
+        + ventas_efectivo
+        - creditos_efectivo
+        - float(closing.gastos_efectivo)
+    )
     return CashClosingOut(
         id=str(closing.id),
         fecha=str(closing.fecha),
@@ -346,9 +366,7 @@ def _build_closing_out(closing: CashClosingModel, live: dict[str, Any]) -> CashC
 async def get_today_closing(db: DBSession, user: CurrentUser):
     """Retorna el cierre de hoy (lo crea automáticamente si no existe)."""
     today = _today_in_business_tz()
-    result = await db.execute(
-        select(CashClosingModel).where(CashClosingModel.fecha == today)
-    )
+    result = await db.execute(select(CashClosingModel).where(CashClosingModel.fecha == today))
     closing = result.scalar_one_or_none()
     if not closing:
         prev_result = await db.execute(
@@ -386,9 +404,7 @@ async def get_closing_by_date(
     último cierre cerrado anterior. El frontend usa el id vacío para ofrecer
     'Abrir caja de este día'.
     """
-    result = await db.execute(
-        select(CashClosingModel).where(CashClosingModel.fecha == fecha)
-    )
+    result = await db.execute(select(CashClosingModel).where(CashClosingModel.fecha == fecha))
     closing = result.scalar_one_or_none()
 
     if closing:
@@ -431,9 +447,7 @@ async def list_cash_closings(
     page: int = Query(1, ge=1),
     page_size: int = Query(30, ge=1, le=200),
 ):
-    total_result = await db.execute(
-        text("SELECT COUNT(*) FROM finance.cash_closings")
-    )
+    total_result = await db.execute(text("SELECT COUNT(*) FROM finance.cash_closings"))
     total = int(total_result.scalar() or 0)
 
     rows_result = await db.execute(
@@ -462,9 +476,7 @@ async def list_cash_closings(
 
 @closings_router.get("/{closing_id}", response_model=CashClosingOut)
 async def get_cash_closing(closing_id: uuid.UUID, db: DBSession, user: CurrentUser):
-    result = await db.execute(
-        select(CashClosingModel).where(CashClosingModel.id == closing_id)
-    )
+    result = await db.execute(select(CashClosingModel).where(CashClosingModel.id == closing_id))
     closing = result.scalar_one_or_none()
     if not closing:
         raise HTTPException(status_code=404, detail="Cierre no encontrado")
@@ -480,7 +492,9 @@ async def get_cash_closing(closing_id: uuid.UUID, db: DBSession, user: CurrentUs
     return _build_closing_out(closing, live)
 
 
-@closings_router.post("", response_model=CashClosingOut, dependencies=[Depends(require_permission("finance:write"))])
+@closings_router.post(
+    "", response_model=CashClosingOut, dependencies=[Depends(require_permission("finance:write"))]
+)
 async def open_cash_closing(
     payload: CashClosingOpenPayload,
     db: DBSession,
@@ -488,9 +502,9 @@ async def open_cash_closing(
 ):
     """Abre un cierre de caja para una fecha (hoy por defecto)."""
     target_date = payload.fecha or _today_in_business_tz()
-    existing = (await db.execute(
-        select(CashClosingModel).where(CashClosingModel.fecha == target_date)
-    )).scalar_one_or_none()
+    existing = (
+        await db.execute(select(CashClosingModel).where(CashClosingModel.fecha == target_date))
+    ).scalar_one_or_none()
     if existing:
         live = await _compute_live_totals(db, target_date)
         return _build_closing_out(existing, live)
@@ -508,7 +522,11 @@ async def open_cash_closing(
     return _build_closing_out(closing, live)
 
 
-@closings_router.patch("/{closing_id}", response_model=CashClosingOut, dependencies=[Depends(require_permission("finance:write"))])
+@closings_router.patch(
+    "/{closing_id}",
+    response_model=CashClosingOut,
+    dependencies=[Depends(require_permission("finance:write"))],
+)
 async def patch_cash_closing(
     closing_id: uuid.UUID,
     payload: CashClosingPatchPayload,
@@ -516,9 +534,7 @@ async def patch_cash_closing(
     user: CurrentUser,
 ):
     """Actualiza gastos en efectivo, saldo inicial o notas de un cierre abierto."""
-    result = await db.execute(
-        select(CashClosingModel).where(CashClosingModel.id == closing_id)
-    )
+    result = await db.execute(select(CashClosingModel).where(CashClosingModel.id == closing_id))
     closing = result.scalar_one_or_none()
     if not closing:
         raise HTTPException(status_code=404, detail="Cierre no encontrado")
@@ -537,7 +553,11 @@ async def patch_cash_closing(
     return _build_closing_out(closing, live)
 
 
-@closings_router.post("/{closing_id}/close", response_model=CashClosingOut, dependencies=[Depends(require_permission("finance:write"))])
+@closings_router.post(
+    "/{closing_id}/close",
+    response_model=CashClosingOut,
+    dependencies=[Depends(require_permission("finance:write"))],
+)
 async def close_cash_closing(
     closing_id: uuid.UUID,
     payload: CashClosingClosePayload,
@@ -545,9 +565,7 @@ async def close_cash_closing(
     user: CurrentUser,
 ):
     """Finaliza el cierre: guarda saldo_contado, diferencia y snapshot de ventas."""
-    result = await db.execute(
-        select(CashClosingModel).where(CashClosingModel.id == closing_id)
-    )
+    result = await db.execute(select(CashClosingModel).where(CashClosingModel.id == closing_id))
     closing = result.scalar_one_or_none()
     if not closing:
         raise HTTPException(status_code=404, detail="Cierre no encontrado")
@@ -560,7 +578,12 @@ async def close_cash_closing(
         closing.gastos_efectivo = Decimal(str(payload.gastos_efectivo))
     ventas_efectivo = live["ventas_por_metodo"].get("Efectivo", 0.0)
     creditos_efectivo = live["creditos_por_metodo"].get("Efectivo", 0.0)
-    saldo_final = float(closing.saldo_inicial) + ventas_efectivo - creditos_efectivo - float(closing.gastos_efectivo)
+    saldo_final = (
+        float(closing.saldo_inicial)
+        + ventas_efectivo
+        - creditos_efectivo
+        - float(closing.gastos_efectivo)
+    )
 
     closing.snap_ventas_por_metodo = live["ventas_por_metodo"]
     closing.snap_creditos_por_metodo = live["creditos_por_metodo"]
@@ -581,6 +604,7 @@ async def close_cash_closing(
 
 # ────────────────── Suppliers ──────────────────────
 
+
 @suppliers_router.get("", response_model=dict)
 async def list_suppliers(
     db: DBSession,
@@ -589,9 +613,11 @@ async def list_suppliers(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
 ):
-    rows = (await db.execute(
-        select(LegacyIdMap).where(LegacyIdMap.entity == "proveedor_sku")
-    )).scalars().all()
+    rows = (
+        (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "proveedor_sku")))
+        .scalars()
+        .all()
+    )
 
     items = []
     for r in rows:
@@ -616,7 +642,7 @@ async def list_suppliers(
     total = len(items)
     start_idx = (page - 1) * page_size
     return {
-        "items": items[start_idx:start_idx + page_size],
+        "items": items[start_idx : start_idx + page_size],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -626,9 +652,11 @@ async def list_suppliers(
 @suppliers_router.get("/grouped")
 async def suppliers_grouped(db: DBSession, user: CurrentUser):
     """Lista proveedores únicos con conteo de SKUs."""
-    rows = (await db.execute(
-        select(LegacyIdMap).where(LegacyIdMap.entity == "proveedor_sku")
-    )).scalars().all()
+    rows = (
+        (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "proveedor_sku")))
+        .scalars()
+        .all()
+    )
     by_prov: dict[str, dict] = {}
     for r in rows:
         e = r.extra or {}
@@ -641,15 +669,18 @@ async def suppliers_grouped(db: DBSession, user: CurrentUser):
                 "skus": [],
             }
         by_prov[nom]["sku_count"] += 1
-        by_prov[nom]["skus"].append({
-            "sku_proveedor": str(e.get("sku_proveedor", "")),
-            "sku_interno": str(e.get("sku_interno", "")),
-            "costo": _f(e.get("costo_unidad")),
-        })
+        by_prov[nom]["skus"].append(
+            {
+                "sku_proveedor": str(e.get("sku_proveedor", "")),
+                "sku_interno": str(e.get("sku_interno", "")),
+                "costo": _f(e.get("costo_unidad")),
+            }
+        )
     return sorted(by_prov.values(), key=lambda x: -x["sku_count"])
 
 
 # ────────────────── Finance Summary (P&L) ──────────────────────
+
 
 @router.get("/summary", response_model=FinanceSummary)
 async def finance_summary(
@@ -668,10 +699,11 @@ async def finance_summary(
     end_dt = datetime.combine(end, datetime.max.time())
 
     # Revenue + COGS via raw SQL
-    rev_row = (await db.execute(
-        text(
-            """
-            SELECT 
+    rev_row = (
+        await db.execute(
+            text(
+                """
+            SELECT
               COALESCE(SUM(o.grand_total), 0) AS revenue,
               COALESCE(SUM(oi.unit_cost * oi.quantity), 0) AS cogs
             FROM sales.orders o
@@ -679,16 +711,17 @@ async def finance_summary(
             WHERE o.occurred_at BETWEEN :start_dt AND :end_dt
               AND COALESCE(o.status, '') <> 'cancelled'
             """
-        ),
-        {"start_dt": start_dt, "end_dt": end_dt},
-    )).one()
+            ),
+            {"start_dt": start_dt, "end_dt": end_dt},
+        )
+    ).one()
     revenue = float(rev_row.revenue or 0)
     cogs = float(rev_row.cogs or 0)
 
     # Expenses
-    exp_rows = (await db.execute(
-        select(LegacyIdMap).where(LegacyIdMap.entity == "gasto")
-    )).scalars().all()
+    exp_rows = (
+        (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "gasto"))).scalars().all()
+    )
     expenses_total = 0.0
     by_cat: dict[str, float] = {}
     for r in exp_rows:
@@ -706,9 +739,10 @@ async def finance_summary(
         by_cat[cat] = by_cat.get(cat, 0) + m
 
     # Revenue by payment method
-    method_rows = (await db.execute(
-        text(
-            """
+    method_rows = (
+        await db.execute(
+            text(
+                """
             SELECT p.method, COALESCE(SUM(p.amount), 0) as total
             FROM sales.payments p
             JOIN sales.orders o ON o.id = p.order_id
@@ -717,15 +751,19 @@ async def finance_summary(
             GROUP BY p.method
             ORDER BY total DESC
             """
-        ),
-        {"start_dt": start_dt, "end_dt": end_dt},
-    )).all()
-    revenue_by_method = [{"method": r.method or "Sin método", "total": float(r.total)} for r in method_rows]
+            ),
+            {"start_dt": start_dt, "end_dt": end_dt},
+        )
+    ).all()
+    revenue_by_method = [
+        {"method": r.method or "Sin método", "total": float(r.total)} for r in method_rows
+    ]
 
     # Daily cashflow
-    daily_rows = (await db.execute(
-        text(
-            """
+    daily_rows = (
+        await db.execute(
+            text(
+                """
             SELECT DATE(o.occurred_at) AS d, COALESCE(SUM(o.grand_total), 0) AS revenue
             FROM sales.orders o
             WHERE o.occurred_at BETWEEN :start_dt AND :end_dt
@@ -733,9 +771,10 @@ async def finance_summary(
             GROUP BY DATE(o.occurred_at)
             ORDER BY d
             """
-        ),
-        {"start_dt": start_dt, "end_dt": end_dt},
-    )).all()
+            ),
+            {"start_dt": start_dt, "end_dt": end_dt},
+        )
+    ).all()
     daily = [{"date": str(r.d), "revenue": float(r.revenue), "expenses": 0.0} for r in daily_rows]
     # Add daily expenses
     daily_map = {d["date"]: d for d in daily}
@@ -779,17 +818,18 @@ async def finance_summary(
 #  META DIARIA (P5) — objetivo inteligente auto-calculado
 # ═══════════════════════════════════════════════════════════════
 
+
 class DailyGoalOut(BaseModel):
     fecha: str
-    target: float            # meta del día (auto o manual)
-    achieved: float          # vendido hoy
-    progress_pct: float      # % de avance
-    remaining: float         # falta para la meta
+    target: float  # meta del día (auto o manual)
+    achieved: float  # vendido hoy
+    progress_pct: float  # % de avance
+    remaining: float  # falta para la meta
     orders_today: int
-    projection_eod: float    # proyección al cierre según ritmo del día
-    status: str              # "logrado" | "en_camino" | "atrasado"
-    target_source: str       # "manual" | "auto_weekday"
-    weekday_avg: float       # promedio histórico de ese día de semana
+    projection_eod: float  # proyección al cierre según ritmo del día
+    status: str  # "logrado" | "en_camino" | "atrasado"
+    target_source: str  # "manual" | "auto_weekday"
+    weekday_avg: float  # promedio histórico de ese día de semana
 
 
 @router.get(
@@ -807,26 +847,29 @@ async def daily_goal(
         fecha = datetime.now(_TZINFO).date()
 
     # Vendido hoy (TZ Colombia)
-    achieved_row = (await db.execute(
-        text(
-            """
+    achieved_row = (
+        await db.execute(
+            text(
+                """
             SELECT COALESCE(SUM(o.grand_total), 0) AS total, COUNT(*) AS cnt
             FROM sales.orders o
             WHERE DATE(o.occurred_at AT TIME ZONE 'America/Bogota') = :fecha
               AND COALESCE(o.status, '') NOT IN ('cancelled', 'refunded')
             """
-        ),
-        {"fecha": fecha},
-    )).one()
+            ),
+            {"fecha": fecha},
+        )
+    ).one()
     achieved = float(achieved_row.total or 0)
     orders_today = int(achieved_row.cnt or 0)
 
     # Promedio del mismo día de semana en las últimas 8 semanas
     weekday = fecha.weekday()  # 0=lunes
     since = fecha - timedelta(days=70)
-    hist_rows = (await db.execute(
-        text(
-            """
+    hist_rows = (
+        await db.execute(
+            text(
+                """
             SELECT DATE(o.occurred_at AT TIME ZONE 'America/Bogota') AS d,
                    SUM(o.grand_total) AS total
             FROM sales.orders o
@@ -835,9 +878,10 @@ async def daily_goal(
               AND COALESCE(o.status, '') NOT IN ('cancelled', 'refunded')
             GROUP BY DATE(o.occurred_at AT TIME ZONE 'America/Bogota')
             """
-        ),
-        {"since": since, "fecha": fecha},
-    )).all()
+            ),
+            {"since": since, "fecha": fecha},
+        )
+    ).all()
     same_weekday = [float(r.total or 0) for r in hist_rows if r.d.weekday() == weekday]
     weekday_avg = sum(same_weekday) / len(same_weekday) if same_weekday else 0.0
     if weekday_avg <= 0 and hist_rows:
@@ -854,7 +898,7 @@ async def daily_goal(
     # Proyección al cierre según hora local
     now_local = datetime.now(_TZINFO)
     if fecha == now_local.date():
-        # fracción del horario comercial transcurrido (8:00–20:00)
+        # fracción del horario comercial transcurrido (8:00-20:00)
         open_h, close_h = 8.0, 20.0
         cur_h = now_local.hour + now_local.minute / 60.0
         frac = min(max((cur_h - open_h) / (close_h - open_h), 0.05), 1.0)

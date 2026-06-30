@@ -1,4 +1,5 @@
 """Normalización de SKUs / IDs de producto — bit-exact a `normalizar_id_producto`."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -12,6 +13,7 @@ try:
         except Exception:
             return v is None
 except Exception:  # pragma: no cover
+
     def _is_na(v: Any) -> bool:
         return v is None
 

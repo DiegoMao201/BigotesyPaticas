@@ -1,18 +1,20 @@
 """
 Sube todos los assets de marca a DO Spaces bajo bigotesypaticas/branding/
 """
+
 import mimetypes
 from pathlib import Path
+
 import boto3
 from botocore.client import Config
 
-ENDPOINT   = "https://nyc3.digitaloceanspaces.com"
-REGION     = "nyc3"
-BUCKET     = "catalogo-ferreinox"
+ENDPOINT = "https://nyc3.digitaloceanspaces.com"
+REGION = "nyc3"
+BUCKET = "catalogo-ferreinox"
 ACCESS_KEY = "DO8014RFF6H69FRGMQZB"
 SECRET_KEY = "nIUpBuZgYIr5cOHUa7sULB7UE6qblM1z7vZP9XOWXxM"
-PREFIX     = "bigotesypaticas/branding"
-CDN_BASE   = "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com"
+PREFIX = "bigotesypaticas/branding"
+CDN_BASE = "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com"
 
 FILES = [
     Path("dist/brand/cdn-uploads/logo-256.png"),

@@ -3,8 +3,11 @@ Genera todos los assets de marca desde packages/branding/logo-source.png
 Fuente: PNG cuadrado con fondo transparente (solo casita + perro + gato).
 Requiere: pip install Pillow
 """
-import base64, shutil
+
+import base64
+import shutil
 from pathlib import Path
+
 from PIL import Image
 
 SOURCE = Path("packages/branding/logo-source.png")
@@ -15,6 +18,7 @@ print(f"Fuente: {SOURCE} ({src_img.size}, mode=RGBA)")
 
 # Fondo teal para íconos que requieren fondo sólido (maskable / apple-touch)
 TEAL_BG = (24, 127, 119, 255)
+
 
 def render_png(size, output, bg=(0, 0, 0, 0), padding=1.0):
     """
@@ -34,6 +38,7 @@ def render_png(size, output, bg=(0, 0, 0, 0), padding=1.0):
     kb = output.stat().st_size / 1024
     print(f"  ✓ {output} ({size}x{size}, {kb:.1f} KB)")
 
+
 def render_ico(sizes, output):
     imgs = []
     for s in sizes:
@@ -46,6 +51,7 @@ def render_ico(sizes, output):
     output.parent.mkdir(parents=True, exist_ok=True)
     imgs[0].save(output, format="ICO", sizes=[(s, s) for s in sizes], append_images=imgs[1:])
     print(f"  ✓ {output} (multi-size: {sizes})")
+
 
 def render_opengraph(output):
     w, h = 1200, 630
@@ -68,17 +74,21 @@ def render_opengraph(output):
     kb = output.stat().st_size / 1024
     print(f"  ✓ {output} (1200x630, {kb:.1f} KB)")
 
+
 def create_svg_wrapper(output):
-    with open(SOURCE, 'rb') as f:
+    with open(SOURCE, "rb") as f:
         png_b64 = base64.b64encode(f.read()).decode()
     w, h = src_img.size
-    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" '
-           f'viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
-           f'<image href="data:image/png;base64,{png_b64}" '
-           f'width="{w}" height="{h}"/></svg>')
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
+        f'<image href="data:image/png;base64,{png_b64}" '
+        f'width="{w}" height="{h}"/></svg>'
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(svg)
     print(f"  ✓ {output}")
+
 
 # ── apps/store/public ──
 store = Path("apps/store/public")

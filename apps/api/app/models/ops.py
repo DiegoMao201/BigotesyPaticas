@@ -1,4 +1,5 @@
 """Modelos cross-cutting (`ops`): legacy_id_map, audit_log."""
+
 from __future__ import annotations
 
 import uuid
@@ -13,11 +14,10 @@ from app.models.common import Base, TimestampMixin, UUIDPKMixin
 
 class LegacyIdMap(UUIDPKMixin, TimestampMixin, Base):
     """Tabla puente entre IDs nuevos (UUID en PG) e IDs antiguos (Sheets)."""
+
     __tablename__ = "legacy_id_map"
     __table_args__ = (
-        UniqueConstraint(
-            "entity", "legacy_id", name="uq_legacy_id_map_entity_legacy_id"
-        ),
+        UniqueConstraint("entity", "legacy_id", name="uq_legacy_id_map_entity_legacy_id"),
         {"schema": "ops"},
     )
 
@@ -29,6 +29,7 @@ class LegacyIdMap(UUIDPKMixin, TimestampMixin, Base):
 
 class AuditLog(UUIDPKMixin, Base):
     """Audit log inmutable. Append-only."""
+
     __tablename__ = "audit_log"
     __table_args__ = ({"schema": "ops"},)
 

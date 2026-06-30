@@ -1,4 +1,5 @@
 """Dependencias FastAPI."""
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -40,9 +41,7 @@ async def get_current_user(
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active or user.deleted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inválido"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inválido")
     return user
 
 
@@ -52,6 +51,7 @@ DBSession = Annotated[AsyncSession, Depends(get_db)]
 
 def require_permission(permission: str):
     """Factory de dependencia para RBAC."""
+
     async def _check(user: CurrentUser) -> User:
         if not user.has_permission(permission):
             raise HTTPException(

@@ -10,6 +10,7 @@ Salida (stderr):
     {"ts":"2026-05-10T14:22:01-05:00","level":"INFO","logger":"app","msg":"venta_registrada",
      "id_venta":"V-123","total":12500,"git_sha":"e99f6dd","env":"prod"}
 """
+
 from __future__ import annotations
 
 import json
@@ -23,10 +24,27 @@ from bp_common.tz import TZ_CO
 from bp_common.version_info import get_git_sha
 
 _RESERVED = {
-    "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
-    "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
-    "created", "msecs", "relativeCreated", "thread", "threadName",
-    "processName", "process", "message",
+    "name",
+    "msg",
+    "args",
+    "levelname",
+    "levelno",
+    "pathname",
+    "filename",
+    "module",
+    "exc_info",
+    "exc_text",
+    "stack_info",
+    "lineno",
+    "funcName",
+    "created",
+    "msecs",
+    "relativeCreated",
+    "thread",
+    "threadName",
+    "processName",
+    "process",
+    "message",
 }
 
 

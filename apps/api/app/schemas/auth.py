@@ -1,4 +1,5 @@
 """Schemas Pydantic v2 — auth."""
+
 from __future__ import annotations
 
 import uuid

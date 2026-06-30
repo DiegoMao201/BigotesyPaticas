@@ -1,4 +1,5 @@
 """Portal Service Status — horarios y disponibilidad de despacho."""
+
 from __future__ import annotations
 
 import os
@@ -41,8 +42,7 @@ async def service_status() -> dict:
         )
     elif not is_delivery_day:
         message = (
-            "Hoy no es día de despacho. "
-            "Recibimos tu pedido y lo enviamos el próximo día hábil."
+            "Hoy no es día de despacho. " "Recibimos tu pedido y lo enviamos el próximo día hábil."
         )
     elif not is_delivery_hour:
         if now_co.hour >= hours_end:

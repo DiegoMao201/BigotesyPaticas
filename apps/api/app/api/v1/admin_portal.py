@@ -1,4 +1,5 @@
 """Admin Portal — endpoints de gestión de pedidos y citas del portal."""
+
 from __future__ import annotations
 
 import uuid
@@ -7,9 +8,10 @@ from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select, text, update as sa_update
+from sqlalchemy import func, select
+from sqlalchemy import update as sa_update
 
-from app.api.v1.portal_notifications import notify_admins, notify_customer
+from app.api.v1.portal_notifications import notify_customer
 from app.deps import DBSession
 from app.models.crm import Customer
 from app.models.portal import (
@@ -34,6 +36,7 @@ router = APIRouter(prefix="/admin/portal", tags=["admin-portal"])
 
 # ── schemas ───────────────────────────────────────────────────────────────────
 
+
 class OrderStatusUpdate(BaseModel):
     status: str
     notes: str | None = None
@@ -47,12 +50,14 @@ class ApptStatusUpdate(BaseModel):
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _pet_name_subquery(db_session):
     """Subquery no es necesaria — usamos join directo en las consultas."""
     pass
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/overview")
 async def portal_overview(db: DBSession) -> dict:
@@ -63,36 +68,48 @@ async def portal_overview(db: DBSession) -> dict:
     thirty_ago = now - timedelta(days=30)
 
     # Sesiones activas en las últimas 24h
-    active_sessions = (await db.execute(
-        select(func.count()).select_from(PortalSession).where(
-            PortalSession.expires_at > now,
-            PortalSession.created_at >= now - timedelta(hours=24),
+    active_sessions = (
+        await db.execute(
+            select(func.count())
+            .select_from(PortalSession)
+            .where(
+                PortalSession.expires_at > now,
+                PortalSession.created_at >= now - timedelta(hours=24),
+            )
         )
-    )).scalar_one()
+    ).scalar_one()
 
     # Pedidos pendientes (received + processing)
-    pending_orders = (await db.execute(
-        select(func.count()).select_from(PortalOrder).where(
-            PortalOrder.status.in_(["received", "processing"])
+    pending_orders = (
+        await db.execute(
+            select(func.count())
+            .select_from(PortalOrder)
+            .where(PortalOrder.status.in_(["received", "processing"]))
         )
-    )).scalar_one()
+    ).scalar_one()
 
     # Citas hoy
-    appts_today = (await db.execute(
-        select(func.count()).select_from(Appointment).where(
-            Appointment.scheduled_at >= today_start,
-            Appointment.scheduled_at < today_end,
-            Appointment.status.notin_(["cancelled"]),
+    appts_today = (
+        await db.execute(
+            select(func.count())
+            .select_from(Appointment)
+            .where(
+                Appointment.scheduled_at >= today_start,
+                Appointment.scheduled_at < today_end,
+                Appointment.status.notin_(["cancelled"]),
+            )
         )
-    )).scalar_one()
+    ).scalar_one()
 
     # Puntos otorgados en los últimos 30 días
-    points_30d = (await db.execute(
-        select(func.coalesce(func.sum(LoyaltyPoint.points), 0)).where(
-            LoyaltyPoint.created_at >= thirty_ago,
-            LoyaltyPoint.points > 0,
+    points_30d = (
+        await db.execute(
+            select(func.coalesce(func.sum(LoyaltyPoint.points), 0)).where(
+                LoyaltyPoint.created_at >= thirty_ago,
+                LoyaltyPoint.points > 0,
+            )
         )
-    )).scalar_one()
+    ).scalar_one()
 
     return {
         "active_sessions_24h": active_sessions,
@@ -129,21 +146,23 @@ async def list_portal_orders(
     rows = (await db.execute(q)).all()
     result = []
     for order, customer_name, pet_name in rows:
-        result.append({
-            "id": str(order.id),
-            "customer_name": customer_name,
-            "pet_name": pet_name,
-            "product_name": order.product_name,
-            "quantity": order.quantity,
-            "unit_price": float(order.unit_price) if order.unit_price else None,
-            "status": order.status,
-            "invoice_number": order.invoice_number,
-            "sales_order_id": str(order.sales_order_id) if order.sales_order_id else None,
-            "notes": order.notes,
-            "created_at": order.created_at.isoformat(),
-            "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
-            "points_awarded": order.points_awarded,
-        })
+        result.append(
+            {
+                "id": str(order.id),
+                "customer_name": customer_name,
+                "pet_name": pet_name,
+                "product_name": order.product_name,
+                "quantity": order.quantity,
+                "unit_price": float(order.unit_price) if order.unit_price else None,
+                "status": order.status,
+                "invoice_number": order.invoice_number,
+                "sales_order_id": str(order.sales_order_id) if order.sales_order_id else None,
+                "notes": order.notes,
+                "created_at": order.created_at.isoformat(),
+                "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
+                "points_awarded": order.points_awarded,
+            }
+        )
     return result
 
 
@@ -154,9 +173,9 @@ async def update_portal_order(
     db: DBSession,
 ) -> dict:
     """Actualiza el estado de un pedido del portal y notifica al cliente."""
-    order = (await db.execute(
-        select(PortalOrder).where(PortalOrder.id == order_id)
-    )).scalar_one_or_none()
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
@@ -225,8 +244,9 @@ async def update_portal_order(
             order.customer_id,
             notif_type="order_delivered",
             title="Pedido entregado",
-            body=f"Tu pedido fue entregado. Ganaste {points} puntos de fidelidad 🐾" if points > 0
-                 else "Tu pedido fue entregado con éxito 🐾",
+            body=f"Tu pedido fue entregado. Ganaste {points} puntos de fidelidad 🐾"
+            if points > 0
+            else "Tu pedido fue entregado con éxito 🐾",
             data={"order_id": str(order.id), "points_awarded": points},
         )
 
@@ -278,21 +298,23 @@ async def list_portal_appointments(
     rows = (await db.execute(q)).all()
     result = []
     for appt, customer_name, pet_name in rows:
-        result.append({
-            "id": str(appt.id),
-            "customer_name": customer_name,
-            "pet_name": pet_name,
-            "service_type": appt.service_type,
-            "scheduled_at": appt.scheduled_at.isoformat(),
-            "duration_min": appt.duration_min,
-            "status": appt.status,
-            "price": float(appt.price) if appt.price else None,
-            "notes": appt.notes,
-            "confirmed_at": appt.confirmed_at.isoformat() if appt.confirmed_at else None,
-            "completed_at": appt.completed_at.isoformat() if appt.completed_at else None,
-            "cancel_reason": appt.cancel_reason,
-            "created_at": appt.created_at.isoformat(),
-        })
+        result.append(
+            {
+                "id": str(appt.id),
+                "customer_name": customer_name,
+                "pet_name": pet_name,
+                "service_type": appt.service_type,
+                "scheduled_at": appt.scheduled_at.isoformat(),
+                "duration_min": appt.duration_min,
+                "status": appt.status,
+                "price": float(appt.price) if appt.price else None,
+                "notes": appt.notes,
+                "confirmed_at": appt.confirmed_at.isoformat() if appt.confirmed_at else None,
+                "completed_at": appt.completed_at.isoformat() if appt.completed_at else None,
+                "cancel_reason": appt.cancel_reason,
+                "created_at": appt.created_at.isoformat(),
+            }
+        )
     return result
 
 
@@ -303,13 +325,12 @@ async def update_portal_appointment(
     db: DBSession,
 ) -> dict:
     """Actualiza el estado de una cita del portal y notifica al cliente."""
-    appt = (await db.execute(
-        select(Appointment).where(Appointment.id == appt_id)
-    )).scalar_one_or_none()
+    appt = (
+        await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    ).scalar_one_or_none()
     if not appt:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
 
-    old_status = appt.status
     new_status = payload.status
     now = datetime.now(UTC)
 
@@ -352,11 +373,15 @@ async def update_portal_appointment(
 @router.get("/feed")
 async def admin_feed(db: DBSession) -> list[dict]:
     """Últimas 20 notificaciones (admin + cliente) ordenadas por fecha."""
-    rows = (await db.execute(
-        select(PortalNotification)
-        .order_by(PortalNotification.created_at.desc())
-        .limit(20)
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(PortalNotification).order_by(PortalNotification.created_at.desc()).limit(20)
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     return [
         {
@@ -380,18 +405,22 @@ async def admin_feed(db: DBSession) -> list[dict]:
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+
 class ChangeWorkflowPayload(BaseModel):
     new_status: str
     internal_notes: str | None = None
+
 
 class EditQuantityPayload(BaseModel):
     new_quantity: int
     reason: str | None = None
 
+
 class SubstitutePayload(BaseModel):
     new_product_id: uuid.UUID
     new_quantity: int | None = None
     reason: str
+
 
 class AddItemPayload(BaseModel):
     product_id: uuid.UUID
@@ -399,36 +428,45 @@ class AddItemPayload(BaseModel):
     notes: str | None = None
     reason: str | None = None
 
+
 class RemoveItemPayload(BaseModel):
     reason: str
+
 
 class DiscountPayload(BaseModel):
     discount_amount: float
     reason: str
 
+
 class AddressPayload(BaseModel):
     shipping_address: str
+
 
 class NotesPayload(BaseModel):
     internal_notes: str | None = None
     customer_facing_notes: str | None = None
 
+
 class ConfirmApprovalPayload(BaseModel):
     channel: str  # 'whatsapp_replied'|'phone_call'|'in_store'
     notes: str | None = None
 
+
 class MarkSentPayload(BaseModel):
     channel: str = "whatsapp"
+
 
 class CancelOrderPayload(BaseModel):
     reason: str
     refund_points: bool = False
+
 
 class RescheduleApptPayload(BaseModel):
     proposed_options: list[str]  # ISO datetime strings
     reason_category: str
     reason_notes: str | None = None
     compensation_points: int = 50
+
 
 class ConfirmApptChoicePayload(BaseModel):
     chosen_datetime: str
@@ -437,19 +475,28 @@ class ConfirmApptChoicePayload(BaseModel):
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 
+
 async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
-    order = (await db.execute(
-        select(PortalOrder).where(PortalOrder.id == order_id)
-    )).scalar_one_or_none()
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
 
-    items = (await db.execute(
-        select(PortalOrderItem)
-        .where(PortalOrderItem.portal_order_id == order_id,
-               PortalOrderItem.is_removed == False)  # noqa: E712
-        .order_by(PortalOrderItem.created_at)
-    )).scalars().all()
+    items = (
+        (
+            await db.execute(
+                select(PortalOrderItem)
+                .where(
+                    PortalOrderItem.portal_order_id == order_id,
+                    PortalOrderItem.is_removed.is_(False),
+                )
+                .order_by(PortalOrderItem.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     items_data = [
         {
@@ -473,9 +520,13 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
     shipping = 0.0 if subtotal >= 30000 else 8000.0
     total = subtotal - discount + shipping
 
-    customer = (await db.execute(
-        select(Customer).where(Customer.id == order.customer_id)
-    )).scalar_one_or_none() if order.customer_id else None
+    customer = (
+        (
+            await db.execute(select(Customer).where(Customer.id == order.customer_id))
+        ).scalar_one_or_none()
+        if order.customer_id
+        else None
+    )
 
     return {
         "id": str(order.id),
@@ -496,8 +547,12 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
         "total": total,
         "points_awarded": order.points_awarded,
         "invoice_number": order.invoice_number,
-        "last_status_change_at": order.last_status_change_at.isoformat() if order.last_status_change_at else None,
-        "customer_confirmed_changes_at": order.customer_confirmed_changes_at.isoformat() if order.customer_confirmed_changes_at else None,
+        "last_status_change_at": order.last_status_change_at.isoformat()
+        if order.last_status_change_at
+        else None,
+        "customer_confirmed_changes_at": order.customer_confirmed_changes_at.isoformat()
+        if order.customer_confirmed_changes_at
+        else None,
         "customer_confirmation_channel": order.customer_confirmation_channel,
         "created_at": order.created_at.isoformat(),
         "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
@@ -505,9 +560,15 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
     }
 
 
-async def _log(db: DBSession, entity_id: uuid.UUID, action: str,
-               actor_name: str = "Admin", changes: dict | None = None,
-               notes: str | None = None, visible: bool = True) -> None:
+async def _log(
+    db: DBSession,
+    entity_id: uuid.UUID,
+    action: str,
+    actor_name: str = "Admin",
+    changes: dict | None = None,
+    notes: str | None = None,
+    visible: bool = True,
+) -> None:
     entry = ActivityLog(
         entity_type="order",
         entity_id=entity_id,
@@ -522,11 +583,18 @@ async def _log(db: DBSession, entity_id: uuid.UUID, action: str,
 
 
 async def _recalculate_total(db: DBSession, order_id: uuid.UUID) -> float:
-    items = (await db.execute(
-        select(PortalOrderItem)
-        .where(PortalOrderItem.portal_order_id == order_id,
-               PortalOrderItem.is_removed == False)  # noqa: E712
-    )).scalars().all()
+    items = (
+        (
+            await db.execute(
+                select(PortalOrderItem).where(
+                    PortalOrderItem.portal_order_id == order_id,
+                    PortalOrderItem.is_removed.is_(False),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     total = sum(float(i.subtotal or (i.unit_price or 0) * i.quantity) for i in items)
     await db.execute(
         sa_update(PortalOrder)
@@ -538,6 +606,7 @@ async def _recalculate_total(db: DBSession, order_id: uuid.UUID) -> float:
 
 # ── GET order detail ──────────────────────────────────────────────────────────
 
+
 @router.get("/orders/{order_id}/detail")
 async def get_order_detail(order_id: uuid.UUID, db: DBSession) -> dict:
     return await _get_order_with_items(db, order_id)
@@ -545,13 +614,20 @@ async def get_order_detail(order_id: uuid.UUID, db: DBSession) -> dict:
 
 # ── GET activity log ──────────────────────────────────────────────────────────
 
+
 @router.get("/orders/{order_id}/activity")
 async def get_order_activity(order_id: uuid.UUID, db: DBSession) -> list[dict]:
-    logs = (await db.execute(
-        select(ActivityLog)
-        .where(ActivityLog.entity_type == "order", ActivityLog.entity_id == order_id)
-        .order_by(ActivityLog.created_at.asc())
-    )).scalars().all()
+    logs = (
+        (
+            await db.execute(
+                select(ActivityLog)
+                .where(ActivityLog.entity_type == "order", ActivityLog.entity_id == order_id)
+                .order_by(ActivityLog.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
     return [
         {
             "id": str(lg.id),
@@ -561,7 +637,9 @@ async def get_order_activity(order_id: uuid.UUID, db: DBSession) -> list[dict]:
             "changes": lg.changes,
             "notes": lg.notes,
             "visible_to_customer": lg.visible_to_customer,
-            "notification_sent_at": lg.notification_sent_at.isoformat() if lg.notification_sent_at else None,
+            "notification_sent_at": lg.notification_sent_at.isoformat()
+            if lg.notification_sent_at
+            else None,
             "created_at": lg.created_at.isoformat(),
         }
         for lg in logs
@@ -584,11 +662,14 @@ WORKFLOW_TRANSITIONS: dict[str, list[str]] = {
     "returned": [],
 }
 
+
 @router.patch("/orders/{order_id}/workflow")
 async def change_workflow_status(
     order_id: uuid.UUID, payload: ChangeWorkflowPayload, db: DBSession
 ) -> dict:
-    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
 
@@ -619,7 +700,9 @@ async def change_workflow_status(
     # Encolar notificación WhatsApp para modal admin (no envía nada automático)
     pending_notif = await queue_customer_notification(order, new, db)
 
-    await _log(db, order_id, "status_changed", changes={"workflow_status": {"before": old, "after": new}})
+    await _log(
+        db, order_id, "status_changed", changes={"workflow_status": {"before": old, "after": new}}
+    )
     await db.commit()
 
     result: dict = {"ok": True, "workflow_status": new}
@@ -630,17 +713,19 @@ async def change_workflow_status(
 
 # ── PATCH item quantity ────────────────────────────────────────────────────────
 
+
 @router.patch("/orders/{order_id}/items/{item_id}/quantity")
 async def edit_item_quantity(
-    order_id: uuid.UUID, item_id: uuid.UUID,
-    payload: EditQuantityPayload, db: DBSession
+    order_id: uuid.UUID, item_id: uuid.UUID, payload: EditQuantityPayload, db: DBSession
 ) -> dict:
-    item = (await db.execute(
-        select(PortalOrderItem).where(
-            PortalOrderItem.id == item_id,
-            PortalOrderItem.portal_order_id == order_id,
+    item = (
+        await db.execute(
+            select(PortalOrderItem).where(
+                PortalOrderItem.id == item_id,
+                PortalOrderItem.portal_order_id == order_id,
+            )
         )
-    )).scalar_one_or_none()
+    ).scalar_one_or_none()
     if not item:
         raise HTTPException(404, "Item no encontrado")
 
@@ -649,11 +734,22 @@ async def edit_item_quantity(
     item.subtotal = (item.unit_price or Decimal("0")) * payload.new_quantity
 
     await _recalculate_total(db, order_id)
-    await _log(db, order_id, "item_quantity_changed",
-        changes={"item": item.name, "quantity": {"before": old_qty, "after": payload.new_quantity}, "reason": payload.reason},
-        notes=payload.reason, visible=True)
+    await _log(
+        db,
+        order_id,
+        "item_quantity_changed",
+        changes={
+            "item": item.name,
+            "quantity": {"before": old_qty, "after": payload.new_quantity},
+            "reason": payload.reason,
+        },
+        notes=payload.reason,
+        visible=True,
+    )
     # Mark as awaiting_customer if currently under_review
-    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if order and order.workflow_status in ("received", "under_review"):
         order.workflow_status = "awaiting_customer"
     await db.commit()
@@ -662,21 +758,26 @@ async def edit_item_quantity(
 
 # ── POST substitute item ──────────────────────────────────────────────────────
 
+
 @router.post("/orders/{order_id}/items/{item_id}/substitute")
 async def substitute_item(
-    order_id: uuid.UUID, item_id: uuid.UUID,
-    payload: SubstitutePayload, db: DBSession
+    order_id: uuid.UUID, item_id: uuid.UUID, payload: SubstitutePayload, db: DBSession
 ) -> dict:
     from app.models.catalog import Product
-    item = (await db.execute(
-        select(PortalOrderItem).where(
-            PortalOrderItem.id == item_id, PortalOrderItem.portal_order_id == order_id
+
+    item = (
+        await db.execute(
+            select(PortalOrderItem).where(
+                PortalOrderItem.id == item_id, PortalOrderItem.portal_order_id == order_id
+            )
         )
-    )).scalar_one_or_none()
+    ).scalar_one_or_none()
     if not item:
         raise HTTPException(404, "Item no encontrado")
 
-    new_prod = (await db.execute(select(Product).where(Product.id == payload.new_product_id))).scalar_one_or_none()
+    new_prod = (
+        await db.execute(select(Product).where(Product.id == payload.new_product_id))
+    ).scalar_one_or_none()
     if not new_prod:
         raise HTTPException(404, "Producto de sustitución no encontrado")
 
@@ -695,10 +796,21 @@ async def substitute_item(
     item.notes = f"Sustituido. Motivo: {payload.reason}"
 
     await _recalculate_total(db, order_id)
-    await _log(db, order_id, "item_substituted",
-        changes={"before": old_data, "after": {"name": new_prod.name, "sku": new_prod.sku}, "reason": payload.reason},
-        notes=payload.reason, visible=True)
-    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+    await _log(
+        db,
+        order_id,
+        "item_substituted",
+        changes={
+            "before": old_data,
+            "after": {"name": new_prod.name, "sku": new_prod.sku},
+            "reason": payload.reason,
+        },
+        notes=payload.reason,
+        visible=True,
+    )
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if order and order.workflow_status in ("received", "under_review"):
         order.workflow_status = "awaiting_customer"
     await db.commit()
@@ -707,16 +819,20 @@ async def substitute_item(
 
 # ── POST add item ─────────────────────────────────────────────────────────────
 
+
 @router.post("/orders/{order_id}/items")
-async def add_item_to_order(
-    order_id: uuid.UUID, payload: AddItemPayload, db: DBSession
-) -> dict:
+async def add_item_to_order(order_id: uuid.UUID, payload: AddItemPayload, db: DBSession) -> dict:
     from app.models.catalog import Product
-    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
 
-    prod = (await db.execute(select(Product).where(Product.id == payload.product_id))).scalar_one_or_none()
+    prod = (
+        await db.execute(select(Product).where(Product.id == payload.product_id))
+    ).scalar_one_or_none()
     if not prod:
         raise HTTPException(404, "Producto no encontrado")
 
@@ -733,9 +849,14 @@ async def add_item_to_order(
     )
     db.add(new_item)
     await _recalculate_total(db, order_id)
-    await _log(db, order_id, "item_added",
+    await _log(
+        db,
+        order_id,
+        "item_added",
         changes={"name": prod.name, "quantity": payload.quantity, "unit_price": float(prod.price)},
-        notes=payload.reason, visible=True)
+        notes=payload.reason,
+        visible=True,
+    )
     if order.workflow_status in ("received", "under_review"):
         order.workflow_status = "awaiting_customer"
     await db.commit()
@@ -744,34 +865,48 @@ async def add_item_to_order(
 
 # ── DELETE remove item ────────────────────────────────────────────────────────
 
+
 @router.delete("/orders/{order_id}/items/{item_id}")
 async def remove_item_from_order(
-    order_id: uuid.UUID, item_id: uuid.UUID,
-    payload: RemoveItemPayload, db: DBSession
+    order_id: uuid.UUID, item_id: uuid.UUID, payload: RemoveItemPayload, db: DBSession
 ) -> dict:
-    items_count = (await db.execute(
-        select(func.count()).select_from(PortalOrderItem).where(
-            PortalOrderItem.portal_order_id == order_id,
-            PortalOrderItem.is_removed == False  # noqa: E712
+    items_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(PortalOrderItem)
+            .where(
+                PortalOrderItem.portal_order_id == order_id,
+                PortalOrderItem.is_removed == False,  # noqa: E712
+            )
         )
-    )).scalar() or 0
+    ).scalar() or 0
     if items_count <= 1:
         raise HTTPException(400, "No se puede quitar el único item. Cancela el pedido.")
 
-    item = (await db.execute(
-        select(PortalOrderItem).where(
-            PortalOrderItem.id == item_id, PortalOrderItem.portal_order_id == order_id
+    item = (
+        await db.execute(
+            select(PortalOrderItem).where(
+                PortalOrderItem.id == item_id, PortalOrderItem.portal_order_id == order_id
+            )
         )
-    )).scalar_one_or_none()
+    ).scalar_one_or_none()
     if not item:
         raise HTTPException(404, "Item no encontrado")
 
     item.is_removed = True
     item.subtotal = Decimal("0")
     await _recalculate_total(db, order_id)
-    await _log(db, order_id, "item_removed",
-        changes={"name": item.name, "reason": payload.reason}, notes=payload.reason, visible=True)
-    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+    await _log(
+        db,
+        order_id,
+        "item_removed",
+        changes={"name": item.name, "reason": payload.reason},
+        notes=payload.reason,
+        visible=True,
+    )
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if order and order.workflow_status in ("received", "under_review"):
         order.workflow_status = "awaiting_customer"
     await db.commit()
@@ -780,17 +915,23 @@ async def remove_item_from_order(
 
 # ── POST apply discount ───────────────────────────────────────────────────────
 
+
 @router.post("/orders/{order_id}/discount")
-async def apply_discount(
-    order_id: uuid.UUID, payload: DiscountPayload, db: DBSession
-) -> dict:
-    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+async def apply_discount(order_id: uuid.UUID, payload: DiscountPayload, db: DBSession) -> dict:
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
     order.discount_amount = Decimal(str(payload.discount_amount))
     order.discount_reason = payload.reason
-    await _log(db, order_id, "discount_applied",
-        changes={"discount_amount": payload.discount_amount, "reason": payload.reason}, visible=True)
+    await _log(
+        db,
+        order_id,
+        "discount_applied",
+        changes={"discount_amount": payload.discount_amount, "reason": payload.reason},
+        visible=True,
+    )
     if order.workflow_status in ("received", "under_review"):
         order.workflow_status = "awaiting_customer"
     await db.commit()
@@ -799,61 +940,86 @@ async def apply_discount(
 
 # ── PATCH shipping address ────────────────────────────────────────────────────
 
+
 @router.patch("/orders/{order_id}/shipping-address")
 async def change_shipping_address(
     order_id: uuid.UUID, payload: AddressPayload, db: DBSession
 ) -> dict:
-    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
     old_addr = order.shipping_address
     order.shipping_address = payload.shipping_address
-    await _log(db, order_id, "address_changed",
-        changes={"before": old_addr, "after": payload.shipping_address}, visible=True)
+    await _log(
+        db,
+        order_id,
+        "address_changed",
+        changes={"before": old_addr, "after": payload.shipping_address},
+        visible=True,
+    )
     await db.commit()
     return {"ok": True}
 
 
 # ── PATCH notes ───────────────────────────────────────────────────────────────
 
+
 @router.patch("/orders/{order_id}/notes")
-async def update_order_notes(
-    order_id: uuid.UUID, payload: NotesPayload, db: DBSession
-) -> dict:
-    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+async def update_order_notes(order_id: uuid.UUID, payload: NotesPayload, db: DBSession) -> dict:
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
     if payload.internal_notes is not None:
-        ts = datetime.now(UTC).strftime('%d/%m %H:%M')
-        order.internal_notes = ((order.internal_notes or "") + f"\n[{ts}] {payload.internal_notes}").strip()
+        ts = datetime.now(UTC).strftime("%d/%m %H:%M")
+        order.internal_notes = (
+            (order.internal_notes or "") + f"\n[{ts}] {payload.internal_notes}"
+        ).strip()
     if payload.customer_facing_notes is not None:
         order.customer_facing_notes = payload.customer_facing_notes
-        await _log(db, order_id, "notes_updated",
-            changes={"customer_facing_notes": payload.customer_facing_notes}, visible=True)
+        await _log(
+            db,
+            order_id,
+            "notes_updated",
+            changes={"customer_facing_notes": payload.customer_facing_notes},
+            visible=True,
+        )
     await db.commit()
     return {"ok": True}
 
 
 # ── POST confirm customer approval ────────────────────────────────────────────
 
+
 @router.post("/orders/{order_id}/confirm-customer-approval")
 async def confirm_customer_approval(
     order_id: uuid.UUID, payload: ConfirmApprovalPayload, db: DBSession
 ) -> dict:
-    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
     order.customer_confirmed_changes_at = datetime.now(UTC)
     order.customer_confirmation_channel = payload.channel
     if order.workflow_status == "awaiting_customer":
         order.workflow_status = "ready_to_invoice"
-    await _log(db, order_id, f"customer_confirmed_via_{payload.channel}",
-        notes=payload.notes, visible=False)
+    await _log(
+        db,
+        order_id,
+        f"customer_confirmed_via_{payload.channel}",
+        notes=payload.notes,
+        visible=False,
+    )
     await db.commit()
     return {"ok": True, "workflow_status": order.workflow_status}
 
 
 # ── POST mark notifications sent ──────────────────────────────────────────────
+
 
 @router.post("/orders/{order_id}/notifications/mark-sent")
 async def mark_notifications_sent(
@@ -870,7 +1036,9 @@ async def mark_notifications_sent(
         )
         .values(notification_sent_at=now, notification_channel=payload.channel)
     )
-    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if order and order.workflow_status == "under_review":
         order.workflow_status = "awaiting_customer"
     await db.commit()
@@ -879,45 +1047,67 @@ async def mark_notifications_sent(
 
 # ── POST cancel order ─────────────────────────────────────────────────────────
 
+
 @router.post("/orders/{order_id}/cancel")
-async def cancel_order(
-    order_id: uuid.UUID, payload: CancelOrderPayload, db: DBSession
-) -> dict:
-    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+async def cancel_order(order_id: uuid.UUID, payload: CancelOrderPayload, db: DBSession) -> dict:
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
     if order.workflow_status in ("delivered", "cancelled"):
-        raise HTTPException(400, f"No se puede cancelar un pedido en estado {order.workflow_status}")
+        raise HTTPException(
+            400, f"No se puede cancelar un pedido en estado {order.workflow_status}"
+        )
     order.workflow_status = "cancelled"
     order.status = "cancelled"
     order.last_status_change_at = datetime.now(UTC)
-    await _log(db, order_id, "cancelled",
-        changes={"reason": payload.reason}, notes=payload.reason, visible=True)
+    await _log(
+        db,
+        order_id,
+        "cancelled",
+        changes={"reason": payload.reason},
+        notes=payload.reason,
+        visible=True,
+    )
     await db.commit()
     return {"ok": True}
 
 
 # ── Appointment endpoints (sprint-2) ──────────────────────────────────────────
 
+
 @router.get("/appointments/{appt_id}/detail")
 async def get_appointment_detail(appt_id: uuid.UUID, db: DBSession) -> dict:
     from app.models.portal import Pet
-    row = (await db.execute(
-        select(Appointment, Customer.full_name.label("customer_name"),
-               Customer.phone.label("customer_phone"),
-               Pet.name.label("pet_name"))
-        .join(Customer, Appointment.customer_id == Customer.id, isouter=True)
-        .join(Pet, Appointment.pet_id == Pet.id, isouter=True)
-        .where(Appointment.id == appt_id)
-    )).first()
+
+    row = (
+        await db.execute(
+            select(
+                Appointment,
+                Customer.full_name.label("customer_name"),
+                Customer.phone.label("customer_phone"),
+                Pet.name.label("pet_name"),
+            )
+            .join(Customer, Appointment.customer_id == Customer.id, isouter=True)
+            .join(Pet, Appointment.pet_id == Pet.id, isouter=True)
+            .where(Appointment.id == appt_id)
+        )
+    ).first()
     if not row:
         raise HTTPException(404, "Cita no encontrada")
     appt, customer_name, customer_phone, pet_name = row
-    logs = (await db.execute(
-        select(ActivityLog)
-        .where(ActivityLog.entity_type == "appointment", ActivityLog.entity_id == appt_id)
-        .order_by(ActivityLog.created_at.asc())
-    )).scalars().all()
+    logs = (
+        (
+            await db.execute(
+                select(ActivityLog)
+                .where(ActivityLog.entity_type == "appointment", ActivityLog.entity_id == appt_id)
+                .order_by(ActivityLog.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
     return {
         "id": str(appt.id),
         "customer_id": str(appt.customer_id) if appt.customer_id else None,
@@ -938,8 +1128,10 @@ async def get_appointment_detail(appt_id: uuid.UUID, db: DBSession) -> dict:
         "created_at": appt.created_at.isoformat(),
         "activity": [
             {
-                "action": lg.action, "actor_name": lg.actor_name,
-                "changes": lg.changes, "visible_to_customer": lg.visible_to_customer,
+                "action": lg.action,
+                "actor_name": lg.actor_name,
+                "changes": lg.changes,
+                "visible_to_customer": lg.visible_to_customer,
                 "created_at": lg.created_at.isoformat(),
             }
             for lg in logs
@@ -951,7 +1143,9 @@ async def get_appointment_detail(appt_id: uuid.UUID, db: DBSession) -> dict:
 async def reschedule_appointment(
     appt_id: uuid.UUID, payload: RescheduleApptPayload, db: DBSession
 ) -> dict:
-    appt = (await db.execute(select(Appointment).where(Appointment.id == appt_id))).scalar_one_or_none()
+    appt = (
+        await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    ).scalar_one_or_none()
     if not appt:
         raise HTTPException(404, "Cita no encontrada")
 
@@ -971,24 +1165,33 @@ async def reschedule_appointment(
         appt.compensation_points = payload.compensation_points
 
     entry = ActivityLog(
-        entity_type="appointment", entity_id=appt_id, action="rescheduled",
-        actor_type="admin", changes={
+        entity_type="appointment",
+        entity_id=appt_id,
+        action="rescheduled",
+        actor_type="admin",
+        changes={
             "original_datetime": old_dt,
             "proposed_options": payload.proposed_options,
             "reason_category": payload.reason_category,
             "compensation_points": payload.compensation_points,
-        }, visible_to_customer=True,
+        },
+        visible_to_customer=True,
     )
     db.add(entry)
     await db.commit()
-    return {"ok": True, "workflow_status": getattr(appt, "workflow_status", "awaiting_customer_reschedule")}
+    return {
+        "ok": True,
+        "workflow_status": getattr(appt, "workflow_status", "awaiting_customer_reschedule"),
+    }
 
 
 @router.patch("/appointments/{appt_id}/confirm-choice")
 async def confirm_appt_customer_choice(
     appt_id: uuid.UUID, payload: ConfirmApptChoicePayload, db: DBSession
 ) -> dict:
-    appt = (await db.execute(select(Appointment).where(Appointment.id == appt_id))).scalar_one_or_none()
+    appt = (
+        await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    ).scalar_one_or_none()
     if not appt:
         raise HTTPException(404, "Cita no encontrada")
     new_dt = datetime.fromisoformat(payload.chosen_datetime)
@@ -998,8 +1201,11 @@ async def confirm_appt_customer_choice(
     if hasattr(appt, "workflow_status"):
         appt.workflow_status = "confirmed"
     entry = ActivityLog(
-        entity_type="appointment", entity_id=appt_id, action="reschedule_confirmed",
-        actor_type="admin", changes={"new_datetime": new_dt.isoformat(), "via": payload.customer_confirmed_via},
+        entity_type="appointment",
+        entity_id=appt_id,
+        action="reschedule_confirmed",
+        actor_type="admin",
+        changes={"new_datetime": new_dt.isoformat(), "via": payload.customer_confirmed_via},
         visible_to_customer=True,
     )
     db.add(entry)
@@ -1009,7 +1215,9 @@ async def confirm_appt_customer_choice(
 
 @router.patch("/appointments/{appt_id}/complete")
 async def complete_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
-    appt = (await db.execute(select(Appointment).where(Appointment.id == appt_id))).scalar_one_or_none()
+    appt = (
+        await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    ).scalar_one_or_none()
     if not appt:
         raise HTTPException(404, "Cita no encontrada")
     appt.status = "completed"
@@ -1022,7 +1230,9 @@ async def complete_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
 
 @router.patch("/appointments/{appt_id}/no-show")
 async def no_show_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
-    appt = (await db.execute(select(Appointment).where(Appointment.id == appt_id))).scalar_one_or_none()
+    appt = (
+        await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    ).scalar_one_or_none()
     if not appt:
         raise HTTPException(404, "Cita no encontrada")
     appt.status = "cancelled"
@@ -1034,19 +1244,32 @@ async def no_show_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
 
 # ── Portal customer: order timeline ──────────────────────────────────────────
 
+
 @router.get("/orders/{order_id}/timeline-preview")
 async def order_timeline_preview(order_id: uuid.UUID, db: DBSession) -> list[dict]:
     """Admin preview del timeline que verá el cliente."""
-    logs = (await db.execute(
-        select(ActivityLog)
-        .where(ActivityLog.entity_type == "order", ActivityLog.entity_id == order_id,
-               ActivityLog.visible_to_customer == True)  # noqa: E712
-        .order_by(ActivityLog.created_at.asc())
-    )).scalars().all()
+    logs = (
+        (
+            await db.execute(
+                select(ActivityLog)
+                .where(
+                    ActivityLog.entity_type == "order",
+                    ActivityLog.entity_id == order_id,
+                    ActivityLog.visible_to_customer.is_(True),
+                )
+                .order_by(ActivityLog.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
     return [
         {
-            "action": lg.action, "changes": lg.changes,
-            "notification_sent_at": lg.notification_sent_at.isoformat() if lg.notification_sent_at else None,
+            "action": lg.action,
+            "changes": lg.changes,
+            "notification_sent_at": lg.notification_sent_at.isoformat()
+            if lg.notification_sent_at
+            else None,
             "created_at": lg.created_at.isoformat(),
         }
         for lg in logs
@@ -1056,6 +1279,7 @@ async def order_timeline_preview(order_id: uuid.UUID, db: DBSession) -> list[dic
 # ═══════════════════════════════════════════════════════════════════════════════
 # SPRINT 5.2 — Endpoints de notificaciones pendientes (modal WhatsApp admin)
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def _notif_dict(n: PendingNotification) -> dict:
     return {
@@ -1076,7 +1300,6 @@ async def list_pending_notifications(
     min_age_minutes: int = Query(default=0, ge=0),
 ) -> list[dict]:
     """Lista notificaciones WhatsApp pendientes de envío por el admin."""
-    from sqlalchemy import and_
     q = select(PendingNotification).where(PendingNotification.status == "pending")
     if min_age_minutes > 0:
         cutoff = datetime.now(UTC) - timedelta(minutes=min_age_minutes)
@@ -1086,14 +1309,14 @@ async def list_pending_notifications(
 
     result = []
     for n in rows:
-        order = (await db.execute(
-            select(PortalOrder).where(PortalOrder.id == n.portal_order_id)
-        )).scalar_one_or_none()
+        order = (
+            await db.execute(select(PortalOrder).where(PortalOrder.id == n.portal_order_id))
+        ).scalar_one_or_none()
         customer = None
         if order:
-            customer = (await db.execute(
-                select(Customer).where(Customer.id == order.customer_id)
-            )).scalar_one_or_none()
+            customer = (
+                await db.execute(select(Customer).where(Customer.id == order.customer_id))
+            ).scalar_one_or_none()
 
         d = _notif_dict(n)
         d["customer_name"] = customer.full_name if customer else ""
@@ -1115,9 +1338,9 @@ async def mark_notification_sent(
     db: DBSession,
 ) -> dict:
     """Marca una notificación como enviada manualmente por el admin."""
-    notif = (await db.execute(
-        select(PendingNotification).where(PendingNotification.id == notif_id)
-    )).scalar_one_or_none()
+    notif = (
+        await db.execute(select(PendingNotification).where(PendingNotification.id == notif_id))
+    ).scalar_one_or_none()
     if not notif:
         raise HTTPException(404, "Notificación no encontrada")
 
@@ -1126,7 +1349,9 @@ async def mark_notification_sent(
 
     # Registrar en activity_log del pedido
     await _log(
-        db, notif.portal_order_id, "whatsapp_template_sent",
+        db,
+        notif.portal_order_id,
+        "whatsapp_template_sent",
         changes={"template_code": notif.template_code, "channel": payload.channel},
         visible=False,
     )
@@ -1137,9 +1362,9 @@ async def mark_notification_sent(
 @router.post("/notifications/{notif_id}/skip")
 async def skip_notification(notif_id: uuid.UUID, db: DBSession) -> dict:
     """Omite una notificación pendiente (Diego decidió no enviar este mensaje)."""
-    notif = (await db.execute(
-        select(PendingNotification).where(PendingNotification.id == notif_id)
-    )).scalar_one_or_none()
+    notif = (
+        await db.execute(select(PendingNotification).where(PendingNotification.id == notif_id))
+    ).scalar_one_or_none()
     if not notif:
         raise HTTPException(404, "Notificación no encontrada")
 

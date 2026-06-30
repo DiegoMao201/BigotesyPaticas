@@ -1,4 +1,5 @@
 """Messenger webhook — auto-respuestas con detección de intent."""
+
 from __future__ import annotations
 
 import logging
@@ -11,9 +12,13 @@ from fastapi.responses import PlainTextResponse
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/webhooks/messenger", tags=["messenger"])
 
-_TOKEN        = lambda: os.environ.get("META_MESSENGER_TOKEN") or os.environ.get("META_ACCESS_TOKEN", "")
+
+def _TOKEN() -> str:
+    return os.environ.get("META_MESSENGER_TOKEN") or os.environ.get("META_ACCESS_TOKEN", "")
+
+
 _VERIFY_TOKEN = os.environ.get("MESSENGER_WEBHOOK_VERIFY_TOKEN", "bigotesypaticas_verify")
-_META_BASE    = "https://graph.facebook.com/v18.0"
+_META_BASE = "https://graph.facebook.com/v18.0"
 
 _INTENTS: list[tuple[list[str], str]] = [
     (
@@ -90,25 +95,31 @@ def _handle_postback(sender_id: str, payload: str) -> None:
             "• 🛍️ Tienda: bigotesypaticas.com\n"
             "• 📱 Portal cliente: mi.bigotesypaticas.com\n"
             "• 📍 Mall Zamara Plaza, Local 2, Dosquebradas\n"
-            "• 🕐 Lun–Sáb 10am–7pm\n\n"
+            "• 🕐 Lun-Sáb 10am-7pm\n\n"
             "¿En qué te puedo ayudar?",
         )
     elif payload == "VIEW_PRODUCTS":
-        _send_message(sender_id, "🛍️ Explora nuestro catálogo completo en bigotesypaticas.com — más de 400 productos para tu mascota.")
+        _send_message(
+            sender_id,
+            "🛍️ Explora nuestro catálogo completo en bigotesypaticas.com — más de 400 productos para tu mascota.",
+        )
     elif payload == "DELIVERY_INFO":
-        _send_message(sender_id, "🛵 Domicilio GRATIS en Pereira y Dosquebradas para pedidos desde $30.000.\nHorario: Lun–Sáb 10am–7pm.\n¿Quieres hacer un pedido?")
+        _send_message(
+            sender_id,
+            "🛵 Domicilio GRATIS en Pereira y Dosquebradas para pedidos desde $30.000.\nHorario: Lun-Sáb 10am-7pm.\n¿Quieres hacer un pedido?",
+        )
     elif payload == "CONTACT_HUMAN":
-        _send_message(sender_id, "👋 ¡Claro! Te conectamos con un asesor. Escríbenos al WhatsApp +57 320 687 6633 o espera unos minutos que alguien te atiende aquí.")
+        _send_message(
+            sender_id,
+            "👋 ¡Claro! Te conectamos con un asesor. Escríbenos al WhatsApp +57 320 687 6633 o espera unos minutos que alguien te atiende aquí.",
+        )
 
 
 @router.get("")
 async def verify_webhook(request: Request):
     """Verificación de webhook por Meta."""
     params = dict(request.query_params)
-    if (
-        params.get("hub.mode") == "subscribe"
-        and params.get("hub.verify_token") == _VERIFY_TOKEN
-    ):
+    if params.get("hub.mode") == "subscribe" and params.get("hub.verify_token") == _VERIFY_TOKEN:
         return PlainTextResponse(content=params["hub.challenge"])
     raise HTTPException(status_code=403, detail="Verificación fallida")
 

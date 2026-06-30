@@ -1,9 +1,9 @@
 """Blog público — listado y detalle de artículos SEO."""
+
 from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
@@ -13,12 +13,14 @@ from app.services.seo_notifications import notify_indexnow
 
 router = APIRouter(prefix="/blog", tags=["blog"])
 
+_background_tasks: set[asyncio.Task] = set()
+
 
 @router.get("/posts")
 async def list_posts(
     db: DBSession,
     published: bool = True,
-    category: Optional[str] = Query(None),
+    category: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(12, ge=1, le=100),
 ) -> dict:
@@ -77,8 +79,9 @@ async def list_posts(
 @router.get("/posts/{slug}")
 async def get_post(slug: str, db: DBSession) -> dict:
     row = (
-        await db.execute(
-            text("""
+        (
+            await db.execute(
+                text("""
                 SELECT id, slug, title, excerpt, content, cover_image_url, category, keywords,
                        meta_title, meta_description, author, published_at, updated_at, view_count
                 FROM content.blog_posts
@@ -86,9 +89,12 @@ async def get_post(slug: str, db: DBSession) -> dict:
                   AND published_at IS NOT NULL
                   AND published_at <= NOW()
             """),
-            {"slug": slug},
+                {"slug": slug},
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
 
     if not row:
         raise HTTPException(status_code=404, detail="Post no encontrado")
@@ -157,9 +163,15 @@ async def create_post(payload: dict, db: DBSession) -> dict:
     )
     await db.commit()
     slug = payload.get("slug", "")
-    asyncio.create_task(notify_indexnow([
-        f"https://bigotesypaticas.com/blog/{slug}",
-        "https://bigotesypaticas.com/blog",
-        "https://bigotesypaticas.com/sitemap.xml",
-    ]))
+    _task = asyncio.create_task(
+        notify_indexnow(
+            [
+                f"https://bigotesypaticas.com/blog/{slug}",
+                "https://bigotesypaticas.com/blog",
+                "https://bigotesypaticas.com/sitemap.xml",
+            ]
+        )
+    )
+    _background_tasks.add(_task)
+    _task.add_done_callback(_background_tasks.discard)
     return {"id": str(post_id), "slug": slug, "ok": True}

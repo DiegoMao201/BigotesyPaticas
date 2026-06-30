@@ -1,11 +1,12 @@
 """Email service — SendGrid API (HTTPS) con fallback SMTP."""
+
 from __future__ import annotations
 
+import json
 import os
 import smtplib
 import urllib.error
 import urllib.request
-import json
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -14,23 +15,30 @@ import structlog
 log = structlog.get_logger()
 
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
-SMTP_SERVER      = os.getenv("SMTP_SERVER",   "smtp.gmail.com")
-SMTP_PORT        = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER        = os.getenv("SMTP_USER",     "")
-SMTP_PASSWORD    = os.getenv("SMTP_PASSWORD", "")
-FROM_NAME        = "Bigotes y Paticas"
-FROM_EMAIL       = os.getenv("FROM_EMAIL", "hola@bigotesypaticas.com")
-STORE_EMAIL      = os.getenv("STORE_EMAIL", os.getenv("SMTP_USER", "bigotesypaticasdosquebradas@gmail.com"))
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+FROM_NAME = "Bigotes y Paticas"
+FROM_EMAIL = os.getenv("FROM_EMAIL", "hola@bigotesypaticas.com")
+STORE_EMAIL = os.getenv(
+    "STORE_EMAIL", os.getenv("SMTP_USER", "bigotesypaticasdosquebradas@gmail.com")
+)
 
 
 def _send_sendgrid(to: str, subject: str, html: str) -> bool:
     """Envía via SendGrid Web API v3 (HTTPS — no requiere puerto SMTP abierto)."""
-    payload = json.dumps({
+    # Reply-To al Gmail real para que las respuestas lleguen a la bandeja
+    reply_to = STORE_EMAIL if STORE_EMAIL != FROM_EMAIL else None
+    payload_dict: dict = {
         "personalizations": [{"to": [{"email": to}]}],
         "from": {"email": FROM_EMAIL, "name": FROM_NAME},
         "subject": subject,
         "content": [{"type": "text/html", "value": html}],
-    }).encode()
+    }
+    if reply_to:
+        payload_dict["reply_to"] = {"email": reply_to, "name": FROM_NAME}
+    payload = json.dumps(payload_dict).encode()
     req = urllib.request.Request(
         "https://api.sendgrid.com/v3/mail/send",
         data=payload,
@@ -60,8 +68,8 @@ def _send_smtp(to: str, subject: str, html: str, text: str = "") -> bool:
         return False
     try:
         msg = MIMEMultipart("alternative")
-        msg["From"]    = f"{FROM_NAME} <{SMTP_USER}>"
-        msg["To"]      = to
+        msg["From"] = f"{FROM_NAME} <{SMTP_USER}>"
+        msg["To"] = to
         msg["Subject"] = subject
         if text:
             msg.attach(MIMEText(text, "plain", "utf-8"))

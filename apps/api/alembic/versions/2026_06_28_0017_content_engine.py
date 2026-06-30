@@ -4,7 +4,9 @@ Revision ID: 0017_content_engine
 Revises: 0016_sprint5_reviews_gbp
 Create Date: 2026-06-28
 """
+
 from __future__ import annotations
+
 from alembic import op
 
 revision = "0017_content_engine"

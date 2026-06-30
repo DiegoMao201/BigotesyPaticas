@@ -4,7 +4,9 @@ Revision ID: 0016_sprint5_reviews_gbp
 Revises: 0015_sprint3_search_filters_redirects
 Create Date: 2026-06-27
 """
+
 from __future__ import annotations
+
 from alembic import op
 
 revision = "0016_sprint5_reviews_gbp"

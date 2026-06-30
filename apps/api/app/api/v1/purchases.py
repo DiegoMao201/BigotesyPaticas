@@ -1,4 +1,5 @@
 """Endpoints de compras a proveedores (Módulo Compras)."""
+
 from __future__ import annotations
 
 import uuid
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/purchases", tags=["purchases"])
 
 
 # ─── Schemas ──────────────────────────────────────────────────────
+
 
 class PurchaseItemIn(BaseModel):
     product_id: uuid.UUID | None = None
@@ -115,6 +117,7 @@ class PurchaseListResponse(BaseModel):
 
 # ─── Helpers ──────────────────────────────────────────────────────
 
+
 def _calc_item_total(item: PurchaseItemIn) -> float:
     return round(item.unit_cost * item.quantity * (1 + item.tax_pct / 100), 2)
 
@@ -128,9 +131,7 @@ async def _apply_stock_and_cost(
     """Crea movimientos de stock tipo PURCHASE y actualiza costo del producto."""
     # Resolver location default
     loc = (
-        await db.execute(
-            select(StockLocation).where(StockLocation.is_default == 1).limit(1)
-        )
+        await db.execute(select(StockLocation).where(StockLocation.is_default == 1).limit(1))
     ).scalar_one_or_none()
     if loc is None:
         # Crear location default si no existe
@@ -145,14 +146,12 @@ async def _apply_stock_and_cost(
         # Actualizar costo del producto si el nuevo costo es > 0
         if item.unit_cost > 0:
             product = (
-                await db.execute(
-                    select(Product).where(Product.id == item.product_id)
-                )
+                await db.execute(select(Product).where(Product.id == item.product_id))
             ).scalar_one_or_none()
             if product:
                 product.cost = Decimal(str(item.unit_cost))
 
-        # Unidades reales = quantity × factor_pack
+        # Unidades reales = quantity x factor_pack
         units = item.quantity * item.factor_pack
 
         stock = (
@@ -238,6 +237,7 @@ async def _upsert_supplier_sku_map(
 
 # ─── Endpoints ────────────────────────────────────────────────────
 
+
 @router.get(
     "",
     response_model=PurchaseListResponse,
@@ -265,7 +265,9 @@ async def list_purchases(
     total_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await db.execute(total_stmt)).scalar_one()
 
-    total_spend_stmt = select(func.coalesce(func.sum(Purchase.total), 0)).select_from(stmt.subquery())
+    total_spend_stmt = select(func.coalesce(func.sum(Purchase.total), 0)).select_from(
+        stmt.subquery()
+    )
     total_spend = float((await db.execute(total_spend_stmt)).scalar_one())
 
     stmt = stmt.order_by(Purchase.purchased_at.desc())
@@ -423,9 +425,7 @@ async def update_purchase(
     user: CurrentUser,
 ):
     purchase = (
-        await db.execute(
-            select(Purchase).where(Purchase.id == purchase_id)
-        )
+        await db.execute(select(Purchase).where(Purchase.id == purchase_id))
     ).scalar_one_or_none()
     if purchase is None:
         raise HTTPException(status_code=404, detail="Compra no encontrada")
@@ -457,9 +457,7 @@ async def update_purchase(
 )
 async def delete_purchase(purchase_id: uuid.UUID, db: DBSession):
     purchase = (
-        await db.execute(
-            select(Purchase).where(Purchase.id == purchase_id)
-        )
+        await db.execute(select(Purchase).where(Purchase.id == purchase_id))
     ).scalar_one_or_none()
     if purchase is None:
         raise HTTPException(status_code=404, detail="Compra no encontrada")
@@ -507,25 +505,28 @@ async def receive_purchase(
 async def purchases_stats(db: DBSession):
     """Resumen estadístico de compras."""
     from datetime import timedelta
-    from sqlalchemy import case
 
     now = datetime.now(UTC)
     start_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     start_30 = now - timedelta(days=30)
 
     total_spend_month = float(
-        (await db.execute(
-            select(func.coalesce(func.sum(Purchase.total), 0))
-            .where(Purchase.purchased_at >= start_month)
-            .where(Purchase.status != "cancelled")
-        )).scalar_one()
+        (
+            await db.execute(
+                select(func.coalesce(func.sum(Purchase.total), 0))
+                .where(Purchase.purchased_at >= start_month)
+                .where(Purchase.status != "cancelled")
+            )
+        ).scalar_one()
     )
     total_count_month = int(
-        (await db.execute(
-            select(func.count(Purchase.id))
-            .where(Purchase.purchased_at >= start_month)
-            .where(Purchase.status != "cancelled")
-        )).scalar_one()
+        (
+            await db.execute(
+                select(func.count(Purchase.id))
+                .where(Purchase.purchased_at >= start_month)
+                .where(Purchase.status != "cancelled")
+            )
+        ).scalar_one()
     )
     # Top suppliers this month
     top_suppliers = (

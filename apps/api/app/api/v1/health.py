@@ -1,4 +1,5 @@
 """Health & version endpoints."""
+
 from __future__ import annotations
 
 import os
@@ -29,11 +30,7 @@ async def readiness(db: DBSession) -> dict:
 
 
 def _get_git_sha() -> str:
-    sha = (
-        os.getenv("GIT_SHA")
-        or os.getenv("COOLIFY_GIT_COMMIT_SHA")
-        or os.getenv("SOURCE_COMMIT")
-    )
+    sha = os.getenv("GIT_SHA") or os.getenv("COOLIFY_GIT_COMMIT_SHA") or os.getenv("SOURCE_COMMIT")
     if sha:
         return sha[:7]
     try:

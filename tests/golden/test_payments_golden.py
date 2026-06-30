@@ -1,4 +1,5 @@
 """Golden tests para `bp_common.payments.normalizar_estado_pago`."""
+
 from __future__ import annotations
 
 import pytest

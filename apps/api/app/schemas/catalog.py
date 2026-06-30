@@ -1,4 +1,5 @@
 """Schemas Pydantic v2 — catalog."""
+
 from __future__ import annotations
 
 import uuid
@@ -118,7 +119,7 @@ class ProductOut(ProductBase):
     recent_reviews: list[RecentReviewOut] = []
 
     @model_validator(mode="after")
-    def _sync_image_url(self) -> "ProductOut":
+    def _sync_image_url(self) -> ProductOut:
         if self.image_url is None:
             self.image_url = self.primary_image_url
         return self

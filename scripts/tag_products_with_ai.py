@@ -11,6 +11,7 @@ Env:
   DATABASE_URL=postgresql+asyncpg://...
   OPENROUTER_API_KEY=sk-or-v1-...
 """
+
 from __future__ import annotations
 
 import argparse
@@ -19,10 +20,9 @@ import json
 import os
 import re
 import sys
-import time
 
-import httpx
 import asyncpg
+import httpx
 
 DB_URL = os.environ.get("DATABASE_URL", "")
 OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
@@ -32,9 +32,18 @@ VALID_LIFE_STAGES = {"puppy", "adult", "senior", "all"}
 VALID_SIZE_RANGES = {"mini", "small", "medium", "large", "giant", "all"}
 VALID_PET_TYPES = {"dog", "cat", "both", "small_pet", "fish", "bird"}
 VALID_HEALTH_CONCERNS = {
-    "digestive", "urinary", "hypoallergenic", "renal", "hepatic",
-    "cardiac", "joint", "weight_management", "skin_sensitive",
-    "grain_free", "dental", "recovery"
+    "digestive",
+    "urinary",
+    "hypoallergenic",
+    "renal",
+    "hepatic",
+    "cardiac",
+    "joint",
+    "weight_management",
+    "skin_sensitive",
+    "grain_free",
+    "dental",
+    "recovery",
 }
 
 SYSTEM_PROMPT = """Eres un experto en productos para mascotas. Analiza el producto y devuelve SOLO un JSON válido con:
@@ -50,9 +59,15 @@ Devuelve SOLO el JSON, sin texto adicional, sin bloques de código."""
 
 def validate_tags(data: dict) -> dict:
     cleaned = {}
-    cleaned["life_stage"] = data.get("life_stage") if data.get("life_stage") in VALID_LIFE_STAGES else "all"
-    cleaned["size_range"] = data.get("size_range") if data.get("size_range") in VALID_SIZE_RANGES else "all"
-    cleaned["pet_type"] = data.get("pet_type") if data.get("pet_type") in VALID_PET_TYPES else "both"
+    cleaned["life_stage"] = (
+        data.get("life_stage") if data.get("life_stage") in VALID_LIFE_STAGES else "all"
+    )
+    cleaned["size_range"] = (
+        data.get("size_range") if data.get("size_range") in VALID_SIZE_RANGES else "all"
+    )
+    cleaned["pet_type"] = (
+        data.get("pet_type") if data.get("pet_type") in VALID_PET_TYPES else "both"
+    )
 
     concerns = data.get("health_concerns")
     if isinstance(concerns, list):
@@ -84,7 +99,10 @@ Descripción: {description[:300] or 'Sin descripción'}"""
     try:
         resp = await client.post(
             OPENROUTER_URL,
-            headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_KEY}",
+                "Content-Type": "application/json",
+            },
             json={
                 "model": "google/gemini-2.5-flash-lite",
                 "messages": [
@@ -194,7 +212,9 @@ async def run(dry_run: bool, resume: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--resume", action="store_true", help="Only tag products without brand_normalized")
+    parser.add_argument(
+        "--resume", action="store_true", help="Only tag products without brand_normalized"
+    )
     args = parser.parse_args()
     asyncio.run(run(dry_run=args.dry_run, resume=args.resume))
 

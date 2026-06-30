@@ -1,4 +1,5 @@
 """Tests para `bp_common.sheets_sanitize.sanitizar_para_sheet`."""
+
 from __future__ import annotations
 
 from datetime import date, datetime

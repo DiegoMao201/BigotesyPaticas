@@ -1,8 +1,9 @@
 """SQLAlchemy 2 — async engine + sessionmaker + Base declarativa."""
+
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import (
@@ -28,7 +29,7 @@ NAMING_CONVENTION = {
 
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
-    type_annotation_map: dict[Any, Any] = {}
+    type_annotation_map: ClassVar[dict[Any, Any]] = {}
 
 
 engine = create_async_engine(

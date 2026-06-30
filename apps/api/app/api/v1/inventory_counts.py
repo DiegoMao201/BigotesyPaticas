@@ -9,6 +9,7 @@ Flujo completo:
   6. GET  /inventory-counts/{id}          → Detalle completo sesión + items + diferencias
   7. DELETE /inventory-counts/{id}        → Eliminar sesión (solo si no aplicada)
 """
+
 from __future__ import annotations
 
 import io
@@ -17,10 +18,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 
 from app.deps import CurrentUser, DBSession, require_permission
 from app.models.catalog import Product
@@ -36,6 +37,7 @@ router = APIRouter(prefix="/inventory-counts", tags=["inventory-counts"])
 
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
+
 
 class CountSessionCreate(BaseModel):
     name: str = Field(min_length=2, max_length=200)
@@ -86,6 +88,7 @@ class CountSessionDetail(CountSessionOut):
 
 class UpdateCountItems(BaseModel):
     """Actualiza conteos de items (puede ser parcial)."""
+
     items: list[dict]  # [{product_id: str, counted_qty: int, notes?: str}]
 
 
@@ -111,6 +114,7 @@ class UploadPreview(BaseModel):
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
+
 def _session_or_404(session: CountSession | None) -> CountSession:
     if session is None:
         raise HTTPException(404, "Sesión de conteo no encontrada")
@@ -128,9 +132,7 @@ def _require_status(session: CountSession, *allowed: str) -> None:
 
 async def _get_default_location(db) -> StockLocation:
     loc = (
-        await db.execute(
-            select(StockLocation).where(StockLocation.is_default == 1).limit(1)
-        )
+        await db.execute(select(StockLocation).where(StockLocation.is_default == 1).limit(1))
     ).scalar_one_or_none()
     if loc is None:
         raise HTTPException(400, "No hay bodega por defecto configurada")
@@ -138,6 +140,7 @@ async def _get_default_location(db) -> StockLocation:
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
+
 
 @router.post(
     "",
@@ -233,13 +236,11 @@ async def list_count_sessions(
         stmt = stmt.where(CountSession.status == status)
     stmt = stmt.order_by(CountSession.created_at.desc())
 
-    total = (
-        await db.execute(select(func.count()).select_from(stmt.subquery()))
-    ).scalar_one()
+    total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
 
     sessions = (
-        await db.execute(stmt.offset((page - 1) * page_size).limit(page_size))
-    ).scalars().all()
+        (await db.execute(stmt.offset((page - 1) * page_size).limit(page_size))).scalars().all()
+    )
 
     # Count items per session
     items_count_map: dict[uuid.UUID, int] = {}
@@ -289,9 +290,7 @@ async def list_count_sessions(
 async def get_count_session(session_id: uuid.UUID, db: DBSession):
     session = _session_or_404(
         (
-            await db.execute(
-                select(CountSession).where(CountSession.id == session_id)
-            )
+            await db.execute(select(CountSession).where(CountSession.id == session_id))
         ).scalar_one_or_none()
     )
     return CountSessionDetail(
@@ -337,18 +336,13 @@ async def download_template(session_id: uuid.UUID, db: DBSession):
     """Descarga plantilla Excel (.xlsx) con todos los productos para diligenciar conteo."""
     try:
         import openpyxl
-        from openpyxl.styles import (
-            Alignment, Border, Font, PatternFill, Side
-        )
-        from openpyxl.utils import get_column_letter
-    except ImportError:
-        raise HTTPException(500, "openpyxl no instalado")
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    except ImportError as exc:
+        raise HTTPException(500, "openpyxl no instalado") from exc
 
     session = _session_or_404(
         (
-            await db.execute(
-                select(CountSession).where(CountSession.id == session_id)
-            )
+            await db.execute(select(CountSession).where(CountSession.id == session_id))
         ).scalar_one_or_none()
     )
 
@@ -357,16 +351,13 @@ async def download_template(session_id: uuid.UUID, db: DBSession):
     ws.title = "Conteo"
 
     # ── Styles ──
-    header_fill = PatternFill("solid", fgColor="FF6B35")   # brand orange
-    count_fill  = PatternFill("solid", fgColor="FFFDE7")   # soft yellow - column to fill
-    system_fill = PatternFill("solid", fgColor="E8F5E9")   # soft green - system qty
+    header_fill = PatternFill("solid", fgColor="FF6B35")  # brand orange
+    count_fill = PatternFill("solid", fgColor="FFFDE7")  # soft yellow - column to fill
+    system_fill = PatternFill("solid", fgColor="E8F5E9")  # soft green - system qty
     header_font = Font(bold=True, color="FFFFFF", size=11)
-    title_font  = Font(bold=True, size=14)
+    title_font = Font(bold=True, size=14)
     border_side = Side(style="thin", color="CCCCCC")
-    thin_border = Border(
-        left=border_side, right=border_side,
-        top=border_side, bottom=border_side
-    )
+    thin_border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
 
     # ── Title ──
     ws.merge_cells("A1:H1")
@@ -408,10 +399,7 @@ async def download_template(session_id: uuid.UUID, db: DBSession):
 
     # ── Data rows ──
     # Get items sorted by category then name
-    items = sorted(
-        session.items,
-        key=lambda i: (i.category_name or "ZZZ", i.product_name)
-    )
+    items = sorted(session.items, key=lambda i: (i.category_name or "ZZZ", i.product_name))
     prev_cat = None
     data_start_row = 4
 
@@ -443,14 +431,14 @@ async def download_template(session_id: uuid.UUID, db: DBSession):
                 c = ws.cell(row=row_idx, column=col)
                 c.border = thin_border
                 c.alignment = Alignment(vertical="center")
-            ws.cell(row=row_idx, column=4).number_format = '#,##0.00'
+            ws.cell(row=row_idx, column=4).number_format = "#,##0.00"
             ws.cell(row=row_idx, column=5).fill = system_fill
             ws.cell(row=row_idx, column=5).alignment = Alignment(horizontal="center")
             ws.cell(row=row_idx, column=6).fill = count_fill
             ws.cell(row=row_idx, column=6).font = Font(bold=True, size=12)
             ws.cell(row=row_idx, column=6).alignment = Alignment(horizontal="center")
-            ws.cell(row=row_idx, column=7).value = f"=IF(F{row_idx}=\"\",\"\",F{row_idx}-E{row_idx})"
-            ws.cell(row=row_idx, column=7).number_format = '+0;-0;0'
+            ws.cell(row=row_idx, column=7).value = f'=IF(F{row_idx}="","",F{row_idx}-E{row_idx})'
+            ws.cell(row=row_idx, column=7).number_format = "+0;-0;0"
             ws.row_dimensions[row_idx].height = 20
             continue
 
@@ -463,14 +451,14 @@ async def download_template(session_id: uuid.UUID, db: DBSession):
         ws.cell(row=r, column=5).value = item.system_qty
         ws.cell(row=r, column=6).value = None
         ws.cell(row=r, column=8).value = ""
-        ws.cell(row=r, column=7).value = f"=IF(F{r}=\"\",\"\",F{r}-E{r})"
-        ws.cell(row=r, column=7).number_format = '+0;-0;0'
+        ws.cell(row=r, column=7).value = f'=IF(F{r}="","",F{r}-E{r})'
+        ws.cell(row=r, column=7).number_format = "+0;-0;0"
 
         for col in range(1, 9):
             c = ws.cell(row=r, column=col)
             c.border = thin_border
             c.alignment = Alignment(vertical="center")
-        ws.cell(row=r, column=4).number_format = '#,##0.00'
+        ws.cell(row=r, column=4).number_format = "#,##0.00"
         ws.cell(row=r, column=5).fill = system_fill
         ws.cell(row=r, column=5).alignment = Alignment(horizontal="center")
         ws.cell(row=r, column=6).fill = count_fill
@@ -518,14 +506,12 @@ async def upload_count_excel(
     """Sube el Excel diligenciado. Devuelve PREVIEW de diferencias sin aplicar nada todavía."""
     try:
         import openpyxl
-    except ImportError:
-        raise HTTPException(500, "openpyxl no instalado")
+    except ImportError as exc:
+        raise HTTPException(500, "openpyxl no instalado") from exc
 
     session = _session_or_404(
         (
-            await db.execute(
-                select(CountSession).where(CountSession.id == session_id)
-            )
+            await db.execute(select(CountSession).where(CountSession.id == session_id))
         ).scalar_one_or_none()
     )
     _require_status(session, "draft", "in_progress")
@@ -539,13 +525,13 @@ async def upload_count_excel(
     try:
         wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
     except Exception as e:
-        raise HTTPException(400, f"No se pudo leer el archivo Excel: {e}")
+        raise HTTPException(400, f"No se pudo leer el archivo Excel: {e}") from e
 
     ws = wb.active
 
     # Find header row: look for row with "SKU" in first column
     header_row = None
-    sku_col = counted_col = system_col = notes_col = None
+    sku_col = counted_col = notes_col = None
     for row in ws.iter_rows(max_row=10):
         for cell in row:
             val = str(cell.value or "").strip().upper()
@@ -557,7 +543,9 @@ async def upload_count_excel(
             break
 
     if header_row is None:
-        raise HTTPException(400, "No se encontró columna 'SKU' en el archivo. Usa la plantilla oficial.")
+        raise HTTPException(
+            400, "No se encontró columna 'SKU' en el archivo. Usa la plantilla oficial."
+        )
 
     # Map header columns
     for cell in ws[header_row]:
@@ -565,7 +553,7 @@ async def upload_count_excel(
         if "CONTEO" in val or "FÍSICO" in val or "FISICO" in val:
             counted_col = cell.column
         elif "STOCK SISTEMA" in val or "SISTEMA" in val:
-            system_col = cell.column
+            pass  # system_col column detected but not used in processing
         elif "NOTA" in val:
             notes_col = cell.column
 
@@ -611,34 +599,38 @@ async def upload_count_excel(
         item = items_by_sku.get(sku_val.upper())
         if item is None:
             not_found += 1
-            rows_preview.append(UploadPreviewRow(
-                sku=sku_val,
-                product_name=f"[NO ENCONTRADO: {sku_val}]",
-                category_name=None,
-                system_qty=0,
-                counted_qty=counted_qty,
-                delta=0,
-                value_impact=0,
-                unit_cost=0,
-                status="not_found",
-            ))
+            rows_preview.append(
+                UploadPreviewRow(
+                    sku=sku_val,
+                    product_name=f"[NO ENCONTRADO: {sku_val}]",
+                    category_name=None,
+                    system_qty=0,
+                    counted_qty=counted_qty,
+                    delta=0,
+                    value_impact=0,
+                    unit_cost=0,
+                    status="not_found",
+                )
+            )
             continue
 
         delta = counted_qty - item.system_qty
         value_impact = round(delta * float(item.unit_cost), 2)
         status = "ok" if delta == 0 else ("surplus" if delta > 0 else "shortage")
 
-        rows_preview.append(UploadPreviewRow(
-            sku=item.sku,
-            product_name=item.product_name,
-            category_name=item.category_name,
-            system_qty=item.system_qty,
-            counted_qty=counted_qty,
-            delta=delta,
-            value_impact=value_impact,
-            unit_cost=float(item.unit_cost),
-            status=status,
-        ))
+        rows_preview.append(
+            UploadPreviewRow(
+                sku=item.sku,
+                product_name=item.product_name,
+                category_name=item.category_name,
+                system_qty=item.system_qty,
+                counted_qty=counted_qty,
+                delta=delta,
+                value_impact=value_impact,
+                unit_cost=float(item.unit_cost),
+                status=status,
+            )
+        )
         counted_updates.append((item, counted_qty, notes_val))
 
     # Persist the counts into count_items (overwrite if re-uploaded)
@@ -684,9 +676,7 @@ async def apply_count_session(
     """
     session = _session_or_404(
         (
-            await db.execute(
-                select(CountSession).where(CountSession.id == session_id)
-            )
+            await db.execute(select(CountSession).where(CountSession.id == session_id))
         ).scalar_one_or_none()
     )
     _require_status(session, "in_progress")
@@ -796,9 +786,7 @@ async def delete_count_session(session_id: uuid.UUID, db: DBSession):
     """Elimina una sesión de conteo. Solo permitido si no ha sido aplicada."""
     session = _session_or_404(
         (
-            await db.execute(
-                select(CountSession).where(CountSession.id == session_id)
-            )
+            await db.execute(select(CountSession).where(CountSession.id == session_id))
         ).scalar_one_or_none()
     )
     _require_status(session, "draft", "in_progress")
@@ -815,14 +803,12 @@ async def download_report(session_id: uuid.UUID, db: DBSession):
     try:
         import openpyxl
         from openpyxl.styles import Alignment, Font, PatternFill
-    except ImportError:
-        raise HTTPException(500, "openpyxl no instalado")
+    except ImportError as exc:
+        raise HTTPException(500, "openpyxl no instalado") from exc
 
     session = _session_or_404(
         (
-            await db.execute(
-                select(CountSession).where(CountSession.id == session_id)
-            )
+            await db.execute(select(CountSession).where(CountSession.id == session_id))
         ).scalar_one_or_none()
     )
     if session.status == "draft":
@@ -832,16 +818,22 @@ async def download_report(session_id: uuid.UUID, db: DBSession):
     ws = wb.active
     ws.title = "Reporte Diferencias"
 
-    hdr_fill  = PatternFill("solid", fgColor="1A237E")
-    hdr_font  = Font(bold=True, color="FFFFFF")
+    hdr_fill = PatternFill("solid", fgColor="1A237E")
+    hdr_font = Font(bold=True, color="FFFFFF")
     plus_fill = PatternFill("solid", fgColor="E8F5E9")
     minus_fill = PatternFill("solid", fgColor="FFEBEE")
-    ok_fill   = PatternFill("solid", fgColor="F5F5F5")
+    ok_fill = PatternFill("solid", fgColor="F5F5F5")
 
     headers = [
-        "SKU", "Nombre", "Categoría", "Costo Unit.",
-        "Stock Sistema", "Conteo Real", "Diferencia",
-        "Impacto ($)", "Notas",
+        "SKU",
+        "Nombre",
+        "Categoría",
+        "Costo Unit.",
+        "Stock Sistema",
+        "Conteo Real",
+        "Diferencia",
+        "Impacto ($)",
+        "Notas",
     ]
     for col, h in enumerate(headers, 1):
         c = ws.cell(row=1, column=col, value=h)

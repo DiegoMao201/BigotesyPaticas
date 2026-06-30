@@ -67,3 +67,6 @@ local-assets/
 # Contexto técnico local — no va al repo
 CONTEXT.md
 
+
+# Media local — fotos y videos para posts (no subir al repo)
+media/

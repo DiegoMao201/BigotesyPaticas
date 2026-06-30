@@ -1,14 +1,14 @@
 """Contact form and newsletter subscription."""
+
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Depends
-from app.db import get_db
 
-from app.services.email import send_email, STORE_EMAIL
+from app.db import get_db
+from app.services.email import STORE_EMAIL, send_email
 
 router = APIRouter(prefix="/contact", tags=["contact"])
 
@@ -67,6 +67,7 @@ class ReviewIn(BaseModel):
 @router.post("/review")
 async def submit_review(payload: ReviewIn, bg: BackgroundTasks) -> dict:
     """Capture internal star rating and notify admin."""
+
     def _send() -> None:
         stars_txt = "⭐" * min(max(payload.stars, 1), 5)
         send_email(
@@ -85,6 +86,7 @@ async def submit_review(payload: ReviewIn, bg: BackgroundTasks) -> dict:
 
 
 WELCOME_COUPON = "PRIMERAPATA"
+
 
 def _welcome_html(email: str) -> str:
     return f"""<!DOCTYPE html>
@@ -206,7 +208,7 @@ def _welcome_html(email: str) -> str:
         </p>
         <p style="color:#a8ddd9;font-size:13px;margin:0 0 16px;">
           📱 <a href="https://wa.me/573206876633" style="color:#5ecdc7;text-decoration:none;">+57 320 687 6633</a>
-          &nbsp;·&nbsp; Lun–Sáb 10 AM–7 PM
+          &nbsp;·&nbsp; Lun-Sáb 10 AM-7 PM
         </p>
         <table cellpadding="0" cellspacing="0" style="margin:0 auto 16px;">
           <tr>
@@ -236,7 +238,8 @@ def _welcome_html(email: str) -> str:
 </html>"""
 
 
-ALREADY_SUBSCRIBED_HTML = lambda email: f"""<!DOCTYPE html>
+def ALREADY_SUBSCRIBED_HTML(email: str) -> str:
+    return f"""<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f0f7f6;font-family:'Helvetica Neue',Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f7f6;padding:32px 0;">
@@ -295,6 +298,7 @@ async def newsletter_subscribe(
                 "¡Ya eres parte del club Bigotes y Paticas! 🐾",
                 ALREADY_SUBSCRIBED_HTML(payload.email),
             )
+
         bg.add_task(_remind)
         return {"ok": True, "already_subscribed": True}
 
@@ -320,5 +324,6 @@ async def newsletter_subscribe(
             "🎁 Tu cupón de bienvenida + 50 Puntos Bigotes — Bigotes y Paticas",
             _welcome_html(payload.email),
         )
+
     bg.add_task(_welcome)
     return {"ok": True, "already_subscribed": False}

@@ -4,6 +4,7 @@ Revision ID: 0011_blog_posts
 Revises: 0010_portal_v4_schema
 Create Date: 2026-06-27
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -18,7 +19,8 @@ depends_on = None
 def upgrade() -> None:
     op.execute(text("CREATE SCHEMA IF NOT EXISTS content;"))
 
-    op.execute(text("""
+    op.execute(
+        text("""
         CREATE TABLE IF NOT EXISTS content.blog_posts (
             id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
             slug            VARCHAR(200) UNIQUE NOT NULL,
@@ -37,20 +39,27 @@ def upgrade() -> None:
             enriched_by_ai  BOOLEAN     NOT NULL DEFAULT TRUE,
             ai_model        VARCHAR(100)
         );
-    """))
+    """)
+    )
 
-    op.execute(text("""
+    op.execute(
+        text("""
         CREATE INDEX IF NOT EXISTS idx_blog_published
             ON content.blog_posts (published_at DESC NULLS LAST);
-    """))
-    op.execute(text("""
+    """)
+    )
+    op.execute(
+        text("""
         CREATE INDEX IF NOT EXISTS idx_blog_category
             ON content.blog_posts (category);
-    """))
-    op.execute(text("""
+    """)
+    )
+    op.execute(
+        text("""
         CREATE INDEX IF NOT EXISTS idx_blog_slug
             ON content.blog_posts (slug);
-    """))
+    """)
+    )
 
 
 def downgrade() -> None:

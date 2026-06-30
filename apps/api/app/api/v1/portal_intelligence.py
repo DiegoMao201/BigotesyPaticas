@@ -1,4 +1,5 @@
 """Portal Intelligence — Smart Cards + Profile Completion para el portal de clientes."""
+
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
@@ -11,15 +12,16 @@ from sqlalchemy import and_, desc, select
 from app.api.v1.portal_auth import PortalUser
 from app.deps import DBSession
 from app.models.crm import Customer
-from app.models.portal import Appointment, HealthRecord, Pet, PortalOrder
+from app.models.portal import Appointment, Pet, PortalOrder
 
 router = APIRouter(prefix="/portal/me", tags=["portal"])
 
 
 # ── smart cards ──────────────────────────────────────────────────────────────
 
+
 class SmartCard(BaseModel):
-    type: str          # reorder | vaccine_due | appointment | birthday | loyalty
+    type: str  # reorder | vaccine_due | appointment | birthday | loyalty
     pet_id: str | None = None
     pet_name: str | None = None
     color_theme: str = "teal"
@@ -27,8 +29,8 @@ class SmartCard(BaseModel):
     subtitle: str
     cta: str
     action_url: str
-    urgency: str       # high | medium | low
-    badge: str | None = None   # "Atención" para high
+    urgency: str  # high | medium | low
+    badge: str | None = None  # "Atención" para high
 
 
 @router.get("/smart-cards", response_model=list[SmartCard])
@@ -42,27 +44,35 @@ async def get_smart_cards(
 
     # ── Mascotas activas ─────────────────────────────────────────────────
     pets = (
-        await db.execute(
-            select(Pet).where(
-                and_(Pet.customer_id == customer.id, Pet.deleted_at == None)  # noqa: E711
+        (
+            await db.execute(
+                select(Pet).where(
+                    and_(Pet.customer_id == customer.id, Pet.deleted_at == None)  # noqa: E711
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     # ── Último pedido por producto (para recompra) ───────────────────────
     last_orders = (
-        await db.execute(
-            select(PortalOrder)
-            .where(
-                and_(
-                    PortalOrder.customer_id == customer.id,
-                    PortalOrder.status.notin_(["cancelled"]),
+        (
+            await db.execute(
+                select(PortalOrder)
+                .where(
+                    and_(
+                        PortalOrder.customer_id == customer.id,
+                        PortalOrder.status.notin_(["cancelled"]),
+                    )
                 )
+                .order_by(desc(PortalOrder.created_at))
+                .limit(20)
             )
-            .order_by(desc(PortalOrder.created_at))
-            .limit(20)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     last_order_by_pet: dict[str, PortalOrder] = {}
     for o in last_orders:
@@ -72,20 +82,24 @@ async def get_smart_cards(
 
     # ── Próximas citas ───────────────────────────────────────────────────
     upcoming_appts = (
-        await db.execute(
-            select(Appointment)
-            .where(
-                and_(
-                    Appointment.customer_id == customer.id,
-                    Appointment.scheduled_at >= now,
-                    Appointment.scheduled_at <= now + timedelta(days=7),
-                    Appointment.status.notin_(["cancelled", "completed"]),
+        (
+            await db.execute(
+                select(Appointment)
+                .where(
+                    and_(
+                        Appointment.customer_id == customer.id,
+                        Appointment.scheduled_at >= now,
+                        Appointment.scheduled_at <= now + timedelta(days=7),
+                        Appointment.status.notin_(["cancelled", "completed"]),
+                    )
                 )
+                .order_by(Appointment.scheduled_at)
+                .limit(3)
             )
-            .order_by(Appointment.scheduled_at)
-            .limit(3)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     # ── Calcular cards ───────────────────────────────────────────────────
     for pet in pets:
@@ -97,48 +111,58 @@ async def get_smart_cards(
                 dias_restantes = pet.food_freq_days - dias_desde
                 if dias_restantes <= 7:
                     urgency = "high" if dias_restantes <= 2 else "medium"
-                    cards.append({
-                        "type": "reorder",
-                        "pet_id": str(pet.id),
-                        "pet_name": pet.name,
-                        "color_theme": pet.color_theme,
-                        "title": f"{pet.name} necesita comida",
-                        "subtitle": (
-                            "¡Ya se acabó!" if dias_restantes <= 0
-                            else f"Se acaba en {dias_restantes} día{'s' if dias_restantes != 1 else ''}"
-                        ),
-                        "cta": "Pedir ahora",
-                        "action_url": f"/orders/new",
-                        "urgency": urgency,
-                        "badge": "Atención" if urgency == "high" else None,
-                        "_sort": 10 if urgency == "high" else 20,
-                    })
+                    cards.append(
+                        {
+                            "type": "reorder",
+                            "pet_id": str(pet.id),
+                            "pet_name": pet.name,
+                            "color_theme": pet.color_theme,
+                            "title": f"{pet.name} necesita comida",
+                            "subtitle": (
+                                "¡Ya se acabó!"
+                                if dias_restantes <= 0
+                                else f"Se acaba en {dias_restantes} día{'s' if dias_restantes != 1 else ''}"
+                            ),
+                            "cta": "Pedir ahora",
+                            "action_url": "/orders/new",
+                            "urgency": urgency,
+                            "badge": "Atención" if urgency == "high" else None,
+                            "_sort": 10 if urgency == "high" else 20,
+                        }
+                    )
 
         # 2. Vacunas / salud próximas
         if pet.health_records:
             for hr in pet.health_records:
                 if hr.next_due_at:
-                    nd = hr.next_due_at if isinstance(hr.next_due_at, date) else hr.next_due_at.date()
+                    nd = (
+                        hr.next_due_at
+                        if isinstance(hr.next_due_at, date)
+                        else hr.next_due_at.date()
+                    )
                     dias = (nd - today).days
                     if dias <= 30:
                         urgency = "high" if dias <= 7 else "medium"
                         tipo = hr.record_type.capitalize() if hr.record_type else "Vacuna"
-                        cards.append({
-                            "type": "vaccine_due",
-                            "pet_id": str(pet.id),
-                            "pet_name": pet.name,
-                            "color_theme": pet.color_theme,
-                            "title": f"{tipo}: {hr.name}",
-                            "subtitle": (
-                                "Vencida" if dias < 0
-                                else f"Vence en {dias} día{'s' if dias != 1 else ''}"
-                            ),
-                            "cta": "Agendar",
-                            "action_url": "/appointments/new",
-                            "urgency": urgency,
-                            "badge": "Atención" if dias <= 7 else None,
-                            "_sort": 5 if dias < 0 else (12 if urgency == "high" else 25),
-                        })
+                        cards.append(
+                            {
+                                "type": "vaccine_due",
+                                "pet_id": str(pet.id),
+                                "pet_name": pet.name,
+                                "color_theme": pet.color_theme,
+                                "title": f"{tipo}: {hr.name}",
+                                "subtitle": (
+                                    "Vencida"
+                                    if dias < 0
+                                    else f"Vence en {dias} día{'s' if dias != 1 else ''}"
+                                ),
+                                "cta": "Agendar",
+                                "action_url": "/appointments/new",
+                                "urgency": urgency,
+                                "badge": "Atención" if dias <= 7 else None,
+                                "_sort": 5 if dias < 0 else (12 if urgency == "high" else 25),
+                            }
+                        )
 
         # 3. Cumpleaños (próximos 7 días)
         if pet.birth_date:
@@ -150,22 +174,25 @@ async def get_smart_cards(
             dias_bd = (next_bd - today).days
             if dias_bd <= 7:
                 age = next_bd.year - bd.year
-                cards.append({
-                    "type": "birthday",
-                    "pet_id": str(pet.id),
-                    "pet_name": pet.name,
-                    "color_theme": pet.color_theme,
-                    "title": f"🎂 {pet.name} cumple {age} años",
-                    "subtitle": (
-                        "¡Hoy es su día!" if dias_bd == 0
-                        else f"En {dias_bd} día{'s' if dias_bd != 1 else ''}"
-                    ),
-                    "cta": "Ver mascota",
-                    "action_url": f"/pets/{pet.id}",
-                    "urgency": "medium",
-                    "badge": "🎂 Cumpleaños" if dias_bd == 0 else None,
-                    "_sort": 30,
-                })
+                cards.append(
+                    {
+                        "type": "birthday",
+                        "pet_id": str(pet.id),
+                        "pet_name": pet.name,
+                        "color_theme": pet.color_theme,
+                        "title": f"🎂 {pet.name} cumple {age} años",
+                        "subtitle": (
+                            "¡Hoy es su día!"
+                            if dias_bd == 0
+                            else f"En {dias_bd} día{'s' if dias_bd != 1 else ''}"
+                        ),
+                        "cta": "Ver mascota",
+                        "action_url": f"/pets/{pet.id}",
+                        "urgency": "medium",
+                        "badge": "🎂 Cumpleaños" if dias_bd == 0 else None,
+                        "_sort": 30,
+                    }
+                )
 
     # 4. Citas próximas
     for appt in upcoming_appts:
@@ -176,24 +203,24 @@ async def get_smart_cards(
         fecha = appt.scheduled_at
         dias = (fecha.date() - today).days
         fecha_str = (
-            "Hoy" if dias == 0
-            else "Mañana" if dias == 1
-            else fecha.strftime("%A %d, %I:%M %p")
+            "Hoy" if dias == 0 else "Mañana" if dias == 1 else fecha.strftime("%A %d, %I:%M %p")
         )
         service = appt.service_type.capitalize()
-        cards.append({
-            "type": "appointment",
-            "pet_id": str(appt.pet_id) if appt.pet_id else None,
-            "pet_name": pet_name,
-            "color_theme": color_theme,
-            "title": f"{service} · {pet_name}",
-            "subtitle": fecha_str,
-            "cta": "Ver detalles",
-            "action_url": f"/appointments",
-            "urgency": "high" if dias == 0 else "medium",
-            "badge": "Hoy" if dias == 0 else None,
-            "_sort": 8 if dias == 0 else 22,
-        })
+        cards.append(
+            {
+                "type": "appointment",
+                "pet_id": str(appt.pet_id) if appt.pet_id else None,
+                "pet_name": pet_name,
+                "color_theme": color_theme,
+                "title": f"{service} · {pet_name}",
+                "subtitle": fecha_str,
+                "cta": "Ver detalles",
+                "action_url": "/appointments",
+                "urgency": "high" if dias == 0 else "medium",
+                "badge": "Hoy" if dias == 0 else None,
+                "_sort": 8 if dias == 0 else 22,
+            }
+        )
 
     # Ordenar por prioridad y devolver máximo 6
     cards.sort(key=lambda c: c.get("_sort", 50))
@@ -205,8 +232,9 @@ async def get_smart_cards(
 
 # ── profile completion ────────────────────────────────────────────────────────
 
+
 class MissingField(BaseModel):
-    entity: str       # "customer" | "pet"
+    entity: str  # "customer" | "pet"
     entity_id: str | None = None
     field: str
     label: str
@@ -242,28 +270,42 @@ async def get_completion(
         if val:
             completed += 1
         else:
-            fields.append({
-                "entity": "customer",
-                "entity_id": None,
-                "field": field,
-                "label": label,
-                "reason": reason,
-                "points_reward": pts,
-                "priority": priority,
-            })
+            fields.append(
+                {
+                    "entity": "customer",
+                    "entity_id": None,
+                    "field": field,
+                    "label": label,
+                    "reason": reason,
+                    "points_reward": pts,
+                    "priority": priority,
+                }
+            )
         priority += 1
 
     # Pet fields (primera mascota activa)
     pets = (
-        await db.execute(
-            select(Pet).where(
-                and_(Pet.customer_id == customer.id, Pet.deleted_at == None)  # noqa: E711
-            ).order_by(Pet.created_at).limit(3)
+        (
+            await db.execute(
+                select(Pet)
+                .where(
+                    and_(Pet.customer_id == customer.id, Pet.deleted_at == None)  # noqa: E711
+                )
+                .order_by(Pet.created_at)
+                .limit(3)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     pet_checks = [
-        ("birth_date", "Cumpleaños de {name}", "para recordarte sus vacunas y celebrar su cumple 🎂", 50),
+        (
+            "birth_date",
+            "Cumpleaños de {name}",
+            "para recordarte sus vacunas y celebrar su cumple 🎂",
+            50,
+        ),
         ("weight_kg", "Peso de {name}", "para sugerir la porción correcta", 20),
         ("breed", "Raza de {name}", "para personalizar nuestras recomendaciones", 15),
         ("photo_url", "Foto de {name}", "para que se vea hermosa en su perfil 📸", 25),
@@ -278,15 +320,17 @@ async def get_completion(
             if val:
                 completed += 1
             else:
-                fields.append({
-                    "entity": "pet",
-                    "entity_id": str(pet.id),
-                    "field": field,
-                    "label": label,
-                    "reason": reason,
-                    "points_reward": pts,
-                    "priority": priority,
-                })
+                fields.append(
+                    {
+                        "entity": "pet",
+                        "entity_id": str(pet.id),
+                        "field": field,
+                        "label": label,
+                        "reason": reason,
+                        "points_reward": pts,
+                        "priority": priority,
+                    }
+                )
             priority += 1
 
     pct = int((completed / max(total, 1)) * 100)

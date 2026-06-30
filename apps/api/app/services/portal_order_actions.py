@@ -6,10 +6,10 @@ Usadas por AMBOS endpoints de cambio de status:
 
 Todas las funciones son idempotentes.
 """
+
 from __future__ import annotations
 
 import math
-import uuid
 from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
@@ -24,7 +24,6 @@ from app.models.portal import (
     PortalReferral,
 )
 
-
 # ── Mapeo de workflow_status a template de notificación ───────────────────────
 
 NOTIFICATION_TEMPLATES: dict[str, str] = {
@@ -38,6 +37,7 @@ NOTIFICATION_TEMPLATES: dict[str, str] = {
 
 # ── Helper: datos mínimos para renderizar mensajes ────────────────────────────
 
+
 async def _order_render_data(order: PortalOrder, db: DBSession) -> dict:
     from app.models.crm import Customer
 
@@ -46,13 +46,17 @@ async def _order_render_data(order: PortalOrder, db: DBSession) -> dict:
     ).scalar_one_or_none()
 
     items = (
-        await db.execute(
-            select(PortalOrderItem).where(
-                PortalOrderItem.portal_order_id == order.id,
-                PortalOrderItem.is_removed == False,  # noqa: E712
+        (
+            await db.execute(
+                select(PortalOrderItem).where(
+                    PortalOrderItem.portal_order_id == order.id,
+                    PortalOrderItem.is_removed == False,  # noqa: E712
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     subtotal = sum(float(i.subtotal or 0) for i in items)
     if not subtotal and order.unit_price:
@@ -87,6 +91,7 @@ async def _order_render_data(order: PortalOrder, db: DBSession) -> dict:
 
 # ── Helper: renderizar plantilla WhatsApp ─────────────────────────────────────
 
+
 def _render_template(template_code: str, data: dict) -> str:
     name = data.get("customer_name", "")
     first = name.split(" ")[0] if name else "cliente"
@@ -96,8 +101,7 @@ def _render_template(template_code: str, data: dict) -> str:
         return f"${int(v):,}".replace(",", ".")
 
     items_text = "\n".join(
-        f"• {i['name']} x{i['quantity']} — {fmt_cop(i['subtotal'])}"
-        for i in items
+        f"• {i['name']} x{i['quantity']} — {fmt_cop(i['subtotal'])}" for i in items
     )
 
     totals_parts = []
@@ -118,7 +122,9 @@ def _render_template(template_code: str, data: dict) -> str:
         )
 
     if template_code == "changes_to_confirm":
-        note = f"\n\n📌 {data['customer_facing_notes']}" if data.get("customer_facing_notes") else ""
+        note = (
+            f"\n\n📌 {data['customer_facing_notes']}" if data.get("customer_facing_notes") else ""
+        )
         return (
             f"Hola {first}! Revisamos tu pedido y hay cambios 🐾\n\n"
             f"{items_text}\n\n{totals}{note}\n\n"
@@ -159,6 +165,7 @@ def _render_template(template_code: str, data: dict) -> str:
 # FUNCIONES PÚBLICAS COMPARTIDAS
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
     """Crea sales.order desde portal_order al facturar. Idempotente.
 
@@ -168,16 +175,21 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
         return order.invoice_number or ""
 
     from app.api.v1.sales import _next_order_number
-    from app.models.sales import Order as SalesOrder, OrderItem as SalesOrderItem
+    from app.models.sales import Order as SalesOrder
+    from app.models.sales import OrderItem as SalesOrderItem
 
     items = (
-        await db.execute(
-            select(PortalOrderItem).where(
-                PortalOrderItem.portal_order_id == order.id,
-                PortalOrderItem.is_removed == False,  # noqa: E712
+        (
+            await db.execute(
+                select(PortalOrderItem).where(
+                    PortalOrderItem.portal_order_id == order.id,
+                    PortalOrderItem.is_removed == False,  # noqa: E712
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     total = sum(float(i.subtotal or 0) for i in items)
     if not total and order.unit_price:
@@ -206,29 +218,33 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
 
     if items:
         for i in items:
-            db.add(SalesOrderItem(
+            db.add(
+                SalesOrderItem(
+                    order_id=sales_order.id,
+                    product_id=i.product_id,
+                    sku_snapshot=i.sku or "",
+                    name_snapshot=i.name or order.product_name,
+                    quantity=i.quantity,
+                    unit_price=float(i.unit_price or 0),
+                    unit_cost=0,
+                    discount=0,
+                    line_total=float(i.subtotal or 0),
+                )
+            )
+    else:
+        db.add(
+            SalesOrderItem(
                 order_id=sales_order.id,
-                product_id=i.product_id,
-                sku_snapshot=i.sku or "",
-                name_snapshot=i.name or order.product_name,
-                quantity=i.quantity,
-                unit_price=float(i.unit_price or 0),
+                product_id=order.product_id,
+                sku_snapshot="",
+                name_snapshot=order.product_name,
+                quantity=order.quantity,
+                unit_price=float(order.unit_price or 0),
                 unit_cost=0,
                 discount=0,
-                line_total=float(i.subtotal or 0),
-            ))
-    else:
-        db.add(SalesOrderItem(
-            order_id=sales_order.id,
-            product_id=order.product_id,
-            sku_snapshot="",
-            name_snapshot=order.product_name,
-            quantity=order.quantity,
-            unit_price=float(order.unit_price or 0),
-            unit_cost=0,
-            discount=0,
-            line_total=total,
-        ))
+                line_total=total,
+            )
+        )
 
     order.invoice_number = invoice_num
     order.invoiced_at = now
@@ -245,13 +261,17 @@ async def credit_loyalty_points(order: PortalOrder, db: DBSession) -> int:
         return 0
 
     items = (
-        await db.execute(
-            select(PortalOrderItem).where(
-                PortalOrderItem.portal_order_id == order.id,
-                PortalOrderItem.is_removed == False,  # noqa: E712
+        (
+            await db.execute(
+                select(PortalOrderItem).where(
+                    PortalOrderItem.portal_order_id == order.id,
+                    PortalOrderItem.is_removed == False,  # noqa: E712
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     total = sum(float(i.subtotal or 0) for i in items)
     if not total and order.unit_price:
@@ -262,15 +282,17 @@ async def credit_loyalty_points(order: PortalOrder, db: DBSession) -> int:
 
     if points > 0:
         now = datetime.now(UTC)
-        db.add(LoyaltyPoint(
-            customer_id=order.customer_id,
-            points=points,
-            reason="portal_order",
-            reference_type="portal_order",
-            reference_id=order.id,
-            description=f"Entrega de pedido: {order.product_name}",
-            expires_at=now + timedelta(days=365),
-        ))
+        db.add(
+            LoyaltyPoint(
+                customer_id=order.customer_id,
+                points=points,
+                reason="portal_order",
+                reference_type="portal_order",
+                reference_id=order.id,
+                description=f"Entrega de pedido: {order.product_name}",
+                expires_at=now + timedelta(days=365),
+            )
+        )
 
     return points
 
@@ -297,18 +319,21 @@ async def process_referral_reward(order: PortalOrder, db: DBSession) -> bool:
         referral.first_purchase_at = now
 
     referral.reward_paid_at = now
-    db.add(LoyaltyPoint(
-        customer_id=referral.referrer_customer_id,
-        points=100,
-        reason="referral",
-        reference_type="referral",
-        reference_id=referral.id,
-        description="Recompensa por referir a un nuevo cliente",
-        expires_at=now + timedelta(days=365),
-    ))
+    db.add(
+        LoyaltyPoint(
+            customer_id=referral.referrer_customer_id,
+            points=100,
+            reason="referral",
+            reference_type="referral",
+            reference_id=referral.id,
+            description="Recompensa por referir a un nuevo cliente",
+            expires_at=now + timedelta(days=365),
+        )
+    )
 
     # Notificar al referidor en portal (no requiere WhatsApp manual)
     from app.api.v1.portal_notifications import notify_customer
+
     await notify_customer(
         db,
         referral.referrer_customer_id,

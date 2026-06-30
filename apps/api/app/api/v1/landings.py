@@ -1,7 +1,7 @@
 """Landing pages SEO programáticas."""
+
 from __future__ import annotations
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
@@ -26,13 +26,13 @@ class LandingOut(BaseModel):
     target_keyword: str
     title: str
     h1: str
-    meta_description: Optional[str]
-    intro_content: Optional[str]
-    category_slug: Optional[str]
-    geographic_focus: Optional[str]
-    cta_text: Optional[str]
+    meta_description: str | None
+    intro_content: str | None
+    category_slug: str | None
+    geographic_focus: str | None
+    cta_text: str | None
     is_active: bool
-    ai_model: Optional[str]
+    ai_model: str | None
 
     class Config:
         from_attributes = True
@@ -43,13 +43,13 @@ class LandingCreate(BaseModel):
     target_keyword: str
     title: str
     h1: str
-    meta_description: Optional[str] = None
-    intro_content: Optional[str] = None
-    category_slug: Optional[str] = None
-    geographic_focus: Optional[str] = None
-    cta_text: Optional[str] = None
+    meta_description: str | None = None
+    intro_content: str | None = None
+    category_slug: str | None = None
+    geographic_focus: str | None = None
+    cta_text: str | None = None
     is_active: bool = True
-    ai_model: Optional[str] = None
+    ai_model: str | None = None
 
 
 @router.get("", response_model=list[LandingOut])

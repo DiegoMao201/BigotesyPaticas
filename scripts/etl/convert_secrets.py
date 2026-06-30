@@ -20,7 +20,9 @@ ALTERNATIVA rápida: si ya tienes el JSON de service account descargado de
 Google Cloud Console, simplemente cópialo a project-secrets/google-service-account.json
 y pasa al paso 6 directamente.
 """
+
 from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path

@@ -18,7 +18,7 @@ import asyncio
 import hashlib
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import asyncpg
 import httpx
@@ -48,7 +48,9 @@ async def fetch_gbp_reviews() -> dict:
         r.raise_for_status()
         data = r.json()
     if data.get("status") != "OK":
-        raise RuntimeError(f"Places API error: {data.get('status')} — {data.get('error_message', '')}")
+        raise RuntimeError(
+            f"Places API error: {data.get('status')} — {data.get('error_message', '')}"
+        )
     return data["result"]
 
 
@@ -59,7 +61,9 @@ def stable_id(reviewer: str, rating: int, ts: int) -> str:
 
 
 async def fuzzy_match_customer(conn: asyncpg.Connection, name: str) -> str | None:
-    rows = await conn.fetch("SELECT id, full_name FROM portal.customers WHERE full_name IS NOT NULL LIMIT 500")
+    rows = await conn.fetch(
+        "SELECT id, full_name FROM portal.customers WHERE full_name IS NOT NULL LIMIT 500"
+    )
     best_score, best_id = 0, None
     for row in rows:
         score = fuzz.token_sort_ratio(name.lower(), row["full_name"].lower())
@@ -71,7 +75,8 @@ async def fuzzy_match_customer(conn: asyncpg.Connection, name: str) -> str | Non
 async def award_gbp_points(conn: asyncpg.Connection, customer_id: str, gbp_review_id: str):
     already = await conn.fetchval(
         "SELECT 1 FROM portal.loyalty_points WHERE customer_id=$1::uuid AND description LIKE $2 LIMIT 1",
-        customer_id, f"%{gbp_review_id}%",
+        customer_id,
+        f"%{gbp_review_id}%",
     )
     if already:
         return
@@ -80,7 +85,8 @@ async def award_gbp_points(conn: asyncpg.Connection, customer_id: str, gbp_revie
         INSERT INTO portal.loyalty_points (customer_id, points, reason, description, expires_at)
         VALUES ($1::uuid, 50, 'gbp_review', $2, NOW() + INTERVAL '1 year')
         """,
-        customer_id, f"Reseña Google Business #{gbp_review_id}",
+        customer_id,
+        f"Reseña Google Business #{gbp_review_id}",
     )
     print(f"  ✅ 50 pts acreditados a cliente {customer_id}")
 
@@ -114,7 +120,7 @@ async def main():
             comment = rev.get("text", "")
             ts = int(rev.get("time", 0))
             gbp_id = stable_id(reviewer, rating, ts)
-            created_at = datetime.fromtimestamp(ts, tz=timezone.utc)
+            created_at = datetime.fromtimestamp(ts, tz=UTC)
             photo_url = rev.get("profile_photo_url")
 
             # Upsert en gbp_reviews_cache
@@ -138,7 +144,12 @@ async def main():
                    created_at, matched_customer_id)
                 VALUES ($1, $2, $3, $4, $5, $6, $7::uuid)
                 """,
-                gbp_id, reviewer, photo_url, rating, comment, created_at,
+                gbp_id,
+                reviewer,
+                photo_url,
+                rating,
+                comment,
+                created_at,
                 customer_id,
             )
             inserted += 1

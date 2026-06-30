@@ -1,4 +1,5 @@
 """Meta Conversion API — server-side event tracking."""
+
 from __future__ import annotations
 
 import hashlib
@@ -10,10 +11,10 @@ import requests
 
 log = logging.getLogger(__name__)
 
-_PIXEL_ID     = os.environ.get("META_PIXEL_ID", "")
+_PIXEL_ID = os.environ.get("META_PIXEL_ID", "")
 _ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
-_TEST_CODE    = os.environ.get("META_TEST_EVENT_CODE", "")
-_BASE         = "https://graph.facebook.com/v18.0"
+_TEST_CODE = os.environ.get("META_TEST_EVENT_CODE", "")
+_BASE = "https://graph.facebook.com/v18.0"
 
 
 def _hash(value: str | None) -> str | None:
@@ -96,7 +97,7 @@ class MetaConversionAPI:
     """Wrapper async-compatible para uso como clase (tests + inyección)."""
 
     def __init__(self) -> None:
-        self.pixel_id     = _PIXEL_ID
+        self.pixel_id = _PIXEL_ID
         self.access_token = _ACCESS_TOKEN
 
     async def send_event(

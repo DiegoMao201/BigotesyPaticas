@@ -7,12 +7,14 @@ Diseño:
 - Crea la tab `Audit_Log` automáticamente si no existe.
 - Esquema fijo: timestamp_co | actor | action | entity | entity_id | summary | payload_json
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import sys
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from bp_common.flags import get_flag
 from bp_common.tz import now_co
@@ -83,6 +85,6 @@ def log_event(
         ]
         ws.append_row(row, value_input_option="USER_ENTERED")
         return True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _LOGGER.warning("audit_log_failed: %s | action=%s entity=%s", exc, action, entity)
         return False

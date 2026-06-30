@@ -18,6 +18,7 @@ except Exception:
     def normalizar_id_producto(x):
         return str(x or "").strip().upper()
 
+
 def money_int(val) -> int:
     return int(round(money_float(val)))
 
@@ -70,19 +71,31 @@ def money_float(val) -> float:
         out = float(re.sub(r"[^0-9]", "", s) or 0)
     return -out if neg else out
 
+
 # ==========================================
 # 3. FUNCIONES DE ACTUALIZACIÓN DE MAPEO PROVEEDORES
 # ==========================================
 
-def _upsert_maestro_proveedores(ws_map, meta_xml, sku_prov, sku_interno, producto_uid, factor, costo_prov, iva_pct):
+
+def _upsert_maestro_proveedores(
+    ws_map, meta_xml, sku_prov, sku_interno, producto_uid, factor, costo_prov, iva_pct
+):
     """
     Inserta o actualiza la relación entre SKU_Proveedor, SKU_Interno y Producto_UID en Maestro_Proveedores.
     Si ya existe la fila (por SKU_Proveedor y SKU_Interno), actualiza los datos; si no, inserta una nueva.
     """
     try:
         ordered_headers = [
-            "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Factor_Pack",
-            "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Producto_UID", "Ultimo_IVA"
+            "ID_Proveedor",
+            "Nombre_Proveedor",
+            "SKU_Proveedor",
+            "SKU_Interno",
+            "Factor_Pack",
+            "Ultima_Actualizacion",
+            "Email",
+            "Costo_Proveedor",
+            "Producto_UID",
+            "Ultimo_IVA",
         ]
         headers = _ensure_sheet_schema(ws_map, ordered_headers)
         recs = ws_map.get_all_records()
@@ -92,12 +105,16 @@ def _upsert_maestro_proveedores(ws_map, meta_xml, sku_prov, sku_interno, product
                 df[col] = ""
 
         mask = (
-            (df["SKU_Proveedor"].astype(str).str.strip().str.upper() == str(sku_prov).strip().upper()) &
-            (df["SKU_Interno"].astype(str).str.strip().str.upper() == str(sku_interno).strip().upper())
+            df["SKU_Proveedor"].astype(str).str.strip().str.upper() == str(sku_prov).strip().upper()
+        ) & (
+            df["SKU_Interno"].astype(str).str.strip().str.upper()
+            == str(sku_interno).strip().upper()
         )
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         id_prov = meta_xml.get("ID_Proveedor", "") if meta_xml else ""
-        nombre_prov = meta_xml.get("Nombre_Proveedor") or meta_xml.get("Proveedor", "") if meta_xml else ""
+        nombre_prov = (
+            meta_xml.get("Nombre_Proveedor") or meta_xml.get("Proveedor", "") if meta_xml else ""
+        )
         email = meta_xml.get("Email_Proveedor", "") if meta_xml else ""
         row_map = {
             "ID_Proveedor": id_prov,
@@ -141,8 +158,16 @@ def _upsert_proveedor_base(ws_map, meta_xml):
 
     try:
         ordered_headers = [
-            "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Factor_Pack",
-            "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Producto_UID", "Ultimo_IVA"
+            "ID_Proveedor",
+            "Nombre_Proveedor",
+            "SKU_Proveedor",
+            "SKU_Interno",
+            "Factor_Pack",
+            "Ultima_Actualizacion",
+            "Email",
+            "Costo_Proveedor",
+            "Producto_UID",
+            "Ultimo_IVA",
         ]
         headers = _ensure_sheet_schema(ws_map, ordered_headers)
         recs = ws_map.get_all_records()
@@ -193,10 +218,21 @@ def _upsert_proveedor_base(ws_map, meta_xml):
     except Exception as e:
         st.warning(f"Error asegurando proveedor base: {e}")
 
+
 def _registrar_gasto_compra(ws_gas, meta_xml, info_pago, total_compra):
-    headers = _ensure_sheet_schema(ws_gas, [
-        "ID_Gasto", "Fecha", "Tipo_Gasto", "Categoria", "Descripcion", "Monto", "Metodo_Pago", "Banco_Origen"
-    ])
+    headers = _ensure_sheet_schema(
+        ws_gas,
+        [
+            "ID_Gasto",
+            "Fecha",
+            "Tipo_Gasto",
+            "Categoria",
+            "Descripcion",
+            "Monto",
+            "Metodo_Pago",
+            "Banco_Origen",
+        ],
+    )
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     gasto_id = f"GAS-{int(time.time())}"
     proveedor = str(meta_xml.get("Proveedor", "")).strip()
@@ -213,23 +249,26 @@ def _registrar_gasto_compra(ws_gas, meta_xml, info_pago, total_compra):
         "Banco_Origen": info_pago.get("Origen", ""),
     }
     ws_gas.append_row([row_map.get(header, "") for header in headers])
+
+
 # 1. CONFIGURACIÓN Y ESTILOS (NEXUS PRO THEME)
 # ==========================================
 
-COLOR_PRIMARIO = "#187f77"      # Cian Oscuro
-COLOR_SECUNDARIO = "#125e58"    # Variante oscura
-COLOR_ACENTO = "#f5a641"        # Naranja
-COLOR_FONDO = "#f8f9fa"         # Gris claro
+COLOR_PRIMARIO = "#187f77"  # Cian Oscuro
+COLOR_SECUNDARIO = "#125e58"  # Variante oscura
+COLOR_ACENTO = "#f5a641"  # Naranja
+COLOR_FONDO = "#f8f9fa"  # Gris claro
 COLOR_BLANCO = "#ffffff"
 
 st.set_page_config(
-    page_title="Compras & Recepción | Nexus Pro", 
-    page_icon="📥", 
+    page_title="Compras & Recepción | Nexus Pro",
+    page_icon="📥",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
-st.markdown(f"""
+st.markdown(
+    f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
@@ -269,13 +308,16 @@ st.markdown(f"""
     .stButton>button {{ border-radius: 8px; font-weight: bold; height: 3rem; transition: all 0.3s ease; }}
     div[data-testid="stExpander"] {{ background-color: {COLOR_BLANCO}; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: none; }}
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ==========================================
 # 2. UTILIDADES MATEMÁTICAS
 # ==========================================
 
 MARGEN_BRUTO_OBJ = 0.20  # 20%
+
 
 def precio_con_margen(costo_neto_unit: float, margen: float = MARGEN_BRUTO_OBJ) -> float:
     """Margen bruto sobre precio: P = C / (1 - m)."""
@@ -289,6 +331,7 @@ def precio_con_margen(costo_neto_unit: float, margen: float = MARGEN_BRUTO_OBJ) 
     except Exception:
         return 0.0
 
+
 def _fmt_qty(x):
     """Evita 1.0, 2.0 cuando son enteros."""
     try:
@@ -296,6 +339,7 @@ def _fmt_qty(x):
         return int(f) if f.is_integer() else f
     except Exception:
         return x
+
 
 def _get_meta_safe():
     """Meta robusto (evita KeyError en step 2)."""
@@ -307,10 +351,12 @@ def _get_meta_safe():
         "Total": money_int(meta.get("Total", 0)),
     }
 
+
 def normalizar_str(valor):
-    if pd.isna(valor) or valor == "": return ""
+    if pd.isna(valor) or valor == "":
+        return ""
     # Eliminar espacios internos y convertir a mayúsculas
-    return str(valor).replace(" ","").strip().upper()
+    return str(valor).replace(" ", "").strip().upper()
 
 
 def normalizar_nombre_producto(valor) -> str:
@@ -322,8 +368,22 @@ def normalizar_nombre_producto(valor) -> str:
 
 def tokens_nombre_producto(valor) -> set[str]:
     stopwords = {
-        "DE", "DEL", "LA", "EL", "LOS", "LAS", "PARA", "CON", "SIN", "Y", "EN", "POR",
-        "UND", "UN", "U", "X"
+        "DE",
+        "DEL",
+        "LA",
+        "EL",
+        "LOS",
+        "LAS",
+        "PARA",
+        "CON",
+        "SIN",
+        "Y",
+        "EN",
+        "POR",
+        "UND",
+        "UN",
+        "U",
+        "X",
     }
     tokens = []
     for tok in normalizar_nombre_producto(valor).split():
@@ -381,16 +441,22 @@ def resolver_costo_unitario_xml(qty, price_amount, base_qty, line_extension, dis
 
     return 0
 
+
 def clean_currency(val):
     return money_int(val)
 
+
 def sanitizar_para_sheet(val):
-    if isinstance(val, (np.int64, np.int32)): return int(val)
-    if isinstance(val, (np.float64, np.float32)): return float(val)
+    if isinstance(val, (np.int64, np.int32)):
+        return int(val)
+    if isinstance(val, (np.float64, np.float32)):
+        return float(val)
     return val
 
+
 def redondear_centena(valor):
-    if not valor: return 0.0
+    if not valor:
+        return 0.0
     return math.ceil(valor / 100.0) * 100.0
 
 
@@ -414,9 +480,11 @@ def valor_bool(val, default=False) -> bool:
         return False
     return default
 
+
 # ==========================================
 # 3. CONEXIÓN A GOOGLE SHEETS
 # ==========================================
+
 
 def _ensure_headers(ws, required_cols: list[str]) -> list[str]:
     """
@@ -434,6 +502,7 @@ def _ensure_headers(ws, required_cols: list[str]) -> list[str]:
             changed = True
 
     return ws.row_values(1) if changed else headers
+
 
 def _ensure_sheet_schema(ws, ordered_headers: list[str]) -> list[str]:
     """
@@ -468,6 +537,7 @@ def _ensure_sheet_schema(ws, ordered_headers: list[str]) -> list[str]:
     ws.update("A1", rewritten_rows)
     return final_headers
 
+
 def _build_inv_indexes(ws_inv):
     """
     Índices para Inventario (Sheets) usados por compras XML/manual.
@@ -475,7 +545,18 @@ def _build_inv_indexes(ws_inv):
     """
     headers = _ensure_headers(
         ws_inv,
-        ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "SKU_Proveedor", "Nombre", "Stock", "Costo", "Precio", "Categoria", "Iva"]
+        [
+            "Producto_UID",
+            "ID_Producto",
+            "ID_Producto_Norm",
+            "SKU_Proveedor",
+            "Nombre",
+            "Stock",
+            "Costo",
+            "Precio",
+            "Categoria",
+            "Iva",
+        ],
     )
 
     data = ws_inv.get_all_values() or []
@@ -490,15 +571,45 @@ def _build_inv_indexes(ws_inv):
         idx_precio = headers.index("Precio")
         idx_categoria = headers.index("Categoria") if "Categoria" in headers else None
         idx_iva = headers.index("Iva") if "Iva" in headers else None
-        return (headers, idx_uid, idx_id, idx_norm, idx_sku_prov, idx_stock, idx_costo, idx_precio, idx_nombre, idx_categoria, idx_iva, {}, {}, {})
+        return (
+            headers,
+            idx_uid,
+            idx_id,
+            idx_norm,
+            idx_sku_prov,
+            idx_stock,
+            idx_costo,
+            idx_precio,
+            idx_nombre,
+            idx_categoria,
+            idx_iva,
+            {},
+            {},
+            {},
+        )
 
     headers = data[0]
 
     # Reasegurar por si la fila 1 está vacía en la hoja
-    if "Producto_UID" not in headers or "ID_Producto" not in headers or "ID_Producto_Norm" not in headers:
+    if (
+        "Producto_UID" not in headers
+        or "ID_Producto" not in headers
+        or "ID_Producto_Norm" not in headers
+    ):
         headers = _ensure_headers(
             ws_inv,
-            ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "SKU_Proveedor", "Nombre", "Stock", "Costo", "Precio", "Categoria", "Iva"]
+            [
+                "Producto_UID",
+                "ID_Producto",
+                "ID_Producto_Norm",
+                "SKU_Proveedor",
+                "Nombre",
+                "Stock",
+                "Costo",
+                "Precio",
+                "Categoria",
+                "Iva",
+            ],
         )
         data = ws_inv.get_all_values() or []
         headers = data[0] if data else headers
@@ -522,7 +633,7 @@ def _build_inv_indexes(ws_inv):
         norm = str(r[idx_norm]).strip() if idx_norm < len(r) else ""
 
         if not norm and pid:
-            norm = normalizar_str(pid) # Fallback simple
+            norm = normalizar_str(pid)  # Fallback simple
 
         if uid:
             uid_to_row[uid] = sheet_row
@@ -533,9 +644,21 @@ def _build_inv_indexes(ws_inv):
 
     return (
         headers,
-        idx_uid, idx_id, idx_norm, idx_sku_prov, idx_stock, idx_costo, idx_precio, idx_nombre, idx_categoria, idx_iva,
-        uid_to_row, norm_to_row, norm_to_uid
+        idx_uid,
+        idx_id,
+        idx_norm,
+        idx_sku_prov,
+        idx_stock,
+        idx_costo,
+        idx_precio,
+        idx_nombre,
+        idx_categoria,
+        idx_iva,
+        uid_to_row,
+        norm_to_row,
+        norm_to_uid,
     )
+
 
 @st.cache_resource(ttl=600)
 def conectar_sheets():
@@ -554,50 +677,132 @@ def conectar_sheets():
             st.stop()
 
         # ✅ ya no falla: helper existe
-        _ensure_headers(ws_inv, ["Producto_UID", "ID_Producto", "ID_Producto_Norm", "SKU_Proveedor", "Stock", "Costo", "Precio", "Nombre", "Categoria", "Iva"])
+        _ensure_headers(
+            ws_inv,
+            [
+                "Producto_UID",
+                "ID_Producto",
+                "ID_Producto_Norm",
+                "SKU_Proveedor",
+                "Stock",
+                "Costo",
+                "Precio",
+                "Nombre",
+                "Categoria",
+                "Iva",
+            ],
+        )
 
-        try: ws_map = sh.worksheet("Maestro_Proveedores")
+        try:
+            ws_map = sh.worksheet("Maestro_Proveedores")
         except:
             ws_map = sh.add_worksheet("Maestro_Proveedores", 1000, 10)
-            ws_map.append_row([
-                "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor",
-                "SKU_Interno", "Factor_Pack", "Ultima_Actualizacion",
-                "Email", "Costo_Proveedor", "Producto_UID", "Ultimo_IVA"
-            ])
+            ws_map.append_row(
+                [
+                    "ID_Proveedor",
+                    "Nombre_Proveedor",
+                    "SKU_Proveedor",
+                    "SKU_Interno",
+                    "Factor_Pack",
+                    "Ultima_Actualizacion",
+                    "Email",
+                    "Costo_Proveedor",
+                    "Producto_UID",
+                    "Ultimo_IVA",
+                ]
+            )
 
-        _ensure_sheet_schema(ws_map, [
-            "ID_Proveedor", "Nombre_Proveedor", "SKU_Proveedor", "SKU_Interno", "Factor_Pack",
-            "Ultima_Actualizacion", "Email", "Costo_Proveedor", "Producto_UID", "Ultimo_IVA"
-        ])
+        _ensure_sheet_schema(
+            ws_map,
+            [
+                "ID_Proveedor",
+                "Nombre_Proveedor",
+                "SKU_Proveedor",
+                "SKU_Interno",
+                "Factor_Pack",
+                "Ultima_Actualizacion",
+                "Email",
+                "Costo_Proveedor",
+                "Producto_UID",
+                "Ultimo_IVA",
+            ],
+        )
 
-        try: ws_hist = sh.worksheet("Historial_Recepciones")
+        try:
+            ws_hist = sh.worksheet("Historial_Recepciones")
         except:
             ws_hist = sh.add_worksheet("Historial_Recepciones", 1000, 24)
 
-        _ensure_sheet_schema(ws_hist, [
-            "Fecha", "Folio", "Proveedor", "Items", "Total", "Usuario", "Estado",
-            "Recepcion_ID", "ID_Proveedor", "Producto_UID", "SKU_Interno", "SKU_Proveedor", "Nombre_Producto",
-            "Cantidad_Pack", "Factor_Pack", "Unidades", "Costo_Unitario", "Costo_Total", "Precio_Unitario",
-            "IVA_Porcentaje", "Origen", "Transporte_Prorrateado", "Descuento_Prorrateado"
-        ])
-        
-        try: ws_gas = sh.worksheet("Gastos")
+        _ensure_sheet_schema(
+            ws_hist,
+            [
+                "Fecha",
+                "Folio",
+                "Proveedor",
+                "Items",
+                "Total",
+                "Usuario",
+                "Estado",
+                "Recepcion_ID",
+                "ID_Proveedor",
+                "Producto_UID",
+                "SKU_Interno",
+                "SKU_Proveedor",
+                "Nombre_Producto",
+                "Cantidad_Pack",
+                "Factor_Pack",
+                "Unidades",
+                "Costo_Unitario",
+                "Costo_Total",
+                "Precio_Unitario",
+                "IVA_Porcentaje",
+                "Origen",
+                "Transporte_Prorrateado",
+                "Descuento_Prorrateado",
+            ],
+        )
+
+        try:
+            ws_gas = sh.worksheet("Gastos")
         except:
             ws_gas = sh.add_worksheet("Gastos", 1000, 8)
-            ws_gas.append_row(["ID_Gasto","Fecha","Tipo_Gasto","Categoria","Descripcion","Monto","Metodo_Pago","Banco_Origen"])
+            ws_gas.append_row(
+                [
+                    "ID_Gasto",
+                    "Fecha",
+                    "Tipo_Gasto",
+                    "Categoria",
+                    "Descripcion",
+                    "Monto",
+                    "Metodo_Pago",
+                    "Banco_Origen",
+                ]
+            )
 
-        _ensure_sheet_schema(ws_gas, [
-            "ID_Gasto", "Fecha", "Tipo_Gasto", "Categoria", "Descripcion", "Monto", "Metodo_Pago", "Banco_Origen"
-        ])
+        _ensure_sheet_schema(
+            ws_gas,
+            [
+                "ID_Gasto",
+                "Fecha",
+                "Tipo_Gasto",
+                "Categoria",
+                "Descripcion",
+                "Monto",
+                "Metodo_Pago",
+                "Banco_Origen",
+            ],
+        )
 
         return sh, ws_inv, ws_map, ws_hist, ws_gas
     except Exception as e:
         st.error(f"Error Conexión Sheets: {e}")
         st.stop()
 
+
 # ==========================================
 # 4. CEREBRO Y MEMORIA
 # ==========================================
+
 
 @st.cache_data(ttl=120)
 def cargar_proveedores(_ws_map) -> tuple[list[str], dict[str, str]]:
@@ -626,17 +831,20 @@ def cargar_proveedores(_ws_map) -> tuple[list[str], dict[str, str]]:
     except Exception:
         return (["(Nuevo proveedor)"], {})
 
+
 @st.cache_data(ttl=60)
 def cargar_cerebro(_ws_inv, _ws_map):
     try:
         d_inv = _ws_inv.get_all_records()
         df_inv = pd.DataFrame(d_inv)
-        col_id = next((c for c in df_inv.columns if 'ID' in c or 'SKU' in c), 'ID_Producto')
-        col_nm = next((c for c in df_inv.columns if 'Nombre' in c), 'Nombre')
-        df_inv['Display'] = df_inv[col_id].astype(str) + " | " + df_inv[col_nm].astype(str)
-        lista_prods = sorted(df_inv['Display'].unique().tolist())
+        col_id = next((c for c in df_inv.columns if "ID" in c or "SKU" in c), "ID_Producto")
+        col_nm = next((c for c in df_inv.columns if "Nombre" in c), "Nombre")
+        df_inv["Display"] = df_inv[col_id].astype(str) + " | " + df_inv[col_nm].astype(str)
+        lista_prods = sorted(df_inv["Display"].unique().tolist())
         lista_prods.insert(0, "NUEVO (Crear Producto)")
-        dict_prods = pd.Series(df_inv['Display'].values, index=df_inv[col_id].apply(normalizar_id_producto)).to_dict()
+        dict_prods = pd.Series(
+            df_inv["Display"].values, index=df_inv[col_id].apply(normalizar_id_producto)
+        ).to_dict()
     except:
         lista_prods, dict_prods = ["NUEVO (Crear Producto)"], {}
 
@@ -645,13 +853,17 @@ def cargar_cerebro(_ws_inv, _ws_map):
         d_map = _ws_map.get_all_records()
         for r in d_map:
             k = f"{normalizar_str(r.get('ID_Proveedor'))}_{normalizar_str(r.get('SKU_Proveedor'))}"
-            iva_guardado = r.get('Ultimo_IVA')
-            iva_val = int(float(iva_guardado)) if iva_guardado in [0, 5, 19, "0", "5", "19", 0.0, 5.0, 19.0] else 0
+            iva_guardado = r.get("Ultimo_IVA")
+            iva_val = (
+                int(float(iva_guardado))
+                if iva_guardado in [0, 5, 19, "0", "5", "19", 0.0, 5.0, 19.0]
+                else 0
+            )
             memoria[k] = {
                 "SKU_Interno": normalizar_str(r.get("SKU_Interno")),
-                "Producto_UID": str(r.get("Producto_UID", "")).strip(),   # ✅ NUEVO
+                "Producto_UID": str(r.get("Producto_UID", "")).strip(),  # ✅ NUEVO
                 "Factor": float(r.get("Factor_Pack", 1)) if r.get("Factor_Pack") else 1.0,
-                "IVA_Aprendido": iva_val
+                "IVA_Aprendido": iva_val,
             }
     except:
         pass
@@ -666,9 +878,21 @@ def cargar_catalogo_inventario(_ws_inv):
         if df_inv.empty:
             return []
 
-        col_id = "ID_Producto" if "ID_Producto" in df_inv.columns else next((c for c in df_inv.columns if 'ID' in c or 'SKU' in c), 'ID_Producto')
-        col_nm = "Nombre" if "Nombre" in df_inv.columns else next((c for c in df_inv.columns if 'Nombre' in c), 'Nombre')
-        col_cat = "Categoria" if "Categoria" in df_inv.columns else ("Categoría" if "Categoría" in df_inv.columns else None)
+        col_id = (
+            "ID_Producto"
+            if "ID_Producto" in df_inv.columns
+            else next((c for c in df_inv.columns if "ID" in c or "SKU" in c), "ID_Producto")
+        )
+        col_nm = (
+            "Nombre"
+            if "Nombre" in df_inv.columns
+            else next((c for c in df_inv.columns if "Nombre" in c), "Nombre")
+        )
+        col_cat = (
+            "Categoria"
+            if "Categoria" in df_inv.columns
+            else ("Categoría" if "Categoría" in df_inv.columns else None)
+        )
         col_iva = "Iva" if "Iva" in df_inv.columns else ("IVA" if "IVA" in df_inv.columns else None)
 
         catalogo = []
@@ -677,16 +901,20 @@ def cargar_catalogo_inventario(_ws_inv):
             nombre = str(row.get(col_nm, "")).strip()
             if not sku and not nombre:
                 continue
-            catalogo.append({
-                "display": f"{sku} | {nombre}" if sku else nombre,
-                "sku": sku,
-                "sku_norm": normalizar_id_producto(sku),
-                "nombre": nombre,
-                "nombre_norm": normalizar_nombre_producto(nombre),
-                "uid": str(row.get("Producto_UID", "")).strip(),
-                "categoria": str(row.get(col_cat, "Sin Categoría")).strip() if col_cat else "Sin Categoría",
-                "iva": float(money_float(row.get(col_iva, 0))) if col_iva else 0.0,
-            })
+            catalogo.append(
+                {
+                    "display": f"{sku} | {nombre}" if sku else nombre,
+                    "sku": sku,
+                    "sku_norm": normalizar_id_producto(sku),
+                    "nombre": nombre,
+                    "nombre_norm": normalizar_nombre_producto(nombre),
+                    "uid": str(row.get("Producto_UID", "")).strip(),
+                    "categoria": str(row.get(col_cat, "Sin Categoría")).strip()
+                    if col_cat
+                    else "Sin Categoría",
+                    "iva": float(money_float(row.get(col_iva, 0))) if col_iva else 0.0,
+                }
+            )
         return catalogo
     except Exception:
         return []
@@ -706,9 +934,9 @@ def buscar_producto_en_catalogo(catalogo, sku_interno="", producto_uid="", nombr
 
 
 def sugerir_producto_para_item(meta, item, memoria, catalogo):
-    nit_prov_norm = normalizar_str(meta.get('ID_Proveedor', ''))
-    sku_prov_norm = normalizar_str(item.get('SKU_Proveedor', 'S/C'))
-    nombre_item = str(item.get('Descripcion', '') or '').strip()
+    nit_prov_norm = normalizar_str(meta.get("ID_Proveedor", ""))
+    sku_prov_norm = normalizar_str(item.get("SKU_Proveedor", "S/C"))
+    nombre_item = str(item.get("Descripcion", "") or "").strip()
     clave_memoria = f"{nit_prov_norm}_{sku_prov_norm}"
 
     sugerencia = {
@@ -717,7 +945,7 @@ def sugerir_producto_para_item(meta, item, memoria, catalogo):
         "categoria": "Sin Categoría",
         "iva": 0.0,
         "factor": 1.0,
-        "motivo": "Nuevo producto"
+        "motivo": "Nuevo producto",
     }
 
     recuerdo = memoria.get(clave_memoria)
@@ -732,38 +960,44 @@ def sugerir_producto_para_item(meta, item, memoria, catalogo):
             nombre=nombre_item,
         )
         if prod:
-            sugerencia.update({
-                "display": prod.get("display", sugerencia["display"]),
-                "nombre": prod.get("nombre", sugerencia["nombre"]),
-                "categoria": prod.get("categoria") or "Sin Categoría",
-                "iva": float(recuerdo.get("IVA_Aprendido", prod.get("iva", 0.0)) or 0.0),
-                "factor": float(recuerdo.get("Factor", 1.0) or 1.0),
-                "motivo": "Memoria de proveedor"
-            })
+            sugerencia.update(
+                {
+                    "display": prod.get("display", sugerencia["display"]),
+                    "nombre": prod.get("nombre", sugerencia["nombre"]),
+                    "categoria": prod.get("categoria") or "Sin Categoría",
+                    "iva": float(recuerdo.get("IVA_Aprendido", prod.get("iva", 0.0)) or 0.0),
+                    "factor": float(recuerdo.get("Factor", 1.0) or 1.0),
+                    "motivo": "Memoria de proveedor",
+                }
+            )
             return sugerencia
 
     if sku_prov_norm and sku_prov_norm != "S/C":
         prod = next((p for p in catalogo if p.get("sku_norm") == sku_prov_norm), None)
         if prod:
-            sugerencia.update({
-                "display": prod.get("display", sugerencia["display"]),
-                "nombre": prod.get("nombre", sugerencia["nombre"]),
-                "categoria": prod.get("categoria") or "Sin Categoría",
-                "iva": float(prod.get("iva", 0.0) or 0.0),
-                "motivo": "SKU proveedor coincide con inventario"
-            })
+            sugerencia.update(
+                {
+                    "display": prod.get("display", sugerencia["display"]),
+                    "nombre": prod.get("nombre", sugerencia["nombre"]),
+                    "categoria": prod.get("categoria") or "Sin Categoría",
+                    "iva": float(prod.get("iva", 0.0) or 0.0),
+                    "motivo": "SKU proveedor coincide con inventario",
+                }
+            )
             return sugerencia
 
     nombre_norm = normalizar_nombre_producto(nombre_item)
     prod_nombre = next((p for p in catalogo if p.get("nombre_norm") == nombre_norm), None)
     if prod_nombre:
-        sugerencia.update({
-            "display": prod_nombre.get("display", sugerencia["display"]),
-            "nombre": prod_nombre.get("nombre", sugerencia["nombre"]),
-            "categoria": prod_nombre.get("categoria") or "Sin Categoría",
-            "iva": float(prod_nombre.get("iva", 0.0) or 0.0),
-            "motivo": "Nombre exacto inventario"
-        })
+        sugerencia.update(
+            {
+                "display": prod_nombre.get("display", sugerencia["display"]),
+                "nombre": prod_nombre.get("nombre", sugerencia["nombre"]),
+                "categoria": prod_nombre.get("categoria") or "Sin Categoría",
+                "iva": float(prod_nombre.get("iva", 0.0) or 0.0),
+                "motivo": "Nombre exacto inventario",
+            }
+        )
         return sugerencia
 
     mejor = None
@@ -775,81 +1009,97 @@ def sugerir_producto_para_item(meta, item, memoria, catalogo):
             mejor = prod
 
     if mejor is not None and mejor_score >= 0.62:
-        sugerencia.update({
-            "display": mejor.get("display", sugerencia["display"]),
-            "nombre": mejor.get("nombre", sugerencia["nombre"]),
-            "categoria": mejor.get("categoria") or "Sin Categoría",
-            "iva": float(mejor.get("iva", 0.0) or 0.0),
-            "motivo": f"Coincidencia sugerida ({mejor_score:.0%})"
-        })
+        sugerencia.update(
+            {
+                "display": mejor.get("display", sugerencia["display"]),
+                "nombre": mejor.get("nombre", sugerencia["nombre"]),
+                "categoria": mejor.get("categoria") or "Sin Categoría",
+                "iva": float(mejor.get("iva", 0.0) or 0.0),
+                "motivo": f"Coincidencia sugerida ({mejor_score:.0%})",
+            }
+        )
 
     return sugerencia
+
 
 # ==========================================
 # 5. PARSER XML COLOMBIA
 # ==========================================
+
 
 def parsear_xml_colombia(archivo):
     try:
         tree = ET.parse(archivo)
         root = tree.getroot()
         ns_map = {
-            'cac': 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2',
-            'cbc': 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2',
+            "cac": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
+            "cbc": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
         }
 
         invoice_root = root
-        if 'AttachedDocument' in root.tag:
-            desc_node = root.find('.//cac:Attachment/cac:ExternalReference/cbc:Description', ns_map)
+        if "AttachedDocument" in root.tag:
+            desc_node = root.find(".//cac:Attachment/cac:ExternalReference/cbc:Description", ns_map)
             if desc_node is not None and desc_node.text and "<Invoice" in desc_node.text:
                 xml_string = desc_node.text.strip()
-                xml_string = xml_string[xml_string.find("<Invoice"):]
+                xml_string = xml_string[xml_string.find("<Invoice") :]
                 invoice_root = ET.fromstring(xml_string)
 
-        ns = ns_map 
+        ns = ns_map
         try:
-            prov_node = invoice_root.find('.//cac:AccountingSupplierParty/cac:Party', ns)
-            prov_tax = prov_node.find('.//cac:PartyTaxScheme', ns)
-            nombre_prov = safe_text(prov_tax.find('cbc:RegistrationName', ns), "Proveedor Desconocido")
-            nit_prov = safe_text(prov_tax.find('cbc:CompanyID', ns), "000000")
+            prov_node = invoice_root.find(".//cac:AccountingSupplierParty/cac:Party", ns)
+            prov_tax = prov_node.find(".//cac:PartyTaxScheme", ns)
+            nombre_prov = safe_text(
+                prov_tax.find("cbc:RegistrationName", ns), "Proveedor Desconocido"
+            )
+            nit_prov = safe_text(prov_tax.find("cbc:CompanyID", ns), "000000")
         except:
             nombre_prov = "Proveedor Desconocido"
             nit_prov = "000000"
 
-        email_prov = safe_text(invoice_root.find('.//cac:AccountingSupplierParty//cbc:ElectronicMail', ns), "")
+        email_prov = safe_text(
+            invoice_root.find(".//cac:AccountingSupplierParty//cbc:ElectronicMail", ns), ""
+        )
 
-        try: folio = safe_text(invoice_root.find('cbc:ID', ns), "S/F")
-        except: folio = "S/F"
+        try:
+            folio = safe_text(invoice_root.find("cbc:ID", ns), "S/F")
+        except:
+            folio = "S/F"
 
-        try: total_pagar_factura = money_int(safe_text(invoice_root.find('.//cac:LegalMonetaryTotal/cbc:PayableAmount', ns), 0))
-        except: total_pagar_factura = 0
+        try:
+            total_pagar_factura = money_int(
+                safe_text(invoice_root.find(".//cac:LegalMonetaryTotal/cbc:PayableAmount", ns), 0)
+            )
+        except:
+            total_pagar_factura = 0
 
         items = []
-        lines = invoice_root.findall('.//cac:InvoiceLine', ns)
-        
+        lines = invoice_root.findall(".//cac:InvoiceLine", ns)
+
         for line in lines:
             try:
-                qty = money_float(safe_text(line.find('cbc:InvoicedQuantity', ns), 0))
+                qty = money_float(safe_text(line.find("cbc:InvoicedQuantity", ns), 0))
                 if qty <= 0:
                     qty = 1.0
 
-                price_node = line.find('.//cac:Price/cbc:PriceAmount', ns)
-                base_qty_node = line.find('.//cac:Price/cbc:BaseQuantity', ns)
+                price_node = line.find(".//cac:Price/cbc:PriceAmount", ns)
+                base_qty_node = line.find(".//cac:Price/cbc:BaseQuantity", ns)
                 price_base_qty = money_float(safe_text(base_qty_node, 1)) or 1.0
-                line_extension = money_float(safe_text(line.find('cbc:LineExtensionAmount', ns), 0))
+                line_extension = money_float(safe_text(line.find("cbc:LineExtensionAmount", ns), 0))
 
                 if price_node is not None and safe_text(price_node, ""):
                     price_amount = money_float(price_node.text)
                 else:
                     price_amount = 0.0
-                
+
                 discount_amount = 0.0
-                allowances = line.findall('.//cac:AllowanceCharge', ns)
+                allowances = line.findall(".//cac:AllowanceCharge", ns)
                 if allowances:
                     for allowance in allowances:
-                        charge_indicator = safe_text(allowance.find('cbc:ChargeIndicator', ns), "false").lower()
-                        val = money_float(safe_text(allowance.find('cbc:Amount', ns), 0))
-                        if charge_indicator == 'false':
+                        charge_indicator = safe_text(
+                            allowance.find("cbc:ChargeIndicator", ns), "false"
+                        ).lower()
+                        val = money_float(safe_text(allowance.find("cbc:Amount", ns), 0))
+                        if charge_indicator == "false":
                             discount_amount += val
                         else:
                             discount_amount -= val
@@ -861,49 +1111,56 @@ def parsear_xml_colombia(archivo):
                     line_extension=line_extension,
                     discount_amount=discount_amount,
                 )
-                
-                item_node = line.find('cac:Item', ns)
-                desc = safe_text(item_node.find('cbc:Description', ns), "Producto XML")
 
-                iva_pct = money_float(safe_text(line.find('.//cac:TaxCategory/cbc:Percent', ns), 0))
-                
+                item_node = line.find("cac:Item", ns)
+                desc = safe_text(item_node.find("cbc:Description", ns), "Producto XML")
+
+                iva_pct = money_float(safe_text(line.find(".//cac:TaxCategory/cbc:Percent", ns), 0))
+
                 sku_prov = "S/C"
-                std_id = item_node.find('.//cac:StandardItemIdentification/cbc:ID', ns)
-                seller_id = item_node.find('.//cac:SellersItemIdentification/cbc:ID', ns)
-                line_id = line.find('cbc:ID', ns)
-                
-                if std_id is not None and std_id.text: sku_prov = std_id.text
-                elif seller_id is not None and seller_id.text: sku_prov = seller_id.text
-                elif line_id is not None and line_id.text: sku_prov = line_id.text
-                
-                items.append({
-                    'SKU_Proveedor': sku_prov,
-                    'Descripcion': desc,
-                    'Cantidad': qty,
-                    'Costo_Base_Unitario': final_base_price,
-                    'IVA_Porcentaje': iva_pct,
-                    '_Costo_Origen_Es_Unitario': True,
-                    '_Cantidad_Origen_Es_Unidad': True,
-                })
+                std_id = item_node.find(".//cac:StandardItemIdentification/cbc:ID", ns)
+                seller_id = item_node.find(".//cac:SellersItemIdentification/cbc:ID", ns)
+                line_id = line.find("cbc:ID", ns)
+
+                if std_id is not None and std_id.text:
+                    sku_prov = std_id.text
+                elif seller_id is not None and seller_id.text:
+                    sku_prov = seller_id.text
+                elif line_id is not None and line_id.text:
+                    sku_prov = line_id.text
+
+                items.append(
+                    {
+                        "SKU_Proveedor": sku_prov,
+                        "Descripcion": desc,
+                        "Cantidad": qty,
+                        "Costo_Base_Unitario": final_base_price,
+                        "IVA_Porcentaje": iva_pct,
+                        "_Costo_Origen_Es_Unitario": True,
+                        "_Cantidad_Origen_Es_Unidad": True,
+                    }
+                )
             except Exception:
                 continue
 
         return {
-            'Proveedor': nombre_prov,
-            'ID_Proveedor': nit_prov,
-            'Email_Proveedor': email_prov,
-            'Folio': folio,
-            'Total': total_pagar_factura,
-            'Items': items
+            "Proveedor": nombre_prov,
+            "ID_Proveedor": nit_prov,
+            "Email_Proveedor": email_prov,
+            "Folio": folio,
+            "Total": total_pagar_factura,
+            "Items": items,
         }
 
     except Exception as e:
         st.error(f"Error parseando XML: {e}")
         return None
 
+
 # ==========================================
 # 6. LÓGICA DE GUARDADO
 # ==========================================
+
 
 def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_pago):
     logs = []
@@ -922,13 +1179,29 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             return False, [f"Error: Falta campo '{campo}' en info_pago."]
 
     if "SKU_Interno_Seleccionado" not in df_final.columns:
-        return False, ["Falta columna SKU_Interno_Seleccionado en df_final (selección del usuario)."]
+        return False, [
+            "Falta columna SKU_Interno_Seleccionado en df_final (selección del usuario)."
+        ]
 
     try:
         _upsert_proveedor_base(ws_map, meta_xml)
 
-        (inv_headers, idx_uid, idx_id, idx_norm, idx_sku_prov, idx_stock, idx_costo, idx_precio, idx_nombre, idx_categoria, idx_iva,
-         uid_to_row, norm_to_row, norm_to_uid) = _build_inv_indexes(ws_inv)
+        (
+            inv_headers,
+            idx_uid,
+            idx_id,
+            idx_norm,
+            idx_sku_prov,
+            idx_stock,
+            idx_costo,
+            idx_precio,
+            idx_nombre,
+            idx_categoria,
+            idx_iva,
+            uid_to_row,
+            norm_to_row,
+            norm_to_uid,
+        ) = _build_inv_indexes(ws_inv)
 
         total_items = len(df_final)
         pr_trans = float(info_pago.get("Transporte", 0.0) or 0.0)
@@ -963,24 +1236,38 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
             precio_auto_original = row.get("_Precio_Auto_Unitario", None)
             factor_inicial = row.get("_Factor_Pack_Inicial", factor)
             try:
-                precio_editado = float(precio_editado) if precio_editado not in (None, "", "None") else 0.0
+                precio_editado = (
+                    float(precio_editado) if precio_editado not in (None, "", "None") else 0.0
+                )
             except Exception:
                 precio_editado = 0.0
             try:
-                precio_auto_original = float(precio_auto_original) if precio_auto_original not in (None, "", "None") else 0.0
+                precio_auto_original = (
+                    float(precio_auto_original)
+                    if precio_auto_original not in (None, "", "None")
+                    else 0.0
+                )
             except Exception:
                 precio_auto_original = 0.0
             try:
-                factor_inicial = float(factor_inicial) if factor_inicial not in (None, "", "None") else factor
+                factor_inicial = (
+                    float(factor_inicial) if factor_inicial not in (None, "", "None") else factor
+                )
             except Exception:
                 factor_inicial = factor
 
-            precio_unitario_calculado = redondear_centena(precio_con_margen(costo_neto_unit, MARGEN_BRUTO_OBJ))
+            precio_unitario_calculado = redondear_centena(
+                precio_con_margen(costo_neto_unit, MARGEN_BRUTO_OBJ)
+            )
             factor_modificado = abs(float(factor) - float(factor_inicial)) > 0.0001
 
             if precio_editado <= 0:
                 precio_final = precio_unitario_calculado
-            elif factor_modificado and precio_auto_original > 0 and abs(precio_editado - precio_auto_original) < 0.01:
+            elif (
+                factor_modificado
+                and precio_auto_original > 0
+                and abs(precio_editado - precio_auto_original) < 0.01
+            ):
                 precio_final = money_int(precio_unitario_calculado)
                 logs.append(f"PRECIO RECALCULADO por factor: {item_label} -> {precio_final}")
             else:
@@ -988,15 +1275,22 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
 
             es_nuevo = ("NUEVO" in sel.upper()) or (sel == "") or sel.upper().startswith("NUEVO")
             if es_nuevo:
-                sku_interno = sku_prov if sku_prov and sku_prov != "S/C" else f"N-{int(time.time())}"
+                sku_interno = (
+                    sku_prov if sku_prov and sku_prov != "S/C" else f"N-{int(time.time())}"
+                )
                 producto_uid = uuid.uuid4().hex
             else:
                 sku_interno = sel.split(" | ")[0].strip()
                 producto_uid = norm_to_uid.get(normalizar_id_producto(sku_interno), "")
 
             sku_norm = normalizar_id_producto(sku_interno)
-            nombre_inventario = str(row.get("Nombre_Inventario", row.get("Descripcion", ""))).strip()
-            categoria = str(row.get("Categoría", row.get("Categoria", "Sin Categoría"))).strip() or "Sin Categoría"
+            nombre_inventario = str(
+                row.get("Nombre_Inventario", row.get("Descripcion", ""))
+            ).strip()
+            categoria = (
+                str(row.get("Categoría", row.get("Categoria", "Sin Categoría"))).strip()
+                or "Sin Categoría"
+            )
 
             if sku_prov and sku_prov != "S/C":
                 _upsert_maestro_proveedores(
@@ -1016,14 +1310,30 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
 
             if fila is not None and not producto_uid:
                 producto_uid = uuid.uuid4().hex
-                updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_uid + 1), "values": [[producto_uid]]})
-                updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_norm + 1), "values": [[sku_norm]]})
-                logs.append(f"CURADO inventario: {sku_interno} ahora tiene UID {producto_uid[:8]}...")
+                updates.append(
+                    {
+                        "range": gspread.utils.rowcol_to_a1(fila, idx_uid + 1),
+                        "values": [[producto_uid]],
+                    }
+                )
+                updates.append(
+                    {
+                        "range": gspread.utils.rowcol_to_a1(fila, idx_norm + 1),
+                        "values": [[sku_norm]],
+                    }
+                )
+                logs.append(
+                    f"CURADO inventario: {sku_interno} ahora tiene UID {producto_uid[:8]}..."
+                )
 
             nombre_historial = nombre_inventario
             if fila is not None:
                 fila_actual = ws_inv.row_values(fila)
-                if idx_nombre is not None and idx_nombre < len(fila_actual) and str(fila_actual[idx_nombre]).strip():
+                if (
+                    idx_nombre is not None
+                    and idx_nombre < len(fila_actual)
+                    and str(fila_actual[idx_nombre]).strip()
+                ):
                     nombre_historial = str(fila_actual[idx_nombre]).strip()
 
             if fila is None:
@@ -1048,7 +1358,9 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
                     new_row[idx_iva] = str(iva_pct)
 
                 appends.append(new_row)
-                logs.append(f"CREADO inventario: {sku_interno} | UID {producto_uid[:8]}... (+{unidades})")
+                logs.append(
+                    f"CREADO inventario: {sku_interno} | UID {producto_uid[:8]}... (+{unidades})"
+                )
             else:
                 stock_actual = 0.0
                 if idx_stock is not None:
@@ -1060,40 +1372,69 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
 
                 nuevo_stock = stock_actual + unidades
                 if idx_stock is not None:
-                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_stock + 1), "values": [[nuevo_stock]]})
+                    updates.append(
+                        {
+                            "range": gspread.utils.rowcol_to_a1(fila, idx_stock + 1),
+                            "values": [[nuevo_stock]],
+                        }
+                    )
                 if idx_costo is not None:
-                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_costo + 1), "values": [[money_int(costo_neto_unit)]]})
+                    updates.append(
+                        {
+                            "range": gspread.utils.rowcol_to_a1(fila, idx_costo + 1),
+                            "values": [[money_int(costo_neto_unit)]],
+                        }
+                    )
                 if idx_precio is not None:
-                    updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_precio + 1), "values": [[money_int(precio_final)]]})
-                updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_uid + 1), "values": [[producto_uid]]})
-                updates.append({"range": gspread.utils.rowcol_to_a1(fila, idx_norm + 1), "values": [[sku_norm]]})
-                logs.append(f"ACTUALIZADO inventario: {sku_interno} | UID {producto_uid[:8]}... Stock {stock_actual}->{nuevo_stock}")
+                    updates.append(
+                        {
+                            "range": gspread.utils.rowcol_to_a1(fila, idx_precio + 1),
+                            "values": [[money_int(precio_final)]],
+                        }
+                    )
+                updates.append(
+                    {
+                        "range": gspread.utils.rowcol_to_a1(fila, idx_uid + 1),
+                        "values": [[producto_uid]],
+                    }
+                )
+                updates.append(
+                    {
+                        "range": gspread.utils.rowcol_to_a1(fila, idx_norm + 1),
+                        "values": [[sku_norm]],
+                    }
+                )
+                logs.append(
+                    f"ACTUALIZADO inventario: {sku_interno} | UID {producto_uid[:8]}... Stock {stock_actual}->{nuevo_stock}"
+                )
 
-            hist_rows.append([
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                str(meta_xml.get("Folio", "")),
-                str(meta_xml.get("Proveedor", "")),
-                len(df_final),
-                money_int(meta_xml.get("Total", 0)),
-                "Admin Nexus",
-                "OK",
-                recepcion_id,
-                str(meta_xml.get("ID_Proveedor", "")),
-                producto_uid,
-                sku_interno,
-                sku_prov,
-                nombre_historial,
-                _fmt_qty(cant_pack),
-                _fmt_qty(factor),
-                _fmt_qty(unidades),
-                money_int(costo_neto_unit),
-                money_int(costo_neto_unit * unidades),
-                money_int(precio_final),
-                iva_pct,
-                str(info_pago.get("Origen", "")),
-                money_int(pr_item_trans),
-                money_int(pr_item_desc),
-            ])
+            hist_rows.append(
+                [
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    str(meta_xml.get("Folio", "")),
+                    str(meta_xml.get("Proveedor", "")),
+                    len(df_final),
+                    money_int(meta_xml.get("Total", 0)),
+                    "Admin Nexus",
+                    "OK",
+                    recepcion_id,
+                    str(meta_xml.get("ID_Proveedor", "")),
+                    producto_uid,
+                    sku_interno,
+                    sku_prov,
+                    nombre_historial,
+                    _fmt_qty(cant_pack),
+                    _fmt_qty(factor),
+                    _fmt_qty(unidades),
+                    money_int(costo_neto_unit),
+                    money_int(costo_neto_unit * unidades),
+                    money_int(precio_final),
+                    iva_pct,
+                    str(info_pago.get("Origen", "")),
+                    money_int(pr_item_trans),
+                    money_int(pr_item_desc),
+                ]
+            )
 
         if updates:
             ws_inv.batch_update(updates)
@@ -1109,17 +1450,22 @@ def procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_final, meta_xml, info_
     except Exception as e:
         return False, [f"Error del Sistema: {e}"]
 
+
 # ==========================================
 # 7. INTERFAZ PRINCIPAL (STREAMLIT) - REFACTORIZADA
 # ==========================================
 
+
 def main():
     st.markdown('<div class="main-header">Recepción & Compras 📥</div>', unsafe_allow_html=True)
-    
+
     # === CONTROL DE ESTADOS ===
-    if 'step' not in st.session_state: st.session_state.step = 1
-    if 'invoice_meta' not in st.session_state: st.session_state.invoice_meta = {}
-    if 'invoice_items' not in st.session_state: st.session_state.invoice_items = []
+    if "step" not in st.session_state:
+        st.session_state.step = 1
+    if "invoice_meta" not in st.session_state:
+        st.session_state.invoice_meta = {}
+    if "invoice_items" not in st.session_state:
+        st.session_state.invoice_items = []
 
     # Conexión
     sh, ws_inv, ws_map, ws_hist, ws_gas = conectar_sheets()
@@ -1128,7 +1474,13 @@ def main():
     cR1, cR2 = st.columns([1, 3])
     if cR1.button("🔄 Recargar catálogo", help="Recarga Inventario/Proveedores/Memory"):
         st.cache_data.clear()
-        for k in ["lst_prods_cache", "dct_prods_cache", "memoria_cache", "proveedores_cache", "prov_id_cache"]:
+        for k in [
+            "lst_prods_cache",
+            "dct_prods_cache",
+            "memoria_cache",
+            "proveedores_cache",
+            "prov_id_cache",
+        ]:
             if k in st.session_state:
                 del st.session_state[k]
         st.rerun()
@@ -1152,9 +1504,15 @@ def main():
     categorias = []
     try:
         df_inv = pd.DataFrame(ws_inv.get_all_records())
-        col_cat = "Categoria" if "Categoria" in df_inv.columns else ("Categoría" if "Categoría" in df_inv.columns else None)
+        col_cat = (
+            "Categoria"
+            if "Categoria" in df_inv.columns
+            else ("Categoría" if "Categoría" in df_inv.columns else None)
+        )
         if col_cat:
-            categorias = sorted([c for c in df_inv[col_cat].fillna("").astype(str).unique().tolist() if c.strip()])
+            categorias = sorted(
+                [c for c in df_inv[col_cat].fillna("").astype(str).unique().tolist() if c.strip()]
+            )
     except Exception:
         categorias = []
     if not categorias:
@@ -1164,26 +1522,34 @@ def main():
     # PASO 1: CARGA DE DATOS (XML O MANUAL)
     # ==========================================
     if st.session_state.step == 1:
-        st.markdown('<div class="sub-header">Selecciona el método de ingreso</div>', unsafe_allow_html=True)
-        
+        st.markdown(
+            '<div class="sub-header">Selecciona el método de ingreso</div>', unsafe_allow_html=True
+        )
+
         tab_xml, tab_manual = st.tabs(["📂 Cargar XML (Factura Electrónica)", "✍️ Ingreso Manual"])
-        
+
         # OPCIÓN A: XML
         with tab_xml:
             st.info("Arrastra tu Factura XML de la DIAN para autocompletar.")
-            uploaded = st.file_uploader("📂 Sube tu Factura XML DIAN aquí", type=['xml'], key="xml_upl")
-            
+            uploaded = st.file_uploader(
+                "📂 Sube tu Factura XML DIAN aquí", type=["xml"], key="xml_upl"
+            )
+
             if uploaded:
                 with st.spinner("🤖 Analizando XML y Consultando Memoria..."):
                     data = parsear_xml_colombia(uploaded)
                     if not data:
-                        st.error("❌ El XML no pudo ser leído. Verifica que sea una factura DIAN válida o consulta soporte.")
+                        st.error(
+                            "❌ El XML no pudo ser leído. Verifica que sea una factura DIAN válida o consulta soporte."
+                        )
                         st.stop()
-                    
+
                     # Guardar en sesión y avanzar
                     st.session_state.invoice_meta = {
-                        "Proveedor": data["Proveedor"], "ID_Proveedor": data["ID_Proveedor"],
-                        "Folio": data["Folio"], "Total": data["Total"]
+                        "Proveedor": data["Proveedor"],
+                        "ID_Proveedor": data["ID_Proveedor"],
+                        "Folio": data["Folio"],
+                        "Total": data["Total"],
                     }
                     st.session_state.invoice_items = data["Items"]
                     st.session_state.step = 2
@@ -1200,7 +1566,11 @@ def main():
                 )
 
                 prov_man = prov_sel
-                nit_default = st.session_state.get("prov_id_cache", {}).get(prov_sel, "") if prov_sel != "(Nuevo proveedor)" else ""
+                nit_default = (
+                    st.session_state.get("prov_id_cache", {}).get(prov_sel, "")
+                    if prov_sel != "(Nuevo proveedor)"
+                    else ""
+                )
 
                 if prov_sel == "(Nuevo proveedor)":
                     prov_man = c1.text_input("Nombre proveedor (nuevo)", placeholder="Ej: Italcol")
@@ -1212,24 +1582,41 @@ def main():
                 st.markdown("---")
                 st.write("📝 **Items de la Factura**")
 
-                st.caption("En ingreso manual puedes escribir costo unitario o total de la línea. Si llenas ambos, el sistema tomará el costo unitario como prioridad para evitar divisiones erróneas cuando haya varias unidades.")
+                st.caption(
+                    "En ingreso manual puedes escribir costo unitario o total de la línea. Si llenas ambos, el sistema tomará el costo unitario como prioridad para evitar divisiones erróneas cuando haya varias unidades."
+                )
 
-                df_template = pd.DataFrame([{
-                    "Descripción": "", "Cantidad": 1, "Costo_Unitario": 0.0, "Costo_Total_Línea": 0.0
-                }])
+                df_template = pd.DataFrame(
+                    [
+                        {
+                            "Descripción": "",
+                            "Cantidad": 1,
+                            "Costo_Unitario": 0.0,
+                            "Costo_Total_Línea": 0.0,
+                        }
+                    ]
+                )
 
                 edited_manual = st.data_editor(
-                    df_template, num_rows="dynamic", use_container_width=True,
+                    df_template,
+                    num_rows="dynamic",
+                    use_container_width=True,
                     column_config={
-                        "Descripción": st.column_config.TextColumn("Descripción del Producto", required=True),
+                        "Descripción": st.column_config.TextColumn(
+                            "Descripción del Producto", required=True
+                        ),
                         "Cantidad": st.column_config.NumberColumn("Cant.", min_value=1),
-                        "Costo_Unitario": st.column_config.NumberColumn("Costo Unitario ($)", min_value=0.0),
-                        "Costo_Total_Línea": st.column_config.NumberColumn("Costo Total ($)", min_value=0.0)
-                    }
+                        "Costo_Unitario": st.column_config.NumberColumn(
+                            "Costo Unitario ($)", min_value=0.0
+                        ),
+                        "Costo_Total_Línea": st.column_config.NumberColumn(
+                            "Costo Total ($)", min_value=0.0
+                        ),
+                    },
                 )
 
                 submit_manual = st.form_submit_button("Siguiente Paso ➡️")
-                
+
                 if submit_manual:
                     if not prov_man or not folio_man:
                         st.error("⚠️ Falta Proveedor o Factura.")
@@ -1256,24 +1643,28 @@ def main():
                                     continue
 
                                 total_manual += c_tot
-                                
-                                items_std.append({
-                                    'SKU_Proveedor': "S/C",
-                                    'Descripcion': row["Descripción"],
-                                    'Cantidad': qty,
-                                    'Costo_Base_Unitario': base_unit,
-                                    'IVA_Porcentaje': 0,
-                                    '_Costo_Origen_Es_Unitario': True,
-                                    '_Cantidad_Origen_Es_Unidad': True,
-                                })
+
+                                items_std.append(
+                                    {
+                                        "SKU_Proveedor": "S/C",
+                                        "Descripcion": row["Descripción"],
+                                        "Cantidad": qty,
+                                        "Costo_Base_Unitario": base_unit,
+                                        "IVA_Porcentaje": 0,
+                                        "_Costo_Origen_Es_Unitario": True,
+                                        "_Cantidad_Origen_Es_Unidad": True,
+                                    }
+                                )
 
                         if not items_std:
                             st.error("⚠️ Debes agregar al menos un producto válido.")
                             st.stop()
-                        
+
                         st.session_state.invoice_meta = {
-                            "Proveedor": prov_man, "ID_Proveedor": nit_man,
-                            "Folio": folio_man, "Total": total_manual
+                            "Proveedor": prov_man,
+                            "ID_Proveedor": nit_man,
+                            "Folio": folio_man,
+                            "Total": total_manual,
                         }
                         st.session_state.invoice_items = items_std
                         st.session_state.step = 2
@@ -1283,12 +1674,16 @@ def main():
     # PASO 2: REVISIÓN, MAPEO Y GUARDADO
     # ==========================================
     elif st.session_state.step == 2:
-        st.markdown('<div class="sub-header">Revisión, Mapeo y Finanzas</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="sub-header">Revisión, Mapeo y Finanzas</div>', unsafe_allow_html=True
+        )
 
         # ✅ meta robusto (NO KeyError)
         meta = _get_meta_safe()
         if not meta["Proveedor"] or not meta["Folio"]:
-            st.error("⚠️ No hay cabecera de compra válida (Proveedor/Folio). Vuelve a ingresar la compra.")
+            st.error(
+                "⚠️ No hay cabecera de compra válida (Proveedor/Folio). Vuelve a ingresar la compra."
+            )
             st.session_state.step = 1
             st.rerun()
 
@@ -1314,7 +1709,7 @@ def main():
             iva_val = sugerencia.get("iva", item.get("IVA_Porcentaje", 0))
             factor_val = sugerencia.get("factor", 1.0)
             categoria_val = sugerencia.get("categoria", "Sin Categoría")
-            nombre_sugerido = sugerencia.get("nombre", item.get('Descripcion', ''))
+            nombre_sugerido = sugerencia.get("nombre", item.get("Descripcion", ""))
             motivo_sugerencia = sugerencia.get("motivo", "Nuevo producto")
 
             base_unit = money_int(item.get("Costo_Base_Unitario", 0))
@@ -1322,112 +1717,160 @@ def main():
             if factor_val <= 0:
                 factor_val = 1.0
             iva_val = float(iva_val or 0.0)
-            cantidad_origen_es_unidad = valor_bool(item.get("_Cantidad_Origen_Es_Unidad"), default=True)
+            cantidad_origen_es_unidad = valor_bool(
+                item.get("_Cantidad_Origen_Es_Unidad"), default=True
+            )
 
             costo_base_unit_est = base_unit
             costo_neto_unit_est = costo_base_unit_est * (1.0 + (iva_val / 100.0))
-            precio_sug_est = redondear_centena(precio_con_margen(costo_neto_unit_est, MARGEN_BRUTO_OBJ))
+            precio_sug_est = redondear_centena(
+                precio_con_margen(costo_neto_unit_est, MARGEN_BRUTO_OBJ)
+            )
 
-            df_revision_data.append({
-                "SKU_Proveedor": item.get('SKU_Proveedor', 'S/C'),
-                "Descripcion": item.get('Descripcion', ''),
-                "Nombre_Inventario": nombre_sugerido,
-                "Cantidad": _fmt_qty(qty),
-                "Costo_Base_Unitario": base_unit,
-                "📌 Producto_Interno": prod_interno_val,
-                "IVA_%": int(iva_val) if float(iva_val).is_integer() else iva_val,
-                "Factor_Pack": factor_val,
-                "Precio_Sugerido": money_int(precio_sug_est or 0),
-                "_Precio_Auto_Unitario": money_int(precio_sug_est or 0),
-                "_Factor_Pack_Inicial": float(factor_val or 1.0),
-                "_Costo_Origen_Es_Unitario": True,
-                "_Cantidad_Origen_Es_Unidad": cantidad_origen_es_unidad,
-                "Categoría": categoria_val,
-                "Sugerencia": motivo_sugerencia
-            })
+            df_revision_data.append(
+                {
+                    "SKU_Proveedor": item.get("SKU_Proveedor", "S/C"),
+                    "Descripcion": item.get("Descripcion", ""),
+                    "Nombre_Inventario": nombre_sugerido,
+                    "Cantidad": _fmt_qty(qty),
+                    "Costo_Base_Unitario": base_unit,
+                    "📌 Producto_Interno": prod_interno_val,
+                    "IVA_%": int(iva_val) if float(iva_val).is_integer() else iva_val,
+                    "Factor_Pack": factor_val,
+                    "Precio_Sugerido": money_int(precio_sug_est or 0),
+                    "_Precio_Auto_Unitario": money_int(precio_sug_est or 0),
+                    "_Factor_Pack_Inicial": float(factor_val or 1.0),
+                    "_Costo_Origen_Es_Unitario": True,
+                    "_Cantidad_Origen_Es_Unidad": cantidad_origen_es_unidad,
+                    "Categoría": categoria_val,
+                    "Sugerencia": motivo_sugerencia,
+                }
+            )
 
         df_revision = pd.DataFrame(df_revision_data)
 
-        st.caption("En compras por XML e ingreso manual, la cantidad y el costo base ya se tratan como unitarios. El campo Factor/Caja se conserva como referencia del proveedor y no divide el costo ni multiplica las unidades en este flujo.")
+        st.caption(
+            "En compras por XML e ingreso manual, la cantidad y el costo base ya se tratan como unitarios. El campo Factor/Caja se conserva como referencia del proveedor y no divide el costo ni multiplica las unidades en este flujo."
+        )
 
         edited_revision = st.data_editor(
             df_revision,
             use_container_width=True,
             hide_index=True,
             column_order=[
-                "SKU_Proveedor", "Descripcion", "Nombre_Inventario", "📌 Producto_Interno",
-                "Sugerencia", "IVA_%", "Categoría", "Cantidad", "Costo_Base_Unitario", "Factor_Pack", "Precio_Sugerido"
+                "SKU_Proveedor",
+                "Descripcion",
+                "Nombre_Inventario",
+                "📌 Producto_Interno",
+                "Sugerencia",
+                "IVA_%",
+                "Categoría",
+                "Cantidad",
+                "Costo_Base_Unitario",
+                "Factor_Pack",
+                "Precio_Sugerido",
             ],
             column_config={
                 "SKU_Proveedor": st.column_config.TextColumn("SKU Prov.", disabled=True),
                 "Descripcion": st.column_config.TextColumn("Desc. Factura", disabled=True),
-                "Nombre_Inventario": st.column_config.TextColumn("✍️ Nombre si es nuevo", disabled=False, width="medium"),
-                "Sugerencia": st.column_config.TextColumn("🤖 Sugerencia", disabled=True, width="medium"),
-
+                "Nombre_Inventario": st.column_config.TextColumn(
+                    "✍️ Nombre si es nuevo", disabled=False, width="medium"
+                ),
+                "Sugerencia": st.column_config.TextColumn(
+                    "🤖 Sugerencia", disabled=True, width="medium"
+                ),
                 # ✅ Asociar a inventario (lista real)
                 "📌 Producto_Interno": st.column_config.SelectboxColumn(
                     "📌 Asociar a",
                     options=st.session_state.lst_prods_cache,
                     required=True,
                 ),
-
                 # ✅ IVA seleccionable
                 "IVA_%": st.column_config.SelectboxColumn(
                     "IVA %",
                     options=[0, 5, 19],
                     required=True,
                 ),
-
                 # ✅ Categoría seleccionable
                 "Categoría": st.column_config.SelectboxColumn(
                     "Categoría",
                     options=categorias,
                     required=True,
                 ),
-
-                "Cantidad": st.column_config.NumberColumn("Cant.", disabled=True, step=1, format="%.0f"),  # ✅ sin 1.0
-                "Costo_Base_Unitario": st.column_config.NumberColumn("Costo Unit. Base", format="$%.0f", disabled=True),
-                "Factor_Pack": st.column_config.NumberColumn("Factor/Caja", min_value=1.0, step=1.0, format="%.0f"),  # ✅
-                "Precio_Sugerido": st.column_config.NumberColumn("Precio Unitario Sugerido", format="$%.0f", min_value=0.0),
+                "Cantidad": st.column_config.NumberColumn(
+                    "Cant.", disabled=True, step=1, format="%.0f"
+                ),  # ✅ sin 1.0
+                "Costo_Base_Unitario": st.column_config.NumberColumn(
+                    "Costo Unit. Base", format="$%.0f", disabled=True
+                ),
+                "Factor_Pack": st.column_config.NumberColumn(
+                    "Factor/Caja", min_value=1.0, step=1.0, format="%.0f"
+                ),  # ✅
+                "Precio_Sugerido": st.column_config.NumberColumn(
+                    "Precio Unitario Sugerido", format="$%.0f", min_value=0.0
+                ),
             },
         )
 
         st.markdown("---")
         st.markdown("### 2. Liquidación y Pago")
-        
+
         c1, c2, c3 = st.columns(3)
         c_transporte = c1.number_input("Costo Transporte ($)", min_value=0.0, value=0.0)
         c_descuento = c2.number_input("Descuento Total ($)", min_value=0.0, value=0.0)
-        origen_pago = c3.selectbox("Cuenta de Egreso (Gastos)", ["Bancolombia Ahorros", "Davivienda", "Nequi", "DaviPlata", "Efectivo", "Caja General", "Crédito Proveedor (CxP)"])
-        
+        origen_pago = c3.selectbox(
+            "Cuenta de Egreso (Gastos)",
+            [
+                "Bancolombia Ahorros",
+                "Davivienda",
+                "Nequi",
+                "DaviPlata",
+                "Efectivo",
+                "Caja General",
+                "Crédito Proveedor (CxP)",
+            ],
+        )
+
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("✅ Confirmar y Guardar en Base de Datos", type="primary", use_container_width=True):
-            
+        if st.button(
+            "✅ Confirmar y Guardar en Base de Datos", type="primary", use_container_width=True
+        ):
             df_to_save = edited_revision.copy()
-            df_to_save = df_to_save.rename(columns={
-                "📌 Producto_Interno": "SKU_Interno_Seleccionado",
-                "IVA_%": "IVA_Porcentaje",
-                "Cantidad": "Cantidad_Recibida"
-            })
-            
+            df_to_save = df_to_save.rename(
+                columns={
+                    "📌 Producto_Interno": "SKU_Interno_Seleccionado",
+                    "IVA_%": "IVA_Porcentaje",
+                    "Cantidad": "Cantidad_Recibida",
+                }
+            )
+
             info_pago = {
                 "Origen": origen_pago,
                 "Transporte": float(c_transporte),
-                "Descuento": float(c_descuento)
+                "Descuento": float(c_descuento),
             }
-            
+
             with st.spinner("Guardando en Google Sheets..."):
-                ok, logs = procesar_guardado(ws_map, ws_inv, ws_hist, ws_gas, df_to_save, meta, info_pago)
-            
+                ok, logs = procesar_guardado(
+                    ws_map, ws_inv, ws_hist, ws_gas, df_to_save, meta, info_pago
+                )
+
             if ok:
                 st.success("¡Compra registrada correctamente!")
                 st.balloons()
                 with st.expander("Ver bitácora de operaciones"):
-                    for l in logs: st.text(l)
+                    for l in logs:
+                        st.text(l)
 
                 # Limpiar caché y recargar memoria para sugerencias inmediatas
                 st.cache_data.clear()
-                for k in ["lst_prods_cache", "dct_prods_cache", "memoria_cache", "proveedores_cache", "prov_id_cache"]:
+                for k in [
+                    "lst_prods_cache",
+                    "dct_prods_cache",
+                    "memoria_cache",
+                    "proveedores_cache",
+                    "prov_id_cache",
+                ]:
                     if k in st.session_state:
                         del st.session_state[k]
 
@@ -1440,7 +1883,9 @@ def main():
                     st.rerun()
             else:
                 st.error("Error guardando datos.")
-                for l in logs: st.error(l)
+                for l in logs:
+                    st.error(l)
+
 
 if __name__ == "__main__":
     main()

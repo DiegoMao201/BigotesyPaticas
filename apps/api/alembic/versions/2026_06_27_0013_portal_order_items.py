@@ -5,6 +5,7 @@ Revises: 0012_seo_landings
 Create Date: 2026-06-27
 
 """
+
 from __future__ import annotations
 
 from alembic import op

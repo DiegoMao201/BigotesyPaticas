@@ -1,4 +1,5 @@
 """Pytest config — añade la raíz del repo al sys.path para imports limpios."""
+
 import sys
 from pathlib import Path
 

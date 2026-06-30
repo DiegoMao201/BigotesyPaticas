@@ -1,8 +1,8 @@
 """Portal Orders — pedidos desde el portal de clientes (sin mostrar stock)."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
@@ -14,13 +14,15 @@ from app.deps import DBSession
 from app.models.catalog import Product
 from app.models.crm import Customer
 from app.models.portal import ActivityLog, PortalOrder, PortalOrderItem
+from app.models.sales import Order as SalesOrder
+from app.models.sales import OrderItem as SalesOrderItem
 from app.services import meta_conversion_api as capi
-from app.models.sales import Order as SalesOrder, OrderItem as SalesOrderItem
 
 router = APIRouter(prefix="/portal/orders", tags=["portal"])
 
 
 # ── schemas ───────────────────────────────────────────────────────────
+
 
 class OrderIn(BaseModel):
     product_id: str
@@ -59,6 +61,7 @@ def _order_out(o: PortalOrder, points: int | None = None) -> OrderOut:
 
 # ── endpoints ─────────────────────────────────────────────────────────
 
+
 @router.get("", response_model=list[OrderOut])
 async def list_orders(
     db: DBSession,
@@ -67,14 +70,18 @@ async def list_orders(
     page_size: int = Query(20, ge=1, le=100),
 ) -> list[OrderOut]:
     rows = (
-        await db.execute(
-            select(PortalOrder)
-            .where(PortalOrder.customer_id == customer.id)
-            .order_by(PortalOrder.created_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await db.execute(
+                select(PortalOrder)
+                .where(PortalOrder.customer_id == customer.id)
+                .order_by(PortalOrder.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [_order_out(o) for o in rows]
 
 
@@ -126,7 +133,7 @@ async def create_order(
                 reason="portal_order",
                 reference_type="portal_order",
                 reference_id=order.id,
-                description=f"Pedido portal: {product.name} ×{order.quantity}",
+                description=f"Pedido portal: {product.name} x{order.quantity}",
                 db=db,
             )
 
@@ -158,6 +165,7 @@ async def create_order(
 
 # ── multi-product order ────────────────────────────────────────────────
 
+
 class MultiOrderItemIn(BaseModel):
     product_id: str
     quantity: int = 1
@@ -183,13 +191,17 @@ async def create_multi_order(
 
     product_ids = [uuid.UUID(i.product_id) for i in payload.items]
     products_rows = (
-        await db.execute(
-            select(Product).where(
-                Product.id.in_(product_ids),
-                Product.deleted_at == None,  # noqa: E711
+        (
+            await db.execute(
+                select(Product).where(
+                    Product.id.in_(product_ids),
+                    Product.deleted_at == None,  # noqa: E711
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     products_map = {p.id: p for p in products_rows}
 
     for item in payload.items:
@@ -200,11 +212,10 @@ async def create_multi_order(
             raise HTTPException(status_code=400, detail="Cantidad debe ser mayor a 0")
 
     subtotal = sum(
-        float(products_map[uuid.UUID(i.product_id)].price or 0) * i.quantity
-        for i in payload.items
+        float(products_map[uuid.UUID(i.product_id)].price or 0) * i.quantity for i in payload.items
     )
     shipping = 0 if subtotal >= 30000 else 8000
-    total = subtotal + shipping
+    _total = subtotal + shipping
     points_to_earn = int(subtotal / 1000)
 
     # Use first product as primary (backward compat with portal_orders columns)
@@ -228,26 +239,28 @@ async def create_multi_order(
         pid = uuid.UUID(item.product_id)
         prod = products_map[pid]
         unit = float(prod.price or 0)
-        db.add(PortalOrderItem(
-            portal_order_id=order.id,
-            product_id=prod.id,
-            sku=prod.sku,
-            name=prod.name,
-            image_url=prod.primary_image_url,
-            quantity=item.quantity,
-            unit_price=unit,
-            subtotal=unit * item.quantity,
-            notes=item.notes,
-        ))
+        db.add(
+            PortalOrderItem(
+                portal_order_id=order.id,
+                product_id=prod.id,
+                sku=prod.sku,
+                name=prod.name,
+                image_url=prod.primary_image_url,
+                quantity=item.quantity,
+                unit_price=unit,
+                subtotal=unit * item.quantity,
+                notes=item.notes,
+            )
+        )
 
     await db.commit()
     await db.refresh(order)
 
+    import contextlib
+
     points_earned = 0
-    try:
+    with contextlib.suppress(Exception):
         points_earned = await award_points(db, customer.id, order.id, points_to_earn)
-    except Exception:
-        pass
 
     return _order_out(order, points=points_earned or None)
 
@@ -274,6 +287,7 @@ async def get_order(
 
 
 # ── top products ────────────────────────────────────────────────────────
+
 
 @router.get("/me/top-products")
 async def top_products(
@@ -329,43 +343,50 @@ async def top_products(
         return []
 
     products_rows = (
-        await db.execute(
-            select(Product).where(
-                Product.id.in_(product_ids),
-                Product.deleted_at.is_(None),
+        (
+            await db.execute(
+                select(Product).where(
+                    Product.id.in_(product_ids),
+                    Product.deleted_at.is_(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     prod_map = {p.id: p for p in products_rows}
     result = []
     for pid in product_ids:
         p = prod_map.get(pid)
         if p:
-            result.append({
-                "id": str(p.id),
-                "name": p.name,
-                "price": float(p.price) if p.price else 0,
-                "image_url": p.primary_image_url,
-                "sku": p.sku,
-            })
+            result.append(
+                {
+                    "id": str(p.id),
+                    "name": p.name,
+                    "price": float(p.price) if p.price else 0,
+                    "image_url": p.primary_image_url,
+                    "sku": p.sku,
+                }
+            )
     return result
 
 
 # ── timeline del pedido (cliente) ──────────────────────────────────────
 
 ACTION_LABELS: dict[str, str] = {
-    "created":             "Pedido recibido 📬",
-    "status_changed":      "Estado actualizado",
+    "created": "Pedido recibido 📬",
+    "status_changed": "Estado actualizado",
     "item_quantity_changed": "Cantidad ajustada",
-    "item_substituted":    "Producto sustituido",
-    "item_added":          "Producto agregado",
-    "item_removed":        "Producto removido",
-    "discount_applied":    "Descuento aplicado 🎉",
-    "address_changed":     "Dirección actualizada",
-    "notes_updated":       "Nota del equipo",
-    "cancelled":           "Pedido cancelado",
+    "item_substituted": "Producto sustituido",
+    "item_added": "Producto agregado",
+    "item_removed": "Producto removido",
+    "discount_applied": "Descuento aplicado 🎉",
+    "address_changed": "Dirección actualizada",
+    "notes_updated": "Nota del equipo",
+    "cancelled": "Pedido cancelado",
 }
+
 
 @router.get("/{order_id}/timeline")
 async def order_timeline(
@@ -374,36 +395,49 @@ async def order_timeline(
     customer: Customer = PortalUser,
 ) -> dict:
     """Timeline informativo del pedido visible al cliente."""
-    order = (await db.execute(
-        select(PortalOrder)
-        .where(
-            PortalOrder.id == order_id,
-            PortalOrder.customer_id == customer.id,
+    order = (
+        await db.execute(
+            select(PortalOrder).where(
+                PortalOrder.id == order_id,
+                PortalOrder.customer_id == customer.id,
+            )
         )
-    )).scalar_one_or_none()
+    ).scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
-    items = (await db.execute(
-        select(PortalOrderItem)
-        .where(
-            PortalOrderItem.portal_order_id == order_id,
-            PortalOrderItem.is_removed == False,  # noqa: E712
+    items = (
+        (
+            await db.execute(
+                select(PortalOrderItem)
+                .where(
+                    PortalOrderItem.portal_order_id == order_id,
+                    PortalOrderItem.is_removed == False,  # noqa: E712
+                )
+                .order_by(PortalOrderItem.created_at)
+            )
         )
-        .order_by(PortalOrderItem.created_at)
-    )).scalars().all()
+        .scalars()
+        .all()
+    )
 
     # Activity log visible al cliente
     try:
-        logs = (await db.execute(
-            select(ActivityLog)
-            .where(
-                ActivityLog.entity_type == "order",
-                ActivityLog.entity_id == order_id,
-                ActivityLog.visible_to_customer == True,  # noqa: E712
+        logs = (
+            (
+                await db.execute(
+                    select(ActivityLog)
+                    .where(
+                        ActivityLog.entity_type == "order",
+                        ActivityLog.entity_id == order_id,
+                        ActivityLog.visible_to_customer == True,  # noqa: E712
+                    )
+                    .order_by(ActivityLog.created_at.asc())
+                )
             )
-            .order_by(ActivityLog.created_at.asc())
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
         timeline = [
             {
                 "action": lg.action,

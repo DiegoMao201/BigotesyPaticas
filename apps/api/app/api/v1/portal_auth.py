@@ -1,13 +1,13 @@
 """Portal Auth — login por cédula + teléfono, sin contraseña."""
+
 from __future__ import annotations
 
 import re
 import secrets
 import unicodedata
-import uuid
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import and_, delete, select
 
@@ -23,6 +23,7 @@ _REFERRAL_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
 
 # ── helpers ──────────────────────────────────────────────────────────
+
 
 def _generate_referral_code(full_name: str) -> str:
     """Genera un código de referido único tipo BP-NOM-XXX."""
@@ -83,13 +84,14 @@ PortalUser = Depends(get_portal_customer)
 
 # ── schemas ───────────────────────────────────────────────────────────
 
+
 class LoginRequest(BaseModel):
     document_id: str
     phone: str
 
 
 class LoginResponse(BaseModel):
-    status: str          # "existing" | "new"
+    status: str  # "existing" | "new"
     customer_id: str
     full_name: str | None
     has_pets: bool
@@ -122,6 +124,7 @@ class AcceptTermsRequest(BaseModel):
 
 # ── endpoints ─────────────────────────────────────────────────────────
 
+
 class SignupRequest(BaseModel):
     full_name: str
     document_id: str
@@ -135,8 +138,7 @@ class SignupRequest(BaseModel):
 @router.post("/signup", response_model=LoginResponse)
 async def signup(payload: SignupRequest, response: Response, db: DBSession) -> LoginResponse:
     """Auto-registro de cliente nuevo desde la tienda o el portal."""
-    from sqlalchemy import or_
-    doc   = payload.document_id.strip()
+    doc = payload.document_id.strip()
     phone = _normalize_phone(payload.phone.strip())
 
     existing = (
@@ -173,6 +175,7 @@ async def signup(payload: SignupRequest, response: Response, db: DBSession) -> L
     pet_name_out: str | None = None
     if payload.pet_name and payload.pet_name.strip():
         from app.models.portal import Pet
+
         pet = Pet(
             customer_id=customer.id,
             name=payload.pet_name.strip(),
@@ -202,6 +205,7 @@ async def signup(payload: SignupRequest, response: Response, db: DBSession) -> L
 
     # Meta Conversion API — CompleteRegistration
     from app.services import meta_conversion_api as capi
+
     capi.send_event(
         "CompleteRegistration",
         user_data={
@@ -274,13 +278,17 @@ async def login(payload: LoginRequest, response: Response, db: DBSession) -> Log
 
     # Limpiar sesiones viejas del mismo cliente (máx 5 activas)
     old_sessions = (
-        await db.execute(
-            select(PortalSession)
-            .where(PortalSession.customer_id == customer.id)
-            .order_by(PortalSession.created_at.desc())
-            .offset(5)
+        (
+            await db.execute(
+                select(PortalSession)
+                .where(PortalSession.customer_id == customer.id)
+                .order_by(PortalSession.created_at.desc())
+                .offset(5)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for s in old_sessions:
         await db.delete(s)
     if old_sessions:
@@ -313,9 +321,7 @@ async def logout(
     bp_portal_token: str | None = Cookie(default=None),
 ) -> dict:
     if bp_portal_token:
-        await db.execute(
-            delete(PortalSession).where(PortalSession.token == bp_portal_token)
-        )
+        await db.execute(delete(PortalSession).where(PortalSession.token == bp_portal_token))
         await db.commit()
     response.delete_cookie(_COOKIE)
     return {"ok": True}
@@ -335,7 +341,9 @@ def _me_response(customer: Customer) -> MeResponse:
         rfm_monetary=float(customer.rfm_monetary) if customer.rfm_monetary else None,
         legacy_pet_name=extra.get("pet_name"),
         legacy_pet_type=extra.get("pet_type"),
-        terms_accepted_at=customer.terms_accepted_at.isoformat() if customer.terms_accepted_at else None,
+        terms_accepted_at=customer.terms_accepted_at.isoformat()
+        if customer.terms_accepted_at
+        else None,
         data_consent_at=customer.data_consent_at.isoformat() if customer.data_consent_at else None,
         referral_code=customer.referral_code,
     )
@@ -389,19 +397,20 @@ async def apply_referral(
     code = (payload.get("referral_code") or "").strip().upper()
     if not code:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=422, detail="Código requerido")
 
     # Buscar al referidor
-    referrer = (await db.execute(
-        select(Customer).where(Customer.referral_code == code)
-    )).scalar_one_or_none()
+    referrer = (
+        await db.execute(select(Customer).where(Customer.referral_code == code))
+    ).scalar_one_or_none()
 
     if not referrer or referrer.id == customer.id:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Código no válido")
 
     from app.models.portal import PortalReferral
-    from app.api.v1.portal_loyalty import POINTS_REFERRAL_SIGNUP, award_points
 
     customer.referred_by_code = code
     customer.referred_by_customer_id = referrer.id
@@ -417,8 +426,10 @@ async def apply_referral(
 
     # Dar 50 puntos al nuevo cliente por usar el código
     signup_pts = 50
-    from app.models.portal import LoyaltyPoint
     from datetime import timedelta
+
+    from app.models.portal import LoyaltyPoint
+
     now = datetime.now(UTC)
     lp = LoyaltyPoint(
         customer_id=customer.id,
@@ -432,8 +443,10 @@ async def apply_referral(
     db.add(lp)
 
     from app.api.v1.portal_notifications import notify_customer
+
     await notify_customer(
-        db, customer.id,
+        db,
+        customer.id,
         notif_type="referral_signup",
         title=f"¡Bienvenida! Tienes {signup_pts} puntos de regalo",
         body=f"Usaste el código de {referrer.full_name or 'un amigo'} y ganaste {signup_pts} puntos 🎉",
@@ -452,22 +465,28 @@ async def my_referrals(
     """Lista de personas que el cliente ha referido + estado de recompensas."""
     from app.models.portal import PortalReferral
 
-    rows = (await db.execute(
-        select(PortalReferral, Customer.full_name.label("referred_name"))
-        .join(Customer, PortalReferral.referred_customer_id == Customer.id)
-        .where(PortalReferral.referrer_customer_id == customer.id)
-        .order_by(PortalReferral.signed_up_at.desc())
-    )).all()
+    rows = (
+        await db.execute(
+            select(PortalReferral, Customer.full_name.label("referred_name"))
+            .join(Customer, PortalReferral.referred_customer_id == Customer.id)
+            .where(PortalReferral.referrer_customer_id == customer.id)
+            .order_by(PortalReferral.signed_up_at.desc())
+        )
+    ).all()
 
     referrals = []
     for ref, referred_name in rows:
-        referrals.append({
-            "id": str(ref.id),
-            "referred_name": referred_name,
-            "signed_up_at": ref.signed_up_at.isoformat(),
-            "first_purchase_at": ref.first_purchase_at.isoformat() if ref.first_purchase_at else None,
-            "reward_paid_at": ref.reward_paid_at.isoformat() if ref.reward_paid_at else None,
-        })
+        referrals.append(
+            {
+                "id": str(ref.id),
+                "referred_name": referred_name,
+                "signed_up_at": ref.signed_up_at.isoformat(),
+                "first_purchase_at": ref.first_purchase_at.isoformat()
+                if ref.first_purchase_at
+                else None,
+                "reward_paid_at": ref.reward_paid_at.isoformat() if ref.reward_paid_at else None,
+            }
+        )
 
     return {
         "referral_code": customer.referral_code,
@@ -484,7 +503,10 @@ async def accept_terms(
 ) -> MeResponse:
     if not payload.terms or not payload.data_consent:
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail="Debes aceptar los términos y el tratamiento de datos")
+
+        raise HTTPException(
+            status_code=400, detail="Debes aceptar los términos y el tratamiento de datos"
+        )
     now = datetime.now(UTC)
     customer.terms_accepted_at = now
     customer.data_consent_at = now

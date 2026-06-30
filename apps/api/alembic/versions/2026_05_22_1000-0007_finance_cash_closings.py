@@ -4,9 +4,9 @@ Revision ID: 0007_finance_cash_closings
 Revises: 0006_seed_default_location
 Create Date: 2026-05-22 10:00:00.000000
 """
+
 from __future__ import annotations
 
-import sqlalchemy as sa
 from alembic import op
 
 revision = "0007_finance_cash_closings"
@@ -46,9 +46,7 @@ def upgrade() -> None:
             CONSTRAINT uq_cash_closings_fecha UNIQUE (fecha)
         )
     """)
-    op.create_index(
-        "ix_finance_cash_closings_fecha", "cash_closings", ["fecha"], schema="finance"
-    )
+    op.create_index("ix_finance_cash_closings_fecha", "cash_closings", ["fecha"], schema="finance")
     op.create_index(
         "ix_finance_cash_closings_status", "cash_closings", ["status"], schema="finance"
     )

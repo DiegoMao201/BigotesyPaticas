@@ -3,14 +3,21 @@
 
 Uso: docker exec <api> python3 scripts/setup_audio_tracks.py
 """
-import os, subprocess, tempfile, boto3
-from botocore.client import Config
+
+import os
+import subprocess
+import tempfile
 from pathlib import Path
 
-CDN_BUCKET   = os.environ.get("S3_BUCKET", "catalogo-ferreinox")
+import boto3
+from botocore.client import Config
+
+CDN_BUCKET = os.environ.get("S3_BUCKET", "catalogo-ferreinox")
 CDN_ENDPOINT = os.environ.get("S3_ENDPOINT_URL", "https://nyc3.digitaloceanspaces.com")
-CDN_REGION   = os.environ.get("S3_REGION", "nyc3")
-CDN_BASE     = os.environ.get("S3_PUBLIC_URL", "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com")
+CDN_REGION = os.environ.get("S3_REGION", "nyc3")
+CDN_BASE = os.environ.get(
+    "S3_PUBLIC_URL", "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com"
+)
 
 # Síntesis ffmpeg: acordes/tonos CC0 propios — 30 segundos cada uno
 TRACKS = {
@@ -45,9 +52,11 @@ TRACKS = {
 }
 
 s3 = boto3.client(
-    "s3", region_name=CDN_REGION, endpoint_url=CDN_ENDPOINT,
-    aws_access_key_id=os.environ.get("S3_ACCESS_KEY",""),
-    aws_secret_access_key=os.environ.get("S3_SECRET_KEY",""),
+    "s3",
+    region_name=CDN_REGION,
+    endpoint_url=CDN_ENDPOINT,
+    aws_access_key_id=os.environ.get("S3_ACCESS_KEY", ""),
+    aws_secret_access_key=os.environ.get("S3_SECRET_KEY", ""),
     config=Config(signature_version="s3v4"),
 )
 
@@ -62,16 +71,34 @@ with tempfile.TemporaryDirectory() as tmp:
             pass
 
         out = Path(tmp) / f"{genre}.mp3"
-        cmd = ["ffmpeg", "-y", "-f", "lavfi", "-i", expr,
-               "-c:a", "libmp3lame", "-b:a", "128k", str(out)]
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            expr,
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "128k",
+            str(out),
+        ]
         r = subprocess.run(cmd, capture_output=True)
         if r.returncode != 0:
             print(f"  ✗ ffmpeg falló para {genre}: {r.stderr[-200:]}")
             continue
 
-        s3.upload_file(str(out), CDN_BUCKET, cdn_key,
-                       ExtraArgs={"ACL": "public-read", "ContentType": "audio/mpeg",
-                                  "CacheControl": "public, max-age=31536000"})
+        s3.upload_file(
+            str(out),
+            CDN_BUCKET,
+            cdn_key,
+            ExtraArgs={
+                "ACL": "public-read",
+                "ContentType": "audio/mpeg",
+                "CacheControl": "public, max-age=31536000",
+            },
+        )
         print(f"  ✓ generado y subido: {genre} → {CDN_BASE}/{cdn_key}")
 
 print("Audio tracks CC0 listos en CDN")

@@ -1,4 +1,5 @@
 """Publicador en Meta Graph API (Instagram + Facebook)."""
+
 from __future__ import annotations
 
 import logging
@@ -9,10 +10,10 @@ import requests
 
 log = logging.getLogger(__name__)
 
-META_BASE   = "https://graph.facebook.com/v18.0"
-PAGE_ID     = os.environ.get("META_PAGE_ID", "")
-IG_ID       = os.environ.get("META_INSTAGRAM_BUSINESS_ID", "")
-ACCESS_TOKEN= os.environ.get("META_ACCESS_TOKEN", "")
+META_BASE = "https://graph.facebook.com/v18.0"
+PAGE_ID = os.environ.get("META_PAGE_ID", "")
+IG_ID = os.environ.get("META_INSTAGRAM_BUSINESS_ID", "")
+ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
 
 
 def _token(platform: str = "instagram") -> str:
@@ -63,12 +64,13 @@ def _ensure_https(url: str) -> str:
 
 def _build_caption(post: dict, platform: str = "facebook") -> str:
     import re
+
     caption = post.get("caption", "") or ""
     hashtags = post.get("hashtags", [])
-    cta_url  = _ensure_https(post.get("cta_url", "") or "")
+    cta_url = _ensure_https(post.get("cta_url", "") or "")
 
     # Normalizar todas las URLs sueltas (www.xxx) a https://
-    caption = re.sub(r'(?<![/\w])(www\.[a-zA-Z0-9.\-]+\.[a-z]{2,})', r'https://\1', caption)
+    caption = re.sub(r"(?<![/\w])(www\.[a-zA-Z0-9.\-]+\.[a-z]{2,})", r"https://\1", caption)
 
     if platform == "instagram":
         # Instagram no permite links clicables en caption — guiar al bio

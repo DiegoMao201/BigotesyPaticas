@@ -11,15 +11,16 @@ Requisitos:
   OPENROUTER_API_KEY = key de OpenRouter
   DATABASE_URL       = postgresql+asyncpg://...
 
-Costo estimado: 30 artículos × ~3000 tokens output = ~$0.03 USD con Gemini 2.5 Flash
+Costo estimado: 30 artículos x ~3000 tokens output = ~$0.03 USD con Gemini 2.5 Flash
 """
-import os
-import sys
-import json
+
 import asyncio
-import httpx
+import json
+import os
 import re
-from datetime import datetime
+import sys
+
+import httpx
 
 # ── Config ───────────────────────────────────────────────────────────────────
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
@@ -36,45 +37,165 @@ for arg in sys.argv:
 # ── Temas estratégicos ────────────────────────────────────────────────────────
 BLOG_TOPICS = [
     # Nutrición
-    {"title": "¿Cuántas veces al día debe comer un cachorro?", "category": "nutricion", "keyword": "alimentación cachorro"},
-    {"title": "Mejor concentrado para perro adulto en Colombia 2026", "category": "nutricion", "keyword": "concentrado perro adulto"},
-    {"title": "Hill's vs Royal Canin: ¿cuál es mejor para mi perro?", "category": "nutricion", "keyword": "Hills vs Royal Canin"},
-    {"title": "Snacks para perros: cuáles son seguros y cuáles no", "category": "nutricion", "keyword": "snacks perros seguros"},
-    {"title": "Alimentos peligrosos para gatos que tienes en casa", "category": "nutricion", "keyword": "alimentos peligrosos gatos"},
-    {"title": "Concentrado por bulto vs por libra: ¿qué conviene más?", "category": "nutricion", "keyword": "concentrado bulto vs libra"},
+    {
+        "title": "¿Cuántas veces al día debe comer un cachorro?",
+        "category": "nutricion",
+        "keyword": "alimentación cachorro",
+    },
+    {
+        "title": "Mejor concentrado para perro adulto en Colombia 2026",
+        "category": "nutricion",
+        "keyword": "concentrado perro adulto",
+    },
+    {
+        "title": "Hill's vs Royal Canin: ¿cuál es mejor para mi perro?",
+        "category": "nutricion",
+        "keyword": "Hills vs Royal Canin",
+    },
+    {
+        "title": "Snacks para perros: cuáles son seguros y cuáles no",
+        "category": "nutricion",
+        "keyword": "snacks perros seguros",
+    },
+    {
+        "title": "Alimentos peligrosos para gatos que tienes en casa",
+        "category": "nutricion",
+        "keyword": "alimentos peligrosos gatos",
+    },
+    {
+        "title": "Concentrado por bulto vs por libra: ¿qué conviene más?",
+        "category": "nutricion",
+        "keyword": "concentrado bulto vs libra",
+    },
     # Salud
-    {"title": "Calendario completo de vacunación canina en Colombia", "category": "salud", "keyword": "vacunas perros Colombia"},
-    {"title": "Calendario de vacunación felina explicado paso a paso", "category": "salud", "keyword": "vacunas gatos"},
-    {"title": "Síntomas de pulgas en perros y cómo eliminarlas definitivamente", "category": "salud", "keyword": "pulgas perros"},
-    {"title": "Mi perro no come: 5 razones y cuándo preocuparse", "category": "salud", "keyword": "perro no come"},
-    {"title": "Mi gato vomita: ¿es normal o debo ir al veterinario?", "category": "salud", "keyword": "gato vomita"},
-    {"title": "Cómo desparasitar a tu gato en casa paso a paso", "category": "salud", "keyword": "desparasitar gato"},
+    {
+        "title": "Calendario completo de vacunación canina en Colombia",
+        "category": "salud",
+        "keyword": "vacunas perros Colombia",
+    },
+    {
+        "title": "Calendario de vacunación felina explicado paso a paso",
+        "category": "salud",
+        "keyword": "vacunas gatos",
+    },
+    {
+        "title": "Síntomas de pulgas en perros y cómo eliminarlas definitivamente",
+        "category": "salud",
+        "keyword": "pulgas perros",
+    },
+    {
+        "title": "Mi perro no come: 5 razones y cuándo preocuparse",
+        "category": "salud",
+        "keyword": "perro no come",
+    },
+    {
+        "title": "Mi gato vomita: ¿es normal o debo ir al veterinario?",
+        "category": "salud",
+        "keyword": "gato vomita",
+    },
+    {
+        "title": "Cómo desparasitar a tu gato en casa paso a paso",
+        "category": "salud",
+        "keyword": "desparasitar gato",
+    },
     # Cuidado
-    {"title": "¿Cada cuánto bañar un perro? Guía completa por raza", "category": "cuidado", "keyword": "cada cuánto bañar perro"},
-    {"title": "Grooming en casa: técnicas profesionales para tu perro", "category": "cuidado", "keyword": "grooming casa"},
-    {"title": "Cómo cepillar a un gato persa sin pelearlo", "category": "cuidado", "keyword": "cepillar gato persa"},
-    {"title": "Cómo cuidar a tu mascota en el clima cálido de Risaralda", "category": "cuidado", "keyword": "cuidar mascota clima cálido"},
+    {
+        "title": "¿Cada cuánto bañar un perro? Guía completa por raza",
+        "category": "cuidado",
+        "keyword": "cada cuánto bañar perro",
+    },
+    {
+        "title": "Grooming en casa: técnicas profesionales para tu perro",
+        "category": "cuidado",
+        "keyword": "grooming casa",
+    },
+    {
+        "title": "Cómo cepillar a un gato persa sin pelearlo",
+        "category": "cuidado",
+        "keyword": "cepillar gato persa",
+    },
+    {
+        "title": "Cómo cuidar a tu mascota en el clima cálido de Risaralda",
+        "category": "cuidado",
+        "keyword": "cuidar mascota clima cálido",
+    },
     # Razas populares
-    {"title": "Guía completa del Yorkshire Terrier en clima cálido", "category": "razas", "keyword": "Yorkshire Pereira"},
-    {"title": "Schnauzer Miniatura: cuidados esenciales y alimentación", "category": "razas", "keyword": "Schnauzer mini cuidados"},
-    {"title": "Gato Persa: el compañero ideal para apartamento", "category": "razas", "keyword": "gato persa cuidados"},
-    {"title": "French Poodle Mini: alimentación, peluquería y cuidados", "category": "razas", "keyword": "french poodle"},
-    {"title": "Bulldog Francés en Colombia: lo que debes saber antes de adoptar", "category": "razas", "keyword": "bulldog francés Colombia"},
+    {
+        "title": "Guía completa del Yorkshire Terrier en clima cálido",
+        "category": "razas",
+        "keyword": "Yorkshire Pereira",
+    },
+    {
+        "title": "Schnauzer Miniatura: cuidados esenciales y alimentación",
+        "category": "razas",
+        "keyword": "Schnauzer mini cuidados",
+    },
+    {
+        "title": "Gato Persa: el compañero ideal para apartamento",
+        "category": "razas",
+        "keyword": "gato persa cuidados",
+    },
+    {
+        "title": "French Poodle Mini: alimentación, peluquería y cuidados",
+        "category": "razas",
+        "keyword": "french poodle",
+    },
+    {
+        "title": "Bulldog Francés en Colombia: lo que debes saber antes de adoptar",
+        "category": "razas",
+        "keyword": "bulldog francés Colombia",
+    },
     # Local Pereira/Dosquebradas
-    {"title": "Veterinarias 24 horas en Pereira y Dosquebradas: guía completa", "category": "local", "keyword": "veterinaria 24 horas Pereira"},
-    {"title": "Mejores parques para perros en Pereira (actualizado 2026)", "category": "local", "keyword": "parque perros Pereira"},
-    {"title": "Adopción de mascotas en Risaralda: dónde y cómo hacerlo", "category": "local", "keyword": "adopción mascotas Risaralda"},
-    {"title": "Restaurantes pet-friendly en Pereira para ir con tu perro", "category": "local", "keyword": "restaurantes pet friendly Pereira"},
-    {"title": "Hospedaje de mascotas en Pereira para las vacaciones", "category": "local", "keyword": "hotel mascotas Pereira"},
+    {
+        "title": "Veterinarias 24 horas en Pereira y Dosquebradas: guía completa",
+        "category": "local",
+        "keyword": "veterinaria 24 horas Pereira",
+    },
+    {
+        "title": "Mejores parques para perros en Pereira (actualizado 2026)",
+        "category": "local",
+        "keyword": "parque perros Pereira",
+    },
+    {
+        "title": "Adopción de mascotas en Risaralda: dónde y cómo hacerlo",
+        "category": "local",
+        "keyword": "adopción mascotas Risaralda",
+    },
+    {
+        "title": "Restaurantes pet-friendly en Pereira para ir con tu perro",
+        "category": "local",
+        "keyword": "restaurantes pet friendly Pereira",
+    },
+    {
+        "title": "Hospedaje de mascotas en Pereira para las vacaciones",
+        "category": "local",
+        "keyword": "hotel mascotas Pereira",
+    },
     # Comportamiento
-    {"title": "Por qué mi perro ladra todo el tiempo y cómo corregirlo", "category": "comportamiento", "keyword": "perro ladra todo el tiempo"},
-    {"title": "Mi gato araña los muebles: solución definitiva", "category": "comportamiento", "keyword": "gato araña muebles"},
-    {"title": "Adiestramiento básico para cachorros: los 5 comandos esenciales", "category": "comportamiento", "keyword": "adiestramiento cachorro"},
+    {
+        "title": "Por qué mi perro ladra todo el tiempo y cómo corregirlo",
+        "category": "comportamiento",
+        "keyword": "perro ladra todo el tiempo",
+    },
+    {
+        "title": "Mi gato araña los muebles: solución definitiva",
+        "category": "comportamiento",
+        "keyword": "gato araña muebles",
+    },
+    {
+        "title": "Adiestramiento básico para cachorros: los 5 comandos esenciales",
+        "category": "comportamiento",
+        "keyword": "adiestramiento cachorro",
+    },
     # General
-    {"title": "Cuánto cuesta tener un perro al mes en Colombia 2026", "category": "general", "keyword": "cuánto cuesta tener perro Colombia"},
+    {
+        "title": "Cuánto cuesta tener un perro al mes en Colombia 2026",
+        "category": "general",
+        "keyword": "cuánto cuesta tener perro Colombia",
+    },
 ]
 
-PROMPT_BLOG = '''Eres un veterinario experto que escribe para Bigotes y Paticas, tienda
+PROMPT_BLOG = """Eres un veterinario experto que escribe para Bigotes y Paticas, tienda
 premium de mascotas ubicada en Dosquebradas, Risaralda (Colombia), con domicilio a toda
 la zona urbana de Pereira y Dosquebradas.
 
@@ -107,7 +228,7 @@ FORMATO DE RESPUESTA: JSON puro (sin markdown ni ```json```) con esta estructura
 }}
 
 IMPORTANTE: El campo "content" debe ser HTML limpio con etiquetas h2, h3, p, ul, li, strong.
-No uses clases CSS ni atributos extra. El texto debe tener al menos 800 palabras reales.'''
+No uses clases CSS ni atributos extra. El texto debe tener al menos 800 palabras reales."""
 
 
 async def call_ai(client: httpx.AsyncClient, topic: dict) -> dict | None:
@@ -122,7 +243,10 @@ async def call_ai(client: httpx.AsyncClient, topic: dict) -> dict | None:
         try:
             res = await client.post(
                 OPENROUTER_URL,
-                headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                },
                 json={
                     "model": MODEL,
                     "messages": [{"role": "user", "content": prompt}],
@@ -135,7 +259,7 @@ async def call_ai(client: httpx.AsyncClient, topic: dict) -> dict | None:
             raw = res.json()["choices"][0]["message"]["content"].strip()
 
             # Extraer JSON si viene envuelto en ```
-            match = re.search(r'\{.*\}', raw, re.DOTALL)
+            match = re.search(r"\{.*\}", raw, re.DOTALL)
             if match:
                 raw = match.group()
 
@@ -202,12 +326,12 @@ async def main():
             # Preview
             print(f"  slug: {post_data.get('slug', 'N/A')}")
             print(f"  meta_title: {post_data.get('meta_title', 'N/A')}")
-            content_len = len(post_data.get('content', ''))
+            content_len = len(post_data.get("content", ""))
             print(f"  content: {content_len} chars HTML")
 
             saved = await save_post(client, post_data, topic)
             if saved:
-                print(f"  ✓ Guardado")
+                print("  ✓ Guardado")
                 ok += 1
             else:
                 errors += 1
@@ -220,9 +344,9 @@ async def main():
     if not DRY_RUN:
         print(f"✓ {ok} artículos generados y guardados")
         print(f"✗ {errors} errores")
-        print(f"\nRevisa el blog en: https://bigotesypaticas.com/blog")
+        print("\nRevisa el blog en: https://bigotesypaticas.com/blog")
     else:
-        print(f"[DRY RUN completado] Nada fue enviado a la API")
+        print("[DRY RUN completado] Nada fue enviado a la API")
 
 
 if __name__ == "__main__":

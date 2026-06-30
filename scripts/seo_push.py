@@ -35,8 +35,8 @@ CRITICAL_URLS = [
     f"{SITE}/veterinaria-domicilio-pereira",
     f"{SITE}/tienda-mascotas-dosquebradas",
     # Portal
-    f"https://portal.bigotesypaticas.com/",
-    f"https://portal.bigotesypaticas.com/login",
+    "https://portal.bigotesypaticas.com/",
+    "https://portal.bigotesypaticas.com/login",
     # Sitemap
     f"{SITE}/sitemap.xml",
 ]

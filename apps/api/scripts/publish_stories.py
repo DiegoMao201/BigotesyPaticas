@@ -4,6 +4,7 @@
 Cron integrado en Dockerfile CMD cada 5 minutos.
 Publica stories aprobadas en Instagram + Facebook via Graph API.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,11 +27,13 @@ import requests
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-_BOGOTA    = ZoneInfo("America/Bogota")
-META_BASE  = "https://graph.facebook.com/v18.0"
-DB_URL     = os.environ.get("DATABASE_URL_SYNC", "").replace(
-    "postgresql+asyncpg://", "postgresql://"
-).replace("postgresql+psycopg://", "postgresql://")
+_BOGOTA = ZoneInfo("America/Bogota")
+META_BASE = "https://graph.facebook.com/v18.0"
+DB_URL = (
+    os.environ.get("DATABASE_URL_SYNC", "")
+    .replace("postgresql+asyncpg://", "postgresql://")
+    .replace("postgresql+psycopg://", "postgresql://")
+)
 
 
 def _token() -> str:
@@ -46,18 +49,21 @@ def get_config(cur) -> dict:
 
 
 def get_pending_stories(cur) -> list[dict]:
-    now          = datetime.now(_BOGOTA).replace(tzinfo=None)
+    now = datetime.now(_BOGOTA).replace(tzinfo=None)
     window_start = now - timedelta(hours=1)
-    cur.execute("""
+    cur.execute(
+        """
         SELECT * FROM content.story_posts
         WHERE status = 'approved'
           AND scheduled_at <= %s
           AND scheduled_at >= %s
         ORDER BY scheduled_at ASC
         LIMIT 10
-    """, (now, window_start))
+    """,
+        (now, window_start),
+    )
     cols = [d[0] for d in cur.description]
-    return [dict(zip(cols, row)) for row in cur.fetchall()]
+    return [dict(zip(cols, row, strict=False)) for row in cur.fetchall()]
 
 
 def publish_ig_story(video_url: str, caption: str) -> str:
@@ -100,7 +106,7 @@ def publish_ig_story(video_url: str, caption: str) -> str:
 
     # Step 3: publicar
     r2 = requests.post(
-        f"{META_META_BASE}/{ig_id}/media_publish" if False else f"{META_BASE}/{ig_id}/media_publish",
+        f"{META_BASE}/{ig_id}/media_publish",
         params={"creation_id": container_id, "access_token": token},
         timeout=30,
     )
@@ -112,14 +118,14 @@ def publish_ig_story(video_url: str, caption: str) -> str:
 
 def publish_fb_story(video_url: str) -> str:
     """Publica video story en Facebook Page via resumable upload. Retorna fb_story_id."""
-    page_id    = os.environ.get("META_PAGE_ID", "")
+    page_id = os.environ.get("META_PAGE_ID", "")
     page_token = os.environ.get("META_MESSENGER_TOKEN") or _token()
     if not page_id:
         raise RuntimeError("META_PAGE_ID no configurado")
 
     # Descargar video desde CDN
     video_bytes = requests.get(video_url, timeout=120).content
-    file_size   = len(video_bytes)
+    file_size = len(video_bytes)
 
     # Fase 1: iniciar sesión de upload
     start_r = requests.post(
@@ -129,7 +135,7 @@ def publish_fb_story(video_url: str) -> str:
     )
     start_r.raise_for_status()
     start_data = start_r.json()
-    video_id   = start_data["video_id"]
+    video_id = start_data["video_id"]
     upload_url = start_data["upload_url"]
     log.info("FB story upload session: %s", video_id)
 
@@ -165,7 +171,7 @@ async def publish_story(story: dict, dry_run: bool, cur, conn) -> bool:
 
     cur.execute(
         "UPDATE content.story_posts SET status='publishing', updated_at=NOW() WHERE id=%s",
-        (story_id,)
+        (story_id,),
     )
     conn.commit()
 
@@ -176,7 +182,7 @@ async def publish_story(story: dict, dry_run: bool, cur, conn) -> bool:
         log.info("[dry-run] Story %s — NO se publica en Meta", story_id[:8])
     else:
         video_url = story.get("video_url", "")
-        caption   = story.get("caption", "") or ""
+        caption = story.get("caption", "") or ""
         if not video_url:
             error = "Sin video_url"
         else:
@@ -195,21 +201,27 @@ async def publish_story(story: dict, dry_run: bool, cur, conn) -> bool:
 
     now = datetime.now(_BOGOTA).replace(tzinfo=None)
     if error and not ig_id and not fb_id:
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE content.story_posts
             SET status='failed', error_message=%s, updated_at=%s
             WHERE id=%s
-        """, (error, now, story_id))
+        """,
+            (error, now, story_id),
+        )
         conn.commit()
         return False
 
-    cur.execute("""
+    cur.execute(
+        """
         UPDATE content.story_posts
         SET status='published', published_at=%s, expires_at=%s,
             instagram_story_id=%s, facebook_story_id=%s,
             dry_run=%s, error_message=NULL, updated_at=%s
         WHERE id=%s
-    """, (now, now + timedelta(hours=24), ig_id, fb_id, dry_run, now, story_id))
+    """,
+        (now, now + timedelta(hours=24), ig_id, fb_id, dry_run, now, story_id),
+    )
     conn.commit()
     log.info("Story %s publicada IG=%s FB=%s dry=%s", story_id[:8], ig_id, fb_id, dry_run)
     return True
@@ -217,28 +229,34 @@ async def publish_story(story: dict, dry_run: bool, cur, conn) -> bool:
 
 async def run():
     if not DB_URL:
-        log.error("DATABASE_URL_SYNC no configurada"); sys.exit(1)
+        log.error("DATABASE_URL_SYNC no configurada")
+        sys.exit(1)
 
     conn = psycopg2.connect(DB_URL, connect_timeout=10)
-    cur  = conn.cursor()
+    cur = conn.cursor()
 
     cfg = get_config(cur)
     if cfg.get("stories_active") != "true":
-        log.info("Stories engine inactivo — exit"); conn.close(); return
+        log.info("Stories engine inactivo — exit")
+        conn.close()
+        return
 
     dry_run = cfg.get("stories_dry_run_mode") == "true"
     stories = get_pending_stories(cur)
 
     if not stories:
         log.info("Sin stories aprobadas pendientes")
-        conn.close(); return
+        conn.close()
+        return
 
     log.info("Publicando %d stories (dry_run=%s)...", len(stories), dry_run)
     ok = failed = 0
     for story in stories:
         success = await publish_story(story, dry_run, cur, conn)
-        if success: ok += 1
-        else: failed += 1
+        if success:
+            ok += 1
+        else:
+            failed += 1
 
     conn.close()
     log.info("Stories — publicadas: %d, fallidas: %d", ok, failed)

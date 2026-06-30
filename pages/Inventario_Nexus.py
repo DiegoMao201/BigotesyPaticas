@@ -19,10 +19,11 @@ st.set_page_config(
     page_title="Bigotes & Paticas | WMS Avanzado",
     page_icon="🐾",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-st.markdown("""
+st.markdown(
+    """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Quicksand', sans-serif; }
@@ -37,12 +38,15 @@ st.markdown("""
         padding: 15px; border-radius: 8px; box-shadow: 2px 2px 10px rgba(0,0,0,0.05);
     }
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ==========================================
 # 1. FUNCIONES UTILITARIAS Y DE LIMPIEZA
 # ==========================================
+
 
 def _norm_col(s: str) -> str:
     """Normaliza nombre de columna para comparación flexible."""
@@ -51,6 +55,7 @@ def _norm_col(s: str) -> str:
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
     s = s.replace(" ", "").replace("_", "")
     return s
+
 
 def _find_col(df, candidates):
     """Busca columna en df que coincida con alguna de las opciones (soporta tildes, espacios, etc)."""
@@ -69,6 +74,7 @@ def _find_col(df, candidates):
                 return orig
     return None
 
+
 def _ensure_cols(df: pd.DataFrame, defaults: dict) -> pd.DataFrame:
     """Asegura que el DataFrame tenga todas las columnas de defaults."""
     df = df.copy() if df is not None else pd.DataFrame()
@@ -77,11 +83,14 @@ def _ensure_cols(df: pd.DataFrame, defaults: dict) -> pd.DataFrame:
             df[c] = v
     return df
 
+
 def normalizar_id_producto(id_prod):
-    if pd.isna(id_prod) or str(id_prod).strip() == "": return "SIN_ID"
+    if pd.isna(id_prod) or str(id_prod).strip() == "":
+        return "SIN_ID"
     val = str(id_prod).strip().upper()
     val = val.replace(".", "").replace(",", "").replace("\t", "").replace("\n", "").lstrip("0")
     return val if val else "SIN_ID"
+
 
 def money_int(x):
     if isinstance(x, (np.integer, int)):
@@ -133,6 +142,7 @@ def money_int(x):
     except Exception:
         out = int(re.sub(r"[^0-9]", "", s) or 0)
     return -out if neg else out
+
 
 def clean_currency(x):
     return money_int(x)
@@ -194,7 +204,11 @@ def aplicar_correccion_costos(ws_inv, ws_map, df_correcciones: pd.DataFrame):
     for sheet_row, raw in enumerate(inv_values[1:], start=2):
         uid = str(raw[idx_uid]).strip() if idx_uid is not None and idx_uid < len(raw) else ""
         sku = str(raw[idx_id]).strip() if idx_id is not None and idx_id < len(raw) else ""
-        sku_norm = str(raw[idx_norm]).strip() if idx_norm is not None and idx_norm < len(raw) else normalizar_id_producto(sku)
+        sku_norm = (
+            str(raw[idx_norm]).strip()
+            if idx_norm is not None and idx_norm < len(raw)
+            else normalizar_id_producto(sku)
+        )
         if uid:
             inv_row_map[("uid", uid)] = sheet_row
         if sku_norm:
@@ -204,7 +218,9 @@ def aplicar_correccion_costos(ws_inv, ws_map, df_correcciones: pd.DataFrame):
     map_headers = map_values[0] if map_values else []
     map_idx_uid = map_headers.index("Producto_UID") if "Producto_UID" in map_headers else None
     map_idx_sku = map_headers.index("SKU_Interno") if "SKU_Interno" in map_headers else None
-    map_idx_costo = map_headers.index("Costo_Proveedor") if "Costo_Proveedor" in map_headers else None
+    map_idx_costo = (
+        map_headers.index("Costo_Proveedor") if "Costo_Proveedor" in map_headers else None
+    )
     map_updates = []
 
     inv_updates = []
@@ -223,16 +239,41 @@ def aplicar_correccion_costos(ws_inv, ws_map, df_correcciones: pd.DataFrame):
         nuevo_costo = money_int(row.get("Costo_Nuevo", 0))
         nuevo_precio = money_int(row.get("Precio_Resultante", 0))
         if idx_costo is not None:
-            inv_updates.append({"range": gspread.utils.rowcol_to_a1(fila_inv, idx_costo + 1), "values": [[nuevo_costo]]})
+            inv_updates.append(
+                {
+                    "range": gspread.utils.rowcol_to_a1(fila_inv, idx_costo + 1),
+                    "values": [[nuevo_costo]],
+                }
+            )
         if idx_precio is not None:
-            inv_updates.append({"range": gspread.utils.rowcol_to_a1(fila_inv, idx_precio + 1), "values": [[nuevo_precio]]})
+            inv_updates.append(
+                {
+                    "range": gspread.utils.rowcol_to_a1(fila_inv, idx_precio + 1),
+                    "values": [[nuevo_precio]],
+                }
+            )
 
         if map_values and map_idx_costo is not None:
             for map_row_num, raw in enumerate(map_values[1:], start=2):
-                map_uid = str(raw[map_idx_uid]).strip() if map_idx_uid is not None and map_idx_uid < len(raw) else ""
-                map_sku = str(raw[map_idx_sku]).strip() if map_idx_sku is not None and map_idx_sku < len(raw) else ""
-                if (producto_uid and map_uid == producto_uid) or (sku_norm and normalizar_id_producto(map_sku) == sku_norm):
-                    map_updates.append({"range": gspread.utils.rowcol_to_a1(map_row_num, map_idx_costo + 1), "values": [[nuevo_costo]]})
+                map_uid = (
+                    str(raw[map_idx_uid]).strip()
+                    if map_idx_uid is not None and map_idx_uid < len(raw)
+                    else ""
+                )
+                map_sku = (
+                    str(raw[map_idx_sku]).strip()
+                    if map_idx_sku is not None and map_idx_sku < len(raw)
+                    else ""
+                )
+                if (producto_uid and map_uid == producto_uid) or (
+                    sku_norm and normalizar_id_producto(map_sku) == sku_norm
+                ):
+                    map_updates.append(
+                        {
+                            "range": gspread.utils.rowcol_to_a1(map_row_num, map_idx_costo + 1),
+                            "values": [[nuevo_costo]],
+                        }
+                    )
 
         applied += 1
         logs.append(
@@ -251,6 +292,7 @@ def aplicar_correccion_costos(ws_inv, ws_map, df_correcciones: pd.DataFrame):
 # 2. GESTIÓN DE API (Anti-Caídas)
 # ==========================================
 
+
 def safe_google_op(func, *args, **kwargs):
     max_retries = 5
     wait = 2
@@ -261,10 +303,11 @@ def safe_google_op(func, *args, **kwargs):
             if "429" in str(e).lower() or "quota" in str(e).lower():
                 if attempt < max_retries - 1:
                     time.sleep(wait)
-                    wait *= 2 
+                    wait *= 2
                     continue
             st.error(f"Error de conexión con Google: {e}")
             raise e
+
 
 @st.cache_resource
 def conectar_db():
@@ -277,6 +320,7 @@ def conectar_db():
     except Exception as e:
         st.error(f"🔴 Error de Conexión Inicial: {e}")
         return None
+
 
 def get_worksheet_safe(sh, name, headers):
     try:
@@ -291,39 +335,92 @@ def get_worksheet_safe(sh, name, headers):
 # 3. CARGA DE DATOS (NUEVOS ESQUEMAS)
 # ==========================================
 
+
 def cargar_datos_snapshot():
     sh = conectar_db()
-    if not sh: return None
+    if not sh:
+        return None
 
     schemas = {
         "Inventario": [
-            "Producto_UID", "ID_Producto", "ID_Producto_Norm", "SKU_Proveedor", "Nombre", "Stock",
-            "Precio", "Costo", "Categoria", "Iva"
+            "Producto_UID",
+            "ID_Producto",
+            "ID_Producto_Norm",
+            "SKU_Proveedor",
+            "Nombre",
+            "Stock",
+            "Precio",
+            "Costo",
+            "Categoria",
+            "Iva",
         ],
         "Ventas": [
-            'ID_Venta', 'Fecha', 'Cedula_Cliente', 'Nombre_Cliente', 'Tipo_Entrega', 'Direccion_Envio',
-            'Estado_Envio', 'Metodo_Pago', 'Banco_Destino', 'Total', 'Items', 'Items_Detalle',
-            'Costo_Total', 'Mascota', 'Direccion', 'Estado_Pago', 'Abono_Recibido',
-            'Saldo_Pendiente', 'Fecha_Promesa_Pago', 'Nota_Pago', 'Items_JSON'
+            "ID_Venta",
+            "Fecha",
+            "Cedula_Cliente",
+            "Nombre_Cliente",
+            "Tipo_Entrega",
+            "Direccion_Envio",
+            "Estado_Envio",
+            "Metodo_Pago",
+            "Banco_Destino",
+            "Total",
+            "Items",
+            "Items_Detalle",
+            "Costo_Total",
+            "Mascota",
+            "Direccion",
+            "Estado_Pago",
+            "Abono_Recibido",
+            "Saldo_Pendiente",
+            "Fecha_Promesa_Pago",
+            "Nota_Pago",
+            "Items_JSON",
         ],
-        "Gastos": ['ID_Gasto', 'Fecha', 'Tipo_Gasto', 'Categoria', 'Descripcion', 'Monto', 'Metodo_Pago', 'Banco_Origen'],
+        "Gastos": [
+            "ID_Gasto",
+            "Fecha",
+            "Tipo_Gasto",
+            "Categoria",
+            "Descripcion",
+            "Monto",
+            "Metodo_Pago",
+            "Banco_Origen",
+        ],
         "Maestro_Proveedores": [
-            'ID_Proveedor', 'Nombre_Proveedor', 'SKU_Proveedor', 'SKU_Interno', 'Factor_Pack',
-            'Ultima_Actualizacion', 'Email', 'Costo_Proveedor', 'Producto_UID', 'Ultimo_IVA'
+            "ID_Proveedor",
+            "Nombre_Proveedor",
+            "SKU_Proveedor",
+            "SKU_Interno",
+            "Factor_Pack",
+            "Ultima_Actualizacion",
+            "Email",
+            "Costo_Proveedor",
+            "Producto_UID",
+            "Ultimo_IVA",
         ],
-        "Historial_Ordenes": ['ID_Orden', 'Proveedor', 'Fecha_Orden', 'Items_JSON', 'Total_Dinero', 'Estado']
+        "Historial_Ordenes": [
+            "ID_Orden",
+            "Proveedor",
+            "Fecha_Orden",
+            "Items_JSON",
+            "Total_Dinero",
+            "Estado",
+        ],
     }
 
     data_store = {}
-    with st.spinner('🔄 Sincronizando Core de Datos...'):
+    with st.spinner("🔄 Sincronizando Core de Datos..."):
         for sheet_name, cols in schemas.items():
             ws = get_worksheet_safe(sh, sheet_name, cols)
             records = safe_google_op(ws.get_all_records)
             df = pd.DataFrame(records)
-            if df.empty: df = pd.DataFrame(columns=cols)
+            if df.empty:
+                df = pd.DataFrame(columns=cols)
             else:
                 for c in cols:
-                    if c not in df.columns: df[c] = ""
+                    if c not in df.columns:
+                        df[c] = ""
             data_store[f"df_{sheet_name}"] = df
             data_store[f"ws_{sheet_name}"] = ws
 
@@ -331,11 +428,11 @@ def cargar_datos_snapshot():
     df_inv = data_store["df_Inventario"]
     df_prov = data_store.get("df_Maestro_Proveedores", pd.DataFrame())
 
-    df_inv['Stock'] = pd.to_numeric(df_inv['Stock'], errors='coerce').fillna(0)
-    df_inv['Costo'] = df_inv['Costo'].apply(clean_currency)
-    df_inv['Precio'] = df_inv['Precio'].apply(clean_currency)
-    df_inv['ID_Producto_Norm'] = df_inv['ID_Producto'].apply(normalizar_id_producto)
-    df_inv['Categoria'] = df_inv['Categoria'].replace('', 'Sin Categoría').fillna('Sin Categoría')
+    df_inv["Stock"] = pd.to_numeric(df_inv["Stock"], errors="coerce").fillna(0)
+    df_inv["Costo"] = df_inv["Costo"].apply(clean_currency)
+    df_inv["Precio"] = df_inv["Precio"].apply(clean_currency)
+    df_inv["ID_Producto_Norm"] = df_inv["ID_Producto"].apply(normalizar_id_producto)
+    df_inv["Categoria"] = df_inv["Categoria"].replace("", "Sin Categoría").fillna("Sin Categoría")
 
     # Limpieza Maestro_Proveedores
     if df_prov is not None and not df_prov.empty:
@@ -348,7 +445,9 @@ def cargar_datos_snapshot():
         df_prov["Factor_Pack"] = pd.to_numeric(df_prov["Factor_Pack"], errors="coerce").fillna(1.0)
         df_prov["Factor_Pack"] = np.where(df_prov["Factor_Pack"] <= 0, 1.0, df_prov["Factor_Pack"])
         df_prov["Costo_Proveedor_Unitario"] = df_prov["Costo_Proveedor"]
-        df_prov["Costo_Proveedor_Unitario"] = df_prov["Costo_Proveedor_Unitario"].apply(clean_currency)
+        df_prov["Costo_Proveedor_Unitario"] = df_prov["Costo_Proveedor_Unitario"].apply(
+            clean_currency
+        )
 
         data_store["df_Maestro_Proveedores"] = df_prov
 
@@ -361,6 +460,7 @@ def cargar_datos_snapshot():
 # ==========================================
 # 4. MOTOR ANALÍTICO AVANZADO (ABC & COMPRAS)
 # ==========================================
+
 
 def _calc_clase_abc(master: pd.DataFrame) -> pd.Series:
     df = master.copy()
@@ -379,40 +479,54 @@ def _calc_clase_abc(master: pd.DataFrame) -> pd.Series:
     out = pd.Series(index=order, data=clases).reindex(df.index).fillna("C")
     return out
 
+
 def calcular_master_df() -> pd.DataFrame:
     data = st.session_state.get("data_store", {})
-    df_inv  = data.get("df_Inventario", pd.DataFrame()).copy()
+    df_inv = data.get("df_Inventario", pd.DataFrame()).copy()
     df_prov = data.get("df_Maestro_Proveedores", pd.DataFrame()).copy()
-    df_ven  = data.get("df_Ventas", pd.DataFrame()).copy()
+    df_ven = data.get("df_Ventas", pd.DataFrame()).copy()
 
     # 1. INVENTARIO ROBUSTO
     col_cat = _find_col(df_inv, ["Categoria", "Categoría"])
     if col_cat and col_cat != "Categoria":
         df_inv = df_inv.rename(columns={col_cat: "Categoria"})
 
-    df_inv = _ensure_cols(df_inv, {
-        "ID_Producto": "", "Nombre": "", "Categoria": "Sin Categoría",
-        "Stock": 0.0, "Costo": 0.0, "Precio": 0.0,
-        "Producto_UID": "", "ID_Producto_Norm": "",
-    })
+    df_inv = _ensure_cols(
+        df_inv,
+        {
+            "ID_Producto": "",
+            "Nombre": "",
+            "Categoria": "Sin Categoría",
+            "Stock": 0.0,
+            "Costo": 0.0,
+            "Precio": 0.0,
+            "Producto_UID": "",
+            "ID_Producto_Norm": "",
+        },
+    )
 
     mask_empty = df_inv["ID_Producto_Norm"].astype(str).str.strip().eq("")
     if mask_empty.any():
-        df_inv.loc[mask_empty, "ID_Producto_Norm"] = (
-            df_inv.loc[mask_empty, "ID_Producto"].apply(normalizar_id_producto)
+        df_inv.loc[mask_empty, "ID_Producto_Norm"] = df_inv.loc[mask_empty, "ID_Producto"].apply(
+            normalizar_id_producto
         )
 
     for c in ["Stock", "Costo", "Precio"]:
         df_inv[c] = df_inv[c].apply(clean_currency)
 
     # 2. PROVEEDORES ROBUSTO
-    df_prov = _ensure_cols(df_prov, {
-        "SKU_Interno": "", "Factor_Pack": 1.0,
-        "Costo_Proveedor": 0.0, "Nombre_Proveedor": "Sin Asignar",
-    })
+    df_prov = _ensure_cols(
+        df_prov,
+        {
+            "SKU_Interno": "",
+            "Factor_Pack": 1.0,
+            "Costo_Proveedor": 0.0,
+            "Nombre_Proveedor": "Sin Asignar",
+        },
+    )
     df_prov["Costo_Proveedor"] = df_prov["Costo_Proveedor"].apply(clean_currency)
-    df_prov["Factor_Pack"]     = pd.to_numeric(df_prov["Factor_Pack"], errors="coerce").fillna(1.0)
-    df_prov["Factor_Pack"]     = np.where(df_prov["Factor_Pack"] <= 0, 1.0, df_prov["Factor_Pack"])
+    df_prov["Factor_Pack"] = pd.to_numeric(df_prov["Factor_Pack"], errors="coerce").fillna(1.0)
+    df_prov["Factor_Pack"] = np.where(df_prov["Factor_Pack"] <= 0, 1.0, df_prov["Factor_Pack"])
 
     if "SKU_Interno_Norm" not in df_prov.columns:
         df_prov["SKU_Interno_Norm"] = df_prov["SKU_Interno"].apply(normalizar_id_producto)
@@ -421,47 +535,68 @@ def calcular_master_df() -> pd.DataFrame:
     df_prov["Costo_Proveedor_Unitario"] = df_prov["Costo_Proveedor"]
     if "Ultima_Actualizacion" in df_prov.columns:
         df_prov["Ultima_Actualizacion"] = df_prov["Ultima_Actualizacion"].astype(str).str.strip()
-        df_prov["Ultima_Actualizacion_dt"] = pd.to_datetime(df_prov["Ultima_Actualizacion"], errors="coerce")
+        df_prov["Ultima_Actualizacion_dt"] = pd.to_datetime(
+            df_prov["Ultima_Actualizacion"], errors="coerce"
+        )
     else:
         df_prov["Ultima_Actualizacion_dt"] = pd.NaT
-    df_prov["Sort_Costo_Proveedor"] = pd.to_numeric(df_prov["Costo_Proveedor"], errors="coerce").fillna(0.0)
+    df_prov["Sort_Costo_Proveedor"] = pd.to_numeric(
+        df_prov["Costo_Proveedor"], errors="coerce"
+    ).fillna(0.0)
 
     # 3. MERGE
     if not df_prov.empty and "SKU_Interno_Norm" in df_prov.columns:
         sort_cols = ["Ultima_Actualizacion_dt", "Sort_Costo_Proveedor"]
         ascending = [False, False]
-        df_prov_clean = (
-            df_prov.sort_values(sort_cols, ascending=ascending, na_position="last")
-            .drop_duplicates("SKU_Interno_Norm")
-        )
+        df_prov_clean = df_prov.sort_values(
+            sort_cols, ascending=ascending, na_position="last"
+        ).drop_duplicates("SKU_Interno_Norm")
         master = pd.merge(
             df_inv,
-            df_prov_clean[["SKU_Interno_Norm", "Nombre_Proveedor", "Costo_Proveedor", "Costo_Proveedor_Unitario", "Factor_Pack"]],
-            left_on="ID_Producto_Norm", right_on="SKU_Interno_Norm",
+            df_prov_clean[
+                [
+                    "SKU_Interno_Norm",
+                    "Nombre_Proveedor",
+                    "Costo_Proveedor",
+                    "Costo_Proveedor_Unitario",
+                    "Factor_Pack",
+                ]
+            ],
+            left_on="ID_Producto_Norm",
+            right_on="SKU_Interno_Norm",
             how="left",
         )
     else:
         master = df_inv.copy()
         master["Nombre_Proveedor"] = "Sin Asignar"
-        master["Costo_Proveedor"]  = 0.0
+        master["Costo_Proveedor"] = 0.0
         master["Costo_Proveedor_Unitario"] = 0.0
-        master["Factor_Pack"]      = 1.0
+        master["Factor_Pack"] = 1.0
 
     master["Nombre_Proveedor"] = master["Nombre_Proveedor"].fillna("Sin Asignar")
-    master["Costo_Proveedor"]  = pd.to_numeric(master["Costo_Proveedor"], errors="coerce").fillna(0.0)
-    master["Costo_Proveedor_Unitario"] = pd.to_numeric(master["Costo_Proveedor_Unitario"], errors="coerce").fillna(0.0)
-    master["Factor_Pack"]      = pd.to_numeric(master["Factor_Pack"], errors="coerce").fillna(1.0)
-    master["Factor_Pack"]      = np.where(master["Factor_Pack"] <= 0, 1.0, master["Factor_Pack"])
+    master["Costo_Proveedor"] = pd.to_numeric(master["Costo_Proveedor"], errors="coerce").fillna(
+        0.0
+    )
+    master["Costo_Proveedor_Unitario"] = pd.to_numeric(
+        master["Costo_Proveedor_Unitario"], errors="coerce"
+    ).fillna(0.0)
+    master["Factor_Pack"] = pd.to_numeric(master["Factor_Pack"], errors="coerce").fillna(1.0)
+    master["Factor_Pack"] = np.where(master["Factor_Pack"] <= 0, 1.0, master["Factor_Pack"])
 
     # 4. NUMÉRICOS BASE
-    for c in ["Stock", "Costo", "Precio", "Costo_Proveedor", "Costo_Proveedor_Unitario", "Factor_Pack"]:
+    for c in [
+        "Stock",
+        "Costo",
+        "Precio",
+        "Costo_Proveedor",
+        "Costo_Proveedor_Unitario",
+        "Factor_Pack",
+    ]:
         master[c] = pd.to_numeric(master[c], errors="coerce").fillna(0.0)
 
     master["Costo_Inventario_Unitario"] = np.where(master["Costo"] > 0, master["Costo"], 0.0)
     master["Costo_Referencia_Proveedor_Unitario"] = np.where(
-        master["Costo_Proveedor_Unitario"] > 0,
-        master["Costo_Proveedor_Unitario"],
-        0.0
+        master["Costo_Proveedor_Unitario"] > 0, master["Costo_Proveedor_Unitario"], 0.0
     )
     master["Costo_Efectivo"] = np.where(
         master["Costo_Inventario_Unitario"] > 0,
@@ -474,26 +609,33 @@ def calcular_master_df() -> pd.DataFrame:
     master["Margen_%"] = np.where(
         master["Precio_Valido"] & master["Costo_Valido"],
         (master["Precio"] - master["Costo_Efectivo"]) / master["Precio"],
-        0.0
+        0.0,
     )
     master["Margen_$"] = np.where(
         master["Precio_Valido"] & master["Costo_Valido"],
         master["Precio"] - master["Costo_Efectivo"],
-        0.0
+        0.0,
     )
     master["Margen_Anomalo"] = (
-        (~master["Precio_Valido"]) |
-        (~master["Costo_Valido"]) |
-        (master["Margen_%"] < -0.25) |
-        (master["Margen_%"] > 0.95)
+        (~master["Precio_Valido"])
+        | (~master["Costo_Valido"])
+        | (master["Margen_%"] < -0.25)
+        | (master["Margen_%"] > 0.95)
     )
     master["Alerta_Datos"] = np.select(
         [
             ~master["Precio_Valido"],
             ~master["Costo_Valido"],
-            (master["Costo_Referencia_Proveedor_Unitario"] > 0) &
-            (master["Costo_Inventario_Unitario"] > 0) &
-            (np.abs(master["Costo_Inventario_Unitario"] - master["Costo_Referencia_Proveedor_Unitario"]) / np.maximum(master["Costo_Inventario_Unitario"], 1.0) > 1.5),
+            (master["Costo_Referencia_Proveedor_Unitario"] > 0)
+            & (master["Costo_Inventario_Unitario"] > 0)
+            & (
+                np.abs(
+                    master["Costo_Inventario_Unitario"]
+                    - master["Costo_Referencia_Proveedor_Unitario"]
+                )
+                / np.maximum(master["Costo_Inventario_Unitario"], 1.0)
+                > 1.5
+            ),
             master["Margen_%"] < -0.25,
             master["Margen_%"] > 0.95,
         ],
@@ -504,11 +646,12 @@ def calcular_master_df() -> pd.DataFrame:
             "Margen negativo anómalo",
             "Margen demasiado alto",
         ],
-        default="OK"
+        default="OK",
     )
 
     # 5. VENTAS / ROTACIÓN
     stats = analizar_ventas(df_ven, master)
+
     def buscar_ventas(row, key):
         posibles = set()
         if "Producto_UID" in row and str(row["Producto_UID"]).strip():
@@ -521,6 +664,7 @@ def calcular_master_df() -> pd.DataFrame:
             if k in stats and key in stats[k]:
                 return stats[k][key]
         return 0.0
+
     master["v90"] = master.apply(lambda row: buscar_ventas(row, "v90"), axis=1)
     master["v30"] = master.apply(lambda row: buscar_ventas(row, "v30"), axis=1)
     master["v90"] = pd.to_numeric(master["v90"], errors="coerce").fillna(0.0)
@@ -543,7 +687,9 @@ def calcular_master_df() -> pd.DataFrame:
         pd.Series(vel_blend * conf, index=master.index).fillna(0.0),
         0.0,
     )
-    master["Velocidad_Diaria"] = pd.to_numeric(master["Velocidad_Diaria"], errors="coerce").fillna(0.0)
+    master["Velocidad_Diaria"] = pd.to_numeric(master["Velocidad_Diaria"], errors="coerce").fillna(
+        0.0
+    )
 
     # 8. SUGERENCIA DE COMPRA
     DIAS_OBJETIVO = 8
@@ -555,18 +701,16 @@ def calcular_master_df() -> pd.DataFrame:
     punto_reorden = (master["Velocidad_Diaria"] * LEAD_TIME_DIAS) + stock_seg
     stock_obj = (master["Velocidad_Diaria"] * DIAS_OBJETIVO) + stock_seg
 
-    master["Factor_Pack_Efectivo"] = np.where(master["Modo_Demanda"] == "ARRANQUE", 1.0, master["Factor_Pack"])
-
+    master["Factor_Pack_Efectivo"] = np.where(
+        master["Modo_Demanda"] == "ARRANQUE", 1.0, master["Factor_Pack"]
+    )
 
     req_rot = (
-        (master["Modo_Demanda"] == "ROTACION") &
-        (master["Velocidad_Diaria"] > 0) &
-        (master["Stock"] <= punto_reorden)
+        (master["Modo_Demanda"] == "ROTACION")
+        & (master["Velocidad_Diaria"] > 0)
+        & (master["Stock"] <= punto_reorden)
     )
-    req_arr = (
-        (master["Modo_Demanda"] == "ARRANQUE") &
-        (master["Stock"] < master["Min_Unidades"])
-    )
+    req_arr = (master["Modo_Demanda"] == "ARRANQUE") & (master["Stock"] < master["Min_Unidades"])
     req_sin_stock = (master["v90"] > 0) & (master["Stock"] <= 0)
 
     master["Requiere_Compra"] = req_rot | req_arr | req_sin_stock
@@ -574,10 +718,7 @@ def calcular_master_df() -> pd.DataFrame:
     faltante_rot = np.maximum(0.0, np.maximum(stock_obj, master["Min_Unidades"]) - master["Stock"])
     faltante_arr = np.maximum(0.0, master["Min_Unidades"] - master["Stock"])
 
-    master["Faltante"] = np.where(
-        req_rot, faltante_rot,
-        np.where(req_arr, faltante_arr, 0.0)
-    )
+    master["Faltante"] = np.where(req_rot, faltante_rot, np.where(req_arr, faltante_arr, 0.0))
 
     master["Sugerencia_Cajas"] = np.ceil(master["Faltante"] / master["Factor_Pack_Efectivo"])
     master["Unidades_Pedir"] = master["Sugerencia_Cajas"] * master["Factor_Pack_Efectivo"]
@@ -593,9 +734,9 @@ def calcular_master_df() -> pd.DataFrame:
             np.where(
                 master["Requiere_Compra"],
                 "Rotación detectada: sugerencia para 8 días",
-                "Stock suficiente para 8 días"
-            )
-        )
+                "Stock suficiente para 8 días",
+            ),
+        ),
     )
 
     # 10. ABC
@@ -603,25 +744,38 @@ def calcular_master_df() -> pd.DataFrame:
     master["Clase_ABC"] = _calc_clase_abc(master)
     master["Clase_ABC"] = master["Clase_ABC"].fillna("C").astype(str)
 
-
     # 11. GARANTIZAR COLUMNAS CRÍTICAS ANTES DE USARLAS
     cols_garantizadas = {
-        "ID_Producto": "", "Nombre": "", "Categoria": "Sin Categoría",
-        "Clase_ABC": "C", "Stock": 0.0, "Estado": "✅ OK",
-        "Velocidad_Diaria": 0.0, "Margen_%": 0.0,
-        "Margen_$": 0.0, "Costo": 0.0, "Precio": 0.0,
-        "Nombre_Proveedor": "Sin Asignar", "Sugerencia_Cajas": 0.0,
-        "Unidades_Pedir": 0.0, "Inversion_Est": 0.0,
-        "Factor_Pack": 1.0, "Costo_Efectivo": 0.0,
-        "Dias_Cobertura": 999.0, "Modo_Demanda": "SIN_VENTAS",
+        "ID_Producto": "",
+        "Nombre": "",
+        "Categoria": "Sin Categoría",
+        "Clase_ABC": "C",
+        "Stock": 0.0,
+        "Estado": "✅ OK",
+        "Velocidad_Diaria": 0.0,
+        "Margen_%": 0.0,
+        "Margen_$": 0.0,
+        "Costo": 0.0,
+        "Precio": 0.0,
+        "Nombre_Proveedor": "Sin Asignar",
+        "Sugerencia_Cajas": 0.0,
+        "Unidades_Pedir": 0.0,
+        "Inversion_Est": 0.0,
+        "Factor_Pack": 1.0,
+        "Costo_Efectivo": 0.0,
+        "Dias_Cobertura": 999.0,
+        "Modo_Demanda": "SIN_VENTAS",
         "ID_Producto_Norm": "",
-        "Requiere_Compra": False
+        "Requiere_Compra": False,
     }
     for col, default in cols_garantizadas.items():
         if col not in master.columns:
             master[col] = default
-        master[col] = master[col].fillna(default) if isinstance(default, str) \
-                      else pd.to_numeric(master[col], errors="coerce").fillna(default)
+        master[col] = (
+            master[col].fillna(default)
+            if isinstance(default, str)
+            else pd.to_numeric(master[col], errors="coerce").fillna(default)
+        )
 
     # 12. ESTADO (ahora seguro)
     conditions = [
@@ -639,6 +793,7 @@ def calcular_master_df() -> pd.DataFrame:
 # ==========================================
 # 5. FUNCIONES DE SOPORTE UI
 # ==========================================
+
 
 def descargar_excel_conteo(df: pd.DataFrame) -> bytes:
     output = io.BytesIO()
@@ -660,11 +815,16 @@ def crear_orden_compra(proveedor: str, items_df: pd.DataFrame) -> str:
         orden_id = f"ORD-{ts}"
         items_json = items_df[["Nombre", "Sugerencia_Cajas"]].to_json(orient="records")
         total = float(items_df["Inversion_Est"].sum())
-        ws_hist.append_row([
-            orden_id, proveedor,
-            datetime.now().strftime("%Y-%m-%d %H:%M"),
-            items_json, total, "Pendiente"
-        ])
+        ws_hist.append_row(
+            [
+                orden_id,
+                proveedor,
+                datetime.now().strftime("%Y-%m-%d %H:%M"),
+                items_json,
+                total,
+                "Pendiente",
+            ]
+        )
         return orden_id
     except Exception as e:
         return f"ORD-ERROR-{e}"
@@ -710,7 +870,6 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
             for k in keys:
                 prod_map[k] = keys
 
-
         def _sumar_items(df_sub):
             totales = {}
             # Detectar si existe Items_Detalle y usarlo si tiene datos
@@ -720,7 +879,11 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
                 try:
                     items = []
                     # Usar Items_Detalle si existe y tiene datos
-                    if col_items_detalle and isinstance(row[col_items_detalle], str) and row[col_items_detalle].strip().startswith("["):
+                    if (
+                        col_items_detalle
+                        and isinstance(row[col_items_detalle], str)
+                        and row[col_items_detalle].strip().startswith("[")
+                    ):
                         items = json.loads(row[col_items_detalle])
                     # Si no, intentar parsear Items
                     elif col_items and isinstance(row[col_items], str):
@@ -788,6 +951,7 @@ def analizar_ventas(df_ven: pd.DataFrame, df_inv: pd.DataFrame) -> dict:
 # 6. INTERFAZ PRINCIPAL (ÚNICA Y DEFINITIVA)
 # ==========================================
 
+
 def main():
     # ── SIDEBAR ───────────────────────────────────────────────────────────
     with st.sidebar:
@@ -817,8 +981,12 @@ def main():
             if col_cat_sb:
                 cats = sorted(
                     df_inv_sb[col_cat_sb]
-                    .fillna("Sin Categoría").astype(str).str.strip()
-                    .replace("", "Sin Categoría").unique().tolist()
+                    .fillna("Sin Categoría")
+                    .astype(str)
+                    .str.strip()
+                    .replace("", "Sin Categoría")
+                    .unique()
+                    .tolist()
                 )
                 cat_filter = st.multiselect("Filtrar por Categoría", cats, default=[])
             abc_filter = st.multiselect("Clasificación ABC", ["A", "B", "C"], default=[])
@@ -852,55 +1020,67 @@ def main():
     # ── KPIs ──────────────────────────────────────────────────────────────
     st.title("🐾 Panel Principal de Operaciones")
 
-    valor_inv       = float((master_df["Stock"] * master_df["Costo_Efectivo"]).sum())
-    agotados        = int(master_df["Stock"].le(0).sum())
-    criticos        = int(master_df["Estado"].eq("🚨 CRÍTICO (A)").sum())
-    margen_base_df  = master_df[
-        (master_df["Stock"] > 0) &
-        (master_df["Precio"] > 0) &
-        (master_df["Costo_Efectivo"] > 0) &
-        (~master_df["Margen_Anomalo"])
+    valor_inv = float((master_df["Stock"] * master_df["Costo_Efectivo"]).sum())
+    agotados = int(master_df["Stock"].le(0).sum())
+    criticos = int(master_df["Estado"].eq("🚨 CRÍTICO (A)").sum())
+    margen_base_df = master_df[
+        (master_df["Stock"] > 0)
+        & (master_df["Precio"] > 0)
+        & (master_df["Costo_Efectivo"] > 0)
+        & (~master_df["Margen_Anomalo"])
     ].copy()
     if not margen_base_df.empty:
         ventas_potenciales = (margen_base_df["Stock"] * margen_base_df["Precio"]).sum()
-        utilidad_potencial = (margen_base_df["Stock"] * (margen_base_df["Precio"] - margen_base_df["Costo_Efectivo"])).sum()
-        margen_promedio = float((utilidad_potencial / ventas_potenciales) * 100.0) if ventas_potenciales > 0 else 0.0
+        utilidad_potencial = (
+            margen_base_df["Stock"] * (margen_base_df["Precio"] - margen_base_df["Costo_Efectivo"])
+        ).sum()
+        margen_promedio = (
+            float((utilidad_potencial / ventas_potenciales) * 100.0)
+            if ventas_potenciales > 0
+            else 0.0
+        )
     else:
         margen_promedio = 0.0
     alertas_datos = int(master_df[master_df["Alerta_Datos"].ne("OK")].shape[0])
 
-    df_gastos  = st.session_state["data_store"].get("df_Gastos", pd.DataFrame())
+    df_gastos = st.session_state["data_store"].get("df_Gastos", pd.DataFrame())
     gastos_mes = 0.0
     if not df_gastos.empty:
         col_fecha_g = _find_col(df_gastos, ["Fecha"])
         col_monto_g = _find_col(df_gastos, ["Monto", "Valor"])
         if col_fecha_g and col_monto_g:
             df_gastos["_fecha"] = pd.to_datetime(df_gastos[col_fecha_g], errors="coerce")
-            df_gastos[col_monto_g] = pd.to_numeric(df_gastos[col_monto_g], errors="coerce").fillna(0.0)
+            df_gastos[col_monto_g] = pd.to_numeric(df_gastos[col_monto_g], errors="coerce").fillna(
+                0.0
+            )
             gastos_mes = float(
                 df_gastos[df_gastos["_fecha"].dt.month == datetime.now().month][col_monto_g].sum()
             )
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("💰 Capital en Inventario", f"${valor_inv:,.0f}")
-    c2.metric("📈 Margen Promedio",        f"{margen_promedio:.1f}%")
-    c3.metric("🚨 Alertas de Quiebre",     agotados + criticos)
-    c4.metric("💸 Gastos del Mes",         f"${gastos_mes:,.0f}")
+    c2.metric("📈 Margen Promedio", f"{margen_promedio:.1f}%")
+    c3.metric("🚨 Alertas de Quiebre", agotados + criticos)
+    c4.metric("💸 Gastos del Mes", f"${gastos_mes:,.0f}")
 
     if alertas_datos > 0:
-        st.warning(f"Se detectaron {alertas_datos} productos con datos dudosos de costo/precio. El margen promedio excluye esos casos para evitar distorsiones.")
+        st.warning(
+            f"Se detectaron {alertas_datos} productos con datos dudosos de costo/precio. El margen promedio excluye esos casos para evitar distorsiones."
+        )
 
     data_store = st.session_state.get("data_store", {})
     ws_inv = data_store.get("ws_Inventario")
     ws_map = data_store.get("ws_Maestro_Proveedores")
 
     # ── TABS ──────────────────────────────────────────────────────────────
-    tabs = st.tabs([
-        "📊 Visión 360",
-        "🧠 Compras Inteligentes",
-        "📥 Recepción",
-        "💸 Finanzas & Gastos",
-    ])
+    tabs = st.tabs(
+        [
+            "📊 Visión 360",
+            "🧠 Compras Inteligentes",
+            "📥 Recepción",
+            "💸 Finanzas & Gastos",
+        ]
+    )
 
     # ── TAB 1: VISIÓN 360 ─────────────────────────────────────────────────
     with tabs[0]:
@@ -913,10 +1093,9 @@ def main():
 
         df_view = master_df.copy()
         if txt_search:
-            mask = (
-                df_view["Nombre"].str.contains(txt_search, case=False, na=False) |
-                df_view["ID_Producto_Norm"].str.contains(txt_search, case=False, na=False)
-            )
+            mask = df_view["Nombre"].str.contains(txt_search, case=False, na=False) | df_view[
+                "ID_Producto_Norm"
+            ].str.contains(txt_search, case=False, na=False)
             df_view = df_view[mask]
         if est_filter != "Todos":
             df_view = df_view[df_view["Estado"] == est_filter]
@@ -933,39 +1112,66 @@ def main():
         )
 
         cols_vista = [
-            "ID_Producto", "Nombre", "Categoria", "Clase_ABC",
-            "Stock", "Estado", "Velocidad_Diaria", "Margen_%", "Costo_Efectivo", "Precio", "Alerta_Datos"
+            "ID_Producto",
+            "Nombre",
+            "Categoria",
+            "Clase_ABC",
+            "Stock",
+            "Estado",
+            "Velocidad_Diaria",
+            "Margen_%",
+            "Costo_Efectivo",
+            "Precio",
+            "Alerta_Datos",
         ]
         cols_vista = [c for c in cols_vista if c in df_view.columns]
         st.dataframe(
             df_view[cols_vista],
             column_config={
-                "Clase_ABC":        st.column_config.TextColumn("ABC"),
-                "Velocidad_Diaria": st.column_config.NumberColumn("Ventas/Día",   format="%.2f"),
-                "Margen_%":         st.column_config.NumberColumn("Margen Bruto", format="%.1f%%"),
-                "Costo_Efectivo":   st.column_config.NumberColumn("Costo Unit.", format="$%.0f"),
-                "Precio":           st.column_config.NumberColumn(format="$%.0f"),
-                "Alerta_Datos":     st.column_config.TextColumn("Diagnóstico"),
+                "Clase_ABC": st.column_config.TextColumn("ABC"),
+                "Velocidad_Diaria": st.column_config.NumberColumn("Ventas/Día", format="%.2f"),
+                "Margen_%": st.column_config.NumberColumn("Margen Bruto", format="%.1f%%"),
+                "Costo_Efectivo": st.column_config.NumberColumn("Costo Unit.", format="$%.0f"),
+                "Precio": st.column_config.NumberColumn(format="$%.0f"),
+                "Alerta_Datos": st.column_config.TextColumn("Diagnóstico"),
             },
-            use_container_width=True, hide_index=True, height=500,
+            use_container_width=True,
+            hide_index=True,
+            height=500,
         )
 
         with st.expander("Diagnóstico de calidad de datos"):
             diag = master_df[master_df["Alerta_Datos"].ne("OK")].copy()
             if diag.empty:
-                st.success("No se detectaron inconsistencias relevantes de costo/precio en inventario.")
+                st.success(
+                    "No se detectaron inconsistencias relevantes de costo/precio en inventario."
+                )
             else:
                 diag_cols = [
-                    "ID_Producto", "Nombre", "Costo_Inventario_Unitario", "Costo_Referencia_Proveedor_Unitario",
-                    "Costo_Efectivo", "Precio", "Margen_%", "Alerta_Datos"
+                    "ID_Producto",
+                    "Nombre",
+                    "Costo_Inventario_Unitario",
+                    "Costo_Referencia_Proveedor_Unitario",
+                    "Costo_Efectivo",
+                    "Precio",
+                    "Margen_%",
+                    "Alerta_Datos",
                 ]
                 diag_cols = [c for c in diag_cols if c in diag.columns]
                 st.dataframe(
-                    diag[diag_cols].sort_values(["Alerta_Datos", "Margen_%"], ascending=[True, True]),
+                    diag[diag_cols].sort_values(
+                        ["Alerta_Datos", "Margen_%"], ascending=[True, True]
+                    ),
                     column_config={
-                        "Costo_Inventario_Unitario": st.column_config.NumberColumn("Costo Inv.", format="$%.0f"),
-                        "Costo_Referencia_Proveedor_Unitario": st.column_config.NumberColumn("Costo Prov. Unit.", format="$%.0f"),
-                        "Costo_Efectivo": st.column_config.NumberColumn("Costo Efectivo", format="$%.0f"),
+                        "Costo_Inventario_Unitario": st.column_config.NumberColumn(
+                            "Costo Inv.", format="$%.0f"
+                        ),
+                        "Costo_Referencia_Proveedor_Unitario": st.column_config.NumberColumn(
+                            "Costo Prov. Unit.", format="$%.0f"
+                        ),
+                        "Costo_Efectivo": st.column_config.NumberColumn(
+                            "Costo Efectivo", format="$%.0f"
+                        ),
                         "Precio": st.column_config.NumberColumn("Precio", format="$%.0f"),
                         "Margen_%": st.column_config.NumberColumn("Margen", format="%.1f%%"),
                     },
@@ -974,51 +1180,84 @@ def main():
                 )
 
             st.markdown("### Corrección manual de costos")
-            st.caption("Regla aplicada: si el costo nuevo baja, el precio actual se conserva. Si el costo nuevo sube, el sistema solo sube el precio cuando el actual ya no soporta el margen objetivo.")
+            st.caption(
+                "Regla aplicada: si el costo nuevo baja, el precio actual se conserva. Si el costo nuevo sube, el sistema solo sube el precio cuando el actual ya no soporta el margen objetivo."
+            )
 
             fuente_correccion = master_df.copy()
-            solo_alertas = st.checkbox("Mostrar solo productos con alerta de datos", value=True, key="fix_cost_only_alerts")
+            solo_alertas = st.checkbox(
+                "Mostrar solo productos con alerta de datos", value=True, key="fix_cost_only_alerts"
+            )
             if solo_alertas:
-                fuente_correccion = fuente_correccion[fuente_correccion["Alerta_Datos"].ne("OK")].copy()
+                fuente_correccion = fuente_correccion[
+                    fuente_correccion["Alerta_Datos"].ne("OK")
+                ].copy()
 
             filtro_fix = st.text_input("Filtrar productos a corregir", key="fix_cost_filter")
             if filtro_fix:
-                mask_fix = (
-                    fuente_correccion["Nombre"].astype(str).str.contains(filtro_fix, case=False, na=False) |
-                    fuente_correccion["ID_Producto"].astype(str).str.contains(filtro_fix, case=False, na=False)
+                mask_fix = fuente_correccion["Nombre"].astype(str).str.contains(
+                    filtro_fix, case=False, na=False
+                ) | fuente_correccion["ID_Producto"].astype(str).str.contains(
+                    filtro_fix, case=False, na=False
                 )
                 fuente_correccion = fuente_correccion[mask_fix].copy()
 
             if fuente_correccion.empty:
                 st.info("No hay productos disponibles con ese filtro para corregir.")
             else:
-                correction_df = fuente_correccion[[
-                    "Producto_UID", "ID_Producto", "Nombre", "Costo_Inventario_Unitario",
-                    "Costo_Referencia_Proveedor_Unitario", "Precio", "Alerta_Datos"
-                ]].copy()
-                correction_df = correction_df.rename(columns={
-                    "Costo_Inventario_Unitario": "Costo_Actual",
-                    "Costo_Referencia_Proveedor_Unitario": "Costo_Proveedor_Ref",
-                    "Precio": "Precio_Actual",
-                })
+                correction_df = fuente_correccion[
+                    [
+                        "Producto_UID",
+                        "ID_Producto",
+                        "Nombre",
+                        "Costo_Inventario_Unitario",
+                        "Costo_Referencia_Proveedor_Unitario",
+                        "Precio",
+                        "Alerta_Datos",
+                    ]
+                ].copy()
+                correction_df = correction_df.rename(
+                    columns={
+                        "Costo_Inventario_Unitario": "Costo_Actual",
+                        "Costo_Referencia_Proveedor_Unitario": "Costo_Proveedor_Ref",
+                        "Precio": "Precio_Actual",
+                    }
+                )
                 correction_df["Aplicar"] = False
                 correction_df["Costo_Nuevo"] = correction_df["Costo_Actual"].apply(money_int)
 
                 edited_fix = st.data_editor(
-                    correction_df[[
-                        "Aplicar", "ID_Producto", "Nombre", "Costo_Actual", "Costo_Proveedor_Ref",
-                        "Precio_Actual", "Costo_Nuevo", "Alerta_Datos", "Producto_UID"
-                    ]],
+                    correction_df[
+                        [
+                            "Aplicar",
+                            "ID_Producto",
+                            "Nombre",
+                            "Costo_Actual",
+                            "Costo_Proveedor_Ref",
+                            "Precio_Actual",
+                            "Costo_Nuevo",
+                            "Alerta_Datos",
+                            "Producto_UID",
+                        ]
+                    ],
                     use_container_width=True,
                     hide_index=True,
                     column_config={
                         "Aplicar": st.column_config.CheckboxColumn("Aplicar"),
                         "ID_Producto": st.column_config.TextColumn("SKU", disabled=True),
                         "Nombre": st.column_config.TextColumn("Producto", disabled=True),
-                        "Costo_Actual": st.column_config.NumberColumn("Costo actual", format="$%.0f", disabled=True),
-                        "Costo_Proveedor_Ref": st.column_config.NumberColumn("Costo proveedor", format="$%.0f", disabled=True),
-                        "Precio_Actual": st.column_config.NumberColumn("Precio actual", format="$%.0f", disabled=True),
-                        "Costo_Nuevo": st.column_config.NumberColumn("Costo nuevo", format="$%.0f", min_value=0.0),
+                        "Costo_Actual": st.column_config.NumberColumn(
+                            "Costo actual", format="$%.0f", disabled=True
+                        ),
+                        "Costo_Proveedor_Ref": st.column_config.NumberColumn(
+                            "Costo proveedor", format="$%.0f", disabled=True
+                        ),
+                        "Precio_Actual": st.column_config.NumberColumn(
+                            "Precio actual", format="$%.0f", disabled=True
+                        ),
+                        "Costo_Nuevo": st.column_config.NumberColumn(
+                            "Costo nuevo", format="$%.0f", min_value=0.0
+                        ),
                         "Alerta_Datos": st.column_config.TextColumn("Diagnóstico", disabled=True),
                         "Producto_UID": None,
                     },
@@ -1028,31 +1267,61 @@ def main():
                 preview_fix = edited_fix.copy()
                 preview_fix["Costo_Nuevo"] = preview_fix["Costo_Nuevo"].apply(money_int)
                 preview_fix["Precio_Resultante"] = preview_fix.apply(
-                    lambda r: calcular_precio_protegido(r.get("Costo_Actual", 0), r.get("Precio_Actual", 0), r.get("Costo_Nuevo", 0)),
+                    lambda r: calcular_precio_protegido(
+                        r.get("Costo_Actual", 0), r.get("Precio_Actual", 0), r.get("Costo_Nuevo", 0)
+                    ),
                     axis=1,
                 )
-                preview_fix["Cambio_Precio"] = preview_fix["Precio_Resultante"] - preview_fix["Precio_Actual"].apply(money_int)
+                preview_fix["Cambio_Precio"] = preview_fix["Precio_Resultante"] - preview_fix[
+                    "Precio_Actual"
+                ].apply(money_int)
 
                 seleccion_fix = preview_fix[preview_fix["Aplicar"] == True].copy()
                 if seleccion_fix.empty:
-                    st.info("Marca los productos que quieras corregir para ver el resultado antes de guardar.")
+                    st.info(
+                        "Marca los productos que quieras corregir para ver el resultado antes de guardar."
+                    )
                 else:
                     st.dataframe(
-                        seleccion_fix[["ID_Producto", "Nombre", "Costo_Actual", "Costo_Nuevo", "Precio_Actual", "Precio_Resultante", "Cambio_Precio"]],
+                        seleccion_fix[
+                            [
+                                "ID_Producto",
+                                "Nombre",
+                                "Costo_Actual",
+                                "Costo_Nuevo",
+                                "Precio_Actual",
+                                "Precio_Resultante",
+                                "Cambio_Precio",
+                            ]
+                        ],
                         use_container_width=True,
                         hide_index=True,
                         column_config={
-                            "Costo_Actual": st.column_config.NumberColumn("Costo actual", format="$%.0f"),
-                            "Costo_Nuevo": st.column_config.NumberColumn("Costo nuevo", format="$%.0f"),
-                            "Precio_Actual": st.column_config.NumberColumn("Precio actual", format="$%.0f"),
-                            "Precio_Resultante": st.column_config.NumberColumn("Precio final", format="$%.0f"),
-                            "Cambio_Precio": st.column_config.NumberColumn("Ajuste precio", format="$%.0f"),
+                            "Costo_Actual": st.column_config.NumberColumn(
+                                "Costo actual", format="$%.0f"
+                            ),
+                            "Costo_Nuevo": st.column_config.NumberColumn(
+                                "Costo nuevo", format="$%.0f"
+                            ),
+                            "Precio_Actual": st.column_config.NumberColumn(
+                                "Precio actual", format="$%.0f"
+                            ),
+                            "Precio_Resultante": st.column_config.NumberColumn(
+                                "Precio final", format="$%.0f"
+                            ),
+                            "Cambio_Precio": st.column_config.NumberColumn(
+                                "Ajuste precio", format="$%.0f"
+                            ),
                         },
                     )
 
-                    if st.button("Guardar correcciones de costo", type="primary", key="btn_save_cost_fixes"):
+                    if st.button(
+                        "Guardar correcciones de costo", type="primary", key="btn_save_cost_fixes"
+                    ):
                         if ws_inv is None:
-                            st.error("No se encontró la hoja Inventario para aplicar las correcciones.")
+                            st.error(
+                                "No se encontró la hoja Inventario para aplicar las correcciones."
+                            )
                         else:
                             applied, logs = aplicar_correccion_costos(ws_inv, ws_map, seleccion_fix)
                             if applied <= 0:
@@ -1061,7 +1330,9 @@ def main():
                                     for log in logs:
                                         st.write(log)
                             else:
-                                st.success(f"Se corrigieron {applied} productos y se sincronizó el costo de referencia del proveedor cuando existía mapeo.")
+                                st.success(
+                                    f"Se corrigieron {applied} productos y se sincronizó el costo de referencia del proveedor cuando existía mapeo."
+                                )
                                 st.session_state.pop("data_store", None)
                                 cargar_datos_snapshot()
                                 st.rerun()
@@ -1083,8 +1354,15 @@ def main():
 
         # Garantizar columnas requeridas
         cols_requeridas = [
-            "Confirmar", "Nombre_Proveedor", "Clase_ABC", "Nombre",
-            "Stock", "Sugerencia_Cajas", "Factor_Pack", "Inversion_Est", "Motivo_Sugerencia"
+            "Confirmar",
+            "Nombre_Proveedor",
+            "Clase_ABC",
+            "Nombre",
+            "Stock",
+            "Sugerencia_Cajas",
+            "Factor_Pack",
+            "Inversion_Est",
+            "Motivo_Sugerencia",
         ]
         for col in cols_requeridas:
             if col not in df_buy.columns:
@@ -1099,7 +1377,7 @@ def main():
         if "select_all_buy" not in st.session_state:
             st.session_state["select_all_buy"] = False
 
-        c_sel, c_desel = st.columns([1,1])
+        c_sel, c_desel = st.columns([1, 1])
         if c_sel.button("Seleccionar todos", key="btn_select_all_buy"):
             df_buy["Confirmar"] = True
             st.session_state["select_all_buy"] = True
@@ -1113,17 +1391,23 @@ def main():
             df_no_buy = master_df[master_df["Unidades_Pedir"] == 0].copy()
             if not df_no_buy.empty:
                 st.markdown("#### Motivo por el que no se sugiere compra:")
-                st.dataframe(df_no_buy[["Nombre", "Stock", "Modo_Demanda", "Motivo_Sugerencia"]], hide_index=True)
+                st.dataframe(
+                    df_no_buy[["Nombre", "Stock", "Modo_Demanda", "Motivo_Sugerencia"]],
+                    hide_index=True,
+                )
         else:
             edited_buy = st.data_editor(
                 df_buy[cols_requeridas],
-                use_container_width=True, hide_index=True,
-                column_config={"Confirmar": st.column_config.CheckboxColumn("Confirmar")}
+                use_container_width=True,
+                hide_index=True,
+                column_config={"Confirmar": st.column_config.CheckboxColumn("Confirmar")},
             )
 
             seleccion = edited_buy[edited_buy["Confirmar"] == True]
             st.divider()
-            st.markdown(f"### Total Inversión Sugerida: :green[${seleccion['Inversion_Est'].sum():,.0f}]")
+            st.markdown(
+                f"### Total Inversión Sugerida: :green[${seleccion['Inversion_Est'].sum():,.0f}]"
+            )
 
             for prov in seleccion["Nombre_Proveedor"].unique():
                 items_prov = seleccion[seleccion["Nombre_Proveedor"] == prov]
@@ -1131,7 +1415,9 @@ def main():
                     f"🛒 Proveedor: {prov} | Total: ${items_prov['Inversion_Est'].sum():,.0f}",
                     expanded=True,
                 ):
-                    st.table(items_prov[["Nombre", "Clase_ABC", "Sugerencia_Cajas", "Inversion_Est"]])
+                    st.table(
+                        items_prov[["Nombre", "Clase_ABC", "Sugerencia_Cajas", "Inversion_Est"]]
+                    )
                     c_btn, c_wa = st.columns([1, 4])
                     if c_btn.button(f"Emitir Orden ({prov})", key=f"btn_ord_{prov}"):
                         new_id = crear_orden_compra(prov, items_prov)
@@ -1147,7 +1433,9 @@ def main():
 
     # ── TAB 3: RECEPCIÓN ──────────────────────────────────────────────────
     with tabs[2]:
-        st.info("Para registrar recepciones de mercancía usa el módulo **📥 Compras** del menú lateral.")
+        st.info(
+            "Para registrar recepciones de mercancía usa el módulo **📥 Compras** del menú lateral."
+        )
 
     # ── TAB 4: FINANZAS ───────────────────────────────────────────────────
     with tabs[3]:
@@ -1157,15 +1445,19 @@ def main():
         with col_g1:
             st.markdown("**Top 5 Productos más Rentables ($)**")
             if "Margen_$" in master_df.columns:
-                top_m = master_df[master_df["Margen_$"] > 0].sort_values("Margen_$", ascending=False).head(5)
+                top_m = (
+                    master_df[master_df["Margen_$"] > 0]
+                    .sort_values("Margen_$", ascending=False)
+                    .head(5)
+                )
                 st.dataframe(
                     top_m[["Nombre", "Costo", "Precio", "Margen_$"]],
                     hide_index=True,
                     column_config={
-                        "Costo":    st.column_config.NumberColumn(format="$%.0f"),
-                        "Precio":   st.column_config.NumberColumn(format="$%.0f"),
+                        "Costo": st.column_config.NumberColumn(format="$%.0f"),
+                        "Precio": st.column_config.NumberColumn(format="$%.0f"),
                         "Margen_$": st.column_config.NumberColumn("Margen $", format="$%.0f"),
-                    }
+                    },
                 )
 
         with col_g2:
@@ -1176,7 +1468,8 @@ def main():
                 if col_cat_g and col_mon_g:
                     resumen_g = (
                         df_gastos.groupby(col_cat_g)[col_mon_g]
-                        .sum().reset_index()
+                        .sum()
+                        .reset_index()
                         .sort_values(col_mon_g, ascending=False)
                     )
                     st.dataframe(resumen_g, hide_index=True)
@@ -1184,6 +1477,7 @@ def main():
                     st.info("Columnas de gastos no reconocidas.")
             else:
                 st.info("Aún no hay gastos registrados.")
+
 
 # ==========================================
 # 7. ENTRY POINT - Lógica de Ejecución

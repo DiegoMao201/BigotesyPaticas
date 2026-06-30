@@ -8,13 +8,12 @@ Uso:
   docker exec <api> python scripts/preprocess_product_images.py        # todos
   docker exec <api> python scripts/preprocess_product_images.py --dry  # solo contar
 """
+
 from __future__ import annotations
 
-import asyncio
-import io
+import logging
 import os
 import sys
-import logging
 import time
 from datetime import datetime
 
@@ -29,24 +28,27 @@ import boto3
 import replicate
 import requests
 from botocore.client import Config
-from PIL import Image
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-CDN_BUCKET   = os.environ.get("S3_BUCKET", "catalogo-ferreinox")
+CDN_BUCKET = os.environ.get("S3_BUCKET", "catalogo-ferreinox")
 CDN_ENDPOINT = os.environ.get("S3_ENDPOINT_URL", "https://nyc3.digitaloceanspaces.com")
-CDN_REGION   = os.environ.get("S3_REGION", "nyc3")
-CDN_BASE     = os.environ.get("S3_PUBLIC_URL", "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com")
-S3_ACCESS    = os.environ.get("S3_ACCESS_KEY", "")
-S3_SECRET    = os.environ.get("S3_SECRET_KEY", "")
+CDN_REGION = os.environ.get("S3_REGION", "nyc3")
+CDN_BASE = os.environ.get(
+    "S3_PUBLIC_URL", "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com"
+)
+S3_ACCESS = os.environ.get("S3_ACCESS_KEY", "")
+S3_SECRET = os.environ.get("S3_SECRET_KEY", "")
 
-DB_URL = os.environ.get("DATABASE_URL_SYNC", "").replace(
-    "postgresql+psycopg://", "postgresql://"
-).replace("postgresql+asyncpg://", "postgresql://")
+DB_URL = (
+    os.environ.get("DATABASE_URL_SYNC", "")
+    .replace("postgresql+psycopg://", "postgresql://")
+    .replace("postgresql+asyncpg://", "postgresql://")
+)
 
-REPLICATE_MODEL  = "cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003"
-COST_PER_IMAGE   = 0.002  # USD estimado
+REPLICATE_MODEL = "cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003"
+COST_PER_IMAGE = 0.002  # USD estimado
 # Rate limit Replicate: 6 req/min con saldo < $5 → 1 cada 11s (seguro)
 REQUEST_INTERVAL = 11.0
 
@@ -78,7 +80,12 @@ def remove_background(replicate_client, image_url: str, max_retries: int = 3) ->
             err = str(e)
             if "429" in err or "throttled" in err.lower() or "rate limit" in err.lower():
                 wait = REQUEST_INTERVAL * (2 ** (attempt - 1))
-                log.warning("429 rate limit (intento %d/%d) — esperando %.0fs...", attempt, max_retries, wait)
+                log.warning(
+                    "429 rate limit (intento %d/%d) — esperando %.0fs...",
+                    attempt,
+                    max_retries,
+                    wait,
+                )
                 time.sleep(wait)
             else:
                 log.warning("rembg falló para %s: %s", image_url[:60], e)
@@ -127,7 +134,7 @@ def main():
         ORDER BY sku
     """)
     cols = [d[0] for d in cur.description]
-    products = [dict(zip(cols, row)) for row in cur.fetchall()]
+    products = [dict(zip(cols, row, strict=False)) for row in cur.fetchall()]
 
     log.info("Productos a procesar con rembg: %d", len(products))
     log.info("Costo estimado: $%.2f USD", len(products) * COST_PER_IMAGE)
@@ -150,7 +157,7 @@ def main():
     start = time.time()
 
     for i, p in enumerate(products, 1):
-        sku  = p["sku"]
+        sku = p["sku"]
         slug = p["slug"] or ""
         img_url = p["primary_image_url"]
 
@@ -183,11 +190,15 @@ def main():
 
         if i % 25 == 0:
             elapsed = time.time() - start
-            rate = i / elapsed * 60
+            _rate = i / elapsed * 60
             eta_min = (len(products) - i) * REQUEST_INTERVAL / 60
             log.info(
                 "--- Progreso: %d/%d OK | %d fallidos | $%.2f USD | ETA ~%.0f min ---",
-                success, len(products), failed, total_cost, eta_min,
+                success,
+                len(products),
+                failed,
+                total_cost,
+                eta_min,
             )
 
     conn.close()

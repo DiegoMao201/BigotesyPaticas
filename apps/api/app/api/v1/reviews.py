@@ -1,13 +1,14 @@
 """Reseñas de productos — clientes verificados + moderación admin + GBP cache."""
+
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import func, select, and_, desc, text
+from sqlalchemy import desc, func, select
 
 from app.api.v1.portal_auth import PortalUser
 from app.api.v1.portal_loyalty import award_points
@@ -17,6 +18,7 @@ from app.models.crm import Customer
 from app.models.portal import PortalOrder, PortalOrderItem
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
+
 
 class ReviewCreate(BaseModel):
     rating: int = Field(..., ge=1, le=5)
@@ -71,7 +73,10 @@ class GBPMatchRequest(BaseModel):
 POINTS_REVIEW_BASE = 20
 POINTS_REVIEW_WITH_PHOTO = 30
 
-async def _has_verified_purchase(db: DBSession, customer_id: uuid.UUID, product_id: uuid.UUID) -> bool:
+
+async def _has_verified_purchase(
+    db: DBSession, customer_id: uuid.UUID, product_id: uuid.UUID
+) -> bool:
     """Retorna True si el cliente tiene al menos un pedido entregado con ese producto."""
     q = (
         select(func.count())
@@ -100,6 +105,7 @@ public_router = APIRouter(prefix="/v1/public", tags=["public"])
 
 # ── Endpoints públicos de reseñas por producto ────────────────────────────────
 
+
 @router.get("/products/{product_id}/reviews")
 async def list_product_reviews(
     product_id: uuid.UUID,
@@ -123,23 +129,32 @@ async def list_product_reviews(
 
     total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
     rows = (
-        await db.execute(base.order_by(order_col).offset((page - 1) * page_size).limit(page_size))
-    ).scalars().all()
+        (await db.execute(base.order_by(order_col).offset((page - 1) * page_size).limit(page_size)))
+        .scalars()
+        .all()
+    )
 
     # Enriquecer con nombre del cliente
     result = []
     for rev in rows:
-        customer = (await db.execute(select(Customer).where(Customer.id == rev.customer_id))).scalar_one_or_none()
+        customer = (
+            await db.execute(select(Customer).where(Customer.id == rev.customer_id))
+        ).scalar_one_or_none()
         d = ReviewOut.model_validate(rev)
-        d.customer_first_name = customer.full_name.split()[0] if customer and customer.full_name else "Cliente"
+        d.customer_first_name = (
+            customer.full_name.split()[0] if customer and customer.full_name else "Cliente"
+        )
         result.append(d)
 
     # Aggregate
-    product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one_or_none()
+    product = (
+        await db.execute(select(Product).where(Product.id == product_id))
+    ).scalar_one_or_none()
     aggregate = {
         "avg": float(product.rating_avg) if product and product.rating_avg else 0.0,
         "count": product.rating_count if product else 0,
-        "distribution": (product.rating_distribution if product else None) or {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0},
+        "distribution": (product.rating_distribution if product else None)
+        or {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0},
     }
 
     return {"reviews": result, "total": total, "aggregate": aggregate, "page": page}
@@ -171,6 +186,7 @@ async def mark_helpful(
 
 # ── Endpoints portal cliente ───────────────────────────────────────────────────
 
+
 @router.post("/portal/products/{product_id}/reviews", status_code=201)
 async def create_review(
     product_id: uuid.UUID,
@@ -188,7 +204,9 @@ async def create_review(
 
     # Verificar que el producto existe y está publicado
     product = (
-        await db.execute(select(Product).where(Product.id == product_id, Product.is_published == True))
+        await db.execute(
+            select(Product).where(Product.id == product_id, Product.is_published.is_(True))
+        )
     ).scalar_one_or_none()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
@@ -263,6 +281,7 @@ async def my_review(
 
 # ── Endpoints admin moderación ─────────────────────────────────────────────────
 
+
 @admin_router.get("/reviews")
 async def admin_list_reviews(
     status_filter: str = "pending",
@@ -277,27 +296,39 @@ async def admin_list_reviews(
 
     total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
     rows = (
-        await db.execute(
-            base.order_by(desc(ProductReview.created_at))
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        (
+            await db.execute(
+                base.order_by(desc(ProductReview.created_at))
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     result = []
     for rev in rows:
-        customer = (await db.execute(select(Customer).where(Customer.id == rev.customer_id))).scalar_one_or_none()
-        product = (await db.execute(select(Product).where(Product.id == rev.product_id))).scalar_one_or_none()
+        customer = (
+            await db.execute(select(Customer).where(Customer.id == rev.customer_id))
+        ).scalar_one_or_none()
+        product = (
+            await db.execute(select(Product).where(Product.id == rev.product_id))
+        ).scalar_one_or_none()
         d = ReviewOut.model_validate(rev)
-        d.customer_first_name = customer.full_name.split()[0] if customer and customer.full_name else "Cliente"
-        result.append({
-            **d.model_dump(),
-            "customer_name": customer.full_name if customer else "Desconocido",
-            "customer_phone": customer.phone if customer else None,
-            "product_name": product.name if product else "Producto eliminado",
-            "product_sku": product.sku if product else None,
-            "product_image": product.primary_image_url if product else None,
-        })
+        d.customer_first_name = (
+            customer.full_name.split()[0] if customer and customer.full_name else "Cliente"
+        )
+        result.append(
+            {
+                **d.model_dump(),
+                "customer_name": customer.full_name if customer else "Desconocido",
+                "customer_phone": customer.phone if customer else None,
+                "product_name": product.name if product else "Producto eliminado",
+                "product_sku": product.sku if product else None,
+                "product_image": product.primary_image_url if product else None,
+            }
+        )
 
     return {"reviews": result, "total": total, "page": page}
 
@@ -308,7 +339,9 @@ async def moderate_review(
     payload: ModerationAction,
     db: DBSession = ...,
 ):
-    rev = (await db.execute(select(ProductReview).where(ProductReview.id == review_id))).scalar_one_or_none()
+    rev = (
+        await db.execute(select(ProductReview).where(ProductReview.id == review_id))
+    ).scalar_one_or_none()
     if not rev:
         raise HTTPException(status_code=404, detail="Reseña no encontrada")
 
@@ -323,7 +356,9 @@ async def moderate_review(
             has_photo = len(rev.photo_urls) > 0
             pts = POINTS_REVIEW_WITH_PHOTO if has_photo else POINTS_REVIEW_BASE
             rev.points_awarded = pts
-            product = (await db.execute(select(Product).where(Product.id == rev.product_id))).scalar_one_or_none()
+            product = (
+                await db.execute(select(Product).where(Product.id == rev.product_id))
+            ).scalar_one_or_none()
             await award_points(
                 customer_id=rev.customer_id,
                 points=pts,
@@ -349,7 +384,9 @@ async def reply_review(
     payload: AdminReply,
     db: DBSession = ...,
 ):
-    rev = (await db.execute(select(ProductReview).where(ProductReview.id == review_id))).scalar_one_or_none()
+    rev = (
+        await db.execute(select(ProductReview).where(ProductReview.id == review_id))
+    ).scalar_one_or_none()
     if not rev:
         raise HTTPException(status_code=404, detail="Reseña no encontrada")
     rev.admin_reply = payload.reply
@@ -361,19 +398,26 @@ async def reply_review(
 
 # ── Endpoint público GBP reviews ──────────────────────────────────────────────
 
+
 @public_router.get("/gbp-reviews")
 async def public_gbp_reviews(limit: int = 6, db: DBSession = ...):
     limit = min(limit, 20)
     rows = (
-        await db.execute(
-            select(GBPReviewCache)
-            .where(GBPReviewCache.rating >= 4)
-            .order_by(desc(GBPReviewCache.review_created_at))
-            .limit(limit)
+        (
+            await db.execute(
+                select(GBPReviewCache)
+                .where(GBPReviewCache.rating >= 4)
+                .order_by(desc(GBPReviewCache.review_created_at))
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
-    avg_q = await db.execute(select(func.avg(GBPReviewCache.rating), func.count()).select_from(GBPReviewCache))
+    avg_q = await db.execute(
+        select(func.avg(GBPReviewCache.rating), func.count()).select_from(GBPReviewCache)
+    )
     avg_row = avg_q.one()
     avg = round(float(avg_row[0] or 5.0), 1)
     count = avg_row[1] or 0
@@ -393,17 +437,22 @@ async def public_gbp_reviews(limit: int = 6, db: DBSession = ...):
 
 # ── Admin GBP ─────────────────────────────────────────────────────────────────
 
+
 @admin_router.get("/gbp-reviews/unmatched")
 async def gbp_unmatched(
     db: DBSession = ...,
 ):
     rows = (
-        await db.execute(
-            select(GBPReviewCache)
-            .where(GBPReviewCache.matched_customer_id == None)
-            .order_by(desc(GBPReviewCache.review_created_at))
+        (
+            await db.execute(
+                select(GBPReviewCache)
+                .where(GBPReviewCache.matched_customer_id.is_(None))
+                .order_by(desc(GBPReviewCache.review_created_at))
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [
         {
             "id": str(r.id),
@@ -423,7 +472,9 @@ async def gbp_match_customer(
     payload: GBPMatchRequest,
     db: DBSession = ...,
 ):
-    row = (await db.execute(select(GBPReviewCache).where(GBPReviewCache.id == gbp_id))).scalar_one_or_none()
+    row = (
+        await db.execute(select(GBPReviewCache).where(GBPReviewCache.id == gbp_id))
+    ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Reseña GBP no encontrada")
     row.matched_customer_id = payload.customer_id
@@ -446,9 +497,12 @@ async def gbp_match_customer(
 @admin_router.post("/gbp-sync/run")
 async def run_gbp_sync():
     """Dispara el sync de reseñas GBP en background (ejecuta el script externo)."""
-    import asyncio, subprocess, sys
+    import asyncio
+    import sys
+
     proc = await asyncio.create_subprocess_exec(
-        sys.executable, "/app/scripts/sync_gbp_reviews.py",
+        sys.executable,
+        "/app/scripts/sync_gbp_reviews.py",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -459,6 +513,6 @@ async def run_gbp_sync():
             "output": (stdout or b"").decode()[-2000:],
             "error": (stderr or b"").decode()[-500:] if proc.returncode != 0 else None,
         }
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         return {"ok": False, "error": "timeout después de 60 segundos"}

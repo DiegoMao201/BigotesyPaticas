@@ -1,4 +1,5 @@
 """Re-exporta schemas."""
+
 from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse, UserOut  # noqa
 from app.schemas.catalog import (  # noqa
     BrandOut,

@@ -1,4 +1,5 @@
 """Endpoints de clientes (CRM básico)."""
+
 from __future__ import annotations
 
 import uuid
@@ -7,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 
-from app.deps import CurrentUser, DBSession, require_permission
+from app.deps import DBSession, require_permission
 from app.models.crm import Customer
 from app.models.sales import Order
 
@@ -34,7 +35,7 @@ class CustomerOut(BaseModel):
     created_at: str
 
     @classmethod
-    def from_orm(cls, c: Customer) -> "CustomerOut":
+    def from_orm(cls, c: Customer) -> CustomerOut:
         extra = c.extra or {}
         return cls(
             id=str(c.id),
@@ -103,10 +104,14 @@ async def list_customers(
         )
     total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     rows = (
-        await db.execute(
-            stmt.order_by(Customer.full_name).offset((page - 1) * page_size).limit(page_size)
+        (
+            await db.execute(
+                stmt.order_by(Customer.full_name).offset((page - 1) * page_size).limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return PaginatedCustomers(
         items=[CustomerOut.from_orm(c) for c in rows],
         total=total,
@@ -123,9 +128,7 @@ async def list_customers(
 async def get_customer(customer_id: uuid.UUID, db: DBSession) -> CustomerOut:
     c = (
         await db.execute(
-            select(Customer)
-            .where(Customer.id == customer_id)
-            .where(Customer.deleted_at == None)  # noqa: E711
+            select(Customer).where(Customer.id == customer_id).where(Customer.deleted_at == None)  # noqa: E711
         )
     ).scalar_one_or_none()
     if not c:
@@ -193,9 +196,7 @@ async def update_customer(
 ) -> CustomerOut:
     c = (
         await db.execute(
-            select(Customer)
-            .where(Customer.id == customer_id)
-            .where(Customer.deleted_at == None)  # noqa: E711
+            select(Customer).where(Customer.id == customer_id).where(Customer.deleted_at == None)  # noqa: E711
         )
     ).scalar_one_or_none()
     if not c:
@@ -226,13 +227,17 @@ async def update_customer(
 )
 async def customer_orders(customer_id: uuid.UUID, db: DBSession) -> list[dict]:
     orders = (
-        await db.execute(
-            select(Order)
-            .where(Order.customer_id == customer_id)
-            .order_by(Order.occurred_at.desc())
-            .limit(50)
+        (
+            await db.execute(
+                select(Order)
+                .where(Order.customer_id == customer_id)
+                .order_by(Order.occurred_at.desc())
+                .limit(50)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [
         {
             "id": str(o.id),

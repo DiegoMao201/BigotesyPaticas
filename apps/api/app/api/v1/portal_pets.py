@@ -1,10 +1,11 @@
 """Portal Pets — CRUD de mascotas + carnet de salud + generación PDF."""
+
 from __future__ import annotations
 
 import io
 import os
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
@@ -24,11 +25,12 @@ RECORD_TYPES = {"vacuna", "desparasitacion", "consulta", "cirugia", "otro"}
 
 # ── schemas ───────────────────────────────────────────────────────────
 
+
 class PetIn(BaseModel):
     name: str
     species: str
     breed: str | None = None
-    birth_date: str | None = None   # YYYY-MM-DD
+    birth_date: str | None = None  # YYYY-MM-DD
     weight_kg: float | None = None
     food_brand: str | None = None
     food_freq_days: int | None = None
@@ -53,7 +55,7 @@ class PetUpdate(BaseModel):
 class HealthRecordIn(BaseModel):
     record_type: str
     name: str
-    applied_at: str          # YYYY-MM-DD
+    applied_at: str  # YYYY-MM-DD
     next_due_at: str | None = None
     vet_name: str | None = None
     notes: str | None = None
@@ -102,7 +104,7 @@ def _pet_out(pet: Pet) -> PetOut:
         age_m = (delta_days % 365) // 30
 
     records = []
-    for hr in (pet.health_records or []):
+    for hr in pet.health_records or []:
         nd = None
         if hr.next_due_at:
             nd_date = hr.next_due_at if isinstance(hr.next_due_at, date) else hr.next_due_at.date()
@@ -119,18 +121,22 @@ def _pet_out(pet: Pet) -> PetOut:
             days_until = None
             alert = None
 
-        records.append(HealthRecordOut(
-            id=str(hr.id),
-            record_type=hr.record_type,
-            name=hr.name,
-            applied_at=str(hr.applied_at if isinstance(hr.applied_at, date) else hr.applied_at.date()),
-            next_due_at=nd,
-            vet_name=hr.vet_name,
-            notes=hr.notes,
-            created_at=hr.created_at.isoformat(),
-            days_until_due=days_until,
-            alert_level=alert,
-        ))
+        records.append(
+            HealthRecordOut(
+                id=str(hr.id),
+                record_type=hr.record_type,
+                name=hr.name,
+                applied_at=str(
+                    hr.applied_at if isinstance(hr.applied_at, date) else hr.applied_at.date()
+                ),
+                next_due_at=nd,
+                vet_name=hr.vet_name,
+                notes=hr.notes,
+                created_at=hr.created_at.isoformat(),
+                days_until_due=days_until,
+                alert_level=alert,
+            )
+        )
 
     records.sort(key=lambda r: r.applied_at, reverse=True)
 
@@ -145,7 +151,7 @@ def _pet_out(pet: Pet) -> PetOut:
         food_freq_days=pet.food_freq_days,
         color_theme=pet.color_theme,
         photo_url=pet.photo_url,
-        thumb_url=getattr(pet, 'thumb_url', None),
+        thumb_url=getattr(pet, "thumb_url", None),
         notes=pet.notes,
         created_at=pet.created_at.isoformat(),
         age_years=age_y,
@@ -173,15 +179,22 @@ async def _get_own_pet(pet_id: uuid.UUID, customer: Customer, db: DBSession) -> 
 
 # ── endpoints ─────────────────────────────────────────────────────────
 
+
 @router.get("", response_model=list[PetOut])
 async def list_pets(db: DBSession, customer: Customer = PortalUser) -> list[PetOut]:
     pets = (
-        await db.execute(
-            select(Pet).where(
-                and_(Pet.customer_id == customer.id, Pet.deleted_at == None)  # noqa: E711
-            ).order_by(Pet.created_at)
+        (
+            await db.execute(
+                select(Pet)
+                .where(
+                    and_(Pet.customer_id == customer.id, Pet.deleted_at == None)  # noqa: E711
+                )
+                .order_by(Pet.created_at)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [_pet_out(p) for p in pets]
 
 
@@ -192,7 +205,9 @@ async def create_pet(
     customer: Customer = PortalUser,
 ) -> PetOut:
     if payload.color_theme not in COLOR_THEMES:
-        raise HTTPException(status_code=422, detail=f"color_theme inválido. Opciones: {COLOR_THEMES}")
+        raise HTTPException(
+            status_code=422, detail=f"color_theme inválido. Opciones: {COLOR_THEMES}"
+        )
     pet = Pet(
         customer_id=customer.id,
         name=payload.name,
@@ -231,7 +246,9 @@ async def update_pet(
 ) -> PetOut:
     pet = await _get_own_pet(pet_id, customer, db)
     if payload.color_theme is not None and payload.color_theme not in COLOR_THEMES:
-        raise HTTPException(status_code=422, detail=f"color_theme inválido. Opciones: {COLOR_THEMES}")
+        raise HTTPException(
+            status_code=422, detail=f"color_theme inválido. Opciones: {COLOR_THEMES}"
+        )
     for field, value in payload.model_dump(exclude_unset=True).items():
         if field == "birth_date" and value:
             setattr(pet, field, date.fromisoformat(value))
@@ -332,6 +349,7 @@ async def upload_pet_photo(
 
 # ── health records ────────────────────────────────────────────────────
 
+
 @router.post("/{pet_id}/health", response_model=HealthRecordOut, status_code=201)
 async def add_health_record(
     pet_id: uuid.UUID,
@@ -377,27 +395,34 @@ async def add_health_record(
 # ── color por tema ────────────────────────────────────────────────────
 
 _THEME_COLORS = {
-    "teal":   {"accent": "#187f77", "bg_light": "#edfaf9", "text_dark": "#085041"},
-    "coral":  {"accent": "#D85A30", "bg_light": "#FAECE7", "text_dark": "#712B13"},
-    "amber":  {"accent": "#BA7517", "bg_light": "#FAEEDA", "text_dark": "#633806"},
+    "teal": {"accent": "#187f77", "bg_light": "#edfaf9", "text_dark": "#085041"},
+    "coral": {"accent": "#D85A30", "bg_light": "#FAECE7", "text_dark": "#712B13"},
+    "amber": {"accent": "#BA7517", "bg_light": "#FAEEDA", "text_dark": "#633806"},
     "purple": {"accent": "#534AB7", "bg_light": "#EEEDFE", "text_dark": "#3C3489"},
-    "pink":   {"accent": "#D4537E", "bg_light": "#FBEAF0", "text_dark": "#72243E"},
-    "green":  {"accent": "#639922", "bg_light": "#EAF3DE", "text_dark": "#27500A"},
+    "pink": {"accent": "#D4537E", "bg_light": "#FBEAF0", "text_dark": "#72243E"},
+    "green": {"accent": "#639922", "bg_light": "#EAF3DE", "text_dark": "#27500A"},
 }
 
 _SPECIES_EMOJI = {
-    "perro": "🐶", "dog": "🐶",
-    "gato": "🐱", "cat": "🐱",
-    "conejo": "🐰", "rabbit": "🐰",
-    "hamster": "🐹", "conejillo": "🐹",
-    "ave": "🐦", "bird": "🐦",
-    "pez": "🐟", "fish": "🐟",
+    "perro": "🐶",
+    "dog": "🐶",
+    "gato": "🐱",
+    "cat": "🐱",
+    "conejo": "🐰",
+    "rabbit": "🐰",
+    "hamster": "🐹",
+    "conejillo": "🐹",
+    "ave": "🐦",
+    "bird": "🐦",
+    "pez": "🐟",
+    "fish": "🐟",
 }
 
 
 # ── PDF carnet ────────────────────────────────────────────────────────
 
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
+
 
 # Jinja2 env con base_url para que WeasyPrint resuelva fonts/ y assets/
 def _make_jinja_env():
@@ -409,6 +434,7 @@ def _make_jinja_env():
         if isinstance(d, str):
             try:
                 from datetime import datetime as _dt
+
                 d = _dt.fromisoformat(d).date()
             except Exception:
                 return str(d)
@@ -430,6 +456,7 @@ async def carnet_pdf(
 ) -> Response:
     """Genera carnet de salud en PDF A5 vertical con WeasyPrint + Jinja2."""
     import base64
+
     from weasyprint import HTML  # type: ignore[import]
 
     pet = await _get_own_pet(pet_id, customer, db)
@@ -448,6 +475,7 @@ async def carnet_pdf(
             # Foto en CDN/Spaces
             try:
                 import httpx
+
                 async with httpx.AsyncClient(timeout=8) as client:
                     resp = await client.get(pet.photo_url)
                 if resp.status_code == 200:
@@ -457,7 +485,7 @@ async def carnet_pdf(
         else:
             # Foto local en /data/portal-uploads
             try:
-                local_photo = _UPLOAD_DIR / pet.photo_url.lstrip("/media/")
+                local_photo = _UPLOAD_DIR / pet.photo_url.removeprefix("/media/")
                 if local_photo.exists():
                     photo_b64 = base64.b64encode(local_photo.read_bytes()).decode()
             except Exception:
@@ -467,6 +495,7 @@ async def carnet_pdf(
     qr_b64 = ""
     try:
         import qrcode
+
         qr_img = qrcode.make(
             f"https://mi.bigotesypaticas.com/pets/{pet.id}",
             box_size=8,
@@ -483,6 +512,7 @@ async def carnet_pdf(
     if pet.birth_date:
         try:
             from dateutil.relativedelta import relativedelta
+
             bd = pet.birth_date if isinstance(pet.birth_date, date) else pet.birth_date.date()
             diff = relativedelta(today, bd)
             parts: list[str] = []

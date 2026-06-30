@@ -1,4 +1,5 @@
 """Endpoints de inventario: stock por SKU/producto, ajustes."""
+
 from __future__ import annotations
 
 import uuid
@@ -32,9 +33,7 @@ class AdjustmentIn(BaseModel):
 
 @router.get("/stock/{product_id}", response_model=list[StockOut])
 async def get_stock(product_id: uuid.UUID, db: DBSession):
-    rows = (
-        await db.execute(select(Stock).where(Stock.product_id == product_id))
-    ).scalars().all()
+    rows = (await db.execute(select(Stock).where(Stock.product_id == product_id))).scalars().all()
     return [
         StockOut(
             product_id=s.product_id,
@@ -57,14 +56,10 @@ async def adjust_stock(payload: AdjustmentIn, db: DBSession, user: CurrentUser):
     location_id = payload.location_id
     if location_id is None:
         loc = (
-            await db.execute(
-                select(StockLocation).where(StockLocation.is_default == 1).limit(1)
-            )
+            await db.execute(select(StockLocation).where(StockLocation.is_default == 1).limit(1))
         ).scalar_one_or_none()
         if loc is None:
-            raise HTTPException(
-                status_code=400, detail="No hay location default configurada"
-            )
+            raise HTTPException(status_code=400, detail="No hay location default configurada")
         location_id = loc.id
 
     # Lock pesimista sobre la fila de stock
@@ -156,9 +151,7 @@ async def adjust_stock_batch(payload: BatchAdjustmentIn, db: DBSession, user: Cu
     location_id = payload.location_id
     if location_id is None:
         loc = (
-            await db.execute(
-                select(StockLocation).where(StockLocation.is_default == 1).limit(1)
-            )
+            await db.execute(select(StockLocation).where(StockLocation.is_default == 1).limit(1))
         ).scalar_one_or_none()
         if loc is None:
             raise HTTPException(status_code=400, detail="No hay location default configurada")
@@ -211,27 +204,32 @@ async def adjust_stock_batch(payload: BatchAdjustmentIn, db: DBSession, user: Cu
         stock.quantity = new_qty
         total_delta += it.quantity_delta
 
-        db.add(StockMovement(
-            product_id=it.product_id,
-            location_id=location_id,
-            movement_type="ADJUSTMENT",
-            quantity_delta=it.quantity_delta,
-            quantity_after=new_qty,
-            notes=it.notes or payload.notes,
-            occurred_at=now,
-            created_by=user.email,
-        ))
-        results.append(BatchAdjustmentResultItem(
-            product_id=it.product_id,
-            quantity_delta=it.quantity_delta,
-            quantity_after=new_qty,
-        ))
+        db.add(
+            StockMovement(
+                product_id=it.product_id,
+                location_id=location_id,
+                movement_type="ADJUSTMENT",
+                quantity_delta=it.quantity_delta,
+                quantity_after=new_qty,
+                notes=it.notes or payload.notes,
+                occurred_at=now,
+                created_by=user.email,
+            )
+        )
+        results.append(
+            BatchAdjustmentResultItem(
+                product_id=it.product_id,
+                quantity_delta=it.quantity_delta,
+                quantity_after=new_qty,
+            )
+        )
 
     await db.commit()
     return BatchAdjustmentOut(applied=len(results), total_delta=total_delta, items=results)
 
 
 # ─────────────── List all stock with product info (for inventory page) ────────────
+
 
 class StockRowOut(BaseModel):
     product_id: uuid.UUID
@@ -266,7 +264,10 @@ async def list_stock(
     q: str | None = Query(None),
     only_in_stock: bool = False,
     only_low_stock: bool = False,
-    sort_by: str = Query("quantity", pattern="^(quantity|cost|price|stock_value_cost|stock_value_price|margin_pct|name|sku)$"),
+    sort_by: str = Query(
+        "quantity",
+        pattern="^(quantity|cost|price|stock_value_cost|stock_value_price|margin_pct|name|sku)$",
+    ),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
@@ -318,23 +319,25 @@ async def list_stock(
         margin = round((price - cost) / price * 100, 1) if price > 0 else 0.0
         total_value_cost += sv_cost
         total_value_price += sv_price
-        items.append(StockRowOut(
-            product_id=p.id,
-            sku=p.sku,
-            name=p.name,
-            category_name=None,
-            quantity=q_int,
-            reserved=r_int,
-            available=avail,
-            cost=cost,
-            price=price,
-            margin_pct=margin,
-            stock_value_cost=sv_cost,
-            stock_value_price=sv_price,
-        ))
+        items.append(
+            StockRowOut(
+                product_id=p.id,
+                sku=p.sku,
+                name=p.name,
+                category_name=None,
+                quantity=q_int,
+                reserved=r_int,
+                available=avail,
+                cost=cost,
+                price=price,
+                margin_pct=margin,
+                stock_value_cost=sv_cost,
+                stock_value_price=sv_price,
+            )
+        )
 
     # Sort
-    reverse = (sort_dir == "desc")
+    reverse = sort_dir == "desc"
     sort_key_map = {
         "quantity": lambda x: x.quantity,
         "cost": lambda x: x.cost,
@@ -349,7 +352,7 @@ async def list_stock(
     total = len(items)
     start_idx = (page - 1) * page_size
     return StockListResponse(
-        items=items[start_idx:start_idx + page_size],
+        items=items[start_idx : start_idx + page_size],
         total=total,
         page=page,
         page_size=page_size,
@@ -361,6 +364,7 @@ async def list_stock(
 
 
 # ─────────────── List stock movements ────────────────────
+
 
 class MovementOut(BaseModel):
     id: uuid.UUID
@@ -418,6 +422,7 @@ async def list_movements(
 
 # ─────────────── Update product pricing (cost + price) ────────────
 
+
 class PricingUpdateIn(BaseModel):
     cost: float | None = Field(None, ge=0, description="Costo unitario (precio de compra)")
     price: float | None = Field(None, ge=0, description="Precio de venta público")
@@ -454,9 +459,11 @@ async def update_product_pricing(
 
     if payload.cost is not None:
         from decimal import Decimal
+
         product.cost = Decimal(str(payload.cost))
     if payload.price is not None:
         from decimal import Decimal
+
         product.price = Decimal(str(payload.price))
 
     await db.commit()
@@ -478,6 +485,7 @@ async def update_product_pricing(
 
 # ─── Analytics: movements per product, ABC, reorder suggestions ───
 
+
 @router.get("/movements/by-product/{product_id}")
 async def product_movements(
     product_id: uuid.UUID,
@@ -487,13 +495,20 @@ async def product_movements(
 ):
     """Movimientos de stock de un producto en los últimos N días."""
     from datetime import timedelta
+
     cutoff = datetime.now(UTC) - timedelta(days=days)
-    rows = (await db.execute(
-        select(StockMovement)
-        .where(StockMovement.product_id == product_id, StockMovement.occurred_at >= cutoff)
-        .order_by(StockMovement.occurred_at.desc())
-        .limit(500)
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(StockMovement)
+                .where(StockMovement.product_id == product_id, StockMovement.occurred_at >= cutoff)
+                .order_by(StockMovement.occurred_at.desc())
+                .limit(500)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return {
         "product_id": str(product_id),
         "days": days,
@@ -505,7 +520,8 @@ async def product_movements(
                 "occurred_at": m.occurred_at.isoformat(),
                 "reference": m.reference_type,
                 "notes": m.notes,
-            } for m in rows
+            }
+            for m in rows
         ],
     }
 
@@ -522,30 +538,38 @@ async def velocity_analysis(
     Lógica portada de Inventario_Nexus.py — Streamlit (heurística pet-shop).
     """
     from datetime import timedelta
+
     from sqlalchemy import text
 
     cutoff_short = datetime.now(UTC) - timedelta(days=days_short)
     cutoff_long = datetime.now(UTC) - timedelta(days=days_long)
 
     # SALE movements (negative qty) por producto
-    short_q = await db.execute(text("""
+    short_q = await db.execute(
+        text("""
         SELECT product_id::text, SUM(ABS(quantity_delta)) AS units
         FROM inventory.stock_movements
         WHERE movement_type = 'SALE' AND occurred_at >= :cutoff
         GROUP BY product_id
-    """), {"cutoff": cutoff_short})
+    """),
+        {"cutoff": cutoff_short},
+    )
     short_map = {r[0]: float(r[1] or 0) for r in short_q.all()}
 
-    long_q = await db.execute(text("""
+    long_q = await db.execute(
+        text("""
         SELECT product_id::text, SUM(ABS(quantity_delta)) AS units
         FROM inventory.stock_movements
         WHERE movement_type = 'SALE' AND occurred_at >= :cutoff
         GROUP BY product_id
-    """), {"cutoff": cutoff_long})
+    """),
+        {"cutoff": cutoff_long},
+    )
     long_map = {r[0]: float(r[1] or 0) for r in long_q.all()}
 
     # Productos + stock + costo + precio
-    rows = await db.execute(text("""
+    rows = await db.execute(
+        text("""
         WITH latest_supplier AS (
             SELECT DISTINCT ON (m.product_id)
                    m.product_id,
@@ -571,7 +595,8 @@ async def velocity_analysis(
         LEFT JOIN inventory.stock s ON s.product_id = p.id
         WHERE p.deleted_at IS NULL AND p.is_active = true
         GROUP BY p.id, c.name, ls.supplier_id, ls.supplier_name
-    """))
+    """)
+    )
 
     productos = []
     for r in rows.all():
@@ -606,27 +631,29 @@ async def velocity_analysis(
         valor_ventas_long = v_long * (price or 0)
         dias_cobertura = (stock / velocidad) if velocidad > 0 else 9999
 
-        productos.append({
-            "product_id": pid,
-            "sku": sku,
-            "name": name,
-            "category_name": category_name,
-            "supplier_id": supplier_id,
-            "supplier_name": supplier_name,
-            "stock": int(stock or 0),
-            "cost": cost or 0,
-            "price": price or 0,
-            "v_short": v_short,
-            "v_long": v_long,
-            "velocidad_diaria": round(velocidad, 3),
-            "punto_reorden": round(punto_reorden, 1),
-            "stock_objetivo": round(stock_objetivo, 1),
-            "faltante": round(faltante, 1),
-            "dias_cobertura": round(dias_cobertura, 1) if dias_cobertura < 9999 else None,
-            "valor_ventas_long": round(valor_ventas_long, 0),
-            "estado": estado,
-            "requiere_compra": estado in ("AGOTADO", "COMPRAR"),
-        })
+        productos.append(
+            {
+                "product_id": pid,
+                "sku": sku,
+                "name": name,
+                "category_name": category_name,
+                "supplier_id": supplier_id,
+                "supplier_name": supplier_name,
+                "stock": int(stock or 0),
+                "cost": cost or 0,
+                "price": price or 0,
+                "v_short": v_short,
+                "v_long": v_long,
+                "velocidad_diaria": round(velocidad, 3),
+                "punto_reorden": round(punto_reorden, 1),
+                "stock_objetivo": round(stock_objetivo, 1),
+                "faltante": round(faltante, 1),
+                "dias_cobertura": round(dias_cobertura, 1) if dias_cobertura < 9999 else None,
+                "valor_ventas_long": round(valor_ventas_long, 0),
+                "estado": estado,
+                "requiere_compra": estado in ("AGOTADO", "COMPRAR"),
+            }
+        )
 
     # ABC analysis: cumulative Pareto sobre valor_ventas_long
     productos.sort(key=lambda x: -x["valor_ventas_long"])
@@ -660,13 +687,17 @@ async def velocity_analysis(
 async def export_inventory_excel(db: DBSession, user: CurrentUser):
     """Descarga inventario completo como Excel (xlsxwriter)."""
     import io
+
     try:
         import xlsxwriter
-    except ImportError:
-        raise HTTPException(500, "xlsxwriter no instalado en el servidor")
+    except ImportError as exc:
+        raise HTTPException(500, "xlsxwriter no instalado en el servidor") from exc
 
     from sqlalchemy import text
-    rows = (await db.execute(text("""
+
+    rows = (
+        await db.execute(
+            text("""
         SELECT p.sku, p.name, c.name AS categoria, b.name AS marca,
                COALESCE(SUM(s.quantity - s.reserved), 0) AS stock,
                p.cost::float AS costo, p.price::float AS precio,
@@ -679,16 +710,28 @@ async def export_inventory_excel(db: DBSession, user: CurrentUser):
         WHERE p.deleted_at IS NULL
         GROUP BY p.id, c.name, b.name
         ORDER BY p.name
-    """))).all()
+    """)
+        )
+    ).all()
 
     output = io.BytesIO()
     wb = xlsxwriter.Workbook(output, {"in_memory": True})
     ws = wb.add_worksheet("Inventario")
 
-    headers = ["SKU", "Nombre", "Categoría", "Marca", "Stock", "Costo", "Precio", "Margen $", "Margen %"]
+    headers = [
+        "SKU",
+        "Nombre",
+        "Categoría",
+        "Marca",
+        "Stock",
+        "Costo",
+        "Precio",
+        "Margen $",
+        "Margen %",
+    ]
     bold = wb.add_format({"bold": True, "bg_color": "#FF6B35", "font_color": "white", "border": 1})
     money = wb.add_format({"num_format": "$#,##0"})
-    pct = wb.add_format({"num_format": "0.0\"%\""})
+    pct = wb.add_format({"num_format": '0.0"%"'})
 
     for col, h in enumerate(headers):
         ws.write(0, col, h, bold)
@@ -713,6 +756,7 @@ async def export_inventory_excel(db: DBSession, user: CurrentUser):
 
     output.seek(0)
     from fastapi.responses import StreamingResponse
+
     filename = f"inventario_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
     return StreamingResponse(
         output,

@@ -1,12 +1,11 @@
 """Portal Appointments — citas de grooming, baño, consulta, etc. + disponibilidad."""
+
 from __future__ import annotations
 
 import os
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
-
-_TZ_CO = ZoneInfo("America/Bogota")
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
@@ -18,20 +17,23 @@ from app.deps import DBSession
 from app.models.crm import Customer
 from app.models.portal import Appointment
 
+_TZ_CO = ZoneInfo("America/Bogota")
+
 router = APIRouter(prefix="/portal/appointments", tags=["portal"])
 
 # Horario configurable por ENV
 _AM_START = int(os.getenv("PORTAL_BUSINESS_HOURS_AM", "9-12").split("-")[0])
-_AM_END   = int(os.getenv("PORTAL_BUSINESS_HOURS_AM", "9-12").split("-")[1])
+_AM_END = int(os.getenv("PORTAL_BUSINESS_HOURS_AM", "9-12").split("-")[1])
 _PM_START = int(os.getenv("PORTAL_BUSINESS_HOURS_PM", "14-17").split("-")[0])
-_PM_END   = int(os.getenv("PORTAL_BUSINESS_HOURS_PM", "14-17").split("-")[1])
+_PM_END = int(os.getenv("PORTAL_BUSINESS_HOURS_PM", "14-17").split("-")[1])
 _SLOT_CAP = int(os.getenv("PORTAL_SLOT_CAPACITY", "1"))
 
 
 # ── schemas ───────────────────────────────────────────────────────────
 
+
 class SlotOut(BaseModel):
-    time: str          # "09:00"
+    time: str  # "09:00"
     available: bool
     reason: str | None = None
 
@@ -45,7 +47,7 @@ class AvailabilityOut(BaseModel):
 class AppointmentIn(BaseModel):
     pet_id: str
     service_type: str
-    scheduled_at: str   # ISO-8601 con TZ (e.g. "2026-07-01T10:00:00-05:00")
+    scheduled_at: str  # ISO-8601 con TZ (e.g. "2026-07-01T10:00:00-05:00")
     duration_min: int = 60
     notes: str | None = None
 
@@ -84,6 +86,7 @@ def _build_slots(hours: range) -> list[str]:
 
 # ── endpoints ─────────────────────────────────────────────────────────
 
+
 @router.get("/availability", response_model=AvailabilityOut)
 async def get_availability(
     db: DBSession,
@@ -93,8 +96,8 @@ async def get_availability(
 ) -> AvailabilityOut:
     try:
         target_date = date.fromisoformat(date_str)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="Fecha inválida, usa YYYY-MM-DD")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Fecha inválida, usa YYYY-MM-DD") from exc
 
     if target_date < date.today():
         raise HTTPException(status_code=422, detail="No puedes agendar en días pasados")
@@ -110,16 +113,20 @@ async def get_availability(
     day_end = day_start + timedelta(days=1)
 
     existing = (
-        await db.execute(
-            select(Appointment).where(
-                and_(
-                    Appointment.scheduled_at >= day_start,
-                    Appointment.scheduled_at < day_end,
-                    Appointment.status.in_(["pending", "confirmed"]),
+        (
+            await db.execute(
+                select(Appointment).where(
+                    and_(
+                        Appointment.scheduled_at >= day_start,
+                        Appointment.scheduled_at < day_end,
+                        Appointment.status.in_(["pending", "confirmed"]),
+                    )
                 )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     booked: dict[str, int] = {}
     for a in existing:
@@ -181,6 +188,7 @@ async def create_appointment(
     # Notificaciones bidireccionales
     try:
         from app.api.v1.portal_notifications import notify_admins, notify_customer
+
         service_label = payload.service_type.capitalize()
         fecha_str = scheduled.strftime("%d/%m/%Y a las %H:%M")
         await notify_customer(
@@ -249,6 +257,7 @@ async def cancel_appointment(
 
 # ── acciones admin (approve / reschedule) ────────────────────────────────────
 
+
 class ApprovePayload(BaseModel):
     new_scheduled_at: str | None = None  # si se reprograma al mismo tiempo
 
@@ -260,7 +269,9 @@ async def admin_approve(
     db: DBSession = None,
 ) -> AppointmentOut:
     """Admin: aprobar cita (requiere auth de admin — la UI lo llama con credenciales admin)."""
-    appt = (await db.execute(select(Appointment).where(Appointment.id == appt_id))).scalar_one_or_none()
+    appt = (
+        await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    ).scalar_one_or_none()
     if not appt:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
     if payload and payload.new_scheduled_at:
@@ -269,6 +280,7 @@ async def admin_approve(
     await db.flush()
     try:
         from app.api.v1.portal_notifications import notify_customer
+
         fecha_str = appt.scheduled_at.strftime("%d/%m/%Y a las %H:%M")
         await notify_customer(
             db,
@@ -292,7 +304,9 @@ async def complete_appointment(
     db: DBSession = None,
     customer: Customer = PortalUser,
 ) -> AppointmentOut:
-    appt = (await db.execute(select(Appointment).where(Appointment.id == appt_id))).scalar_one_or_none()
+    appt = (
+        await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    ).scalar_one_or_none()
     if not appt:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
     if appt.status == "completed":

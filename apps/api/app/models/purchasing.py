@@ -1,12 +1,18 @@
 """Modelos del bounded context `purchasing` (Compras a proveedores)."""
+
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    CheckConstraint, DateTime, ForeignKey, Integer, Numeric,
-    String, Text, UniqueConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -21,6 +27,7 @@ from app.models.common import (
 
 class Purchase(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
     """Orden / factura de compra a proveedor."""
+
     __tablename__ = "purchases"
     __table_args__ = ({"schema": "purchasing"},)
 
@@ -54,7 +61,7 @@ class Purchase(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
     )
 
     # Relación con ítems
-    items: Mapped[list["PurchaseItem"]] = relationship(
+    items: Mapped[list[PurchaseItem]] = relationship(
         "PurchaseItem",
         back_populates="purchase",
         cascade="all, delete-orphan",
@@ -64,6 +71,7 @@ class Purchase(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
 
 class PurchaseItem(UUIDPKMixin, TimestampMixin, Base):
     """Línea de producto dentro de una compra."""
+
     __tablename__ = "purchase_items"
     __table_args__ = ({"schema": "purchasing"},)
 
@@ -95,11 +103,12 @@ class PurchaseItem(UUIDPKMixin, TimestampMixin, Base):
     total_cost: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
 
     # Relación inversa
-    purchase: Mapped["Purchase"] = relationship("Purchase", back_populates="items")
+    purchase: Mapped[Purchase] = relationship("Purchase", back_populates="items")
 
 
 class Supplier(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
     """Proveedor (maestro). Crear inline desde Compras o desde /suppliers."""
+
     __tablename__ = "suppliers"
     __table_args__ = (
         UniqueConstraint("nit", name="uq_suppliers_nit"),
@@ -119,6 +128,7 @@ class Supplier(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
 
 class SupplierSkuMap(UUIDPKMixin, TimestampMixin, Base):
     """Memoria SKU proveedor → producto interno (para auto-match en parser XML)."""
+
     __tablename__ = "supplier_sku_map"
     __table_args__ = (
         UniqueConstraint("supplier_id", "sku_proveedor", name="uq_supplier_sku"),

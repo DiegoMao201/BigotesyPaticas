@@ -4,9 +4,8 @@ Revision ID: 0012_seo_landings
 Revises: 0011_blog_posts
 Create Date: 2026-06-27
 """
+
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, TEXT
 
 revision = "0012_seo_landings"
 down_revision = "0011_blog_posts"

@@ -7,6 +7,7 @@ Revision ID: 0008_portal_schema
 Revises: 0007_finance_cash_closings
 Create Date: 2026-06-25 10:00:00.000000
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -44,9 +45,9 @@ def upgrade() -> None:
             deleted_at      TIMESTAMPTZ
         )
     """)
-    op.create_index("ix_portal_pets_customer_id",  "pets", ["customer_id"],  schema="portal")
-    op.create_index("ix_portal_pets_deleted_at",   "pets", ["deleted_at"],   schema="portal")
-    op.create_index("ix_portal_pets_species",      "pets", ["species"],      schema="portal")
+    op.create_index("ix_portal_pets_customer_id", "pets", ["customer_id"], schema="portal")
+    op.create_index("ix_portal_pets_deleted_at", "pets", ["deleted_at"], schema="portal")
+    op.create_index("ix_portal_pets_species", "pets", ["species"], schema="portal")
 
     # ── health_records ───────────────────────────────────────────────
     op.execute("""
@@ -63,9 +64,9 @@ def upgrade() -> None:
             created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
-    op.create_index("ix_portal_hr_pet_id",    "health_records", ["pet_id"],       schema="portal")
-    op.create_index("ix_portal_hr_next_due",  "health_records", ["next_due_at"],  schema="portal")
-    op.create_index("ix_portal_hr_type",      "health_records", ["record_type"],  schema="portal")
+    op.create_index("ix_portal_hr_pet_id", "health_records", ["pet_id"], schema="portal")
+    op.create_index("ix_portal_hr_next_due", "health_records", ["next_due_at"], schema="portal")
+    op.create_index("ix_portal_hr_type", "health_records", ["record_type"], schema="portal")
 
     # ── appointments ─────────────────────────────────────────────────
     op.execute("""
@@ -88,10 +89,10 @@ def upgrade() -> None:
             updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
-    op.create_index("ix_portal_appt_pet_id",      "appointments", ["pet_id"],       schema="portal")
-    op.create_index("ix_portal_appt_customer_id", "appointments", ["customer_id"],  schema="portal")
-    op.create_index("ix_portal_appt_scheduled",   "appointments", ["scheduled_at"], schema="portal")
-    op.create_index("ix_portal_appt_status",      "appointments", ["status"],       schema="portal")
+    op.create_index("ix_portal_appt_pet_id", "appointments", ["pet_id"], schema="portal")
+    op.create_index("ix_portal_appt_customer_id", "appointments", ["customer_id"], schema="portal")
+    op.create_index("ix_portal_appt_scheduled", "appointments", ["scheduled_at"], schema="portal")
+    op.create_index("ix_portal_appt_status", "appointments", ["status"], schema="portal")
 
     # ── portal_orders ────────────────────────────────────────────────
     op.execute("""
@@ -116,10 +117,10 @@ def upgrade() -> None:
             updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
-    op.create_index("ix_portal_orders_customer",  "portal_orders", ["customer_id"], schema="portal")
-    op.create_index("ix_portal_orders_pet_id",    "portal_orders", ["pet_id"],      schema="portal")
-    op.create_index("ix_portal_orders_status",    "portal_orders", ["status"],      schema="portal")
-    op.create_index("ix_portal_orders_created",   "portal_orders", ["created_at"],  schema="portal")
+    op.create_index("ix_portal_orders_customer", "portal_orders", ["customer_id"], schema="portal")
+    op.create_index("ix_portal_orders_pet_id", "portal_orders", ["pet_id"], schema="portal")
+    op.create_index("ix_portal_orders_status", "portal_orders", ["status"], schema="portal")
+    op.create_index("ix_portal_orders_created", "portal_orders", ["created_at"], schema="portal")
 
     # ── portal_sessions ──────────────────────────────────────────────
     op.execute("""
@@ -132,9 +133,13 @@ def upgrade() -> None:
             created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
-    op.create_index("ix_portal_sessions_token",    "portal_sessions", ["token"],       schema="portal")
-    op.create_index("ix_portal_sessions_customer", "portal_sessions", ["customer_id"], schema="portal")
-    op.create_index("ix_portal_sessions_expires",  "portal_sessions", ["expires_at"],  schema="portal")
+    op.create_index("ix_portal_sessions_token", "portal_sessions", ["token"], schema="portal")
+    op.create_index(
+        "ix_portal_sessions_customer", "portal_sessions", ["customer_id"], schema="portal"
+    )
+    op.create_index(
+        "ix_portal_sessions_expires", "portal_sessions", ["expires_at"], schema="portal"
+    )
 
     # ── loyalty_points ───────────────────────────────────────────────
     op.execute("""
@@ -157,9 +162,9 @@ def upgrade() -> None:
             created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
-    op.create_index("ix_portal_lp_customer",  "loyalty_points", ["customer_id"], schema="portal")
-    op.create_index("ix_portal_lp_expires",   "loyalty_points", ["expires_at"],  schema="portal")
-    op.create_index("ix_portal_lp_reason",    "loyalty_points", ["reason"],      schema="portal")
+    op.create_index("ix_portal_lp_customer", "loyalty_points", ["customer_id"], schema="portal")
+    op.create_index("ix_portal_lp_expires", "loyalty_points", ["expires_at"], schema="portal")
+    op.create_index("ix_portal_lp_reason", "loyalty_points", ["reason"], schema="portal")
 
     # ── notifications ────────────────────────────────────────────────
     op.execute("""
@@ -181,15 +186,20 @@ def upgrade() -> None:
         )
     """)
     op.create_index("ix_portal_notif_customer", "notifications", ["customer_id"], schema="portal")
-    op.create_index("ix_portal_notif_read_at",  "notifications", ["read_at"],     schema="portal")
-    op.create_index("ix_portal_notif_type",     "notifications", ["type"],        schema="portal")
-    op.create_index("ix_portal_notif_created",  "notifications", ["created_at"],  schema="portal")
+    op.create_index("ix_portal_notif_read_at", "notifications", ["read_at"], schema="portal")
+    op.create_index("ix_portal_notif_type", "notifications", ["type"], schema="portal")
+    op.create_index("ix_portal_notif_created", "notifications", ["created_at"], schema="portal")
 
 
 def downgrade() -> None:
     for tbl in [
-        "notifications", "loyalty_points", "portal_sessions",
-        "portal_orders", "appointments", "health_records", "pets",
+        "notifications",
+        "loyalty_points",
+        "portal_sessions",
+        "portal_orders",
+        "appointments",
+        "health_records",
+        "pets",
     ]:
         op.drop_table(tbl, schema="portal")
     op.execute("DROP SCHEMA IF EXISTS portal")

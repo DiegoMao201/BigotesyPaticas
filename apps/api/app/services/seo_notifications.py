@@ -1,6 +1,8 @@
 """IndexNow — notificación instantánea a Bing/Yandex cuando cambia una URL."""
+
 import os
-from typing import Sequence
+from collections.abc import Sequence
+
 import httpx
 
 INDEXNOW_KEY = os.environ.get("INDEXNOW_KEY", "")
@@ -22,5 +24,5 @@ async def notify_indexnow(urls: Sequence[str]) -> None:
     try:
         async with httpx.AsyncClient(timeout=8) as client:
             await client.post(BING_URL, json=payload)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[indexnow] Failed: {exc}")

@@ -21,22 +21,26 @@ NOTA: Este script es el SCAFFOLD inicial. Cada handler `_handle_<tab>` debe
 implementarse según el shape real de cada tab. Hasta que el usuario confirme
 estructuras, este script lista los tabs existentes y produce un mapeo dry.
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import os
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+
 
 # --- Lazy imports (algunos no son obligatorios en dry-run) ---
 def _lazy_gspread():
     try:
         import gspread  # type: ignore
         from google.oauth2.service_account import Credentials  # type: ignore
+
         return gspread, Credentials
     except ImportError as e:
         print(f"Faltan deps: pip install gspread google-auth\n{e}", file=sys.stderr)
@@ -46,6 +50,7 @@ def _lazy_gspread():
 def _lazy_sa():
     try:
         from sqlalchemy import create_engine, text  # type: ignore
+
         return create_engine, text
     except ImportError as e:
         print(f"Faltan deps: pip install sqlalchemy psycopg[binary]\n{e}", file=sys.stderr)
@@ -71,10 +76,12 @@ def handler(tab_name: str):
     def deco(fn):
         HANDLERS[tab_name] = fn
         return fn
+
     return deco
 
 
 # ---------- Handlers (esqueleto, completar cuando conozcamos las tabs) ----------
+
 
 @handler("products")
 def _h_products(rows: list[dict], conn, dry_run: bool) -> TabReport:
@@ -92,8 +99,9 @@ def _h_products(rows: list[dict], conn, dry_run: bool) -> TabReport:
       imagen / url_imagen → products.primary_image_url
       activo (bool/int) → products.is_active
     """
+    import re
+    import unicodedata
     from datetime import UTC, datetime
-    import re, unicodedata
 
     rep = TabReport(name="products", rows_read=len(rows))
     if not rows:
@@ -158,8 +166,15 @@ def _h_products(rows: list[dict], conn, dry_run: bool) -> TabReport:
                 """UPDATE catalog.products SET name=:name, price=:price, cost=:cost,
                    is_active=:active, primary_image_url=:img, updated_at=:now
                    WHERE sku=:sku""",
-                {"name": name, "price": price, "cost": cost, "active": is_active,
-                 "img": image, "now": now, "sku": sku},
+                {
+                    "name": name,
+                    "price": price,
+                    "cost": cost,
+                    "active": is_active,
+                    "img": image,
+                    "now": now,
+                    "sku": sku,
+                },
             )
             rep.rows_updated += 1
         else:
@@ -167,8 +182,17 @@ def _h_products(rows: list[dict], conn, dry_run: bool) -> TabReport:
                 """INSERT INTO catalog.products
                    (sku, slug, name, short_description, price, cost, is_active, primary_image_url, created_at, updated_at)
                    VALUES (:sku, :slug, :name, :desc, :price, :cost, :active, :img, :now, :now)""",
-                {"sku": sku, "slug": _slug(name), "name": name, "desc": desc,
-                 "price": price, "cost": cost, "active": is_active, "img": image, "now": now},
+                {
+                    "sku": sku,
+                    "slug": _slug(name),
+                    "name": name,
+                    "desc": desc,
+                    "price": price,
+                    "cost": cost,
+                    "active": is_active,
+                    "img": image,
+                    "now": now,
+                },
             )
             rep.rows_inserted += 1
     return rep
@@ -183,7 +207,8 @@ def _h_inventory(rows: list[dict], conn, dry_run: bool) -> TabReport:
       cantidad / stock / qty → inventory.stock.quantity
       ubicacion / location → inventory.stock_locations.name
     """
-    import re, unicodedata
+    import re
+    import unicodedata
 
     rep = TabReport(name="inventory", rows_read=len(rows))
 
@@ -208,7 +233,9 @@ def _h_inventory(rows: list[dict], conn, dry_run: bool) -> TabReport:
         if dry_run or conn is None:
             rep.rows_skipped += 1
             continue
-        prod = conn.execute("SELECT id FROM catalog.products WHERE sku = :sku", {"sku": sku}).fetchone()
+        prod = conn.execute(
+            "SELECT id FROM catalog.products WHERE sku = :sku", {"sku": sku}
+        ).fetchone()
         if not prod:
             rep.rows_rejected += 1
             rep.rejections.append({"reason": f"producto no encontrado sku={sku}", "raw": r})
@@ -244,7 +271,8 @@ def _h_customers(rows: list[dict], conn, dry_run: bool) -> TabReport:
       ciudad / municipio → city
       direccion → address
     """
-    import re, unicodedata
+    import re
+    import unicodedata
     from datetime import UTC, datetime
 
     rep = TabReport(name="customers", rows_read=len(rows))
@@ -256,7 +284,9 @@ def _h_customers(rows: list[dict], conn, dry_run: bool) -> TabReport:
     now = datetime.now(UTC)
     for r in rows:
         nr = {_norm(k): v for k, v in r.items()}
-        full_name = (nr.get("nombre") or nr.get("nombre_completo") or nr.get("cliente") or "").strip()
+        full_name = (
+            nr.get("nombre") or nr.get("nombre_completo") or nr.get("cliente") or ""
+        ).strip()
         if not full_name:
             rep.rows_rejected += 1
             rep.rejections.append({"reason": "nombre vacío", "raw": r})
@@ -290,8 +320,15 @@ def _h_customers(rows: list[dict], conn, dry_run: bool) -> TabReport:
             conn.execute(
                 """INSERT INTO crm.customers (full_name, document_id, email, phone, city, address, created_at, updated_at)
                    VALUES (:fn, :doc, :em, :ph, :ct, :ad, :now, :now)""",
-                {"fn": full_name, "doc": doc, "em": email, "ph": phone,
-                 "ct": city, "ad": address, "now": now},
+                {
+                    "fn": full_name,
+                    "doc": doc,
+                    "em": email,
+                    "ph": phone,
+                    "ct": city,
+                    "ad": address,
+                    "now": now,
+                },
             )
             rep.rows_inserted += 1
     return rep
@@ -310,7 +347,8 @@ def _h_sales(rows: list[dict], conn, dry_run: bool) -> TabReport:
       canal / medio → channel
       notas → notes
     """
-    import re, unicodedata
+    import re
+    import unicodedata
     from datetime import UTC, datetime
 
     rep = TabReport(name="sales", rows_read=len(rows))
@@ -337,14 +375,20 @@ def _h_sales(rows: list[dict], conn, dry_run: bool) -> TabReport:
         return datetime.now(UTC)
 
     STATUS_MAP = {
-        "completada": "completed", "pagada": "completed", "entregada": "completed",
-        "pendiente": "pending", "cancelada": "cancelled", "procesando": "processing",
+        "completada": "completed",
+        "pagada": "completed",
+        "entregada": "completed",
+        "pendiente": "pending",
+        "cancelada": "cancelled",
+        "procesando": "processing",
     }
 
     now = datetime.now(UTC)
     for r in rows:
         nr = {_norm(k): v for k, v in r.items()}
-        order_number = str(nr.get("numero_orden") or nr.get("id_venta") or nr.get("orden") or "").strip()
+        order_number = str(
+            nr.get("numero_orden") or nr.get("id_venta") or nr.get("orden") or ""
+        ).strip()
         if not order_number:
             rep.rows_rejected += 1
             rep.rejections.append({"reason": "numero_orden vacío", "raw": r})
@@ -353,7 +397,9 @@ def _h_sales(rows: list[dict], conn, dry_run: bool) -> TabReport:
         occurred = _parse_date(nr.get("fecha") or nr.get("fecha_venta") or now)
         raw_status = str(nr.get("estado") or "").strip().lower()
         status = STATUS_MAP.get(raw_status, "completed")
-        channel = str(nr.get("canal") or nr.get("medio") or "physical").strip().lower() or "physical"
+        channel = (
+            str(nr.get("canal") or nr.get("medio") or "physical").strip().lower() or "physical"
+        )
 
         if dry_run or conn is None:
             rep.rows_skipped += 1
@@ -371,15 +417,21 @@ def _h_sales(rows: list[dict], conn, dry_run: bool) -> TabReport:
                    (order_number, channel, status, grand_total, subtotal, paid_amount,
                     balance_due, payment_status, occurred_at, created_at, updated_at)
                    VALUES (:on, :ch, :st, :gt, :gt, :gt, 0, 'paid', :oc, :now, :now)""",
-                {"on": order_number, "ch": channel, "st": status, "gt": total,
-                 "oc": occurred, "now": now},
+                {
+                    "on": order_number,
+                    "ch": channel,
+                    "st": status,
+                    "gt": total,
+                    "oc": occurred,
+                    "now": now,
+                },
             )
             rep.rows_inserted += 1
     return rep
 
 
-
 # ---------- Driver ----------
+
 
 def fetch_tab_rows(tab: str) -> list[dict]:
     gspread, Credentials = _lazy_gspread()
@@ -408,10 +460,11 @@ def write_log(reports: list[TabReport], outdir: Path) -> Path:
     outdir.mkdir(parents=True, exist_ok=True)
     ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     out = outdir / f"etl-{ts}.json"
-    out.write_text(json.dumps(
-        {"ts": ts, "reports": [r.__dict__ for r in reports]},
-        ensure_ascii=False, indent=2
-    ))
+    out.write_text(
+        json.dumps(
+            {"ts": ts, "reports": [r.__dict__ for r in reports]}, ensure_ascii=False, indent=2
+        )
+    )
     return out
 
 
@@ -455,7 +508,9 @@ def main() -> int:
         rows = fetch_tab_rows(tab)
         rep = HANDLERS[tab](rows, conn, args.dry_run)
         reports.append(rep)
-        print(f"  read={rep.rows_read} ins={rep.rows_inserted} upd={rep.rows_updated} skip={rep.rows_skipped} rej={rep.rows_rejected}")
+        print(
+            f"  read={rep.rows_read} ins={rep.rows_inserted} upd={rep.rows_updated} skip={rep.rows_skipped} rej={rep.rows_rejected}"
+        )
 
     if conn:
         conn.commit()

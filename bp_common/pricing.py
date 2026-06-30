@@ -3,6 +3,7 @@
 Fórmula vigente y NO negociable: ``P = C / (1 - m)``.
 Cualquier cambio invalida toda la política de pricing del negocio.
 """
+
 from __future__ import annotations
 
 MARGEN_BRUTO_OBJ_DEFAULT: float = 0.20  # 20%

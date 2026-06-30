@@ -5,12 +5,12 @@ Corre cada 5 minutos via cron (igual que publish_stories.py).
 Instagram: imagen en feed del perfil (permanente).
 Facebook:  foto con caption en el muro de la página (permanente).
 """
+
 from __future__ import annotations
 
 import logging
 import os
 import sys
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, "/app")
@@ -25,11 +25,13 @@ import requests
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-_BOGOTA   = ZoneInfo("America/Bogota")
+_BOGOTA = ZoneInfo("America/Bogota")
 META_BASE = "https://graph.facebook.com/v25.0"
-DB_URL    = os.environ.get("DATABASE_URL_SYNC", "").replace(
-    "postgresql+asyncpg://", "postgresql://"
-).replace("postgresql+psycopg://", "postgresql://")
+DB_URL = (
+    os.environ.get("DATABASE_URL_SYNC", "")
+    .replace("postgresql+asyncpg://", "postgresql://")
+    .replace("postgresql+psycopg://", "postgresql://")
+)
 
 
 def _page_token() -> str:
@@ -49,12 +51,12 @@ def get_pending_feed_posts(cur) -> list[dict]:
         LIMIT 5
     """)
     cols = [d[0] for d in cur.description]
-    return [dict(zip(cols, row)) for row in cur.fetchall()]
+    return [dict(zip(cols, row, strict=False)) for row in cur.fetchall()]
 
 
 def publish_instagram_feed(image_url: str, caption: str) -> str:
     """Publica imagen en el feed de Instagram Business."""
-    ig_id      = os.environ.get("META_INSTAGRAM_BUSINESS_ID", "")
+    ig_id = os.environ.get("META_INSTAGRAM_BUSINESS_ID", "")
     page_token = _page_token()
     if not ig_id:
         raise RuntimeError("META_INSTAGRAM_BUSINESS_ID no configurado")
@@ -90,7 +92,7 @@ def publish_facebook_feed(image_url: str, caption: str, link_url: str | None = N
 
     El link de contacto va en el caption como texto clickeable en FB.
     """
-    page_id    = os.environ.get("META_PAGE_ID", "")
+    page_id = os.environ.get("META_PAGE_ID", "")
     page_token = _page_token()
     if not page_id:
         raise RuntimeError("META_PAGE_ID no configurado")
@@ -113,7 +115,8 @@ def publish_facebook_feed(image_url: str, caption: str, link_url: str | None = N
 
 
 def mark_published(cur, conn, post_id: str, ig_id: str, fb_id: str) -> None:
-    cur.execute("""
+    cur.execute(
+        """
         UPDATE content.story_posts
         SET status = 'published',
             published_at = NOW(),
@@ -121,18 +124,23 @@ def mark_published(cur, conn, post_id: str, ig_id: str, fb_id: str) -> None:
             facebook_story_id  = %s,
             updated_at = NOW()
         WHERE id = %s
-    """, (ig_id, fb_id, post_id))
+    """,
+        (ig_id, fb_id, post_id),
+    )
     conn.commit()
 
 
 def mark_failed(cur, conn, post_id: str, error: str) -> None:
-    cur.execute("""
+    cur.execute(
+        """
         UPDATE content.story_posts
         SET status = 'failed',
             error_message = %s,
             updated_at = NOW()
         WHERE id = %s
-    """, (error[:500], post_id))
+    """,
+        (error[:500], post_id),
+    )
     conn.commit()
 
 
@@ -142,7 +150,7 @@ def main() -> None:
         sys.exit(1)
 
     conn = psycopg2.connect(DB_URL, connect_timeout=10)
-    cur  = conn.cursor()
+    cur = conn.cursor()
 
     posts = get_pending_feed_posts(cur)
     if not posts:
@@ -153,10 +161,10 @@ def main() -> None:
     log.info("%d feed post(s) aprobados para publicar", len(posts))
 
     for post in posts:
-        pid       = post["id"]
+        pid = post["id"]
         image_url = post["base_image_url"]
-        caption   = post["caption"] or ""
-        link_url  = post["swipe_up_url"]
+        caption = post["caption"] or ""
+        link_url = post["swipe_up_url"]
 
         log.info("Publicando feed post %s …", pid)
         ig_post_id = ""

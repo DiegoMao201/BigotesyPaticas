@@ -18,7 +18,7 @@ import asyncio
 import hashlib
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import asyncpg
 import httpx
@@ -53,13 +53,15 @@ async def fetch_gbp_reviews() -> dict:
     reviews_raw = data.get("reviews", [])
     reviews = []
     for rv in reviews_raw:
-        reviews.append({
-            "author_name": rv.get("authorAttribution", {}).get("displayName", "Anónimo"),
-            "profile_photo_url": rv.get("authorAttribution", {}).get("photoUri"),
-            "rating": rv.get("rating", 0),
-            "text": rv.get("text", {}).get("text", ""),
-            "time": rv.get("publishTime", ""),
-        })
+        reviews.append(
+            {
+                "author_name": rv.get("authorAttribution", {}).get("displayName", "Anónimo"),
+                "profile_photo_url": rv.get("authorAttribution", {}).get("photoUri"),
+                "rating": rv.get("rating", 0),
+                "text": rv.get("text", {}).get("text", ""),
+                "time": rv.get("publishTime", ""),
+            }
+        )
     return {
         "rating": data.get("rating"),
         "user_ratings_total": data.get("userRatingCount", 0),
@@ -74,7 +76,9 @@ def stable_id(reviewer: str, rating: int, ts: int) -> str:
 
 
 async def fuzzy_match_customer(conn: asyncpg.Connection, name: str) -> str | None:
-    rows = await conn.fetch("SELECT id, full_name FROM crm.customers WHERE full_name IS NOT NULL LIMIT 500")
+    rows = await conn.fetch(
+        "SELECT id, full_name FROM crm.customers WHERE full_name IS NOT NULL LIMIT 500"
+    )
     best_score, best_id = 0, None
     for row in rows:
         score = fuzz.token_sort_ratio(name.lower(), row["full_name"].lower())
@@ -95,7 +99,8 @@ async def award_gbp_points(conn: asyncpg.Connection, customer_id: str, gbp_revie
         INSERT INTO portal.loyalty_points (customer_id, points, reason, description, expires_at)
         VALUES ($1::uuid, 50, 'gbp_review', $2, NOW() + INTERVAL '1 year')
         """,
-        customer_id, f"Reseña Google Business #{gbp_review_id}",
+        customer_id,
+        f"Reseña Google Business #{gbp_review_id}",
     )
     await conn.execute(
         "UPDATE catalog.gbp_reviews_cache SET points_credited=1, points_credited_at=NOW() WHERE google_review_id=$1",
@@ -135,11 +140,16 @@ async def main():
             # publishTime puede ser ISO string ("2024-03-15T...") o unix int
             if isinstance(time_raw, str) and time_raw:
                 from dateutil.parser import parse as parse_dt
-                created_at = parse_dt(time_raw).replace(tzinfo=timezone.utc) if "+" not in time_raw else parse_dt(time_raw)
+
+                created_at = (
+                    parse_dt(time_raw).replace(tzinfo=UTC)
+                    if "+" not in time_raw
+                    else parse_dt(time_raw)
+                )
                 ts = int(created_at.timestamp())
             else:
                 ts = int(time_raw) if time_raw else 0
-                created_at = datetime.fromtimestamp(ts, tz=timezone.utc)
+                created_at = datetime.fromtimestamp(ts, tz=UTC)
             gbp_id = stable_id(reviewer, rating, ts)
             photo_url = rev.get("profile_photo_url")
 
@@ -164,7 +174,12 @@ async def main():
                    review_created_at, matched_customer_id)
                 VALUES ($1, $2, $3, $4, $5, $6, $7::uuid)
                 """,
-                gbp_id, reviewer, photo_url, rating, comment, created_at,
+                gbp_id,
+                reviewer,
+                photo_url,
+                rating,
+                comment,
+                created_at,
                 customer_id,
             )
             inserted += 1

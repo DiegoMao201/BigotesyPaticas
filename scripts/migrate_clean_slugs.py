@@ -12,6 +12,7 @@ Steps:
   4. If collision: keep one clean, others get a suffix from their name
   5. Report stats
 """
+
 from __future__ import annotations
 
 import argparse
@@ -105,7 +106,7 @@ async def run(dry_run: bool) -> None:
         print(f"\nCambios a aplicar: {len(changes)}")
         print(f"Colisiones detectadas: {collisions}")
         print("\nPrimeros 30 cambios:")
-        for pid, old_s, new_s in changes[:30]:
+        for _pid, old_s, new_s in changes[:30]:
             print(f"  {old_s}  →  {new_s}")
 
         if dry_run:
@@ -120,16 +121,20 @@ async def run(dry_run: bool) -> None:
                 if old_slug == new_slug:
                     continue
                 await conn.execute(
-                    "UPDATE catalog.products SET slug = $1 WHERE id = $2",
-                    new_slug, pid
+                    "UPDATE catalog.products SET slug = $1 WHERE id = $2", new_slug, pid
                 )
                 # Insert redirect
-                await conn.execute("""
+                await conn.execute(
+                    """
                     INSERT INTO catalog.slug_redirects (old_slug, new_slug, product_id)
                     VALUES ($1, $2, $3)
                     ON CONFLICT (old_slug) DO UPDATE
                     SET new_slug = EXCLUDED.new_slug
-                """, old_slug, new_slug, pid)
+                """,
+                    old_slug,
+                    new_slug,
+                    pid,
+                )
                 applied += 1
                 redirects += 1
 
@@ -137,9 +142,7 @@ async def run(dry_run: bool) -> None:
         remaining = await conn.fetchval(
             "SELECT COUNT(*) FROM catalog.products WHERE slug ~ '-[a-f0-9]{6}$'"
         )
-        total_redirects = await conn.fetchval(
-            "SELECT COUNT(*) FROM catalog.slug_redirects"
-        )
+        total_redirects = await conn.fetchval("SELECT COUNT(*) FROM catalog.slug_redirects")
 
         print(f"\n✅ Cambios aplicados: {applied}")
         print(f"✅ Redirects creados: {redirects}")
@@ -151,7 +154,9 @@ async def run(dry_run: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Migrate product slugs — remove 6-char hash suffix")
+    parser = argparse.ArgumentParser(
+        description="Migrate product slugs — remove 6-char hash suffix"
+    )
     parser.add_argument("--dry-run", action="store_true", help="Preview only, do not write")
     args = parser.parse_args()
     asyncio.run(run(dry_run=args.dry_run))

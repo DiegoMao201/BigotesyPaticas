@@ -1,4 +1,5 @@
 """Estados de pago — bit-exact a `BigotesyPaticas.py::_normalizar_estado_pago`."""
+
 from __future__ import annotations
 
 from typing import Any

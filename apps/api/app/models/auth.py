@@ -1,11 +1,11 @@
 """Modelos del bounded context `auth`."""
+
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Table, Column, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, CITEXT
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Table, UniqueConstraint
+from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.common import (
@@ -16,13 +16,22 @@ from app.models.common import (
     UUIDPKMixin,
 )
 
-
 # Tabla de unión users <-> roles
 user_roles = Table(
     "user_roles",
     Base.metadata,
-    Column("user_id", UUID(as_uuid=True), ForeignKey("auth.users.id", ondelete="CASCADE"), primary_key=True),
-    Column("role_id", UUID(as_uuid=True), ForeignKey("auth.roles.id", ondelete="CASCADE"), primary_key=True),
+    Column(
+        "user_id",
+        UUID(as_uuid=True),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "role_id",
+        UUID(as_uuid=True),
+        ForeignKey("auth.roles.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
     schema="auth",
 )
 
@@ -38,7 +47,7 @@ class User(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     is_superadmin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    roles: Mapped[list["Role"]] = relationship(
+    roles: Mapped[list[Role]] = relationship(
         "Role", secondary=user_roles, back_populates="users", lazy="selectin"
     )
 
@@ -63,9 +72,7 @@ class Role(UUIDPKMixin, TimestampMixin, Base):
         nullable=False,
     )
 
-    users: Mapped[list[User]] = relationship(
-        User, secondary=user_roles, back_populates="roles"
-    )
+    users: Mapped[list[User]] = relationship(User, secondary=user_roles, back_populates="roles")
 
 
 # Permisos canónicos (verdad única). Usar en seeds y RBAC.
@@ -99,29 +106,49 @@ PERMISSIONS = {
 ROLE_DEFAULTS = {
     "superadmin": list(PERMISSIONS),
     "admin": [
-        "catalog:read", "catalog:write",
-        "inventory:read", "inventory:write", "inventory:adjust",
-        "sales:read", "sales:write", "sales:refund",
-        "purchasing:read", "purchasing:write",
-        "crm:read", "crm:write",
-        "finance:read", "finance:write",
+        "catalog:read",
+        "catalog:write",
+        "inventory:read",
+        "inventory:write",
+        "inventory:adjust",
+        "sales:read",
+        "sales:write",
+        "sales:refund",
+        "purchasing:read",
+        "purchasing:write",
+        "crm:read",
+        "crm:write",
+        "finance:read",
+        "finance:write",
         "users:read",
     ],
     "manager": [
-        "catalog:read", "catalog:write",
-        "inventory:read", "inventory:write", "inventory:adjust",
-        "sales:read", "sales:write",
-        "purchasing:read", "purchasing:write",
-        "crm:read", "crm:write",
+        "catalog:read",
+        "catalog:write",
+        "inventory:read",
+        "inventory:write",
+        "inventory:adjust",
+        "sales:read",
+        "sales:write",
+        "purchasing:read",
+        "purchasing:write",
+        "crm:read",
+        "crm:write",
         "finance:read",
     ],
     "cashier": [
-        "catalog:read", "inventory:read",
-        "sales:read", "sales:write",
-        "crm:read", "crm:write",
+        "catalog:read",
+        "inventory:read",
+        "sales:read",
+        "sales:write",
+        "crm:read",
+        "crm:write",
     ],
     "viewer": [
-        "catalog:read", "inventory:read", "sales:read",
-        "crm:read", "finance:read",
+        "catalog:read",
+        "inventory:read",
+        "sales:read",
+        "crm:read",
+        "finance:read",
     ],
 }

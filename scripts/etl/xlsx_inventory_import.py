@@ -12,11 +12,11 @@ Uso:
 
 Por defecto conecta al tunnel SSH en localhost:5433.
 """
+
 from __future__ import annotations
 
 import argparse
 import re
-import sys
 import unicodedata
 import uuid
 from pathlib import Path
@@ -118,7 +118,10 @@ def parse_excel(path: Path) -> list[dict]:
 def ensure_category(conn, name: str, dry_run: bool) -> str | None:
     """Retorna category_id (UUID str) existente o crea la categoría."""
     cur = conn.cursor()
-    cur.execute("SELECT id FROM catalog.categories WHERE UPPER(name) = %s AND deleted_at IS NULL LIMIT 1", (name,))
+    cur.execute(
+        "SELECT id FROM catalog.categories WHERE UPPER(name) = %s AND deleted_at IS NULL LIMIT 1",
+        (name,),
+    )
     row = cur.fetchone()
     if row:
         return str(row[0])
@@ -129,7 +132,10 @@ def ensure_category(conn, name: str, dry_run: bool) -> str | None:
     cat_id = str(uuid.uuid4())
     cat_slug = slugify(name)
     # Resolver conflicto de slug
-    cur.execute("SELECT id FROM catalog.categories WHERE slug = %s AND deleted_at IS NULL LIMIT 1", (cat_slug,))
+    cur.execute(
+        "SELECT id FROM catalog.categories WHERE slug = %s AND deleted_at IS NULL LIMIT 1",
+        (cat_slug,),
+    )
     if cur.fetchone():
         cat_slug = f"{cat_slug}-{cat_id[:6]}"
     cur.execute(
@@ -257,11 +263,9 @@ def run_import(db_url: str, dry_run: bool):
         category_map: dict[str, str | None] = {}
 
         stats = {"updated": 0, "created": 0, "skipped": 0, "errors": 0}
-        sku_counters: dict[str, int] = {}
-
         cur = conn.cursor()
 
-        for i, p in enumerate(products):
+        for _i, p in enumerate(products):
             sku_raw = p["sku_raw"]
             name = p["name"]
             cat_name = p["category"]
@@ -290,7 +294,6 @@ def run_import(db_url: str, dry_run: bool):
                 if row:
                     product_id = str(row[0])
                     if not dry_run:
-                        updates = {"price": price, "cost": cost, "updated_at": "now()"}
                         if category_id:
                             cur.execute(
                                 """
@@ -299,9 +302,13 @@ def run_import(db_url: str, dry_run: bool):
                                     attributes = attributes || %s::jsonb, updated_at = now()
                                 WHERE id = %s
                                 """,
-                                (price, cost, category_id,
-                                 psycopg2.extras.Json(attributes) if attributes else "{}",
-                                 product_id),
+                                (
+                                    price,
+                                    cost,
+                                    category_id,
+                                    psycopg2.extras.Json(attributes) if attributes else "{}",
+                                    product_id,
+                                ),
                             )
                         else:
                             cur.execute(
@@ -311,9 +318,12 @@ def run_import(db_url: str, dry_run: bool):
                                     attributes = attributes || %s::jsonb, updated_at = now()
                                 WHERE id = %s
                                 """,
-                                (price, cost,
-                                 psycopg2.extras.Json(attributes) if attributes else "{}",
-                                 product_id),
+                                (
+                                    price,
+                                    cost,
+                                    psycopg2.extras.Json(attributes) if attributes else "{}",
+                                    product_id,
+                                ),
                             )
                         upsert_stock(conn, product_id, location_id, conteo, dry_run)
                     stats["updated"] += 1
@@ -342,9 +352,13 @@ def run_import(db_url: str, dry_run: bool):
                                     attributes = attributes || %s::jsonb, updated_at = now()
                                 WHERE id = %s
                                 """,
-                                (price, cost, category_id,
-                                 psycopg2.extras.Json(attributes) if attributes else "{}",
-                                 product_id),
+                                (
+                                    price,
+                                    cost,
+                                    category_id,
+                                    psycopg2.extras.Json(attributes) if attributes else "{}",
+                                    product_id,
+                                ),
                             )
                         else:
                             cur.execute(
@@ -354,9 +368,12 @@ def run_import(db_url: str, dry_run: bool):
                                     attributes = attributes || %s::jsonb, updated_at = now()
                                 WHERE id = %s
                                 """,
-                                (price, cost,
-                                 psycopg2.extras.Json(attributes) if attributes else "{}",
-                                 product_id),
+                                (
+                                    price,
+                                    cost,
+                                    psycopg2.extras.Json(attributes) if attributes else "{}",
+                                    product_id,
+                                ),
                             )
                         upsert_stock(conn, product_id, location_id, conteo, dry_run)
                     stats["updated"] += 1
@@ -411,8 +428,14 @@ def run_import(db_url: str, dry_run: bool):
                             now(), now())
                     """,
                     (
-                        product_id, sku, name, slug, category_id,
-                        cost, price, margin,
+                        product_id,
+                        sku,
+                        name,
+                        slug,
+                        category_id,
+                        cost,
+                        price,
+                        margin,
                         psycopg2.extras.Json(attributes),
                     ),
                 )
@@ -430,7 +453,7 @@ def run_import(db_url: str, dry_run: bool):
             conn.rollback()
             print("\n[DRY-RUN] No se aplicaron cambios.")
 
-        print(f"\nResumen:")
+        print("\nResumen:")
         print(f"  Actualizados:  {stats['updated']}")
         print(f"  Creados:       {stats['created']}")
         print(f"  Omitidos:      {stats['skipped']}")
@@ -448,7 +471,9 @@ def run_import(db_url: str, dry_run: bool):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Importar inventario desde Excel a PostgreSQL")
-    parser.add_argument("--dry-run", action="store_true", help="Solo muestra cambios, no escribe en BD")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Solo muestra cambios, no escribe en BD"
+    )
     parser.add_argument("--db-url", default=DEFAULT_DB_URL, help="URL de conexión PostgreSQL")
     args = parser.parse_args()
 

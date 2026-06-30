@@ -1,4 +1,5 @@
 """Golden tests para `bp_common.pricing.precio_con_margen`."""
+
 from __future__ import annotations
 
 import math

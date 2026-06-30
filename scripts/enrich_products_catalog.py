@@ -8,13 +8,15 @@ Uso:
   python scripts/enrich_products_catalog.py --only-missing        # Full catálogo (faltantes)
   python scripts/enrich_products_catalog.py --only-missing --limit=100  # Lote específico
 """
+
+import asyncio
+import json
 import os
 import sys
-import json
 import time
-import asyncio
-import httpx
 from datetime import datetime
+
+import httpx
 
 # ─── Configuración ──────────────────────────────────────────────────────────
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
@@ -33,10 +35,29 @@ for arg in sys.argv:
         LIMIT = int(arg.split("=")[1])
 
 KNOWN_BRANDS = [
-    "Hills", "Hill's", "Royal Canin", "Pro Plan", "Purina", "Eukanuba",
-    "Bravecto", "Frontline", "Advocate", "Drontal", "Nutram", "Acana",
-    "Orijen", "Taste of the Wild", "Diamond", "Pedigree", "Whiskas",
-    "Fancy Feast", "Friskies", "Iams", "Kibbles", "Nexgard", "Seresto",
+    "Hills",
+    "Hill's",
+    "Royal Canin",
+    "Pro Plan",
+    "Purina",
+    "Eukanuba",
+    "Bravecto",
+    "Frontline",
+    "Advocate",
+    "Drontal",
+    "Nutram",
+    "Acana",
+    "Orijen",
+    "Taste of the Wild",
+    "Diamond",
+    "Pedigree",
+    "Whiskas",
+    "Fancy Feast",
+    "Friskies",
+    "Iams",
+    "Kibbles",
+    "Nexgard",
+    "Seresto",
 ]
 
 PROMPT_TEMPLATE = """Eres un redactor experto en e-commerce para mascotas en Colombia.
@@ -116,9 +137,23 @@ def detect_brand(name: str) -> str:
 
 
 def is_medication(name: str, category: str) -> bool:
-    keywords = ["tableta", "tablet", " ml ", "mg ", "ampolla", "jeringa",
-                "antibiótico", "antiinflamatorio", "antiparasit", "antifúng",
-                "drontal", "bravecto", "advocate", "frontline", "nexgard"]
+    keywords = [
+        "tableta",
+        "tablet",
+        " ml ",
+        "mg ",
+        "ampolla",
+        "jeringa",
+        "antibiótico",
+        "antiinflamatorio",
+        "antiparasit",
+        "antifúng",
+        "drontal",
+        "bravecto",
+        "advocate",
+        "frontline",
+        "nexgard",
+    ]
     text = (name + " " + (category or "")).lower()
     return any(k in text for k in keywords)
 
@@ -135,7 +170,9 @@ async def enrich_one(client: httpx.AsyncClient, product: dict) -> dict | None:
         brand_hint=brand,
     )
     if med:
-        prompt += "\n\nATENCIÓN: Este producto parece ser de uso veterinario/médico. Aplica regla 2."
+        prompt += (
+            "\n\nATENCIÓN: Este producto parece ser de uso veterinario/médico. Aplica regla 2."
+        )
 
     for attempt in range(RETRY_MAX):
         try:
@@ -181,7 +218,7 @@ async def enrich_one(client: httpx.AsyncClient, product: dict) -> dict | None:
             print(f"    ⚠️  Error (intento {attempt+1}): {e}")
 
         if attempt < RETRY_MAX - 1:
-            await asyncio.sleep(2 ** attempt)
+            await asyncio.sleep(2**attempt)
 
     return None
 
@@ -194,15 +231,17 @@ async def main() -> None:
         print("❌ DATABASE_URL no configurada")
         sys.exit(1)
 
-    from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
 
     engine = create_async_engine(DB_URL, pool_size=5)
 
     print("╔══════════════════════════════════════════════════════╗")
     print("║   Bigotes y Paticas — Enriquecimiento de catálogo   ║")
     print("╠══════════════════════════════════════════════════════╣")
-    print(f"║  Modo:        {'DRY-RUN (sin escritura DB)' if DRY_RUN else 'PRODUCCIÓN            '}")
+    print(
+        f"║  Modo:        {'DRY-RUN (sin escritura DB)' if DRY_RUN else 'PRODUCCIÓN            '}"
+    )
     print(f"║  Solo nuevos: {ONLY_MISSING}")
     print(f"║  Límite:      {LIMIT or 'Todos'}")
     print(f"║  Modelo:      {MODEL}")
@@ -273,7 +312,7 @@ async def main() -> None:
             if DRY_RUN:
                 # Mostrar preview del JSON generado
                 d = result["data"]
-                print(f"  ✓ DRY")
+                print("  ✓ DRY")
                 print(f"        descripcion_corta: {d.get('descripcion_corta','')[:70]}")
                 print(f"        beneficios[0]: {(d.get('beneficios') or [''])[0][:60]}")
                 print(f"        modo_de_uso: {d.get('modo_de_uso','')[:60]}")
@@ -318,11 +357,13 @@ async def main() -> None:
     if not DRY_RUN and stats["ok"] > 0:
         # Verificación rápida
         async with engine.begin() as conn:
-            r = await conn.execute(text("""
+            r = await conn.execute(
+                text("""
                 SELECT COUNT(*) FROM catalog.products
                 WHERE enriched_content IS NOT NULL
                   AND deleted_at IS NULL AND is_active = true
-            """))
+            """)
+            )
             enriched_total = r.scalar()
         print(f"\n  📊 Total enriquecidos en DB: {enriched_total:,}")
 
