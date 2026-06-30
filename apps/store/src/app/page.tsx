@@ -13,6 +13,8 @@ import { HeroSection } from '@/components/HeroSection';
 import { PortalCTA } from '@/components/PortalCTA';
 import { NewsletterForm } from '@/components/NewsletterForm';
 import { RealReviewsSection } from '@/components/reviews/RealReviewsSection';
+import { StoreMapEmbed } from '@/components/maps/StoreMapEmbed';
+import { BUSINESS_INFO } from '@/lib/business-info';
 
 const CATEGORIES = [
   { slug: 'perros',     name: 'Perros',     emoji: '🐕', tone: 'from-orange-100 to-amber-50', accent: 'text-orange-700' },
@@ -214,6 +216,65 @@ export default async function HomePage() {
             <MapPin className="h-4 w-4" />
             Consultar cobertura por WhatsApp
           </a>
+        </div>
+      </section>
+
+      {/* ENCUÉNTRANOS — Mapa Google Business */}
+      <section className="container-wide py-20">
+        <div className="rounded-[2.5rem] overflow-hidden border border-border bg-card shadow-sm">
+          <div className="grid md:grid-cols-5">
+            {/* Info lateral */}
+            <div className="md:col-span-2 p-10 flex flex-col justify-center gap-6 bg-gradient-to-br from-teal-50 to-emerald-50 border-b md:border-b-0 md:border-r border-border">
+              <div>
+                <p className="text-brand-600 font-semibold text-sm mb-2 uppercase tracking-wider">Punto físico</p>
+                <h2 className="text-3xl font-display font-extrabold mb-1">Encuéntranos</h2>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Visítanos en el Mall Zamara Plaza o haz tu pedido con domicilio — cubrimos toda la zona urbana de Pereira y Dosquebradas.
+                </p>
+              </div>
+              <ul className="space-y-3 text-sm">
+                <li className="flex items-start gap-3">
+                  <span className="text-xl shrink-0">📍</span>
+                  <div>
+                    <p className="font-semibold">{BUSINESS_INFO.address.streetAddress}</p>
+                    <p className="text-muted-foreground">{BUSINESS_INFO.address.addressLocality}, {BUSINESS_INFO.address.addressRegion}</p>
+                  </div>
+                </li>
+                <li className="flex items-center gap-3">
+                  <span className="text-xl shrink-0">🕐</span>
+                  <p>Lun–Sáb · 10:00 am – 7:00 pm</p>
+                </li>
+                <li className="flex items-center gap-3">
+                  <span className="text-xl shrink-0">🛵</span>
+                  <p>Domicilios en 24-72h · Gratis desde $30.000</p>
+                </li>
+                <li className="flex items-center gap-3">
+                  <span className="text-xl shrink-0">⭐</span>
+                  <p className="font-semibold">5.0 en Google Business</p>
+                </li>
+              </ul>
+              <div className="flex flex-col gap-3">
+                <a
+                  href="https://wa.me/573206876633?text=Hola!%20Quiero%20hacer%20un%20pedido"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-green-500 text-white font-semibold text-sm hover:bg-green-600 transition-colors"
+                >
+                  💬 Pedir por WhatsApp
+                </a>
+                <a
+                  href="/contacto"
+                  className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border border-border bg-white text-sm font-semibold hover:bg-gray-50 transition-colors"
+                >
+                  <MapPin className="h-4 w-4" /> Ver cómo llegar
+                </a>
+              </div>
+            </div>
+            {/* Mapa */}
+            <div className="md:col-span-3">
+              <StoreMapEmbed height={460} zoom={17} className="rounded-none border-0" />
+            </div>
+          </div>
         </div>
       </section>
 

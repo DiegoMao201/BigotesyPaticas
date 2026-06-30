@@ -177,10 +177,18 @@ export function Footer() {
             <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
             5.0 ★★★★★ en Google
           </a>
-          <div className="flex gap-3 mt-4">
+          <div className="flex flex-col gap-2 mt-4">
             <a href="https://wa.me/573206876633" target="_blank" rel="noopener noreferrer"
                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand transition-colors">
               📱 WhatsApp directo
+            </a>
+            <a
+              href="https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Mall+Zamara+Plaza+Dosquebradas"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#187f77] hover:text-[#0d4a45] transition-colors"
+            >
+              🗺️ Ver en Google Maps
             </a>
           </div>
         </div>
