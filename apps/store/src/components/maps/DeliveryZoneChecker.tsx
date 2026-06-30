@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MapPin, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { BUSINESS_INFO } from '@/lib/business-info';
+import { loadMapsScript } from '@/lib/maps';
 
 const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? '';
 const STORE_LAT = BUSINESS_INFO.geo.latitude;
@@ -10,28 +11,6 @@ const STORE_LNG = BUSINESS_INFO.geo.longitude;
 const MAX_KM = 22;
 
 type Status = 'idle' | 'loading' | 'ok' | 'far' | 'error';
-
-declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    google: any;
-    _bpMapsReady?: () => void;
-  }
-}
-
-function loadMapsScript(cb: () => void) {
-  if (window.google?.maps?.places) { cb(); return; }
-  if (document.getElementById('bp-gmaps')) {
-    window._bpMapsReady = cb;
-    return;
-  }
-  window._bpMapsReady = cb;
-  const s = document.createElement('script');
-  s.id = 'bp-gmaps';
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=places&language=es&callback=_bpMapsReady`;
-  s.async = true;
-  document.head.appendChild(s);
-}
 
 export function DeliveryZoneChecker() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -42,7 +21,7 @@ export function DeliveryZoneChecker() {
 
   useEffect(() => {
     if (!MAPS_KEY) return;
-    loadMapsScript(() => {
+    loadMapsScript(MAPS_KEY, () => {
       if (!inputRef.current) return;
       const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
         bounds: new window.google.maps.LatLngBounds(
