@@ -6,6 +6,7 @@ Usa:
   - DO Spaces CDN para almacenamiento
   - Pillow para logo overlay (8% ancho, 60% opacidad, esquina inferior-derecha)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -19,6 +20,7 @@ import uuid
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
+from typing import ClassVar
 
 import requests
 
@@ -26,31 +28,35 @@ log = logging.getLogger(__name__)
 
 # ─── Constantes ───────────────────────────────────────────────────────────────
 
-CDN_BASE    = os.environ.get("S3_PUBLIC_URL", "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com")
-CDN_BUCKET  = os.environ.get("S3_BUCKET", "catalogo-ferreinox")
-CDN_ENDPOINT= os.environ.get("S3_ENDPOINT_URL", "https://nyc3.digitaloceanspaces.com")
-CDN_REGION  = os.environ.get("S3_REGION", "nyc3")
-S3_ACCESS   = os.environ.get("S3_ACCESS_KEY", "")
-S3_SECRET   = os.environ.get("S3_SECRET_KEY", "")
+CDN_BASE = os.environ.get(
+    "S3_PUBLIC_URL", "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com"
+)
+CDN_BUCKET = os.environ.get("S3_BUCKET", "catalogo-ferreinox")
+CDN_ENDPOINT = os.environ.get("S3_ENDPOINT_URL", "https://nyc3.digitaloceanspaces.com")
+CDN_REGION = os.environ.get("S3_REGION", "nyc3")
+S3_ACCESS = os.environ.get("S3_ACCESS_KEY", "")
+S3_SECRET = os.environ.get("S3_SECRET_KEY", "")
 
-LOGO_PATH   = Path("/app/apps/store/public/icon-192.png")
-TEMP_DIR    = Path("/tmp/content_engine")
+LOGO_PATH = Path("/app/apps/store/public/icon-192.png")
+TEMP_DIR = Path("/tmp/content_engine")
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 BRAND_HASHTAGS = ["#BigotesYPaticasPereira", "#BigotesYPaticasDosquebradas"]
 
 IMAGE_COSTS = {
-    "gpt-image-1":  0.50,
+    "gpt-image-1": 0.50,
     "flux-1.1-pro": 0.04,
 }
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+
 @lru_cache(maxsize=1)
 def _openai_client():
     from openai import OpenAI
+
     key = os.environ.get("OPENAI_API_KEY", "")
     if not key:
         raise RuntimeError("OPENAI_API_KEY no configurada en environment")
@@ -60,6 +66,7 @@ def _openai_client():
 def _s3_client():
     import boto3
     from botocore.client import Config
+
     return boto3.client(
         "s3",
         region_name=CDN_REGION,
@@ -71,6 +78,7 @@ def _s3_client():
 
 
 # ─── ContentGenerator ─────────────────────────────────────────────────────────
+
 
 class ContentGenerator:
     """Genera posts completos: caption + imagen + upload CDN."""
@@ -85,14 +93,27 @@ class ContentGenerator:
 
     # ── Selección inteligente de modelo ──────────────────────────────────────
 
-    _CRITICAL_TEXT_KEYWORDS = [
-        "quotation", "quote", "cita", "frase", "tipográfic", "typographic",
-        "cliente verificado", "cliente fidelizado", "data point",
-        "porcentaje", "percent", "5 estrellas", "five stars",
-        "según estudios", "estudios veterinarios",
+    _CRITICAL_TEXT_KEYWORDS: ClassVar[list[str]] = [
+        "quotation",
+        "quote",
+        "cita",
+        "frase",
+        "tipográfic",
+        "typographic",
+        "cliente verificado",
+        "cliente fidelizado",
+        "data point",
+        "porcentaje",
+        "percent",
+        "5 estrellas",
+        "five stars",
+        "según estudios",
+        "estudios veterinarios",
     ]
 
-    def _select_image_model(self, template: dict, visual_prompt: str, fallback: str = "gpt-image-1") -> str:
+    def _select_image_model(
+        self, template: dict, visual_prompt: str, fallback: str = "gpt-image-1"
+    ) -> str:
         """Elige modelo según: preferred_image_model del template → safety check → fallback config."""
         preferred = template.get("preferred_image_model")
         if preferred == "flux-1.1-pro":
@@ -129,10 +150,15 @@ class ContentGenerator:
         )
 
         # 2. Selección inteligente de modelo (template pref > safety check > config fallback)
-        effective_model = self._select_image_model(tpl, filled["visual_prompt"], fallback=image_model)
+        effective_model = self._select_image_model(
+            tpl, filled["visual_prompt"], fallback=image_model
+        )
         log.info(
             "template=%s model_selected=%s (template_pref=%s fallback=%s)",
-            tpl.get("code"), effective_model, tpl.get("preferred_image_model"), image_model,
+            tpl.get("code"),
+            effective_model,
+            tpl.get("preferred_image_model"),
+            image_model,
         )
 
         # 3. Generar imagen con modelo elegido
@@ -170,18 +196,22 @@ class ContentGenerator:
             cost = 0.0
 
         return {
-            "visual_prompt":    filled["visual_prompt"],
-            "caption":          filled["caption"],
-            "hashtags":         filled.get("hashtags", []),
-            "cta_url":          filled.get("cta_url"),
-            "image_url":        cdn_url,
+            "visual_prompt": filled["visual_prompt"],
+            "caption": filled["caption"],
+            "hashtags": filled.get("hashtags", []),
+            "cta_url": filled.get("cta_url"),
+            "image_url": cdn_url,
             "image_local_path": str(branded_path) if branded_path else None,
-            "image_model":      "compose+gpt-image-1" if (tpl.get("code") == "product_hero" and context.get("product_image_url")) else effective_model,
-            "image_cost_usd":   cost,
-            "product_id":       context.get("product_id"),
+            "image_model": "compose+gpt-image-1"
+            if (tpl.get("code") == "product_hero" and context.get("product_image_url"))
+            else effective_model,
+            "image_cost_usd": cost,
+            "product_id": context.get("product_id"),
         }
 
-    async def regenerate_image(self, visual_prompt: str, image_model: str = "gpt-image-1") -> tuple[str, str, float]:
+    async def regenerate_image(
+        self, visual_prompt: str, image_model: str = "gpt-image-1"
+    ) -> tuple[str, str, float]:
         """Regenera solo la imagen. Retorna (cdn_url, local_path, cost_usd)."""
         if image_model == "flux-1.1-pro":
             raw_path = await asyncio.get_event_loop().run_in_executor(
@@ -312,16 +342,14 @@ Respondé JSON estricto sin markdown:
         )
 
         # output puede ser FileOutput, lista o URL string
-        if isinstance(output, list):
-            image_url = str(output[0])
-        else:
-            image_url = str(output)
+        image_url = str(output[0]) if isinstance(output, list) else str(output)
 
         resp = requests.get(image_url, timeout=60)
         resp.raise_for_status()
 
         # Convertir webp → PNG con PIL
         from PIL import Image as PilImage
+
         img = PilImage.open(io.BytesIO(resp.content)).convert("RGB")
         out = TEMP_DIR / f"post_flux_{uuid.uuid4()}.png"
         img.save(out, "PNG")
@@ -334,7 +362,9 @@ Respondé JSON estricto sin markdown:
     async def _compose_product_hero_image(self, product_image_url: str) -> tuple[str, Path, float]:
         """Descarga foto real del producto del CDN, genera fondo editorial con IA y los compone."""
         import io as _io
-        from PIL import Image as PilImage, ImageFilter
+
+        from PIL import Image as PilImage
+        from PIL import ImageFilter
 
         # 1. Descargar imagen real
         resp = requests.get(product_image_url, timeout=30)
