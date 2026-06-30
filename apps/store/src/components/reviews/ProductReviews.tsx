@@ -83,7 +83,31 @@ export function ProductReviews({
     trackEvent('review_helpful', { product_id: productId, review_id: reviewId });
   }
 
-  if (initialRatingCount === 0 && !data?.count) return null;
+  const hasNoReviews = initialRatingCount === 0 && !data?.count;
+
+  if (hasNoReviews) {
+    return (
+      <section className="py-12">
+        <h2 className="text-2xl font-display font-bold mb-6">Reseñas de clientes</h2>
+        <div className="rounded-2xl border border-border bg-amber-50 p-6 text-center space-y-3 max-w-md">
+          <p className="text-3xl">⭐</p>
+          <p className="font-semibold text-foreground">¡Sé el primero en opinar!</p>
+          <p className="text-sm text-muted-foreground">
+            Si compraste este producto, puedes calificarlo desde tu portal de cliente y ganar{' '}
+            <span className="font-semibold text-amber-700">hasta 30 Puntos Bigotes.</span>
+          </p>
+          <a
+            href={process.env.NEXT_PUBLIC_PORTAL_URL ?? 'https://portal.bigotesypaticas.com'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block mt-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-semibold hover:bg-brand-700 transition-colors"
+          >
+            Calificar en mi portal →
+          </a>
+        </div>
+      </section>
+    );
+  }
 
   const distribution = (data as ReviewsData & { distribution?: Record<string, number> })?.distribution ?? {};
   const totalCount = data?.count ?? initialRatingCount;
@@ -91,9 +115,19 @@ export function ProductReviews({
 
   return (
     <section className="py-12">
-      <h2 className="text-2xl font-display font-bold mb-8">
-        Reseñas de clientes{totalCount > 0 ? ` (${totalCount})` : ''}
-      </h2>
+      <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
+        <h2 className="text-2xl font-display font-bold">
+          Reseñas de clientes{totalCount > 0 ? ` (${totalCount})` : ''}
+        </h2>
+        <a
+          href={process.env.NEXT_PUBLIC_PORTAL_URL ?? 'https://portal.bigotesypaticas.com'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-brand-600 font-semibold hover:underline"
+        >
+          ¿Compraste este producto? Califica →
+        </a>
+      </div>
 
       {/* Resumen */}
       {avgRating != null && totalCount > 0 && (
