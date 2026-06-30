@@ -53,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
 
 # Migraciones + seed (auth + catálogo demo) + servidor
 # El bucle en background actúa como cron: publica posts aprobados cada 5 minutos
-CMD ["sh", "-c", "alembic upgrade head && python -m app.cli.seed && python -m app.cli.seed_catalog && (while true; do python3 scripts/publish_scheduled_posts.py >> /tmp/publish_feed.log 2>&1; python3 scripts/publish_stories.py >> /tmp/publish_stories.log 2>&1; sleep 300; done) & exec gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --access-logfile - --error-logfile -"]
+CMD ["sh", "-c", "alembic upgrade head && python -m app.cli.seed && python -m app.cli.seed_catalog && (while true; do python3 scripts/publish_scheduled_posts.py >> /tmp/publish_feed.log 2>&1; python3 scripts/publish_stories.py >> /tmp/publish_stories.log 2>&1; python3 scripts/publish_feed_posts.py >> /tmp/publish_feed_posts.log 2>&1; sleep 300; done) & exec gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --access-logfile - --error-logfile -"]
