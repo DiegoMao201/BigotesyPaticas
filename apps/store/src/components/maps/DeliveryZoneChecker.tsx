@@ -24,25 +24,34 @@ export function DeliveryZoneChecker() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function calcDistance(destination: any) {
     setStatus('loading');
-    const svc = new window.google.maps.DistanceMatrixService();
-    svc.getDistanceMatrix(
-      {
-        origins:      [{ lat: STORE_LAT, lng: STORE_LNG }],
-        destinations: [destination],
-        travelMode:   window.google.maps.TravelMode.DRIVING,
-        unitSystem:   window.google.maps.UnitSystem.METRIC,
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (result: any, st: string) => {
-        if (st !== 'OK' || !result) { setStatus('error'); return; }
-        const el = result.rows[0]?.elements[0];
-        if (el?.status !== 'OK') { setStatus('error'); return; }
-        const km = (el.distance?.value ?? 99999) / 1000;
-        setDistanceText(el.distance?.text ?? '');
-        setDurationText(el.duration?.text ?? '');
-        setStatus(km <= MAX_KM ? 'ok' : 'far');
-      },
-    );
+    try {
+      const svc = new window.google.maps.DistanceMatrixService();
+      svc.getDistanceMatrix(
+        {
+          origins:      [{ lat: STORE_LAT, lng: STORE_LNG }],
+          destinations: [destination],
+          travelMode:   window.google.maps.TravelMode.DRIVING,
+          unitSystem:   window.google.maps.UnitSystem.METRIC,
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (result: any, st: string) => {
+          if (st === 'REQUEST_DENIED') {
+            setGeoError('Servicio temporalmente no disponible. Escríbenos por WhatsApp y te confirmamos.');
+            setStatus('idle');
+            return;
+          }
+          if (st !== 'OK' || !result) { setStatus('error'); return; }
+          const el = result.rows[0]?.elements[0];
+          if (el?.status !== 'OK') { setStatus('error'); return; }
+          const km = (el.distance?.value ?? 99999) / 1000;
+          setDistanceText(el.distance?.text ?? '');
+          setDurationText(el.duration?.text ?? '');
+          setStatus(km <= MAX_KM ? 'ok' : 'far');
+        },
+      );
+    } catch {
+      setStatus('error');
+    }
   }
 
   // ── Reverse geocode coordenadas → dirección legible ───────────────────────
