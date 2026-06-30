@@ -176,12 +176,6 @@ export function LocalBusinessSchema() {
             value: true,
           },
         ].filter(Boolean),
-        aggregateRating: {
-          '@type': 'AggregateRating',
-          ratingValue: BUSINESS_INFO.rating.value,
-          reviewCount: BUSINESS_INFO.rating.reviewCount,
-          bestRating: BUSINESS_INFO.rating.bestRating,
-        },
       }}
     />
   );
