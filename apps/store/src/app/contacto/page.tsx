@@ -3,7 +3,7 @@ import { Phone, Mail, MapPin, Clock, ExternalLink } from 'lucide-react';
 import { ContactForm } from './ContactForm';
 import { DeliveryZoneChecker } from '@/components/maps/DeliveryZoneChecker';
 import { StoreMapEmbed } from '@/components/maps/StoreMapEmbed';
-import { LocalBusinessSchema, BreadcrumbSchema } from '@/components/seo/JsonLd';
+import { BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { BUSINESS_INFO } from '@/lib/business-info';
 
 export const metadata: Metadata = {
@@ -23,7 +23,6 @@ const GOOGLE_MAPS_URL = 'https://www.google.com/maps/search/?api=1&query=Bigotes
 export default function ContactoPage() {
   return (
     <>
-      <LocalBusinessSchema />
       <BreadcrumbSchema
         items={[
           { name: 'Inicio', url: 'https://bigotesypaticas.com' },
