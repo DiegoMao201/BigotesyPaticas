@@ -49,7 +49,7 @@ async def list_stories(
         params["status"] = status
 
     rows = await db.execute(text(f"""
-        SELECT sp.id, sp.template_code, sp.creation_mode, sp.status,
+        SELECT sp.id, sp.post_type, sp.template_code, sp.creation_mode, sp.status,
                sp.video_url, sp.base_image_url, sp.caption, sp.swipe_up_url,
                sp.scheduled_at, sp.published_at, sp.expires_at,
                sp.instagram_story_id, sp.facebook_story_id,
