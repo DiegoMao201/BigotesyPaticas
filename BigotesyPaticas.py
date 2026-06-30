@@ -10,6 +10,7 @@ import urllib.parse
 import jinja2
 from io import BytesIO
 from pathlib import Path
+
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
@@ -41,6 +42,7 @@ except Exception:
     mm = None
     canvas = None
 
+
 # --- CONFIGURACIÓN DE ZONA HORARIA ---
 def _get_bogota_timezone():
     if ZoneInfo is not None:
@@ -54,11 +56,14 @@ TZ_CO = _get_bogota_timezone()
 BASE_DIR = Path(__file__).resolve().parent
 FACTURA_TEMPLATE_PATH = BASE_DIR / "factura.html"
 
+
 def now_co():
     return datetime.now(TZ_CO)
 
+
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Nexus Pro | Bigotes y Paticas", page_icon="🐾", layout="wide")
+
 
 # ==========================================
 # 1. SISTEMA ANTI-BLOQUEO (RETRY LOGIC)
@@ -70,7 +75,7 @@ def safe_api_call(func, *args, **kwargs):
     """
     max_retries = 5
     wait_time = 2  # Segundos iniciales de espera
-    
+
     for attempt in range(max_retries):
         try:
             return func(*args, **kwargs)
@@ -87,6 +92,7 @@ def safe_api_call(func, *args, **kwargs):
             else:
                 raise e
 
+
 # ==========================================
 # 2. CONEXIÓN Y LECTURA OPTIMIZADA
 # ==========================================
@@ -101,6 +107,7 @@ def conectar_google_sheets():
         st.error(f"Error crítico conectando a Google Sheets: {e}")
         st.stop()
 
+
 def obtener_worksheets(sh):
     """Devuelve un diccionario con las hojas para fácil acceso"""
     return {
@@ -112,11 +119,12 @@ def obtener_worksheets(sh):
         # Agrega las otras si las usas activamente, por ahora estas son las vitales para el POS
     }
 
+
 def limpiar_dataframe(raw_data):
     """Convierte datos crudos de Sheets a DataFrame limpio"""
     if not raw_data:
         return pd.DataFrame()
-    
+
     header = raw_data[0]
     # Limpieza de encabezados duplicados o vacíos
     seen = {}
@@ -135,10 +143,21 @@ def limpiar_dataframe(raw_data):
     df = pd.DataFrame(raw_data[1:], columns=clean_header)
 
     # Convertir columnas numéricas y fechas
-    cols_money = ['Precio', 'Costo', 'Monto', 'Total', 'Costo_Total', 
-                  'Base_Inicial', 'Ventas_Efectivo', 'Gastos_Efectivo', 
-                  'Dinero_A_Bancos', 'Saldo_Teorico', 'Saldo_Real', 'Diferencia']
-    cols_numeric = ['Stock']
+    cols_money = [
+        "Precio",
+        "Costo",
+        "Monto",
+        "Total",
+        "Costo_Total",
+        "Base_Inicial",
+        "Ventas_Efectivo",
+        "Gastos_Efectivo",
+        "Dinero_A_Bancos",
+        "Saldo_Teorico",
+        "Saldo_Real",
+        "Diferencia",
+    ]
+    cols_numeric = ["Stock"]
 
     for col in cols_money:
         if col in df.columns:
@@ -146,18 +165,19 @@ def limpiar_dataframe(raw_data):
 
     for col in cols_numeric:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-    
-    if 'Fecha' in df.columns:
-        df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-        
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    if "Fecha" in df.columns:
+        df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
+
     return df
+
 
 def cargar_datos_iniciales():
     """Carga TODOS los datos al Session State de una sola vez."""
     sh = conectar_google_sheets()
     h = asegurar_esquema_operativo(sh)
-    
+
     with st.spinner("🔄 Sincronizando datos con la nube..."):
         # Usamos safe_api_call para leer
         data_inv = safe_api_call(h["inv"].get_all_values)
@@ -171,26 +191,39 @@ def cargar_datos_iniciales():
             "cli": limpiar_dataframe(data_cli),
             "ven": limpiar_dataframe(data_ven),
             "gas": limpiar_dataframe(data_gas),
-            "cie": limpiar_dataframe(data_cie)
+            "cie": limpiar_dataframe(data_cie),
         }
         st.session_state.ultima_sincronizacion = now_co()
+
 
 # ==========================================
 # 3. FUNCIONES DE UTILIDAD (Tus funciones originales)
 # ==========================================
 def sanitizar_para_sheet(val):
-    if isinstance(val, (np.int64, np.int32)): return int(val)
-    if isinstance(val, (np.float64, np.float32, float)): return int(round(float(val)))
-    if isinstance(val, (pd.Timestamp, datetime, date)): return val.strftime("%Y-%m-%d %H:%M:%S") if isinstance(val, datetime) else val.strftime("%Y-%m-%d")
+    if isinstance(val, (np.int64, np.int32)):
+        return int(val)
+    if isinstance(val, (np.float64, np.float32, float)):
+        return int(round(float(val)))
+    if isinstance(val, (pd.Timestamp, datetime, date)):
+        return (
+            val.strftime("%Y-%m-%d %H:%M:%S")
+            if isinstance(val, datetime)
+            else val.strftime("%Y-%m-%d")
+        )
     return val
 
+
 def normalizar_id_producto(id_prod):
-    if pd.isna(id_prod): return ""
+    if pd.isna(id_prod):
+        return ""
     s = str(id_prod).strip().upper()
     s = s.replace(" ", "").replace(",", "").replace(".", "")
-    if s.isdigit(): s = str(int(s))
-    if s.endswith("00") and s[:-2].isdigit(): s = s[:-2]
+    if s.isdigit():
+        s = str(int(s))
+    if s.endswith("00") and s[:-2].isdigit():
+        s = s[:-2]
     return s
+
 
 def clean_currency(val):
     if isinstance(val, (np.integer, int)):
@@ -243,10 +276,21 @@ def clean_currency(val):
         out = int(re.sub(r"[^0-9]", "", s) or 0)
     return -out if neg else out
 
+
 def limpiar_tel(tel):
-    t = str(tel).replace(" ", "").replace("+", "").replace("-", "").replace("(", "").replace(")", "").strip()
-    if len(t) == 10 and not t.startswith("57"): t = "57" + t
+    t = (
+        str(tel)
+        .replace(" ", "")
+        .replace("+", "")
+        .replace("-", "")
+        .replace("(", "")
+        .replace(")", "")
+        .strip()
+    )
+    if len(t) == 10 and not t.startswith("57"):
+        t = "57" + t
     return t
+
 
 VENTAS_REQUIRED_COLUMNS = [
     "ID_Venta",
@@ -275,8 +319,20 @@ VENTAS_REQUIRED_COLUMNS = [
 VENTAS_COLUMN_ALIASES = {
     "Direccion_Envio": ["Direccion", "Dirección", "Direccion_Entrega"],
     "Direccion": ["Direccion_Envio", "Dirección", "Direccion_Entrega"],
-    "Items_Detalle": ["Items_JSON", "Items_Json", "Detalle_JSON", "Detalle_Venta", "Productos_JSON"],
-    "Items_JSON": ["Items_Detalle", "Items_Json", "Detalle_JSON", "Detalle_Venta", "Productos_JSON"],
+    "Items_Detalle": [
+        "Items_JSON",
+        "Items_Json",
+        "Detalle_JSON",
+        "Detalle_Venta",
+        "Productos_JSON",
+    ],
+    "Items_JSON": [
+        "Items_Detalle",
+        "Items_Json",
+        "Detalle_JSON",
+        "Detalle_Venta",
+        "Productos_JSON",
+    ],
     "Banco_Destino": ["Banco_Origen", "Banco", "Cuenta_Destino"],
 }
 
@@ -433,11 +489,7 @@ def preparar_ventas_dashboard(df_ventas: pd.DataFrame) -> pd.DataFrame:
         saldo_raw = clean_currency(row.get("Saldo_Pendiente", 0))
         estado_raw = row.get("Estado_Pago", "")
 
-        sin_meta_pago = (
-            str(estado_raw or "").strip() == ""
-            and abono_raw <= 0
-            and saldo_raw <= 0
-        )
+        sin_meta_pago = str(estado_raw or "").strip() == "" and abono_raw <= 0 and saldo_raw <= 0
         if sin_meta_pago:
             abono = total
             saldo = 0
@@ -501,6 +553,7 @@ def _agrupar_items_vendidos(df_ventas: pd.DataFrame) -> pd.DataFrame:
         .sort_values(["Ventas", "Cantidad"], ascending=False)
     )
 
+
 def _wa_resumir_items(items_str: str, max_len: int = 180) -> str:
     s = (items_str or "").strip()
     if not s:
@@ -510,6 +563,7 @@ def _wa_resumir_items(items_str: str, max_len: int = 180) -> str:
         return s
     return s[: max_len - 1].rstrip() + "…"
 
+
 def _wa_items_bullets(items_str: str, max_items: int = 30) -> str:
     parts = [p.strip() for p in (items_str or "").split(",") if p.strip()]
     # 1.0x -> 1x
@@ -517,7 +571,12 @@ def _wa_items_bullets(items_str: str, max_items: int = 30) -> str:
     if len(parts) > max_items:
         extra = len(parts) - max_items
         parts = parts[:max_items] + [f"🐾 {extra} producto(s) adicional(es)"]
-    return "\n".join([f"🐾 {p}" if not p.startswith("🐾") else p for p in parts]) if parts else "🐾 Compra registrada"
+    return (
+        "\n".join([f"🐾 {p}" if not p.startswith("🐾") else p for p in parts])
+        if parts
+        else "🐾 Compra registrada"
+    )
+
 
 def msg_venta(nombre: str, mascota: str, items_str: str, total: float) -> str:
     """
@@ -536,14 +595,17 @@ def msg_venta(nombre: str, mascota: str, items_str: str, total: float) -> str:
         f"Te esperamos pronto con mucho cariño. 🐶🐱"
     )
 
+
 def msg_venta_fidelidad(nombre: str, mascota: str, items_str: str, total: float) -> str:
     return msg_venta(nombre, mascota, items_str, total)
+
 
 def msg_bienvenida(nombre, mascota):
     return f"""🐾 ¡Hola {nombre}! Bienvenido/a a Bigotes y Paticas.
 🎉 Estamos felices de consentir a {mascota or 'tu peludito'}.
 📦 Necesites comida, snacks o juguetes, aquí estamos.
 🤗 Gracias por confiar en nosotros."""
+
 
 def reset_pos_workflow(clear_cliente=True):
     if clear_cliente:
@@ -566,6 +628,7 @@ def reset_pos_workflow(clear_cliente=True):
         "editor_carrito",
     ]:
         st.session_state.pop(key, None)
+
 
 def construir_resumen_venta(
     id_venta,
@@ -590,7 +653,9 @@ def construir_resumen_venta(
         cantidad = float(item.get("Cantidad", 0) or 0)
         precio = clean_currency(item.get("Precio", item.get("Precio_Unitario", 0)) or 0)
         descuento = clean_currency(item.get("Descuento", item.get("Descuento_Unitario", 0)) or 0)
-        subtotal = clean_currency(item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad)) or 0)
+        subtotal = clean_currency(
+            item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad)) or 0
+        )
         unidades_total += cantidad
         descuento_total += clean_currency(descuento * cantidad)
         items_normalizados.append(
@@ -628,6 +693,7 @@ def construir_resumen_venta(
         "items": items_normalizados,
     }
 
+
 def _row_pick(row, candidates, default=""):
     for key in candidates:
         if key in row:
@@ -635,6 +701,7 @@ def _row_pick(row, candidates, default=""):
             if pd.notna(value) and str(value).strip() != "":
                 return value
     return default
+
 
 def _normalizar_items_factura(items):
     items_normalizados = []
@@ -644,10 +711,14 @@ def _normalizar_items_factura(items):
         cantidad = float(item.get("Cantidad", item.get("Qty", 0)) or 0)
         precio = clean_currency(item.get("Precio", item.get("Precio_Unitario", 0)) or 0)
         descuento = clean_currency(item.get("Descuento", item.get("Descuento_Unitario", 0)) or 0)
-        subtotal = clean_currency(item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad)) or 0)
+        subtotal = clean_currency(
+            item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad)) or 0
+        )
         items_normalizados.append(
             {
-                "Nombre_Producto": item.get("Nombre_Producto", item.get("Nombre", item.get("Descripcion", "Producto"))),
+                "Nombre_Producto": item.get(
+                    "Nombre_Producto", item.get("Nombre", item.get("Descripcion", "Producto"))
+                ),
                 "Cantidad": cantidad,
                 "Precio": precio,
                 "Descuento": descuento,
@@ -655,6 +726,7 @@ def _normalizar_items_factura(items):
             }
         )
     return items_normalizados
+
 
 def _items_desde_texto(items_str, total_num):
     partes = [p.strip() for p in str(items_str or "").split(",") if p.strip()]
@@ -683,13 +755,21 @@ def _items_desde_texto(items_str, total_num):
         )
     return items
 
+
 def construir_resumen_venta_desde_fila(row):
     row_dict = row.to_dict() if hasattr(row, "to_dict") else dict(row)
     total_num = clean_currency(_row_pick(row_dict, ["Total", "Monto", "Valor_Total"], 0))
 
     items_json_raw = _row_pick(
         row_dict,
-        ["Items_JSON", "Items_Json", "Items_Detalle", "Detalle_JSON", "Detalle_Venta", "Productos_JSON"],
+        [
+            "Items_JSON",
+            "Items_Json",
+            "Items_Detalle",
+            "Detalle_JSON",
+            "Detalle_Venta",
+            "Productos_JSON",
+        ],
         "",
     )
     parsed_items = []
@@ -719,7 +799,9 @@ def construir_resumen_venta_desde_fila(row):
     cliente = {
         "Nombre": _row_pick(row_dict, ["Nombre_Cliente", "Cliente", "Nombre"], "Consumidor Final"),
         "Cedula": _row_pick(row_dict, ["Cedula_Cliente", "Cedula", "Documento"], ""),
-        "Direccion": _row_pick(row_dict, ["Direccion_Envio", "Direccion", "Dirección", "Direccion_Entrega"], "Local"),
+        "Direccion": _row_pick(
+            row_dict, ["Direccion_Envio", "Direccion", "Dirección", "Direccion_Entrega"], "Local"
+        ),
     }
 
     return construir_resumen_venta(
@@ -727,17 +809,30 @@ def construir_resumen_venta_desde_fila(row):
         fecha=str(_row_pick(row_dict, ["Fecha", "Fecha_Venta"], "")),
         metodo=str(_row_pick(row_dict, ["Metodo_Pago", "Método_Pago", "Pago"], "Efectivo")),
         entrega=str(_row_pick(row_dict, ["Tipo_Entrega", "Entrega", "Modalidad_Entrega"], "Local")),
-        dir_envio=str(_row_pick(row_dict, ["Direccion_Envio", "Direccion", "Dirección", "Direccion_Entrega"], "Local")),
+        dir_envio=str(
+            _row_pick(
+                row_dict,
+                ["Direccion_Envio", "Direccion", "Dirección", "Direccion_Entrega"],
+                "Local",
+            )
+        ),
         cliente=cliente,
         mascota=str(_row_pick(row_dict, ["Mascota", "Nombre_Mascota"], "")),
         carrito=parsed_items,
         total_num=total_num,
         estado_pago=str(_row_pick(row_dict, ["Estado_Pago", "EstadoPago"], "Pagado")),
-        abono_recibido=clean_currency(_row_pick(row_dict, ["Abono_Recibido", "Abono", "Monto_Cobrado"], 0)),
-        saldo_pendiente=clean_currency(_row_pick(row_dict, ["Saldo_Pendiente", "Pendiente_Pago", "Saldo"], 0)),
-        fecha_promesa_pago=str(_row_pick(row_dict, ["Fecha_Promesa_Pago", "Fecha_Cobro", "Promesa_Pago"], "")),
+        abono_recibido=clean_currency(
+            _row_pick(row_dict, ["Abono_Recibido", "Abono", "Monto_Cobrado"], 0)
+        ),
+        saldo_pendiente=clean_currency(
+            _row_pick(row_dict, ["Saldo_Pendiente", "Pendiente_Pago", "Saldo"], 0)
+        ),
+        fecha_promesa_pago=str(
+            _row_pick(row_dict, ["Fecha_Promesa_Pago", "Fecha_Cobro", "Promesa_Pago"], "")
+        ),
         nota_pago=str(_row_pick(row_dict, ["Nota_Pago", "Observacion_Pago", "Observaciones"], "")),
     )
+
 
 def generar_pdf_reportlab(venta_data, items):
     if canvas is None or colors is None or A4 is None or mm is None:
@@ -751,7 +846,9 @@ def generar_pdf_reportlab(venta_data, items):
         cantidad = float(item.get("Cantidad", 0) or 0)
         precio = clean_currency(item.get("Precio", item.get("Precio_Unitario", 0)) or 0)
         descuento = clean_currency(item.get("Descuento", item.get("Descuento_Unitario", 0)) or 0)
-        subtotal = clean_currency(item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad)) or 0)
+        subtotal = clean_currency(
+            item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad)) or 0
+        )
         subtotal_bruto += clean_currency(precio * cantidad)
         descuento_total += clean_currency(descuento * cantidad)
         total_unidades += cantidad
@@ -784,19 +881,45 @@ def generar_pdf_reportlab(venta_data, items):
 
     def draw_base_header():
         pdf.setFillColor(white)
-        pdf.roundRect(margin - 4, margin - 2, width - (2 * margin) + 8, height - (2 * margin) + 4, 18, stroke=0, fill=1)
+        pdf.roundRect(
+            margin - 4,
+            margin - 2,
+            width - (2 * margin) + 8,
+            height - (2 * margin) + 4,
+            18,
+            stroke=0,
+            fill=1,
+        )
         pdf.setFillColor(gold)
-        pdf.roundRect(margin - 4, height - margin + 8, width - (2 * margin) + 8, 10, 5, stroke=0, fill=1)
+        pdf.roundRect(
+            margin - 4, height - margin + 8, width - (2 * margin) + 8, 10, 5, stroke=0, fill=1
+        )
         header_height = 76 if compact_mode else 88
         pdf.setFillColor(teal)
-        pdf.roundRect(margin - 4, height - margin - (header_height - 10), width - (2 * margin) + 8, header_height, 18, stroke=0, fill=1)
+        pdf.roundRect(
+            margin - 4,
+            height - margin - (header_height - 10),
+            width - (2 * margin) + 8,
+            header_height,
+            18,
+            stroke=0,
+            fill=1,
+        )
         pdf.setFillColor(teal_deep)
         pdf.roundRect(width - margin - 165, height - margin - 54, 150, 48, 16, stroke=0, fill=1)
 
         logo_path = BASE_DIR / "BigotesyPaticas.png"
         if logo_path.exists():
             try:
-                pdf.drawImage(str(logo_path), margin + 10, height - margin - 58, width=42, height=42, preserveAspectRatio=True, mask="auto")
+                pdf.drawImage(
+                    str(logo_path),
+                    margin + 10,
+                    height - margin - 58,
+                    width=42,
+                    height=42,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
             except Exception:
                 pass
 
@@ -806,14 +929,22 @@ def generar_pdf_reportlab(venta_data, items):
         pdf.setFont("Helvetica-Bold", 22)
         pdf.drawString(margin + 62, height - margin - 38, "Bigotes y Paticas")
         pdf.setFont("Helvetica", 10)
-        pdf.drawString(margin + 62, height - margin - 54, "Tu tienda de confianza para consentir a cada peludito.")
+        pdf.drawString(
+            margin + 62,
+            height - margin - 54,
+            "Tu tienda de confianza para consentir a cada peludito.",
+        )
         pdf.drawString(margin + 62, height - margin - 67, "Tel: 3206876633")
 
         pdf.setFont("Helvetica-Bold", 18)
         pdf.drawRightString(width - margin - 28, height - margin - 22, "RECIBO")
         pdf.setFont("Helvetica", 10)
-        pdf.drawRightString(width - margin - 28, height - margin - 38, f"No: {venta_data.get('ID', '')}")
-        pdf.drawRightString(width - margin - 28, height - margin - 52, f"Fecha: {venta_data.get('Fecha', '')}")
+        pdf.drawRightString(
+            width - margin - 28, height - margin - 38, f"No: {venta_data.get('ID', '')}"
+        )
+        pdf.drawRightString(
+            width - margin - 28, height - margin - 52, f"Fecha: {venta_data.get('Fecha', '')}"
+        )
 
     def draw_summary_cards(top_y):
         card_width = (width - (2 * margin) - 20) / 3
@@ -909,7 +1040,15 @@ def generar_pdf_reportlab(venta_data, items):
             y = height - margin - 32
             draw_table_header(y)
             y -= 26
-        row_height = 14 if compact_mode and item["Descuento"] <= 0 else 18 if item["Descuento"] <= 0 else 20 if compact_mode else 24
+        row_height = (
+            14
+            if compact_mode and item["Descuento"] <= 0
+            else 18
+            if item["Descuento"] <= 0
+            else 20
+            if compact_mode
+            else 24
+        )
         pdf.setStrokeColor(colors.HexColor("#edf3f2"))
         pdf.line(margin, y - row_height + 4, width - margin, y - row_height + 4)
         pdf.setFillColor(ink)
@@ -931,13 +1070,25 @@ def generar_pdf_reportlab(venta_data, items):
 
     note_y = max(y - (6 if compact_mode else 10), margin + 68)
     pdf.setFillColor(mist)
-    pdf.roundRect(margin, note_y - (36 if compact_mode else 44), width - (2 * margin) - 168, 36 if compact_mode else 44, 14, stroke=0, fill=1)
+    pdf.roundRect(
+        margin,
+        note_y - (36 if compact_mode else 44),
+        width - (2 * margin) - 168,
+        36 if compact_mode else 44,
+        14,
+        stroke=0,
+        fill=1,
+    )
     pdf.setFillColor(teal)
     pdf.setFont("Helvetica-Bold", 10 if compact_mode else 11)
     pdf.drawString(margin + 12, note_y - 14, "Una factura que deja huella")
     pdf.setFillColor(muted)
     pdf.setFont("Helvetica", 7.8 if compact_mode else 8.5)
-    pdf.drawString(margin + 12, note_y - 28, "Resumen elegante, claro y listo para respaldo, cambios o garantias dentro del plazo informado.")
+    pdf.drawString(
+        margin + 12,
+        note_y - 28,
+        "Resumen elegante, claro y listo para respaldo, cambios o garantias dentro del plazo informado.",
+    )
 
     totals_x = width - margin - 156
     pdf.setFillColor(colors.HexColor("#fffaf2"))
@@ -948,7 +1099,9 @@ def generar_pdf_reportlab(venta_data, items):
     pdf.setFont("Helvetica", 8.5)
     pdf.drawString(totals_x + 10, note_y - 14, f"Subtotal bruto: {money(subtotal_bruto)}")
     pdf.drawString(totals_x + 10, note_y - 25, f"Descuentos: {money(descuento_total)}")
-    pdf.drawString(totals_x + 10, note_y - 36, f"Items: {venta_data.get('Total_Items', len(items_render))}")
+    pdf.drawString(
+        totals_x + 10, note_y - 36, f"Items: {venta_data.get('Total_Items', len(items_render))}"
+    )
     pdf.setFillColor(gold)
     pdf.setFont("Helvetica-Bold", 12)
     pdf.drawRightString(totals_x + 146, note_y - 16, money(venta_data.get("Total", 0)))
@@ -961,11 +1114,16 @@ def generar_pdf_reportlab(venta_data, items):
     pdf.drawString(margin, footer_y, "Gracias por consentir a tu mascota con nosotros")
     pdf.setFillColor(muted)
     pdf.setFont("Helvetica", 8.2)
-    pdf.drawString(margin, footer_y - 10, "Conserva este recibo para cambios o garantias durante los siguientes 5 dias habiles.")
+    pdf.drawString(
+        margin,
+        footer_y - 10,
+        "Conserva este recibo para cambios o garantias durante los siguientes 5 dias habiles.",
+    )
     pdf.drawRightString(width - margin, footer_y - 2, "Bigotes y Paticas · Servicio con detalle")
 
     pdf.save()
     return buffer.getvalue()
+
 
 def generar_pdf_html(venta_data, items):
     try:
@@ -973,14 +1131,18 @@ def generar_pdf_html(venta_data, items):
             pdf_alt = generar_pdf_reportlab(venta_data, items)
             if pdf_alt is not None:
                 return pdf_alt
-            st.warning("No se pudo cargar WeasyPrint y tampoco está disponible ReportLab para generar el PDF.")
+            st.warning(
+                "No se pudo cargar WeasyPrint y tampoco está disponible ReportLab para generar el PDF."
+            )
             return None
         try:
             with FACTURA_TEMPLATE_PATH.open("r", encoding="utf-8") as f:
                 template_str = f.read()
         except FileNotFoundError:
             # Plantilla de respaldo por si falla la lectura del archivo
-            template_str = "<html><body><h1>Factura {{id_venta}}</h1><p>Total: {{total}}</p></body></html>"
+            template_str = (
+                "<html><body><h1>Factura {{id_venta}}</h1><p>Total: {{total}}</p></body></html>"
+            )
 
         items_render = []
         subtotal_bruto = 0
@@ -989,8 +1151,13 @@ def generar_pdf_html(venta_data, items):
         for item in items:
             cantidad = float(item.get("Cantidad", 0) or 0)
             precio = clean_currency(item.get("Precio", item.get("Precio_Unitario", 0)) or 0)
-            descuento = clean_currency(item.get("Descuento", item.get("Descuento_Unitario", 0)) or 0)
-            subtotal = clean_currency(item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad)) or 0)
+            descuento = clean_currency(
+                item.get("Descuento", item.get("Descuento_Unitario", 0)) or 0
+            )
+            subtotal = clean_currency(
+                item.get("Subtotal", item.get("Subtotal_Linea", (precio - descuento) * cantidad))
+                or 0
+            )
             subtotal_bruto += clean_currency(precio * cantidad)
             descuento_total += clean_currency(descuento * cantidad)
             total_unidades += cantidad
@@ -1005,21 +1172,21 @@ def generar_pdf_html(venta_data, items):
             )
 
         context = {
-            "id_venta": venta_data['ID'],
-            "fecha": venta_data['Fecha'],
-            "cliente_nombre": venta_data.get('Cliente', 'Consumidor Final'),
-            "cliente_cedula": venta_data.get('Cedula_Cliente', '---'),
-            "cliente_direccion": venta_data.get('Direccion', 'Local'),
-            "cliente_mascota": venta_data.get('Mascota', '---'),
-            "metodo_pago": venta_data.get('Metodo_Pago', 'Efectivo'),
-            "tipo_entrega": venta_data.get('Tipo_Entrega', 'Local'),
+            "id_venta": venta_data["ID"],
+            "fecha": venta_data["Fecha"],
+            "cliente_nombre": venta_data.get("Cliente", "Consumidor Final"),
+            "cliente_cedula": venta_data.get("Cedula_Cliente", "---"),
+            "cliente_direccion": venta_data.get("Direccion", "Local"),
+            "cliente_mascota": venta_data.get("Mascota", "---"),
+            "metodo_pago": venta_data.get("Metodo_Pago", "Efectivo"),
+            "tipo_entrega": venta_data.get("Tipo_Entrega", "Local"),
             "items": items_render,
             "subtotal_bruto": subtotal_bruto,
             "descuento_total": descuento_total,
             "total_unidades": total_unidades,
             "total_items": venta_data.get("Total_Items", len(items_render)),
             "compact_mode": len(items_render) <= 8,
-            "total": clean_currency(venta_data['Total']),
+            "total": clean_currency(venta_data["Total"]),
         }
         template = jinja2.Template(template_str)
         html_renderizado = template.render(context)
@@ -1035,24 +1202,25 @@ def generar_pdf_html(venta_data, items):
         st.error(f"Error generando PDF: {e}")
         return None
 
+
 def normalizar_todas_las_referencias():
     sh = conectar_google_sheets()
     ws_inv = sh.worksheet("Inventario")
-    df = st.session_state.db['inv']
-    
-    if 'ID_Producto' not in df.columns:
+    df = st.session_state.db["inv"]
+
+    if "ID_Producto" not in df.columns:
         st.error("No se encontró ID_Producto")
         return
 
-    col_valores = [normalizar_id_producto(x) for x in df['ID_Producto']]
-    
+    col_valores = [normalizar_id_producto(x) for x in df["ID_Producto"]]
+
     # Encontrar indice de columna
     headers = safe_api_call(ws_inv.row_values, 1)
-    if 'ID_Producto_Norm' not in headers:
-        safe_api_call(ws_inv.update_cell, 1, len(headers)+1, 'ID_Producto_Norm')
+    if "ID_Producto_Norm" not in headers:
+        safe_api_call(ws_inv.update_cell, 1, len(headers) + 1, "ID_Producto_Norm")
         col_idx = len(headers) + 1
     else:
-        col_idx = headers.index('ID_Producto_Norm') + 1
+        col_idx = headers.index("ID_Producto_Norm") + 1
 
     # Update masivo (vertical)
     valores_lista = [[v] for v in col_valores]
@@ -1060,9 +1228,11 @@ def normalizar_todas_las_referencias():
     safe_api_call(ws_inv.update, rango, valores_lista)
     st.success("Referencias normalizadas en la Nube. Recarga los datos.")
 
+
 # ==============================
 # NUEVO: Reparación robusta UID
 # ==============================
+
 
 def _ensure_sheet_columns(ws, required_cols):
     """Asegura columnas en fila 1. Retorna headers finales."""
@@ -1107,7 +1277,9 @@ def asegurar_ids_inventario_nube():
     uid_ser = df["Producto_UID"].fillna("").astype(str).str.strip()
     mask_missing = uid_ser.eq("")
     if mask_missing.any():
-        df.loc[mask_missing, "Producto_UID"] = [uuid.uuid4().hex for _ in range(int(mask_missing.sum()))]
+        df.loc[mask_missing, "Producto_UID"] = [
+            uuid.uuid4().hex for _ in range(int(mask_missing.sum()))
+        ]
 
     # 3) Subir a Google Sheets
     sh = conectar_google_sheets()
@@ -1128,13 +1300,17 @@ def asegurar_ids_inventario_nube():
 
     # 4) Persistir en memoria
     st.session_state.db["inv"] = df
-    st.success("✅ Reparación lista: Producto_UID + ID_Producto_Norm actualizados en Inventario (nube y memoria).")
+    st.success(
+        "✅ Reparación lista: Producto_UID + ID_Producto_Norm actualizados en Inventario (nube y memoria)."
+    )
+
 
 # ==========================================
 # 4. FUNCIONES DE ESCRITURA (OPTIMIZADAS)
 # ==========================================
 
 # ...existing code...
+
 
 def _to_float(x, default=0.0):
     try:
@@ -1146,6 +1322,7 @@ def _to_float(x, default=0.0):
         return float(s.replace(",", ""))
     except Exception:
         return default
+
 
 def _build_inventory_index(ws_inv):
     """
@@ -1187,6 +1364,7 @@ def _build_inventory_index(ws_inv):
 
     return headers, rows, col_stock, col_uid, col_norm, uid_to_row, norm_to_row
 
+
 # ...existing code...
 def registrar_venta(venta_data, carrito):
     """Escribe venta y descuenta stock de forma confiable por Producto_UID."""
@@ -1212,7 +1390,9 @@ def registrar_venta(venta_data, carrito):
     df_inv["ID_Producto_Norm"] = df_inv["ID_Producto_Norm"].fillna("").astype(str).str.strip()
 
     # 3) Index nube (sin ws.find)
-    headers, rows, col_stock, col_uid, col_norm, uid_to_row, norm_to_row = _build_inventory_index(ws_inv)
+    headers, rows, col_stock, col_uid, col_norm, uid_to_row, norm_to_row = _build_inventory_index(
+        ws_inv
+    )
 
     # 4) Acumular deltas por fila (por si se repite un producto en carrito)
     deltas_by_row = {}  # row -> total_delta (negativo)
@@ -1284,27 +1464,37 @@ def registrar_venta(venta_data, carrito):
     if "Fecha" in nuevo_df.columns:
         nuevo_df["Fecha"] = pd.to_datetime(nuevo_df["Fecha"], errors="coerce")
     if "Fecha_Promesa_Pago" in nuevo_df.columns:
-        nuevo_df["Fecha_Promesa_Pago"] = pd.to_datetime(nuevo_df["Fecha_Promesa_Pago"], errors="coerce")
-    st.session_state.db["ven"] = pd.concat([st.session_state.db["ven"], nuevo_df], ignore_index=True)
+        nuevo_df["Fecha_Promesa_Pago"] = pd.to_datetime(
+            nuevo_df["Fecha_Promesa_Pago"], errors="coerce"
+        )
+    st.session_state.db["ven"] = pd.concat(
+        [st.session_state.db["ven"], nuevo_df], ignore_index=True
+    )
+
 
 def registrar_gasto(fila_datos):
     sh = conectar_google_sheets()
     ws_gas = obtener_worksheets(sh)["gas"]
-    
+
     fila_datos = [sanitizar_para_sheet(v) for v in fila_datos]
     safe_api_call(ws_gas.append_row, fila_datos)
-    
+
     # Update local
-    cols = st.session_state.db['gas'].columns
-    if len(fila_datos) < len(cols): fila_datos += [""] * (len(cols) - len(fila_datos))
+    cols = st.session_state.db["gas"].columns
+    if len(fila_datos) < len(cols):
+        fila_datos += [""] * (len(cols) - len(fila_datos))
     nuevo_df = pd.DataFrame([fila_datos], columns=cols)
-    if 'Monto' in nuevo_df.columns: nuevo_df['Monto'] = nuevo_df['Monto'].apply(clean_currency)
-    st.session_state.db['gas'] = pd.concat([st.session_state.db['gas'], nuevo_df], ignore_index=True)
+    if "Monto" in nuevo_df.columns:
+        nuevo_df["Monto"] = nuevo_df["Monto"].apply(clean_currency)
+    st.session_state.db["gas"] = pd.concat(
+        [st.session_state.db["gas"], nuevo_df], ignore_index=True
+    )
+
 
 def registrar_cliente(fila_datos, update=False, row_idx=None):
     sh = conectar_google_sheets()
     ws_cli = obtener_worksheets(sh)["cli"]
-    
+
     if update and row_idx:
         # Update rango A:J (asumiendo 10 columnas)
         rango = f"A{row_idx}:J{row_idx}"
@@ -1316,15 +1506,19 @@ def registrar_cliente(fila_datos, update=False, row_idx=None):
     else:
         safe_api_call(ws_cli.append_row, fila_datos)
         # Update local append
-        cols = st.session_state.db['cli'].columns
-        if len(fila_datos) < len(cols): fila_datos += [""] * (len(cols) - len(fila_datos))
+        cols = st.session_state.db["cli"].columns
+        if len(fila_datos) < len(cols):
+            fila_datos += [""] * (len(cols) - len(fila_datos))
         nuevo_df = pd.DataFrame([fila_datos], columns=cols)
-        st.session_state.db['cli'] = pd.concat([st.session_state.db['cli'], nuevo_df], ignore_index=True)
+        st.session_state.db["cli"] = pd.concat(
+            [st.session_state.db["cli"], nuevo_df], ignore_index=True
+        )
+
 
 def actualizar_estado_envio(id_venta, nuevo_estado):
     sh = conectar_google_sheets()
     ws_ven = asegurar_esquema_operativo(sh)["ven"]
-    
+
     try:
         cell = safe_api_call(ws_ven.find, str(id_venta))
         if cell:
@@ -1332,12 +1526,12 @@ def actualizar_estado_envio(id_venta, nuevo_estado):
             headers = safe_api_call(ws_ven.row_values, 1)
             col_idx = headers.index("Estado_Envio") + 1
             safe_api_call(ws_ven.update_cell, cell.row, col_idx, nuevo_estado)
-            
+
             # Update Local
-            df_ven = st.session_state.db['ven']
-            idx = df_ven[df_ven['ID_Venta'] == id_venta].index
+            df_ven = st.session_state.db["ven"]
+            idx = df_ven[df_ven["ID_Venta"] == id_venta].index
             if not idx.empty:
-                st.session_state.db['ven'].at[idx[0], 'Estado_Envio'] = nuevo_estado
+                st.session_state.db["ven"].at[idx[0], "Estado_Envio"] = nuevo_estado
             return True
     except:
         return False
@@ -1380,7 +1574,9 @@ def actualizar_pago_venta(id_venta, abono_adicional=0, fecha_promesa_pago="", no
             updates["Fecha_Promesa_Pago"] = fecha_promesa_pago
         if nota_pago:
             nota_anterior = str(row_map.get("Nota_Pago", "")).strip()
-            updates["Nota_Pago"] = f"{nota_anterior} | {nota_pago}".strip(" |") if nota_anterior else nota_pago
+            updates["Nota_Pago"] = (
+                f"{nota_anterior} | {nota_pago}".strip(" |") if nota_anterior else nota_pago
+            )
 
         batch_updates = []
         for campo, valor in updates.items():
@@ -1411,35 +1607,51 @@ def actualizar_pago_venta(id_venta, abono_adicional=0, fecha_promesa_pago="", no
     except Exception as e:
         return False, f"No pude actualizar el cobro: {e}"
 
+
 # ==========================================
 # 5. PESTAÑAS (UI)
 # ==========================================
 
+
 def tab_pos():
-    st.markdown("""
+    st.markdown(
+        """
         <style>
         .main-title { color: #187f77; font-size: 2.2rem; font-weight: 800; margin-bottom: 0.5rem; }
         .sub-title { color: #f5a641; font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; }
         .mascota-box { background: #f8f9fa; border-radius: 12px; padding: 10px 18px; margin-bottom: 10px; border-left: 5px solid #f5a641; }
         .carrito-total { background: #f5a641; color: white; font-size: 1.5rem; font-weight: bold; border-radius: 10px; padding: 12px 24px; text-align: right; margin-top: 10px; }
         </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
-    st.markdown('<div class="main-title">🐾 Punto de Venta Bigotes y Paticas</div>', unsafe_allow_html=True)
-    
+    st.markdown(
+        '<div class="main-title">🐾 Punto de Venta Bigotes y Paticas</div>', unsafe_allow_html=True
+    )
+
     # Inicializar variables POS
-    if 'carrito' not in st.session_state: st.session_state.carrito = []
-    if 'cliente_actual' not in st.session_state: st.session_state.cliente_actual = None
-    if 'mascota_seleccionada' not in st.session_state: st.session_state.mascota_seleccionada = None
-    if 'ultimo_pdf' not in st.session_state: st.session_state.ultimo_pdf = None
-    if 'ultimo_pdf_nombre' not in st.session_state: st.session_state.ultimo_pdf_nombre = None
-    if 'ultima_venta_id' not in st.session_state: st.session_state.ultima_venta_id = None
-    if 'ultima_venta_resumen' not in st.session_state: st.session_state.ultima_venta_resumen = None
-    if 'whatsapp_link' not in st.session_state: st.session_state.whatsapp_link = None
-    if 'whatsapp_link_web' not in st.session_state: st.session_state.whatsapp_link_web = None
+    if "carrito" not in st.session_state:
+        st.session_state.carrito = []
+    if "cliente_actual" not in st.session_state:
+        st.session_state.cliente_actual = None
+    if "mascota_seleccionada" not in st.session_state:
+        st.session_state.mascota_seleccionada = None
+    if "ultimo_pdf" not in st.session_state:
+        st.session_state.ultimo_pdf = None
+    if "ultimo_pdf_nombre" not in st.session_state:
+        st.session_state.ultimo_pdf_nombre = None
+    if "ultima_venta_id" not in st.session_state:
+        st.session_state.ultima_venta_id = None
+    if "ultima_venta_resumen" not in st.session_state:
+        st.session_state.ultima_venta_resumen = None
+    if "whatsapp_link" not in st.session_state:
+        st.session_state.whatsapp_link = None
+    if "whatsapp_link_web" not in st.session_state:
+        st.session_state.whatsapp_link_web = None
 
-    df_c = st.session_state.db['cli']
-    df_inv = st.session_state.db['inv']
+    df_c = st.session_state.db["cli"]
+    df_inv = st.session_state.db["inv"]
 
     # --- 1. BUSCAR CLIENTE ---
     st.markdown("### 👤 Cliente")
@@ -1447,36 +1659,43 @@ def tab_pos():
         search = st.text_input("Buscar cliente (Nombre, Cédula, Mascota)", key="busca_cli_pos")
         if search:
             mask = (
-                df_c['Nombre'].astype(str).str.contains(search, case=False, na=False) |
-                df_c['Cedula'].astype(str).str.contains(search, case=False, na=False) |
-                df_c['Mascota'].astype(str).str.contains(search, case=False, na=False)
+                df_c["Nombre"].astype(str).str.contains(search, case=False, na=False)
+                | df_c["Cedula"].astype(str).str.contains(search, case=False, na=False)
+                | df_c["Mascota"].astype(str).str.contains(search, case=False, na=False)
             )
             resultados = df_c[mask]
         else:
-            resultados = df_c.head(0) # No mostrar nada si no hay busqueda
+            resultados = df_c.head(0)  # No mostrar nada si no hay busqueda
 
         if not resultados.empty:
-            selected_idx = st.selectbox("Seleccionar:", resultados.index, format_func=lambda i: f"{resultados.loc[i, 'Nombre']} - {resultados.loc[i, 'Cedula']}")
-            
+            selected_idx = st.selectbox(
+                "Seleccionar:",
+                resultados.index,
+                format_func=lambda i: f"{resultados.loc[i, 'Nombre']} - {resultados.loc[i, 'Cedula']}",
+            )
+
             if st.button("Cargar Cliente"):
                 cliente_data = resultados.loc[selected_idx].to_dict()
                 # Parsear mascotas
                 mascotas_lista = []
                 try:
-                    raw_json = cliente_data.get('Info_Mascotas', '')
+                    raw_json = cliente_data.get("Info_Mascotas", "")
                     if raw_json and str(raw_json).strip():
                         parsed = json.loads(str(raw_json))
                         if isinstance(parsed, list):
-                            mascotas_lista = [m.get('Nombre') for m in parsed if m.get('Nombre')]
-                except: pass
-                
+                            mascotas_lista = [m.get("Nombre") for m in parsed if m.get("Nombre")]
+                except:
+                    pass
+
                 if not mascotas_lista:
-                    old_m = cliente_data.get('Mascota', '')
-                    if old_m: mascotas_lista = [old_m]
-                
-                if not mascotas_lista: mascotas_lista = ["Varios"]
-                
-                cliente_data['Lista_Mascotas'] = mascotas_lista
+                    old_m = cliente_data.get("Mascota", "")
+                    if old_m:
+                        mascotas_lista = [old_m]
+
+                if not mascotas_lista:
+                    mascotas_lista = ["Varios"]
+
+                cliente_data["Lista_Mascotas"] = mascotas_lista
                 st.session_state.cliente_actual = cliente_data
                 st.session_state.mascota_seleccionada = mascotas_lista[0]
                 st.toast("Cliente cargado", icon="✅")
@@ -1484,7 +1703,9 @@ def tab_pos():
 
     if st.session_state.cliente_actual:
         c_act = st.session_state.cliente_actual
-        st.info(f"Cliente: **{c_act['Nombre']}** | Mascota: **{st.session_state.mascota_seleccionada}**")
+        st.info(
+            f"Cliente: **{c_act['Nombre']}** | Mascota: **{st.session_state.mascota_seleccionada}**"
+        )
 
     # --- 2. PRODUCTOS (SELECCIÓN + AGREGAR) ---
     st.markdown("### 🛒 Productos")
@@ -1596,7 +1817,9 @@ def tab_pos():
                 it["Cantidad"] = float(it.get("Cantidad", 0) or 0) + float(cant)
                 it["Precio"] = clean_currency(precio)
                 it["Descuento"] = clean_currency(descuento)
-                it["Subtotal"] = clean_currency((it["Precio"] - it["Descuento"]) * float(it["Cantidad"]))
+                it["Subtotal"] = clean_currency(
+                    (it["Precio"] - it["Descuento"]) * float(it["Cantidad"])
+                )
                 existe = True
                 break
 
@@ -1611,7 +1834,9 @@ def tab_pos():
                     "Precio": clean_currency(precio),
                     "Descuento": clean_currency(descuento),
                     "Costo": clean_currency(costo_base),
-                    "Subtotal": clean_currency((clean_currency(precio) - clean_currency(descuento)) * float(cant)),
+                    "Subtotal": clean_currency(
+                        (clean_currency(precio) - clean_currency(descuento)) * float(cant)
+                    ),
                 }
             )
         st.rerun()
@@ -1636,7 +1861,9 @@ def tab_pos():
 
     # Subtotal siempre consistente
     if "Subtotal" not in df_car.columns:
-        df_car["Subtotal"] = ((df_car["Precio"] - df_car["Descuento"]) * df_car["Cantidad"]).round().astype(int)
+        df_car["Subtotal"] = (
+            ((df_car["Precio"] - df_car["Descuento"]) * df_car["Cantidad"]).round().astype(int)
+        )
 
     with st.form("pos_carrito_form", clear_on_submit=False):
         edited_car = st.data_editor(
@@ -1645,16 +1872,28 @@ def tab_pos():
             num_rows="fixed",
             hide_index=True,
             column_config={
-                "🗑️ Eliminar": st.column_config.CheckboxColumn("🗑️", help="Marca para eliminar esta línea"),
-                "Producto_UID": st.column_config.TextColumn("Producto_UID", disabled=True, width="small"),
-                "ID_Producto": st.column_config.TextColumn("ID_Producto", disabled=True, width="small"),
-                "ID_Producto_Norm": st.column_config.TextColumn("ID_Producto_Norm", disabled=True, width="small"),
-                "Nombre_Producto": st.column_config.TextColumn("Producto", disabled=True, width="large"),
+                "🗑️ Eliminar": st.column_config.CheckboxColumn(
+                    "🗑️", help="Marca para eliminar esta línea"
+                ),
+                "Producto_UID": st.column_config.TextColumn(
+                    "Producto_UID", disabled=True, width="small"
+                ),
+                "ID_Producto": st.column_config.TextColumn(
+                    "ID_Producto", disabled=True, width="small"
+                ),
+                "ID_Producto_Norm": st.column_config.TextColumn(
+                    "ID_Producto_Norm", disabled=True, width="small"
+                ),
+                "Nombre_Producto": st.column_config.TextColumn(
+                    "Producto", disabled=True, width="large"
+                ),
                 "Cantidad": st.column_config.NumberColumn("Cantidad", min_value=0.0, step=1.0),
                 "Precio": st.column_config.NumberColumn("Precio", format="$%.0f", step=100.0),
                 "Descuento": st.column_config.NumberColumn("Desc.", format="$%.0f", step=100.0),
                 "Costo": st.column_config.NumberColumn("Costo", format="$%.0f", step=100.0),
-                "Subtotal": st.column_config.NumberColumn("Subtotal", format="$%.0f", disabled=True),
+                "Subtotal": st.column_config.NumberColumn(
+                    "Subtotal", format="$%.0f", disabled=True
+                ),
             },
         )
 
@@ -1677,7 +1916,11 @@ def tab_pos():
                     edited_car[c] = pd.to_numeric(edited_car[c], errors="coerce").fillna(0.0)
 
             if not edited_car.empty:
-                edited_car["Subtotal"] = ((edited_car["Precio"] - edited_car["Descuento"]) * edited_car["Cantidad"]).round().astype(int)
+                edited_car["Subtotal"] = (
+                    ((edited_car["Precio"] - edited_car["Descuento"]) * edited_car["Cantidad"])
+                    .round()
+                    .astype(int)
+                )
 
             # 3) Guardar en session_state (sin columna de acción)
             if "🗑️ Eliminar" in edited_car.columns:
@@ -1694,8 +1937,14 @@ def tab_pos():
                 df_total[c] = pd.to_numeric(df_total[c], errors="coerce").fillna(0.0)
                 if c in ["Precio", "Descuento", "Subtotal"]:
                     df_total[c] = df_total[c].round().astype(int)
-        if "Subtotal" not in df_total.columns and {"Precio", "Descuento", "Cantidad"}.issubset(df_total.columns):
-            df_total["Subtotal"] = ((df_total["Precio"] - df_total["Descuento"]) * df_total["Cantidad"]).round().astype(int)
+        if "Subtotal" not in df_total.columns and {"Precio", "Descuento", "Cantidad"}.issubset(
+            df_total.columns
+        ):
+            df_total["Subtotal"] = (
+                ((df_total["Precio"] - df_total["Descuento"]) * df_total["Cantidad"])
+                .round()
+                .astype(int)
+            )
         total = clean_currency(df_total["Subtotal"].sum()) if "Subtotal" in df_total.columns else 0
     else:
         total = 0
@@ -1705,12 +1954,20 @@ def tab_pos():
     # --- 4. PAGO + FINALIZAR (FUERA del bloque del carrito) ---
     st.markdown("---")
     c1, c2, c3 = st.columns(3)
-    metodo = c1.selectbox("Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"], key="pos_metodo")
+    metodo = c1.selectbox(
+        "Pago", ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"], key="pos_metodo"
+    )
     entrega = c2.selectbox("Entrega", ["Local", "Domicilio"], key="pos_entrega")
-    estado_cobro_ui = c3.selectbox("Estado de cobro", ["Pagado completo", "Abono parcial", "Pago pendiente"], key="pos_estado_pago")
+    estado_cobro_ui = c3.selectbox(
+        "Estado de cobro",
+        ["Pagado completo", "Abono parcial", "Pago pendiente"],
+        key="pos_estado_pago",
+    )
     dir_envio = st.text_input(
         "Dirección",
-        value=st.session_state.cliente_actual.get("Direccion", "") if st.session_state.cliente_actual else "",
+        value=st.session_state.cliente_actual.get("Direccion", "")
+        if st.session_state.cliente_actual
+        else "",
         key="pos_dir",
     )
 
@@ -1735,14 +1992,24 @@ def tab_pos():
     if estado_cobro_ui in ["Abono parcial", "Pago pendiente"]:
         cf1, cf2 = st.columns(2)
         cf1.date_input("Fecha compromiso de pago", value=now_co().date(), key="pos_fecha_pago")
-        cf2.text_input("Nota de cobro", placeholder="Ej: cliente paga el sábado en la tarde", key="pos_nota_pago")
+        cf2.text_input(
+            "Nota de cobro",
+            placeholder="Ej: cliente paga el sábado en la tarde",
+            key="pos_nota_pago",
+        )
     else:
         st.session_state["pos_abono"] = float(total or 0)
         st.session_state["pos_fecha_pago"] = now_co().date()
         st.session_state["pos_nota_pago"] = ""
 
-    cobrado_estimado = total if estado_cobro_ui == "Pagado completo" else clean_currency(st.session_state.get("pos_abono", 0) or 0)
-    st.caption(f"Cobrado ahora: ${cobrado_estimado:,.0f} | Pendiente por cobrar: ${max(total - cobrado_estimado, 0):,.0f}")
+    cobrado_estimado = (
+        total
+        if estado_cobro_ui == "Pagado completo"
+        else clean_currency(st.session_state.get("pos_abono", 0) or 0)
+    )
+    st.caption(
+        f"Cobrado ahora: ${cobrado_estimado:,.0f} | Pendiente por cobrar: ${max(total - cobrado_estimado, 0):,.0f}"
+    )
 
     if st.button("✅ FINALIZAR VENTA", type="primary", width="stretch", key="pos_fin"):
         if not st.session_state.cliente_actual:
@@ -1759,7 +2026,9 @@ def tab_pos():
             fecha = now_co().strftime("%Y-%m-%d %H:%M:%S")
             carrito_cerrado = [dict(item) for item in st.session_state.carrito]
 
-            items_str = ", ".join([f"{x['Cantidad']}x {x['Nombre_Producto']}" for x in carrito_cerrado])
+            items_str = ", ".join(
+                [f"{x['Cantidad']}x {x['Nombre_Producto']}" for x in carrito_cerrado]
+            )
 
             # total ya lo calculas más arriba; asegurar float
             total_num = clean_currency(total or 0)
@@ -1781,9 +2050,14 @@ def tab_pos():
                 ]
             )
 
-            costo_total = clean_currency(sum(
-                [clean_currency(x.get("Costo", 0) or 0) * float(x.get("Cantidad", 0) or 0) for x in carrito_cerrado]
-            ))
+            costo_total = clean_currency(
+                sum(
+                    [
+                        clean_currency(x.get("Costo", 0) or 0) * float(x.get("Cantidad", 0) or 0)
+                        for x in carrito_cerrado
+                    ]
+                )
+            )
 
             estado_cobro_ui = st.session_state.get("pos_estado_pago", "Pagado completo")
             fecha_promesa_pago = ""
@@ -1847,7 +2121,9 @@ def tab_pos():
                 fecha_promesa_pago=fecha_promesa_pago,
                 nota_pago=nota_pago,
             )
-            st.session_state.ultimo_pdf = generar_pdf_html(resumen_venta["venta"], resumen_venta["items"])
+            st.session_state.ultimo_pdf = generar_pdf_html(
+                resumen_venta["venta"], resumen_venta["items"]
+            )
             st.session_state.ultimo_pdf_nombre = f"Factura_{id_venta}.pdf"
             st.session_state.ultima_venta_resumen = resumen_venta
 
@@ -1866,7 +2142,9 @@ def tab_pos():
             st.session_state.whatsapp_link_web = link_web
 
             st.session_state.carrito = []
-            st.success("Venta registrada. El resumen, la factura y el acceso a WhatsApp quedaron listos.")
+            st.success(
+                "Venta registrada. El resumen, la factura y el acceso a WhatsApp quedaron listos."
+            )
 
     # ===== UI POST-VENTA =====
     if st.session_state.get("ultima_venta_id"):
@@ -1894,12 +2172,18 @@ def tab_pos():
             unsafe_allow_html=True,
         )
         c_estado_venta, c_estado_pago, c_compromiso = st.columns(3)
-        c_estado_venta.caption(f"Entrega: {venta_resumen.get('Tipo_Entrega', 'Local')} | Envío: {venta_resumen.get('Direccion', 'Local') or 'Local'}")
-        c_estado_pago.caption(f"Cobro: {venta_resumen.get('Estado_Pago', 'Pagado')} | Método: {venta_resumen.get('Metodo_Pago', 'Efectivo')}")
+        c_estado_venta.caption(
+            f"Entrega: {venta_resumen.get('Tipo_Entrega', 'Local')} | Envío: {venta_resumen.get('Direccion', 'Local') or 'Local'}"
+        )
+        c_estado_pago.caption(
+            f"Cobro: {venta_resumen.get('Estado_Pago', 'Pagado')} | Método: {venta_resumen.get('Metodo_Pago', 'Efectivo')}"
+        )
         compromiso = venta_resumen.get("Fecha_Promesa_Pago", "")
         c_compromiso.caption(f"Compromiso: {compromiso if compromiso else 'Sin fecha pendiente'}")
         if items_resumen:
-            preview_items = pd.DataFrame(items_resumen)[["Nombre_Producto", "Cantidad", "Precio", "Descuento", "Subtotal"]].copy()
+            preview_items = pd.DataFrame(items_resumen)[
+                ["Nombre_Producto", "Cantidad", "Precio", "Descuento", "Subtotal"]
+            ].copy()
             st.dataframe(
                 preview_items,
                 use_container_width=True,
@@ -1917,7 +2201,8 @@ def tab_pos():
             st.download_button(
                 "📄 Descargar factura PDF",
                 data=st.session_state.get("ultimo_pdf") or b"",
-                file_name=st.session_state.get("ultimo_pdf_nombre") or f"Factura_{st.session_state.get('ultima_venta_id', 'venta')}.pdf",
+                file_name=st.session_state.get("ultimo_pdf_nombre")
+                or f"Factura_{st.session_state.get('ultima_venta_id', 'venta')}.pdf",
                 mime="application/pdf",
                 type="primary",
                 use_container_width=True,
@@ -1928,12 +2213,21 @@ def tab_pos():
                 st.caption("La venta se guardó, pero el PDF no se pudo generar en este entorno.")
         with c2:
             if st.session_state.get("whatsapp_link"):
-                st.link_button("🟢 Abrir en WhatsApp App/Desktop", st.session_state["whatsapp_link"], type="secondary", use_container_width=True)
+                st.link_button(
+                    "🟢 Abrir en WhatsApp App/Desktop",
+                    st.session_state["whatsapp_link"],
+                    type="secondary",
+                    use_container_width=True,
+                )
             else:
                 st.warning("No hay teléfono válido para WhatsApp en este cliente.")
         with c3:
             if st.session_state.get("whatsapp_link_web"):
-                st.link_button("🌐 Abrir en WhatsApp Web", st.session_state["whatsapp_link_web"], use_container_width=True)
+                st.link_button(
+                    "🌐 Abrir en WhatsApp Web",
+                    st.session_state["whatsapp_link_web"],
+                    use_container_width=True,
+                )
         st.button(
             "✨ Nueva venta limpia",
             key="pos_nueva_venta",
@@ -1941,6 +2235,7 @@ def tab_pos():
             on_click=reset_pos_workflow,
             kwargs={"clear_cliente": True},
         )
+
 
 def _get_cliente_tel(cliente: dict) -> str:
     """Obtiene teléfono de forma robusta desde el dict de cliente."""
@@ -1951,6 +2246,7 @@ def _get_cliente_tel(cliente: dict) -> str:
         if v and str(v).strip():
             return str(v).strip()
     return ""
+
 
 def build_whatsapp_links(telefono: str, mensaje: str) -> tuple[str | None, str | None]:
     """Links estables para celular (wa.me) y PC (WhatsApp Web)."""
@@ -1964,6 +2260,7 @@ def build_whatsapp_links(telefono: str, mensaje: str) -> tuple[str | None, str |
         f"https://wa.me/{tel}?text={encoded}",
         f"https://web.whatsapp.com/send?phone={tel}&text={encoded}",
     )
+
 
 # ✅ DEFINICIÓN FINAL (única) DEL MENSAJE POST-VENTA
 # (si existían versiones anteriores, esta las sobre-escribe y elimina el “doble mensaje”)
@@ -1984,8 +2281,10 @@ def msg_venta(nombre: str, mascota: str, items_str: str, total: float) -> str:
         f"Te esperamos pronto con mucho cariño. 🐶🐱"
     )
 
+
 def msg_venta_fidelidad(nombre: str, mascota: str, items_str: str, total: float) -> str:
     return msg_venta(nombre, mascota, items_str, total)
+
 
 def tab_clientes_ui():
     st.header("Gestión de Clientes")
@@ -2000,28 +2299,39 @@ def tab_clientes_ui():
             mascota = st.text_input("Nombre Mascota Principal")
             tipo = st.selectbox("Tipo", ["Perro", "Gato", "Otro"])
             cumple = st.date_input("Cumpleaños Mascota")
-            
+
             if st.form_submit_button("Guardar"):
                 # Crear JSON simple
                 info_m = json.dumps([{"Nombre": mascota, "Tipo": tipo, "Cumpleaños": str(cumple)}])
-                fila = [cedula, nombre, tel, email, dir, mascota, tipo, str(cumple), now_co().strftime("%Y-%m-%d"), info_m]
-                
+                fila = [
+                    cedula,
+                    nombre,
+                    tel,
+                    email,
+                    dir,
+                    mascota,
+                    tipo,
+                    str(cumple),
+                    now_co().strftime("%Y-%m-%d"),
+                    info_m,
+                ]
+
                 # Check si existe (local)
-                df = st.session_state.db['cli']
-                existe = df[df['Cedula'].astype(str) == str(cedula)]
-                
+                df = st.session_state.db["cli"]
+                existe = df[df["Cedula"].astype(str) == str(cedula)]
+
                 if not existe.empty:
                     # Update (más complejo, requeriría row_idx, por simplicidad en versión fixed sugerimos append o avisar)
                     st.warning("Cliente ya existe con esa cédula (Lógica update pendiente)")
                 else:
                     registrar_cliente(fila)
                     st.success("Cliente guardado")
-                    
+
                     # Generar link bienvenida
                     link = f"https://wa.me/{limpiar_tel(tel)}?text={urllib.parse.quote(msg_bienvenida(nombre, mascota))}"
                     st.markdown(f"[📲 Enviar Bienvenida]({link})")
 
-    st.dataframe(st.session_state.db['cli'], use_container_width=True)
+    st.dataframe(st.session_state.db["cli"], use_container_width=True)
 
     # Botón para limpiar selección y permitir crear un nuevo cliente
     if st.button("🆕 Nuevo Cliente", help="Registrar un cliente desde cero"):
@@ -2029,60 +2339,87 @@ def tab_clientes_ui():
         st.session_state.mascota_seleccionada = None
         st.rerun()
 
+
 def tab_despachos_ui():
     st.header("🚚 Despachos")
-    df = st.session_state.db['ven']
-    pendientes = df[df['Estado_Envio'].isin(["Pendiente", "En camino"])]
-    
+    df = st.session_state.db["ven"]
+    pendientes = df[df["Estado_Envio"].isin(["Pendiente", "En camino"])]
+
     if pendientes.empty:
         st.info("No hay despachos pendientes")
     else:
         st.dataframe(pendientes)
-        sel_id = st.selectbox("Actualizar ID", pendientes['ID_Venta'])
+        sel_id = st.selectbox("Actualizar ID", pendientes["ID_Venta"])
         nuevo = st.selectbox("Nuevo Estado", ["Entregado", "Pagado", "Cancelado"])
         if st.button("Actualizar"):
             ok = actualizar_estado_envio(sel_id, nuevo)
-            if ok: 
+            if ok:
                 st.success("Actualizado")
                 st.rerun()
-            else: st.error("Error al actualizar")
+            else:
+                st.error("Error al actualizar")
+
 
 def tab_facturas_ui():
     st.header("Facturas y Reimpresiones")
-    df = st.session_state.db['ven'].copy()
+    df = st.session_state.db["ven"].copy()
     if df.empty:
         st.info("No hay ventas registradas todavía.")
         return
 
-    if 'Fecha' in df.columns:
-        df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-        df = df.sort_values('Fecha', ascending=False)
-        fechas_validas = df['Fecha'].dropna()
+    if "Fecha" in df.columns:
+        df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
+        df = df.sort_values("Fecha", ascending=False)
+        fechas_validas = df["Fecha"].dropna()
     else:
-        fechas_validas = pd.Series(dtype='datetime64[ns]')
+        fechas_validas = pd.Series(dtype="datetime64[ns]")
 
-    texto = st.text_input("Buscar venta", placeholder="Cliente, cédula, mascota o ID de venta", key="buscar_factura_texto")
+    texto = st.text_input(
+        "Buscar venta",
+        placeholder="Cliente, cédula, mascota o ID de venta",
+        key="buscar_factura_texto",
+    )
     c1, c2 = st.columns(2)
-    usar_rango = c1.toggle("Filtrar por rango de fechas", value=False, key="facturas_filtrar_fechas")
+    usar_rango = c1.toggle(
+        "Filtrar por rango de fechas", value=False, key="facturas_filtrar_fechas"
+    )
 
     fecha_ini = fecha_fin = None
     if usar_rango and not fechas_validas.empty:
         min_fecha = fechas_validas.min().date()
         max_fecha = fechas_validas.max().date()
-        fecha_ini = c1.date_input("Desde", value=min_fecha, min_value=min_fecha, max_value=max_fecha, key="facturas_desde")
-        fecha_fin = c2.date_input("Hasta", value=max_fecha, min_value=min_fecha, max_value=max_fecha, key="facturas_hasta")
+        fecha_ini = c1.date_input(
+            "Desde", value=min_fecha, min_value=min_fecha, max_value=max_fecha, key="facturas_desde"
+        )
+        fecha_fin = c2.date_input(
+            "Hasta", value=max_fecha, min_value=min_fecha, max_value=max_fecha, key="facturas_hasta"
+        )
     else:
         c2.caption("Activa el rango solo cuando quieras acotar la búsqueda.")
 
     filtrado = df.copy()
-    if usar_rango and fecha_ini and fecha_fin and 'Fecha' in filtrado.columns:
+    if usar_rango and fecha_ini and fecha_fin and "Fecha" in filtrado.columns:
         if fecha_ini > fecha_fin:
             fecha_ini, fecha_fin = fecha_fin, fecha_ini
-        filtrado = filtrado[(filtrado['Fecha'].dt.date >= fecha_ini) & (filtrado['Fecha'].dt.date <= fecha_fin)].copy()
+        filtrado = filtrado[
+            (filtrado["Fecha"].dt.date >= fecha_ini) & (filtrado["Fecha"].dt.date <= fecha_fin)
+        ].copy()
 
     if texto.strip():
         q = texto.strip()
-        columnas_busqueda = [col for col in ["ID_Venta", "Nombre_Cliente", "Cedula_Cliente", "Mascota", "Items", "Direccion_Envio", "Direccion"] if col in filtrado.columns]
+        columnas_busqueda = [
+            col
+            for col in [
+                "ID_Venta",
+                "Nombre_Cliente",
+                "Cedula_Cliente",
+                "Mascota",
+                "Items",
+                "Direccion_Envio",
+                "Direccion",
+            ]
+            if col in filtrado.columns
+        ]
         if columnas_busqueda:
             mask = pd.Series(False, index=filtrado.index)
             for col in columnas_busqueda:
@@ -2093,7 +2430,19 @@ def tab_facturas_ui():
         st.info("No encontré ventas con esos filtros.")
         return
 
-    mostrar_cols = [col for col in ["Fecha", "ID_Venta", "Nombre_Cliente", "Cedula_Cliente", "Mascota", "Metodo_Pago", "Total"] if col in filtrado.columns]
+    mostrar_cols = [
+        col
+        for col in [
+            "Fecha",
+            "ID_Venta",
+            "Nombre_Cliente",
+            "Cedula_Cliente",
+            "Mascota",
+            "Metodo_Pago",
+            "Total",
+        ]
+        if col in filtrado.columns
+    ]
     vista = filtrado[mostrar_cols].copy()
     st.dataframe(
         vista,
@@ -2137,7 +2486,9 @@ def tab_facturas_ui():
 
     if resumen["items"]:
         st.dataframe(
-            pd.DataFrame(resumen["items"])[["Nombre_Producto", "Cantidad", "Precio", "Descuento", "Subtotal"]],
+            pd.DataFrame(resumen["items"])[
+                ["Nombre_Producto", "Cantidad", "Precio", "Descuento", "Subtotal"]
+            ],
             use_container_width=True,
             hide_index=True,
             column_config={
@@ -2160,7 +2511,10 @@ def tab_facturas_ui():
         key="hist_download_pdf",
     )
     if not pdf_data:
-        st.caption("No se pudo generar el PDF para esta venta. Revisa si el detalle guardado está incompleto.")
+        st.caption(
+            "No se pudo generar el PDF para esta venta. Revisa si el detalle guardado está incompleto."
+        )
+
 
 def tab_gastos_ui():
     st.header("Gastos")
@@ -2170,22 +2524,23 @@ def tab_gastos_ui():
         desc = st.text_input("Descripción")
         monto = st.number_input("Monto", min_value=0.0)
         metodo = st.selectbox("Pago", ["Efectivo", "Bancos", "Nequi"])
-        
+
         if st.form_submit_button("Registrar"):
             ts = int(now_co().timestamp())
             fila = [f"GAS-{ts}", now_co().strftime("%Y-%m-%d"), tipo, cat, desc, monto, metodo, ""]
             registrar_gasto(fila)
             st.success("Gasto guardado")
 
+
 def tab_cuadre_ui():
     st.header("Cuadre de Caja")
 
-    df_ven = preparar_ventas_dashboard(st.session_state.db['ven'])
-    df_gas = st.session_state.db['gas'].copy()
-    df_cie = st.session_state.db['cie'].copy()
+    df_ven = preparar_ventas_dashboard(st.session_state.db["ven"])
+    df_gas = st.session_state.db["gas"].copy()
+    df_cie = st.session_state.db["cie"].copy()
 
-    if not df_gas.empty and 'Monto' in df_gas.columns:
-        df_gas['Monto'] = df_gas['Monto'].apply(clean_currency)
+    if not df_gas.empty and "Monto" in df_gas.columns:
+        df_gas["Monto"] = df_gas["Monto"].apply(clean_currency)
 
     fecha = st.date_input("Fecha a cuadrar", now_co().date(), key="cuadre_fecha")
 
@@ -2210,44 +2565,79 @@ def tab_cuadre_ui():
 
             if st.form_submit_button("Registrar movimiento"):
                 ts = int(now_co().timestamp())
-                fila = [f"GAS-{ts}", now_co().strftime("%Y-%m-%d"), tipo, cat, desc, monto, metodo, ""]
+                fila = [
+                    f"GAS-{ts}",
+                    now_co().strftime("%Y-%m-%d"),
+                    tipo,
+                    cat,
+                    desc,
+                    monto,
+                    metodo,
+                    "",
+                ]
                 registrar_gasto(fila)
                 st.success("Movimiento guardado. El cuadre se recalculó con este gasto/pago.")
                 st.rerun()
 
     base_inicial = 0.0
-    if not df_cie.empty and 'Fecha' in df_cie.columns:
-        df_cie['Fecha_dt'] = pd.to_datetime(df_cie['Fecha'], errors='coerce').dt.date
-        if 'Saldo_Real' in df_cie.columns:
-            df_cie['Saldo_Real'] = df_cie['Saldo_Real'].apply(clean_currency)
-        prev_cierre = df_cie[df_cie['Fecha_dt'] < fecha].sort_values('Fecha_dt', ascending=False)
+    if not df_cie.empty and "Fecha" in df_cie.columns:
+        df_cie["Fecha_dt"] = pd.to_datetime(df_cie["Fecha"], errors="coerce").dt.date
+        if "Saldo_Real" in df_cie.columns:
+            df_cie["Saldo_Real"] = df_cie["Saldo_Real"].apply(clean_currency)
+        prev_cierre = df_cie[df_cie["Fecha_dt"] < fecha].sort_values("Fecha_dt", ascending=False)
         if not prev_cierre.empty:
-            base_inicial = clean_currency(prev_cierre.iloc[0].get('Saldo_Real', 0))
+            base_inicial = clean_currency(prev_cierre.iloc[0].get("Saldo_Real", 0))
 
-    if not df_ven.empty and 'Fecha' in df_ven.columns:
-        df_ven['Fecha_dt'] = pd.to_datetime(df_ven['Fecha'], errors='coerce').dt.date
+    if not df_ven.empty and "Fecha" in df_ven.columns:
+        df_ven["Fecha_dt"] = pd.to_datetime(df_ven["Fecha"], errors="coerce").dt.date
     else:
-        df_ven['Fecha_dt'] = None
-    if not df_gas.empty and 'Fecha' in df_gas.columns:
-        df_gas['Fecha_dt'] = pd.to_datetime(df_gas['Fecha'], errors='coerce').dt.date
+        df_ven["Fecha_dt"] = None
+    if not df_gas.empty and "Fecha" in df_gas.columns:
+        df_gas["Fecha_dt"] = pd.to_datetime(df_gas["Fecha"], errors="coerce").dt.date
     else:
-        df_gas['Fecha_dt'] = None
+        df_gas["Fecha_dt"] = None
 
-    v_dia = df_ven[df_ven['Fecha_dt'] == fecha].copy() if not df_ven.empty else pd.DataFrame()
-    g_dia = df_gas[df_gas['Fecha_dt'] == fecha].copy() if not df_gas.empty else pd.DataFrame()
+    v_dia = df_ven[df_ven["Fecha_dt"] == fecha].copy() if not df_ven.empty else pd.DataFrame()
+    g_dia = df_gas[df_gas["Fecha_dt"] == fecha].copy() if not df_gas.empty else pd.DataFrame()
 
-    ventas_facturadas = clean_currency(v_dia['Total'].sum()) if not v_dia.empty else 0
-    cobrado_total = clean_currency(v_dia['Cobrado'].sum()) if not v_dia.empty else 0
-    pendiente_cobro = clean_currency(v_dia['Pendiente'].sum()) if not v_dia.empty else 0
-    costo_merc = clean_currency(v_dia['Costo_Total'].sum()) if not v_dia.empty and 'Costo_Total' in v_dia.columns else 0
+    ventas_facturadas = clean_currency(v_dia["Total"].sum()) if not v_dia.empty else 0
+    cobrado_total = clean_currency(v_dia["Cobrado"].sum()) if not v_dia.empty else 0
+    pendiente_cobro = clean_currency(v_dia["Pendiente"].sum()) if not v_dia.empty else 0
+    costo_merc = (
+        clean_currency(v_dia["Costo_Total"].sum())
+        if not v_dia.empty and "Costo_Total" in v_dia.columns
+        else 0
+    )
     margen_ganado = clean_currency(ventas_facturadas - costo_merc)
-    margen_pct = ((ventas_facturadas - costo_merc) / ventas_facturadas * 100) if ventas_facturadas > 0 else 0
+    margen_pct = (
+        ((ventas_facturadas - costo_merc) / ventas_facturadas * 100) if ventas_facturadas > 0 else 0
+    )
 
-    cobro_efectivo = clean_currency(v_dia[v_dia['Metodo_Pago'] == 'Efectivo']['Cobrado'].sum()) if not v_dia.empty else 0
-    cobro_tarjeta = clean_currency(v_dia[v_dia['Metodo_Pago'] == 'Tarjeta']['Cobrado'].sum()) if not v_dia.empty else 0
-    cobro_digital = clean_currency(v_dia[v_dia['Metodo_Pago'].isin(['Nequi', 'Daviplata', 'Transferencia'])]['Cobrado'].sum()) if not v_dia.empty else 0
+    cobro_efectivo = (
+        clean_currency(v_dia[v_dia["Metodo_Pago"] == "Efectivo"]["Cobrado"].sum())
+        if not v_dia.empty
+        else 0
+    )
+    cobro_tarjeta = (
+        clean_currency(v_dia[v_dia["Metodo_Pago"] == "Tarjeta"]["Cobrado"].sum())
+        if not v_dia.empty
+        else 0
+    )
+    cobro_digital = (
+        clean_currency(
+            v_dia[v_dia["Metodo_Pago"].isin(["Nequi", "Daviplata", "Transferencia"])][
+                "Cobrado"
+            ].sum()
+        )
+        if not v_dia.empty
+        else 0
+    )
     cobro_electronico = clean_currency(cobro_tarjeta + cobro_digital)
-    gastos_efectivo = clean_currency(g_dia[g_dia['Metodo_Pago'] == 'Efectivo']['Monto'].sum()) if not g_dia.empty else 0
+    gastos_efectivo = (
+        clean_currency(g_dia[g_dia["Metodo_Pago"] == "Efectivo"]["Monto"].sum())
+        if not g_dia.empty
+        else 0
+    )
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric("Base inicial", f"${base_inicial:,.0f}")
@@ -2261,17 +2651,32 @@ def tab_cuadre_ui():
 
     with c_mov:
         st.subheader("1. Movimientos del día")
-        mix_rows = pd.DataFrame([
-            {"Canal": "Efectivo", "Cobrado": cobro_efectivo},
-            {"Canal": "Tarjeta", "Cobrado": cobro_tarjeta},
-            {"Canal": "Digital", "Cobrado": cobro_digital},
-            {"Canal": "Gastos en efectivo", "Cobrado": -gastos_efectivo},
-        ])
+        mix_rows = pd.DataFrame(
+            [
+                {"Canal": "Efectivo", "Cobrado": cobro_efectivo},
+                {"Canal": "Tarjeta", "Cobrado": cobro_tarjeta},
+                {"Canal": "Digital", "Cobrado": cobro_digital},
+                {"Canal": "Gastos en efectivo", "Cobrado": -gastos_efectivo},
+            ]
+        )
         st.bar_chart(mix_rows.set_index("Canal"))
 
         vista_ventas = v_dia.copy()
         if not vista_ventas.empty:
-            mostrar_cols = [col for col in ["Fecha", "ID_Venta", "Nombre_Cliente", "Metodo_Pago", "Estado_Pago", "Abono_Recibido", "Saldo_Pendiente", "Total"] if col in vista_ventas.columns]
+            mostrar_cols = [
+                col
+                for col in [
+                    "Fecha",
+                    "ID_Venta",
+                    "Nombre_Cliente",
+                    "Metodo_Pago",
+                    "Estado_Pago",
+                    "Abono_Recibido",
+                    "Saldo_Pendiente",
+                    "Total",
+                ]
+                if col in vista_ventas.columns
+            ]
             st.dataframe(
                 vista_ventas[mostrar_cols],
                 use_container_width=True,
@@ -2288,7 +2693,11 @@ def tab_cuadre_ui():
 
         if not g_dia.empty:
             st.markdown("#### Salidas del día")
-            cols_gastos = [col for col in ["Fecha", "Categoria", "Descripcion", "Metodo_Pago", "Monto"] if col in g_dia.columns]
+            cols_gastos = [
+                col
+                for col in ["Fecha", "Categoria", "Descripcion", "Metodo_Pago", "Monto"]
+                if col in g_dia.columns
+            ]
             st.dataframe(
                 g_dia[cols_gastos],
                 use_container_width=True,
@@ -2299,14 +2708,21 @@ def tab_cuadre_ui():
     with c_cierre:
         st.subheader("2. Conteo y conciliación")
         with st.form("cierre_caja"):
-            base = st.number_input("Base inicial de la jornada", value=float(base_inicial), min_value=0.0)
+            base = st.number_input(
+                "Base inicial de la jornada", value=float(base_inicial), min_value=0.0
+            )
             bancos = st.number_input("Dinero enviado a bancos", min_value=0.0, value=0.0)
             real = st.number_input("Saldo real contado en caja", min_value=0.0, value=0.0)
-            notas = st.text_area("Notas del cierre", placeholder="Ej: faltante por cambio, pago pendiente identificado, consignación realizada")
+            notas = st.text_area(
+                "Notas del cierre",
+                placeholder="Ej: faltante por cambio, pago pendiente identificado, consignación realizada",
+            )
 
             teorico = clean_currency(base + cobro_efectivo - gastos_efectivo - bancos)
             dif = clean_currency(real - teorico)
-            pendiente_label = "Cuadre perfecto" if dif == 0 else "Sobrante" if dif > 0 else "Faltante"
+            pendiente_label = (
+                "Cuadre perfecto" if dif == 0 else "Sobrante" if dif > 0 else "Faltante"
+            )
             color_dif = "#0f766e" if dif == 0 else "#b45309" if dif > 0 else "#b91c1c"
 
             st.markdown(
@@ -2321,7 +2737,9 @@ def tab_cuadre_ui():
                 unsafe_allow_html=True,
             )
 
-            guardar_cierre = st.form_submit_button("Guardar cierre del día", type="primary", use_container_width=True)
+            guardar_cierre = st.form_submit_button(
+                "Guardar cierre del día", type="primary", use_container_width=True
+            )
 
             if guardar_cierre:
                 sh = conectar_google_sheets()
@@ -2349,33 +2767,76 @@ def tab_cuadre_ui():
                 safe_api_call(ws_cie.append_row, fila)
 
                 for col in cierre_payload.keys():
-                    if col not in st.session_state.db['cie'].columns:
-                        st.session_state.db['cie'][col] = ""
-                nuevo_df = pd.DataFrame([{col: cierre_payload.get(col, "") for col in st.session_state.db['cie'].columns}])
-                for col in ["Base_Inicial", "Ventas_Efectivo", "Ventas_Electronico", "Gastos_Efectivo", "Dinero_A_Bancos", "Saldo_Teorico", "Saldo_Real", "Diferencia", "Costo_Mercancia", "Margen_Ganado", "Ventas_Facturadas", "Abonos_Recibidos", "Pendiente_Cobro"]:
+                    if col not in st.session_state.db["cie"].columns:
+                        st.session_state.db["cie"][col] = ""
+                nuevo_df = pd.DataFrame(
+                    [
+                        {
+                            col: cierre_payload.get(col, "")
+                            for col in st.session_state.db["cie"].columns
+                        }
+                    ]
+                )
+                for col in [
+                    "Base_Inicial",
+                    "Ventas_Efectivo",
+                    "Ventas_Electronico",
+                    "Gastos_Efectivo",
+                    "Dinero_A_Bancos",
+                    "Saldo_Teorico",
+                    "Saldo_Real",
+                    "Diferencia",
+                    "Costo_Mercancia",
+                    "Margen_Ganado",
+                    "Ventas_Facturadas",
+                    "Abonos_Recibidos",
+                    "Pendiente_Cobro",
+                ]:
                     if col in nuevo_df.columns:
                         nuevo_df[col] = nuevo_df[col].apply(clean_currency)
-                st.session_state.db['cie'] = pd.concat([st.session_state.db['cie'], nuevo_df], ignore_index=True)
+                st.session_state.db["cie"] = pd.concat(
+                    [st.session_state.db["cie"], nuevo_df], ignore_index=True
+                )
                 st.success("Cierre guardado en la nube y en la sesión actual.")
 
-        pendientes_hoy = v_dia[v_dia['Saldo_Pendiente'] > 0].copy() if not v_dia.empty else pd.DataFrame()
+        pendientes_hoy = (
+            v_dia[v_dia["Saldo_Pendiente"] > 0].copy() if not v_dia.empty else pd.DataFrame()
+        )
         if not pendientes_hoy.empty:
             st.markdown("#### 3. Cobros abiertos del día")
             st.dataframe(
-                pendientes_hoy[[col for col in ["ID_Venta", "Nombre_Cliente", "Metodo_Pago", "Saldo_Pendiente", "Fecha_Promesa_Pago"] if col in pendientes_hoy.columns]],
+                pendientes_hoy[
+                    [
+                        col
+                        for col in [
+                            "ID_Venta",
+                            "Nombre_Cliente",
+                            "Metodo_Pago",
+                            "Saldo_Pendiente",
+                            "Fecha_Promesa_Pago",
+                        ]
+                        if col in pendientes_hoy.columns
+                    ]
+                ],
                 use_container_width=True,
                 hide_index=True,
-                column_config={"Saldo_Pendiente": st.column_config.NumberColumn("Saldo", format="$%.0f")},
+                column_config={
+                    "Saldo_Pendiente": st.column_config.NumberColumn("Saldo", format="$%.0f")
+                },
             )
 
     st.markdown("---")
     st.subheader("Histórico reciente de cierres")
     if not df_cie.empty:
         vista_cierres = df_cie.copy()
-        if 'Fecha' in vista_cierres.columns:
-            vista_cierres['Fecha'] = pd.to_datetime(vista_cierres['Fecha'], errors='coerce')
-            vista_cierres = vista_cierres.sort_values('Fecha', ascending=False)
-        cols_cierres = [col for col in ["Fecha", "Hora", "Saldo_Real", "Diferencia", "Pendiente_Cobro", "Notas"] if col in vista_cierres.columns]
+        if "Fecha" in vista_cierres.columns:
+            vista_cierres["Fecha"] = pd.to_datetime(vista_cierres["Fecha"], errors="coerce")
+            vista_cierres = vista_cierres.sort_values("Fecha", ascending=False)
+        cols_cierres = [
+            col
+            for col in ["Fecha", "Hora", "Saldo_Real", "Diferencia", "Pendiente_Cobro", "Notas"]
+            if col in vista_cierres.columns
+        ]
         st.dataframe(
             vista_cierres.head(10)[cols_cierres],
             use_container_width=True,
@@ -2390,52 +2851,71 @@ def tab_cuadre_ui():
     else:
         st.info("Todavía no hay cierres guardados.")
 
+
 def tab_resumen_ui():
     st.header("Resumen de Ventas")
-    df = preparar_ventas_dashboard(st.session_state.db['ven'])
+    df = preparar_ventas_dashboard(st.session_state.db["ven"])
     if df.empty:
         st.info("Todavía no hay ventas para analizar.")
         return
 
-    df = df[df['Fecha'].notna()].copy() if 'Fecha' in df.columns else df.copy()
+    df = df[df["Fecha"].notna()].copy() if "Fecha" in df.columns else df.copy()
     if df.empty:
         st.info("No hay fechas válidas en las ventas registradas.")
         return
 
-    fecha_min = df['Fecha'].min().date()
-    fecha_max = df['Fecha'].max().date()
+    fecha_min = df["Fecha"].min().date()
+    fecha_max = df["Fecha"].max().date()
     desde_default = max(fecha_min, fecha_max - timedelta(days=30))
 
     f1, f2, f3, f4 = st.columns(4)
-    fecha_ini = f1.date_input("Desde", value=desde_default, min_value=fecha_min, max_value=fecha_max, key="resumen_desde")
-    fecha_fin = f2.date_input("Hasta", value=fecha_max, min_value=fecha_min, max_value=fecha_max, key="resumen_hasta")
-    metodos = sorted([m for m in df.get('Metodo_Pago', pd.Series(dtype=str)).fillna('').astype(str).unique().tolist() if m])
+    fecha_ini = f1.date_input(
+        "Desde", value=desde_default, min_value=fecha_min, max_value=fecha_max, key="resumen_desde"
+    )
+    fecha_fin = f2.date_input(
+        "Hasta", value=fecha_max, min_value=fecha_min, max_value=fecha_max, key="resumen_hasta"
+    )
+    metodos = sorted(
+        [
+            m
+            for m in df.get("Metodo_Pago", pd.Series(dtype=str))
+            .fillna("")
+            .astype(str)
+            .unique()
+            .tolist()
+            if m
+        ]
+    )
     metodo_sel = f3.selectbox("Método de pago", ["Todos"] + metodos, key="resumen_metodo")
-    estado_sel = f4.selectbox("Estado de cobro", ["Todos", "Pagado", "Abono parcial", "Pendiente"], key="resumen_estado")
+    estado_sel = f4.selectbox(
+        "Estado de cobro", ["Todos", "Pagado", "Abono parcial", "Pendiente"], key="resumen_estado"
+    )
 
     if fecha_ini > fecha_fin:
         fecha_ini, fecha_fin = fecha_fin, fecha_ini
 
-    filtrado = df[(df['Fecha'].dt.date >= fecha_ini) & (df['Fecha'].dt.date <= fecha_fin)].copy()
+    filtrado = df[(df["Fecha"].dt.date >= fecha_ini) & (df["Fecha"].dt.date <= fecha_fin)].copy()
     if metodo_sel != "Todos":
-        filtrado = filtrado[filtrado['Metodo_Pago'].astype(str) == metodo_sel].copy()
+        filtrado = filtrado[filtrado["Metodo_Pago"].astype(str) == metodo_sel].copy()
     if estado_sel != "Todos":
-        filtrado = filtrado[filtrado['Estado_Pago'].astype(str) == estado_sel].copy()
+        filtrado = filtrado[filtrado["Estado_Pago"].astype(str) == estado_sel].copy()
 
     if filtrado.empty:
         st.warning("No hay ventas con los filtros seleccionados.")
         return
 
-    total_vendido = clean_currency(filtrado['Total'].sum())
-    total_cobrado = clean_currency(filtrado['Cobrado'].sum())
-    total_pendiente = clean_currency(filtrado['Pendiente'].sum())
-    total_costos = clean_currency(filtrado['Costo_Total'].sum()) if 'Costo_Total' in filtrado.columns else 0
+    total_vendido = clean_currency(filtrado["Total"].sum())
+    total_cobrado = clean_currency(filtrado["Cobrado"].sum())
+    total_pendiente = clean_currency(filtrado["Pendiente"].sum())
+    total_costos = (
+        clean_currency(filtrado["Costo_Total"].sum()) if "Costo_Total" in filtrado.columns else 0
+    )
     utilidad = clean_currency(total_vendido - total_costos)
     ticket_prom = total_vendido / max(len(filtrado), 1)
-    pendientes = filtrado[filtrado['Saldo_Pendiente'] > 0].copy()
+    pendientes = filtrado[filtrado["Saldo_Pendiente"] > 0].copy()
     vencidos = pendientes[
-        pendientes['Fecha_Promesa_Pago'].notna() &
-        (pendientes['Fecha_Promesa_Pago'].dt.date < now_co().date())
+        pendientes["Fecha_Promesa_Pago"].notna()
+        & (pendientes["Fecha_Promesa_Pago"].dt.date < now_co().date())
     ].copy()
 
     st.markdown(
@@ -2469,13 +2949,29 @@ def tab_resumen_ui():
     c1, c2 = st.columns([1.05, 0.95], gap="large")
     with c1:
         st.subheader("Tendencia diaria")
-        diario = filtrado.groupby(filtrado['Fecha'].dt.date).agg(Vendido=('Total', 'sum'), Cobrado=('Cobrado', 'sum'))
+        diario = filtrado.groupby(filtrado["Fecha"].dt.date).agg(
+            Vendido=("Total", "sum"), Cobrado=("Cobrado", "sum")
+        )
         st.line_chart(diario)
 
         st.subheader("Ventas recientes")
-        cols_tabla = [col for col in ["Fecha", "ID_Venta", "Nombre_Cliente", "Mascota", "Metodo_Pago", "Estado_Pago", "Abono_Recibido", "Saldo_Pendiente", "Total"] if col in filtrado.columns]
+        cols_tabla = [
+            col
+            for col in [
+                "Fecha",
+                "ID_Venta",
+                "Nombre_Cliente",
+                "Mascota",
+                "Metodo_Pago",
+                "Estado_Pago",
+                "Abono_Recibido",
+                "Saldo_Pendiente",
+                "Total",
+            ]
+            if col in filtrado.columns
+        ]
         st.dataframe(
-            filtrado.sort_values('Fecha', ascending=False)[cols_tabla].head(20),
+            filtrado.sort_values("Fecha", ascending=False)[cols_tabla].head(20),
             use_container_width=True,
             hide_index=True,
             column_config={
@@ -2488,9 +2984,11 @@ def tab_resumen_ui():
 
     with c2:
         st.subheader("Mix de pagos")
-        mix = filtrado.groupby('Metodo_Pago', as_index=False).agg(Vendido=('Total', 'sum'), Cobrado=('Cobrado', 'sum'))
+        mix = filtrado.groupby("Metodo_Pago", as_index=False).agg(
+            Vendido=("Total", "sum"), Cobrado=("Cobrado", "sum")
+        )
         if not mix.empty:
-            st.bar_chart(mix.set_index('Metodo_Pago'))
+            st.bar_chart(mix.set_index("Metodo_Pago"))
 
         st.subheader("Productos más vendidos")
         top_items = _agrupar_items_vendidos(filtrado).head(10)
@@ -2508,8 +3006,17 @@ def tab_resumen_ui():
             st.info("No encontré detalle suficiente para agrupar productos en este rango.")
 
         st.subheader("Clientes con mayor compra")
-        if 'Nombre_Cliente' in filtrado.columns:
-            top_clientes = filtrado.groupby('Nombre_Cliente', as_index=False).agg(Compras=('ID_Venta', 'count'), Vendido=('Total', 'sum'), Pendiente=('Saldo_Pendiente', 'sum')).sort_values('Vendido', ascending=False).head(10)
+        if "Nombre_Cliente" in filtrado.columns:
+            top_clientes = (
+                filtrado.groupby("Nombre_Cliente", as_index=False)
+                .agg(
+                    Compras=("ID_Venta", "count"),
+                    Vendido=("Total", "sum"),
+                    Pendiente=("Saldo_Pendiente", "sum"),
+                )
+                .sort_values("Vendido", ascending=False)
+                .head(10)
+            )
             st.dataframe(
                 top_clientes,
                 use_container_width=True,
@@ -2525,8 +3032,24 @@ def tab_resumen_ui():
     if pendientes.empty:
         st.success("No hay ventas pendientes de pago en el rango seleccionado.")
     else:
-        vista_pend = pendientes.sort_values(['Fecha_Promesa_Pago', 'Fecha'], ascending=[True, False]).copy()
-        cols_pend = [col for col in ["ID_Venta", "Fecha", "Nombre_Cliente", "Metodo_Pago", "Estado_Pago", "Abono_Recibido", "Saldo_Pendiente", "Fecha_Promesa_Pago", "Nota_Pago"] if col in vista_pend.columns]
+        vista_pend = pendientes.sort_values(
+            ["Fecha_Promesa_Pago", "Fecha"], ascending=[True, False]
+        ).copy()
+        cols_pend = [
+            col
+            for col in [
+                "ID_Venta",
+                "Fecha",
+                "Nombre_Cliente",
+                "Metodo_Pago",
+                "Estado_Pago",
+                "Abono_Recibido",
+                "Saldo_Pendiente",
+                "Fecha_Promesa_Pago",
+                "Nota_Pago",
+            ]
+            if col in vista_pend.columns
+        ]
         st.dataframe(
             vista_pend[cols_pend],
             use_container_width=True,
@@ -2535,7 +3058,9 @@ def tab_resumen_ui():
                 "Fecha": st.column_config.DatetimeColumn("Fecha venta", format="YYYY-MM-DD HH:mm"),
                 "Abono_Recibido": st.column_config.NumberColumn("Abonado", format="$%.0f"),
                 "Saldo_Pendiente": st.column_config.NumberColumn("Saldo", format="$%.0f"),
-                "Fecha_Promesa_Pago": st.column_config.DatetimeColumn("Compromiso", format="YYYY-MM-DD"),
+                "Fecha_Promesa_Pago": st.column_config.DatetimeColumn(
+                    "Compromiso", format="YYYY-MM-DD"
+                ),
             },
         )
 
@@ -2547,15 +3072,29 @@ def tab_resumen_ui():
 
         with st.form("gestionar_cobro_pendiente"):
             seleccion = st.selectbox("Venta a gestionar", opciones)
-            accion = st.selectbox("Acción", ["Registrar abono", "Marcar como pagada", "Reprogramar cobro"])
+            accion = st.selectbox(
+                "Acción", ["Registrar abono", "Marcar como pagada", "Reprogramar cobro"]
+            )
             saldo_actual = 0
             if seleccion:
                 id_seleccion = seleccion.split(" | ", 1)[0]
-                fila_sel = vista_pend[vista_pend['ID_Venta'].astype(str) == str(id_seleccion)].iloc[0]
-                saldo_actual = clean_currency(fila_sel.get('Saldo_Pendiente', 0))
-            abono_extra = st.number_input("Valor recibido", min_value=0.0, max_value=float(saldo_actual or 0), value=0.0, step=1000.0)
-            fecha_compromiso = st.date_input("Nueva fecha compromiso", value=now_co().date(), key="resumen_fecha_compromiso")
-            nota_cobro = st.text_input("Nota", placeholder="Ej: cliente confirmó transferencia para mañana")
+                fila_sel = vista_pend[vista_pend["ID_Venta"].astype(str) == str(id_seleccion)].iloc[
+                    0
+                ]
+                saldo_actual = clean_currency(fila_sel.get("Saldo_Pendiente", 0))
+            abono_extra = st.number_input(
+                "Valor recibido",
+                min_value=0.0,
+                max_value=float(saldo_actual or 0),
+                value=0.0,
+                step=1000.0,
+            )
+            fecha_compromiso = st.date_input(
+                "Nueva fecha compromiso", value=now_co().date(), key="resumen_fecha_compromiso"
+            )
+            nota_cobro = st.text_input(
+                "Nota", placeholder="Ej: cliente confirmó transferencia para mañana"
+            )
 
             if st.form_submit_button("Actualizar cobro", type="primary"):
                 if not seleccion:
@@ -2581,38 +3120,62 @@ def tab_resumen_ui():
                         else:
                             st.error(mensaje)
 
+
 # ==========================================
 # 6. MAIN APP
 # ==========================================
 
+
 def main():
     # Inicialización de DB
-    if 'db' not in st.session_state:
+    if "db" not in st.session_state:
         cargar_datos_iniciales()
-    
+
     # Barra Lateral
     with st.sidebar:
         st.title("Nexus Pro")
-        if st.button("🔄 Sincronizar Datos", help="Trae cambios de la nube si alguien más editó el Excel"):
+        if st.button(
+            "🔄 Sincronizar Datos", help="Trae cambios de la nube si alguien más editó el Excel"
+        ):
             st.cache_resource.clear()
             cargar_datos_iniciales()
             st.rerun()
-        st.caption(f"Última sinc: {st.session_state.get('ultima_sincronizacion', 'Nunca').strftime('%H:%M:%S')}")
-        
+        st.caption(
+            f"Última sinc: {st.session_state.get('ultima_sincronizacion', 'Nunca').strftime('%H:%M:%S')}"
+        )
+
         st.divider()
         if st.button("🧱 Reparar IDs (Producto_UID + Norm)"):
             asegurar_ids_inventario_nube()
 
     # Tabs
-    tabs = st.tabs(["🛒 POS", "🧾 Facturas", "👤 Clientes", "🚚 Despachos", "💳 Gastos", "💵 Cuadre", "📊 Resumen"])
-    
-    with tabs[0]: tab_pos()
-    with tabs[1]: tab_facturas_ui()
-    with tabs[2]: tab_clientes_ui()
-    with tabs[3]: tab_despachos_ui()
-    with tabs[4]: tab_gastos_ui()
-    with tabs[5]: tab_cuadre_ui()
-    with tabs[6]: tab_resumen_ui()
+    tabs = st.tabs(
+        [
+            "🛒 POS",
+            "🧾 Facturas",
+            "👤 Clientes",
+            "🚚 Despachos",
+            "💳 Gastos",
+            "💵 Cuadre",
+            "📊 Resumen",
+        ]
+    )
+
+    with tabs[0]:
+        tab_pos()
+    with tabs[1]:
+        tab_facturas_ui()
+    with tabs[2]:
+        tab_clientes_ui()
+    with tabs[3]:
+        tab_despachos_ui()
+    with tabs[4]:
+        tab_gastos_ui()
+    with tabs[5]:
+        tab_cuadre_ui()
+    with tabs[6]:
+        tab_resumen_ui()
+
 
 if __name__ == "__main__":
     main()
