@@ -81,12 +81,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const landingsData = await fetchJson<{ slug: string; updated_at?: string }[]>('/v1/landings');
   if (landingsData) {
     landingPages.push(
-      ...landingsData.map((l) => ({
-        url: `${BASE}/landing/${l.slug}`,
-        lastModified: l.updated_at ? new Date(l.updated_at) : now,
-        changeFrequency: 'weekly' as const,
-        priority: 0.75,
-      })),
+      ...landingsData
+        .filter((l) => !l.slug.startsWith('test-'))
+        .map((l) => ({
+          url: `${BASE}/landing/${l.slug}`,
+          lastModified: l.updated_at ? new Date(l.updated_at) : now,
+          changeFrequency: 'weekly' as const,
+          priority: 0.75,
+        })),
     );
   }
 
