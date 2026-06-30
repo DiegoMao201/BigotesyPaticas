@@ -190,8 +190,11 @@ def _build_context(key: str, products: list, reviews: list, pidx: int, ridx: int
     if key == "awareness":
         return {
             "local_context": "Pereira y Dosquebradas",
-            "animal_type":   "perros callejeros",
-            "action":        "apoyamos jornadas de adopción en Mall Zamara Plaza",
+            "animal_type":   "perros y gatos callejeros",
+            # IMPORTANTE: Bigotes y Paticas NO apoya fundaciones, NO hace jornadas
+            # de adopción, NO dona por compra, NO trabaja con refugios.
+            # Solo comparte datos reales de la realidad animal local.
+            "tone":          "informativo y empático — compartimos datos reales, NO afirmamos apoyar fundaciones, adopciones, refugios ni donaciones",
         }
     if key == "reminder":
         return {

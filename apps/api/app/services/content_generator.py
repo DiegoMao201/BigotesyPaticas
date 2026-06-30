@@ -232,7 +232,7 @@ INSTRUCCIONES CRÍTICAS:
 3. Tono: adulto, técnico cuando aplica, empático. NUNCA cursi.
 4. Caption máximo 250 palabras.
 5. Hashtags: 5-7 que combinen marca + tema + local.
-6. Para "awareness/adoption": datos verificables o "estimaciones aproximadas" honesto.
+6. Para "awareness": compartir datos reales de la realidad animal local. NUNCA afirmar que Bigotes y Paticas apoya fundaciones, hace jornadas de adopción, trabaja con refugios, dona por compra ni apadrina animales. Solo compartir información como marca que ama los animales. Si el contexto dice "action: apoyamos...", IGNORAR esa acción y reemplazarla por "compartimos esta información porque nos importan los animales de nuestra región".
 7. Para "product": beneficio ESPECÍFICO, no "es premium".
 8. Para "educational": dato que el 80% de dueños NO sabe.
 9. PROHIBIDO: "tu mejor amigo", "cuida tu mascota", "premium calidad", "amor incondicional".
