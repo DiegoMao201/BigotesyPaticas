@@ -24,10 +24,27 @@ const SLUG_STRATEGY: Record<string, {
 };
 
 const FILTER_CHIPS: Record<string, FilterChip[]> = {
-  perros:     [{ label: 'Concentrado', keyword: 'concentrado' }, { label: 'Snacks', keyword: 'snack' }, { label: 'Higiene', keyword: 'higiene' }, { label: 'Salud', keyword: 'salud' }, { label: 'Accesorios', keyword: 'accesorio' }],
-  gatos:      [{ label: 'Concentrado', keyword: 'concentrado' }, { label: 'Snacks', keyword: 'snack' }, { label: 'Higiene', keyword: 'higiene' }, { label: 'Salud', keyword: 'salud' }],
+  perros:     [
+    { label: 'Concentrado', keyword: 'concentrado', categorySlug: 'concentrado' },
+    { label: 'Snacks',      keyword: 'snack',        categorySlug: 'snacks'      },
+    { label: 'Higiene',     keyword: 'higiene',      categorySlug: 'higiene'     },
+    { label: 'Salud',       keyword: 'salud',        categorySlug: 'medicamentos'},
+    { label: 'Accesorios',  keyword: 'accesorio',    categorySlug: 'accesorios'  },
+  ],
+  gatos:      [
+    { label: 'Concentrado', keyword: 'concentrado', categorySlug: 'concentrado' },
+    { label: 'Snacks',      keyword: 'snack',        categorySlug: 'snacks'      },
+    { label: 'Higiene',     keyword: 'higiene',      categorySlug: 'higiene'     },
+    { label: 'Salud',       keyword: 'salud',        categorySlug: 'medicamentos'},
+  ],
   snacks:     [{ label: 'Dental', keyword: 'dental' }, { label: 'Natural', keyword: 'natural' }, { label: 'Perro', keyword: 'perro' }, { label: 'Gato', keyword: 'gato' }],
-  todos:      [{ label: 'Concentrado', keyword: 'concentrado' }, { label: 'Snacks', keyword: 'snack' }, { label: 'Higiene', keyword: 'higiene' }, { label: 'Medicamento', keyword: 'medicamento' }, { label: 'Accesorio', keyword: 'accesorio' }],
+  todos:      [
+    { label: 'Concentrado',  keyword: 'concentrado', categorySlug: 'concentrado'  },
+    { label: 'Snacks',       keyword: 'snack',        categorySlug: 'snacks'       },
+    { label: 'Higiene',      keyword: 'higiene',      categorySlug: 'higiene'      },
+    { label: 'Medicamentos', keyword: 'medicamento',  categorySlug: 'medicamentos' },
+    { label: 'Accesorios',   keyword: 'accesorio',    categorySlug: 'accesorios'   },
+  ],
 };
 
 interface Props {
@@ -74,16 +91,24 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     ? searchParams.pet_type.join(',')
     : searchParams.pet_type;
 
+  const subCat = Array.isArray(searchParams.sub_cat)
+    ? searchParams.sub_cat[0]
+    : searchParams.sub_cat;
+
   const hasAdvancedFilters = !!(lifeStage || sizeRange || brand || petType);
+  const hasAnyFilters = hasAdvancedFilters || !!subCat;
 
   // Resolve category slug for the catalog endpoint
   let categorySlugForApi: string | undefined;
-  if (strategy?.type === 'category' && strategy.value) {
+  if (subCat) {
+    // sub_cat (chip de subcategoría) toma prioridad
+    categorySlugForApi = subCat;
+  } else if (strategy?.type === 'category' && strategy.value) {
     categorySlugForApi = strategy.value;
   } else if (!strategy) {
     categorySlugForApi = slug;
   }
-  // For species (perros/gatos), use pet_type filter in catalog endpoint
+  // For species (perros/gatos), always include pet_type
   const effectivePetType = petType ?? strategy?.pet_type;
 
   // Fetch data: prefer catalogFiltered for advanced filters or when facets needed
@@ -96,15 +121,15 @@ export default async function CategoryPage({ params, searchParams }: Props) {
       pet_type: effectivePetType,
       page_size: 40,
     }),
-    // Keep legacy list for species-based filtering until catalog endpoint handles species
-    strategy?.type === 'species' && !hasAdvancedFilters
+    // Legacy list solo para páginas de especie sin ningún filtro activo
+    strategy?.type === 'species' && !hasAnyFilters
       ? storeApi.list({ species: strategy.value, per_page: 40 })
       : Promise.resolve(null),
     (strategy?.type === 'category' || !strategy) ? storeApi.categories() : Promise.resolve([]),
   ]);
 
-  // Use legacy data for simple species pages without advanced filters
-  const data = (strategy?.type === 'species' && !hasAdvancedFilters && legacyData)
+  // Use legacy data only for simple species pages without any active filter
+  const data = (strategy?.type === 'species' && !hasAnyFilters && legacyData)
     ? legacyData
     : { items: catalogData.items, total: catalogData.total };
 
@@ -120,10 +145,14 @@ export default async function CategoryPage({ params, searchParams }: Props) {
 
   // Build load-more query for legacy grid pagination
   const loadMoreParams = new URLSearchParams({ is_published: 'true' });
-  if (strategy?.type === 'species' && strategy.value) {
-    loadMoreParams.set('species', strategy.value);
-  } else if (categorySlugForApi) {
+  if (categorySlugForApi) {
     loadMoreParams.set('category_slug', categorySlugForApi);
+  } else if (strategy?.type === 'species' && strategy.value) {
+    loadMoreParams.set('species', strategy.value);
+  }
+  if (effectivePetType && categorySlugForApi) {
+    // Cuando hay sub_cat, necesitamos filtrar por pet_type también en load-more
+    loadMoreParams.set('pet_type', effectivePetType);
   }
 
   const filterChips = FILTER_CHIPS[slug] ?? [];

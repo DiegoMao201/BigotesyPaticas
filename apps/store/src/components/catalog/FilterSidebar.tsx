@@ -19,6 +19,7 @@ const LIFE_STAGE_LABELS: Record<string, string> = {
   puppy: 'Cachorro',
   adult: 'Adulto',
   senior: 'Senior',
+  all: 'Todas las edades',
 };
 
 const SIZE_RANGE_LABELS: Record<string, string> = {
@@ -27,11 +28,13 @@ const SIZE_RANGE_LABELS: Record<string, string> = {
   medium: 'Mediano',
   large: 'Grande',
   giant: 'Gigante',
+  all: 'Todos los tamaños',
 };
 
 const PET_TYPE_LABELS: Record<string, string> = {
   dog: 'Perro',
   cat: 'Gato',
+  both: 'Perro y Gato',
   small_pet: 'Mascota pequeña',
   fish: 'Pez',
   bird: 'Ave',

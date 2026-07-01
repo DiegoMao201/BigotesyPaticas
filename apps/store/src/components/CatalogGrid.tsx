@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronDown, Heart, MessageCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
@@ -10,6 +11,8 @@ import { getOutOfStockWhatsAppUrl } from '@/lib/whatsapp-messages';
 export interface FilterChip {
   label: string;
   keyword: string;
+  /** Si se define, el chip filtra server-side via ?sub_cat=slug en lugar de client-side */
+  categorySlug?: string;
 }
 
 interface CatalogGridProps {
@@ -26,11 +29,17 @@ type SortKey = 'relevance' | 'price_asc' | 'price_desc';
 const PER_PAGE = 40;
 
 export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = [], slug }: CatalogGridProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [items, setItems] = useState<Product[]>(initialItems);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState('');
   const [sort, setSort] = useState<SortKey>('relevance');
+
+  const currentSubCat = searchParams.get('sub_cat') ?? '';
 
   const hasMore = items.length < totalCount;
 
@@ -56,7 +65,8 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
   const displayed = useMemo(() => {
     let result = [...items];
 
-    if (activeFilter) {
+    // Solo filtro client-side para chips SIN categorySlug (keyword puro)
+    if (activeFilter && !currentSubCat) {
       const kw = activeFilter.toLowerCase();
       result = result.filter(
         (p) =>
@@ -70,9 +80,37 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
     if (sort === 'price_desc') result.sort((a, b) => Number(b.price) - Number(a.price));
 
     return result;
-  }, [items, activeFilter, sort]);
+  }, [items, activeFilter, currentSubCat, sort]);
 
-  const allChips: FilterChip[] = [{ label: 'Todos', keyword: '' }, ...filterChips];
+  const allChips: FilterChip[] = [{ label: 'Todos', keyword: '', categorySlug: '' }, ...filterChips];
+
+  function handleChipClick(chip: FilterChip) {
+    if (chip.categorySlug !== undefined) {
+      // Server-side: navegar con ?sub_cat=slug
+      const params = new URLSearchParams(searchParams.toString());
+      // Limpiar filtros de sidebar al cambiar subcategoría
+      params.delete('life_stage');
+      params.delete('size_range');
+      params.delete('brand');
+      params.delete('pet_type');
+      if (chip.categorySlug) {
+        params.set('sub_cat', chip.categorySlug);
+      } else {
+        params.delete('sub_cat');
+      }
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    } else {
+      // Client-side: filtro de texto local
+      setActiveFilter(chip.keyword);
+    }
+  }
+
+  function isChipActive(chip: FilterChip): boolean {
+    if (chip.categorySlug !== undefined) {
+      return currentSubCat === chip.categorySlug;
+    }
+    return activeFilter === chip.keyword;
+  }
 
   return (
     <div>
@@ -82,9 +120,9 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
           {allChips.map((chip) => (
             <button
               key={chip.label}
-              onClick={() => setActiveFilter(chip.keyword)}
+              onClick={() => handleChipClick(chip)}
               className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                activeFilter === chip.keyword
+                isChipActive(chip)
                   ? 'bg-[#187f77] text-white shadow-sm'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
@@ -110,8 +148,8 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
         </div>
       </div>
 
-      {/* Contador cuando filtro activo */}
-      {activeFilter && (
+      {/* Contador cuando filtro client-side activo (solo para chips sin categorySlug) */}
+      {activeFilter && !currentSubCat && (
         <p className="text-xs text-gray-500 mb-4">
           {displayed.length} resultado{displayed.length !== 1 ? 's' : ''} para &ldquo;
           {allChips.find((c) => c.keyword === activeFilter)?.label}&rdquo;
