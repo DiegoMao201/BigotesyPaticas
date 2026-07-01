@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, Package, Pencil, Eye, EyeOff, Star, Filter, Truck, AlertTriangle, Download, Upload } from 'lucide-react';
+import { Search, Plus, Package, Pencil, Eye, EyeOff, Star, Filter, Truck, AlertTriangle, Download, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { products, suppliers, type Product } from '@/lib/api';
 import { Card } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
 import { Pagination } from '@/components/ui/pagination';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
+
 import { formatCurrency } from '@/lib/utils';
 
 // P4: margen real y alerta de venta por debajo del costo
@@ -39,6 +40,7 @@ export default function ProductsPage() {
   const [filterSupplier, setFilterSupplier] = useState<string>('all');
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [openCreate, setOpenCreate] = useState(false);
+  const [deleteProduct, setDeleteProduct] = useState<Product | null>(null);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
 
@@ -71,6 +73,12 @@ export default function ProductsPage() {
   const updateMut = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Partial<Product> }) => products.update(id, payload),
     onSuccess: () => { toast.success('Producto actualizado'); qc.invalidateQueries({ queryKey: ['products'] }); setEditProduct(null); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => products.delete(id),
+    onSuccess: () => { toast.success('Producto eliminado'); qc.invalidateQueries({ queryKey: ['products'] }); setDeleteProduct(null); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -256,6 +264,13 @@ export default function ProductsPage() {
                         >
                           <Star className="w-3.5 h-3.5" />
                         </button>
+                        <button
+                          title="Eliminar producto"
+                          onClick={() => setDeleteProduct(p)}
+                          className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -291,6 +306,40 @@ export default function ProductsPage() {
             onSubmit={(p) => updateMut.mutate({ id: editProduct.id, payload: p })}
             loading={updateMut.isPending}
           />
+        )}
+      </Dialog>
+
+      {/* Modal confirmar eliminación */}
+      <Dialog open={!!deleteProduct} onClose={() => setDeleteProduct(null)} title="Eliminar producto">
+        {deleteProduct && (
+          <>
+            <DialogBody>
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground mb-1">{deleteProduct.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    ¿Estás seguro? El producto se eliminará del catálogo y la tienda. Esta acción no se puede deshacer.
+                  </p>
+                  <p className="text-xs text-amber-600 mt-2 font-medium">
+                    ⚠️ El historial de ventas asociado se preserva. Solo el producto deja de estar disponible.
+                  </p>
+                </div>
+              </div>
+            </DialogBody>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteProduct(null)}>Cancelar</Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                onClick={() => deleteMut.mutate(deleteProduct.id)}
+                disabled={deleteMut.isPending}
+              >
+                {deleteMut.isPending ? 'Eliminando…' : 'Sí, eliminar'}
+              </Button>
+            </DialogFooter>
+          </>
         )}
       </Dialog>
     </div>

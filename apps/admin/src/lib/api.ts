@@ -197,6 +197,8 @@ export const products = {
     api<Product>('/v1/products', { method: 'POST', body: JSON.stringify(payload) }),
   update: (id: string, payload: Partial<Product>) =>
     api<Product>(`/v1/products/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  delete: (id: string) =>
+    api<{ ok: boolean; id: string }>(`/v1/products/${id}`, { method: 'DELETE' }),
   brands: () => api<{ id: string; name: string; slug: string }[]>('/v1/brands'),
   categories: () => api<{ id: string; name: string; slug: string }[]>('/v1/categories'),
   exportXlsx: async (): Promise<Blob> => {

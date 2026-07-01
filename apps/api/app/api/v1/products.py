@@ -497,6 +497,25 @@ async def create_product(payload: ProductCreate, db: DBSession):
     return out
 
 
+@router.delete(
+    "/{product_id}",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_permission("catalog:write"))],
+)
+async def delete_product(product_id: uuid.UUID, db: DBSession):
+    """Soft-delete de producto. No elimina físicamente para preservar historial de ventas."""
+    p = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one_or_none()
+    if p is None:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    if p.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Producto ya eliminado")
+    p.deleted_at = datetime.now(UTC)
+    p.is_published = False
+    p.is_active = False
+    await db.commit()
+    return {"ok": True, "id": str(product_id)}
+
+
 @router.patch(
     "/{product_id}",
     response_model=ProductOut,

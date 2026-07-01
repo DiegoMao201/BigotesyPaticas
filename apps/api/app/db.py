@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncGenerator
 from typing import Any, ClassVar
 
@@ -32,12 +33,29 @@ class Base(DeclarativeBase):
     type_annotation_map: ClassVar[dict[Any, Any]] = {}
 
 
+async def _on_connect(conn: Any) -> None:
+    """Registra codecs JSON/JSONB en asyncpg 0.28+ que no los incluye por defecto."""
+    await conn.set_type_codec(
+        "json",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+    await conn.set_type_codec(
+        "jsonb",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+
+
 engine = create_async_engine(
     settings.database_url,
     pool_size=settings.db_pool_size,
     max_overflow=settings.db_max_overflow,
     pool_pre_ping=True,
     echo=False,
+    connect_args={"init": _on_connect},
 )
 
 AsyncSessionLocal = async_sessionmaker(
