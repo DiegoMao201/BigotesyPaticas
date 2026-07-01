@@ -215,6 +215,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
               apiQuery={loadMoreParams.toString()}
               filterChips={filterChips}
               slug={slug}
+              petType={effectivePetType}
             />
           ) : (
             <div className="text-center py-24">

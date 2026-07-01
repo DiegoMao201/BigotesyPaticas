@@ -26,6 +26,45 @@ import requests
 
 log = logging.getLogger(__name__)
 
+# ─── URLs válidas para CTA — ÚNICA lista autorizada ───────────────────────────
+# Si el modelo inventa una URL fuera de esta lista, se reemplaza por el fallback.
+_VALID_CTA_URLS: frozenset[str] = frozenset({
+    "https://bigotesypaticas.com/categorias/todos",
+    "https://bigotesypaticas.com/categorias/perros",
+    "https://bigotesypaticas.com/categorias/gatos",
+    "https://bigotesypaticas.com/categorias/snacks",
+    "https://bigotesypaticas.com/categorias/accesorios",
+    "https://bigotesypaticas.com/adopcion",
+    "https://bigotesypaticas.com/jornadas-esterilizacion",
+    "https://bigotesypaticas.com/nutricion-salud-oral",
+    "https://bigotesypaticas.com/planes-nutricionales",
+    "https://bigotesypaticas.com/nosotros",
+    "https://bigotesypaticas.com/blog",
+    "https://bigotesypaticas.com/contacto",
+    "https://mi.bigotesypaticas.com",
+    "https://wa.me/573206876633",
+})
+_CTA_FALLBACK = "https://bigotesypaticas.com/categorias/todos"
+
+
+def _validated_cta_url(url: str | None) -> str:
+    """Devuelve la URL si está en la lista blanca; de lo contrario el fallback."""
+    if not url:
+        return _CTA_FALLBACK
+    # Permitir WhatsApp con query params (?text=...)
+    if url.startswith("https://wa.me/573206876633"):
+        return url
+    # Permitir URLs de productos o categorías específicas
+    if url.startswith("https://bigotesypaticas.com/producto/"):
+        return url
+    if url.startswith("https://bigotesypaticas.com/categorias/"):
+        return url
+    if url in _VALID_CTA_URLS:
+        return url
+    log.warning("CTA URL inválida bloqueada: %s → usando fallback", url)
+    return _CTA_FALLBACK
+
+
 # ─── Constantes ───────────────────────────────────────────────────────────────
 
 CDN_BASE = os.environ.get(
@@ -199,7 +238,7 @@ class ContentGenerator:
             "visual_prompt": filled["visual_prompt"],
             "caption": filled["caption"],
             "hashtags": filled.get("hashtags", []),
-            "cta_url": filled.get("cta_url"),
+            "cta_url": _validated_cta_url(filled.get("cta_url")),
             "image_url": cdn_url,
             "image_local_path": str(branded_path) if branded_path else None,
             "image_model": "compose+gpt-image-1"
@@ -266,7 +305,20 @@ INSTRUCCIONES CRÍTICAS:
 7. Para "product": beneficio ESPECÍFICO, no "es premium".
 8. Para "educational": dato que el 80% de dueños NO sabe.
 9. PROHIBIDO: "tu mejor amigo", "cuida tu mascota", "premium calidad", "amor incondicional".
-10. CTAs siempre apuntan a bigotesypaticas.com o mi.bigotesypaticas.com o WhatsApp. NO tienda física como CTA principal.
+10. CTAs — USA SOLO ESTAS URLs EXACTAS (elige la más apropiada para el tema del post):
+    TIENDA: https://bigotesypaticas.com/categorias/todos
+    PERROS: https://bigotesypaticas.com/categorias/perros
+    GATOS: https://bigotesypaticas.com/categorias/gatos
+    SNACKS: https://bigotesypaticas.com/categorias/snacks
+    ACCESORIOS: https://bigotesypaticas.com/categorias/accesorios
+    ADOPCIÓN: https://bigotesypaticas.com/adopcion
+    ESTERILIZACIÓN: https://bigotesypaticas.com/jornadas-esterilizacion
+    SALUD ORAL: https://bigotesypaticas.com/nutricion-salud-oral
+    NUTRICIÓN: https://bigotesypaticas.com/planes-nutricionales
+    NOSOTROS: https://bigotesypaticas.com/nosotros
+    WHATSAPP: https://wa.me/573206876633
+    PORTAL CLIENTE: https://mi.bigotesypaticas.com
+    PROHIBIDO: inventar cualquier otra URL. Si el tema no encaja con ninguna, usa la de TIENDA o WHATSAPP.
 11. Domicilio: GRATIS en pedidos +$30.000. Solo $5.000 en pedidos menores.
 12. TEXTO EN IMAGEN EN ESPAÑOL: Si el visual_prompt_template tiene la variable {{display_text_es}}, rellenala con texto corto (máx 12 palabras), directo e impactante en ESPAÑOL colombiano. Ejemplo para educational_data: "38 de cada 100 perros en Colombia tienen sobrepeso". Sin inglés.
 

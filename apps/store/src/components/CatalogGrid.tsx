@@ -22,13 +22,15 @@ interface CatalogGridProps {
   apiQuery: string;
   filterChips?: FilterChip[];
   slug: string;
+  /** pet_type activo de la página (dog/cat) para filtros de chips client-side */
+  petType?: string;
 }
 
 type SortKey = 'relevance' | 'price_asc' | 'price_desc';
 
 const PER_PAGE = 40;
 
-export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = [], slug }: CatalogGridProps) {
+export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = [], slug, petType }: CatalogGridProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -39,34 +41,57 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
   const [activeFilter, setActiveFilter] = useState('');
   const [sort, setSort] = useState<SortKey>('relevance');
 
-  const currentSubCat = searchParams.get('sub_cat') ?? '';
+  // Estado client-side para chips de categoría (fetch instantáneo, sin server re-render)
+  const [activeSubCat, setActiveSubCat] = useState(searchParams.get('sub_cat') ?? '');
+  const [chipItems, setChipItems] = useState<Product[] | null>(null);
+  const [chipTotal, setChipTotal] = useState<number | null>(null);
+  const [chipLoading, setChipLoading] = useState(false);
 
-  const hasMore = items.length < totalCount;
+  const effectiveItems = chipItems ?? items;
+  const effectiveTotal = chipTotal ?? totalCount;
+  const hasMore = effectiveItems.length < effectiveTotal && !chipLoading;
 
   const loadMore = useCallback(async () => {
     setLoading(true);
     try {
       const nextPage = page + 1;
-      const res = await fetch(`/api/v1/products?${apiQuery}&per_page=${PER_PAGE}&page=${nextPage}`);
+      let query: string;
+      if (activeSubCat) {
+        const qs = new URLSearchParams({ is_published: 'true', page_size: String(PER_PAGE), page: String(nextPage) });
+        qs.set('category_slug', activeSubCat);
+        if (petType) qs.set('pet_type', petType);
+        query = qs.toString();
+      } else {
+        query = `${apiQuery}&per_page=${PER_PAGE}&page=${nextPage}`;
+      }
+      const res = await fetch(`/api/v1/products?${query}`);
       if (!res.ok) throw new Error('fetch error');
       const data = await res.json();
-      setItems((prev) => {
-        const existingIds = new Set(prev.map((p) => p.id));
-        return [...prev, ...data.items.filter((p: Product) => !existingIds.has(p.id))];
-      });
+      const newItems: Product[] = data.items ?? [];
+      if (activeSubCat) {
+        setChipItems((prev) => {
+          const existingIds = new Set((prev ?? []).map((p) => p.id));
+          return [...(prev ?? []), ...newItems.filter((p) => !existingIds.has(p.id))];
+        });
+      } else {
+        setItems((prev) => {
+          const existingIds = new Set(prev.map((p) => p.id));
+          return [...prev, ...newItems.filter((p: Product) => !existingIds.has(p.id))];
+        });
+      }
       setPage(nextPage);
     } catch {
       /* silencioso */
     } finally {
       setLoading(false);
     }
-  }, [page, apiQuery]);
+  }, [page, apiQuery, activeSubCat, petType]);
 
   const displayed = useMemo(() => {
-    let result = [...items];
+    let result = [...effectiveItems];
 
     // Solo filtro client-side para chips SIN categorySlug (keyword puro)
-    if (activeFilter && !currentSubCat) {
+    if (activeFilter && !activeSubCat) {
       const kw = activeFilter.toLowerCase();
       result = result.filter(
         (p) =>
@@ -80,34 +105,61 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
     if (sort === 'price_desc') result.sort((a, b) => Number(b.price) - Number(a.price));
 
     return result;
-  }, [items, activeFilter, currentSubCat, sort]);
+  }, [effectiveItems, activeFilter, activeSubCat, sort]);
 
   const allChips: FilterChip[] = [{ label: 'Todos', keyword: '', categorySlug: '' }, ...filterChips];
 
-  function handleChipClick(chip: FilterChip) {
+  async function handleChipClick(chip: FilterChip) {
     if (chip.categorySlug !== undefined) {
-      // Server-side: navegar con ?sub_cat=slug
-      const params = new URLSearchParams(searchParams.toString());
-      // Limpiar filtros de sidebar al cambiar subcategoría
-      params.delete('life_stage');
-      params.delete('size_range');
-      params.delete('brand');
-      params.delete('pet_type');
-      if (chip.categorySlug) {
-        params.set('sub_cat', chip.categorySlug);
-      } else {
-        params.delete('sub_cat');
+      // "Todos" — limpiar estado y volver al URL limpio
+      if (!chip.categorySlug) {
+        setActiveSubCat('');
+        setChipItems(null);
+        setChipTotal(null);
+        setPage(1);
+        // Si la página actual tenía sub_cat en URL (cargó filtrado desde servidor),
+        // navegar para restablecer los items del servidor
+        if (searchParams.get('sub_cat')) {
+          router.push(pathname, { scroll: false });
+        }
+        return;
       }
-      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+
+      // Chip de categoría: fetch client-side INSTANTÁNEO
+      setActiveSubCat(chip.categorySlug);
+      setChipItems([]);   // mostrar vacío mientras carga
+      setChipTotal(null);
+      setChipLoading(true);
+      setPage(1);
+
+      // Actualizar URL silenciosamente (sin re-render del servidor)
+      const newUrl = `${pathname}?sub_cat=${chip.categorySlug}`;
+      window.history.pushState(null, '', newUrl);
+
+      try {
+        const qs = new URLSearchParams({ is_published: 'true', page_size: String(PER_PAGE) });
+        qs.set('category_slug', chip.categorySlug);
+        if (petType) qs.set('pet_type', petType);
+        const res = await fetch(`/api/v1/products?${qs.toString()}`);
+        if (!res.ok) throw new Error('fetch error');
+        const data = await res.json();
+        setChipItems(data.items ?? []);
+        setChipTotal(data.total ?? 0);
+      } catch {
+        // Fallback a navegación server-side si falla el fetch
+        router.push(newUrl, { scroll: false });
+      } finally {
+        setChipLoading(false);
+      }
     } else {
-      // Client-side: filtro de texto local
+      // Client-side: filtro de texto local (para chips sin categorySlug)
       setActiveFilter(chip.keyword);
     }
   }
 
   function isChipActive(chip: FilterChip): boolean {
     if (chip.categorySlug !== undefined) {
-      return currentSubCat === chip.categorySlug;
+      return activeSubCat === chip.categorySlug;
     }
     return activeFilter === chip.keyword;
   }
@@ -149,14 +201,31 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
       </div>
 
       {/* Contador cuando filtro client-side activo (solo para chips sin categorySlug) */}
-      {activeFilter && !currentSubCat && (
+      {activeFilter && !activeSubCat && (
         <p className="text-xs text-gray-500 mb-4">
           {displayed.length} resultado{displayed.length !== 1 ? 's' : ''} para &ldquo;
           {allChips.find((c) => c.keyword === activeFilter)?.label}&rdquo;
         </p>
       )}
 
-      {displayed.length > 0 ? (
+      {/* Skeleton de carga para chips de categoría */}
+      {chipLoading && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 mb-4">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-gray-100 overflow-hidden animate-pulse">
+              <div className="aspect-square bg-gray-100" />
+              <div className="p-2.5 space-y-1.5">
+                <div className="h-2 bg-gray-100 rounded w-2/3" />
+                <div className="h-3 bg-gray-100 rounded" />
+                <div className="h-3 bg-gray-100 rounded w-4/5" />
+                <div className="h-4 bg-gray-100 rounded w-1/2 mt-1" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!chipLoading && displayed.length > 0 ? (
         <>
           {/* ── Grid ── */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
@@ -301,16 +370,18 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
           )}
         </>
       ) : (
-        <div className="py-16 text-center text-gray-400">
-          <p className="text-4xl mb-3">🔍</p>
-          <p className="font-semibold text-gray-500">Sin resultados para este filtro</p>
-          <button
-            onClick={() => setActiveFilter('')}
-            className="mt-3 text-sm text-[#187f77] underline hover:no-underline"
-          >
-            Ver todos los productos
-          </button>
-        </div>
+        !chipLoading && (
+          <div className="py-16 text-center text-gray-400">
+            <p className="text-4xl mb-3">🔍</p>
+            <p className="font-semibold text-gray-500">Sin resultados para este filtro</p>
+            <button
+              onClick={() => handleChipClick({ label: 'Todos', keyword: '', categorySlug: '' })}
+              className="mt-3 text-sm text-[#187f77] underline hover:no-underline"
+            >
+              Ver todos los productos
+            </button>
+          </div>
+        )
       )}
     </div>
   );
