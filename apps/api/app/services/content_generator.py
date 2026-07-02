@@ -47,16 +47,21 @@ _VALID_CTA_URLS: frozenset[str] = frozenset({
 _CTA_FALLBACK = "https://bigotesypaticas.com/categorias/todos"
 
 
-def _validated_cta_url(url: str | None) -> str:
-    """Devuelve la URL si está en la lista blanca; de lo contrario el fallback."""
+def _validated_cta_url(url: str | None, allowed_product_slug: str | None = None) -> str:
+    """Devuelve la URL si está en la lista blanca; de lo contrario el fallback.
+
+    Para URLs /producto/, solo acepta el slug EXACTO pasado como allowed_product_slug.
+    Si allowed_product_slug es None, bloquea TODAS las URLs /producto/ inventadas.
+    """
     if not url:
         return _CTA_FALLBACK
-    # Permitir WhatsApp con query params (?text=...)
     if url.startswith("https://wa.me/573206876633"):
         return url
-    # Permitir URLs de productos o categorías específicas
     if url.startswith("https://bigotesypaticas.com/producto/"):
-        return url
+        if allowed_product_slug and url == f"https://bigotesypaticas.com/producto/{allowed_product_slug}":
+            return url
+        log.warning("CTA URL de producto bloqueada (slug no autorizado): %s → fallback", url)
+        return _CTA_FALLBACK
     if url.startswith("https://bigotesypaticas.com/categorias/"):
         return url
     if url in _VALID_CTA_URLS:
@@ -238,7 +243,7 @@ class ContentGenerator:
             "visual_prompt": filled["visual_prompt"],
             "caption": filled["caption"],
             "hashtags": filled.get("hashtags", []),
-            "cta_url": _validated_cta_url(filled.get("cta_url")),
+            "cta_url": _validated_cta_url(filled.get("cta_url"), context.get("slug")),
             "image_url": cdn_url,
             "image_local_path": str(branded_path) if branded_path else None,
             "image_model": "compose+gpt-image-1"
@@ -280,6 +285,18 @@ class ContentGenerator:
     # ── Paso 1: Claude Haiku rellena template ─────────────────────────────────
 
     def _fill_template_with_claude(self, template: dict, context: dict) -> dict:
+        # Construir URL de producto permitida (solo si hay slug real en el contexto)
+        allowed_product_url = (
+            f"https://bigotesypaticas.com/producto/{context['slug']}"
+            if context.get("slug")
+            else None
+        )
+        product_url_rule = (
+            f"    PRODUCTO (esta publicación): {allowed_product_url}"
+            if allowed_product_url
+            else "    [No hay URL de producto para este post — NO uses /producto/]"
+        )
+
         prompt = f"""Sos copywriter editorial de marca para Bigotes y Paticas, tienda premium de mascotas en Pereira/Dosquebradas Colombia.
 
 ADN DE MARCA: conciencia animal, amor real, esperanza, autoridad técnica, identidad regional Pereira/Eje Cafetero. NO clichés genéricos.
@@ -292,20 +309,41 @@ VISUAL PROMPT TEMPLATE:
 CAPTION TEMPLATE:
 {template['caption_template']}
 
-CONTEXTO ESPECÍFICO DEL POST:
+CONTEXTO ESPECÍFICO DEL POST (datos reales de la base de datos):
 {json.dumps(context, ensure_ascii=False, indent=2)}
 
-INSTRUCCIONES CRÍTICAS:
-1. Variables {{como_esta}}: rellenalas con datos ESPECÍFICOS y CREATIVOS, no genéricos.
-2. Datos numéricos: cifras reales investigables (animales sin hogar Risaralda, % esterilización Pereira, etc).
+═══════════════════════════════════════════════════
+REGLA #1 — SOLO DATOS REALES. CERO INVENTOS.
+═══════════════════════════════════════════════════
+PROHIBIDO ABSOLUTO inventar, modificar o extrapolar:
+  ✗ Nombres de productos distintos al campo "product_name" del contexto
+  ✗ Precios distintos al campo "product_price" del contexto
+  ✗ Pesos, tamaños o variantes (ej: "15kg", "500g", "XL") que NO estén en "product_name"
+  ✗ SKUs, códigos, referencias que no estén en el contexto
+  ✗ Estadísticas sin fuente verificable (no inventes porcentajes como "73%" o "2-3 años más")
+  ✗ Reseñas, opiniones de clientes o testimonios que no estén en el contexto
+  ✗ Nombres de clientes, mascotas o personas que no estén en el contexto
+  ✗ Afirmaciones sobre fundaciones, donaciones, adopciones o alianzas que no existan
+
+Si el contexto no tiene un dato → omitir ese dato. Nunca rellenar con inventos.
+
+═══════════════════════════════════════════════════
+INSTRUCCIONES EDITORIALES
+═══════════════════════════════════════════════════
+1. Variables {{como_esta}}: rellena con los datos EXACTOS del CONTEXTO, sin modificarlos.
+2. Si el template pide datos que no están en el contexto, usar frases genéricas verificables ("para razas de mediano porte", "formulado para adultos").
 3. Tono: adulto, técnico cuando aplica, empático. NUNCA cursi.
 4. Caption máximo 250 palabras.
 5. Hashtags: 5-7 que combinen marca + tema + local.
-6. Para "awareness": compartir datos reales de la realidad animal local. NUNCA afirmar que Bigotes y Paticas apoya fundaciones, hace jornadas de adopción, trabaja con refugios, dona por compra ni apadrina animales. Solo compartir información como marca que ama los animales. Si el contexto dice "action: apoyamos...", IGNORAR esa acción y reemplazarla por "compartimos esta información porque nos importan los animales de nuestra región".
-7. Para "product": beneficio ESPECÍFICO, no "es premium".
-8. Para "educational": dato que el 80% de dueños NO sabe.
+6. Para "awareness": compartir SOLO datos de la realidad animal colombiana verificables. NUNCA afirmar que Bigotes y Paticas apoya fundaciones, hace jornadas, dona o trabaja con refugios.
+7. Para "product": beneficio ESPECÍFICO basado en el producto real del contexto, no inventado.
+8. Para "educational": dato verificable que el 80% de dueños NO sabe.
 9. PROHIBIDO: "tu mejor amigo", "cuida tu mascota", "premium calidad", "amor incondicional".
-10. CTAs — USA SOLO ESTAS URLs EXACTAS (elige la más apropiada para el tema del post):
+
+═══════════════════════════════════════════════════
+CTAs — USA SOLO ESTAS URLs EXACTAS
+═══════════════════════════════════════════════════
+{product_url_rule}
     TIENDA: https://bigotesypaticas.com/categorias/todos
     PERROS: https://bigotesypaticas.com/categorias/perros
     GATOS: https://bigotesypaticas.com/categorias/gatos
@@ -313,14 +351,15 @@ INSTRUCCIONES CRÍTICAS:
     ACCESORIOS: https://bigotesypaticas.com/categorias/accesorios
     ADOPCIÓN: https://bigotesypaticas.com/adopcion
     ESTERILIZACIÓN: https://bigotesypaticas.com/jornadas-esterilizacion
-    SALUD ORAL: https://bigotesypaticas.com/nutricion-salud-oral
-    NUTRICIÓN: https://bigotesypaticas.com/planes-nutricionales
-    NOSOTROS: https://bigotesypaticas.com/nosotros
-    WHATSAPP: https://wa.me/573206876633
     PORTAL CLIENTE: https://mi.bigotesypaticas.com
-    PROHIBIDO: inventar cualquier otra URL. Si el tema no encaja con ninguna, usa la de TIENDA o WHATSAPP.
-11. Domicilio: GRATIS en pedidos +$30.000. Solo $5.000 en pedidos menores.
-12. TEXTO EN IMAGEN EN ESPAÑOL: Si el visual_prompt_template tiene la variable {{display_text_es}}, rellenala con texto corto (máx 12 palabras), directo e impactante en ESPAÑOL colombiano. Ejemplo para educational_data: "38 de cada 100 perros en Colombia tienen sobrepeso". Sin inglés.
+    WHATSAPP: https://wa.me/573206876633
+PROHIBIDO: inventar CUALQUIER otra URL, especialmente /producto/[slug-inventado].
+
+═══════════════════════════════════════════════════
+OTROS
+═══════════════════════════════════════════════════
+- Domicilio: GRATIS en pedidos +$30.000. Solo $5.000 en pedidos menores.
+- TEXTO EN IMAGEN EN ESPAÑOL: Si el template tiene {{display_text_es}}, máx 12 palabras, impactante, en español colombiano. Sin inglés.
 
 Respondé JSON estricto sin markdown:
 {{"visual_prompt": "...", "caption": "...", "hashtags": ["#..."], "cta_url": "..." }}"""
