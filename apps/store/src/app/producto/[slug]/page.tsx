@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { storeApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
@@ -54,7 +54,11 @@ const WA_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP ?? '573206876633';
 
 export default async function ProductPage({ params }: Props) {
   const product = await storeApi.bySlug(params.slug);
-  if (!product) notFound();
+  if (!product) {
+    const redir = await storeApi.slugRedirect(params.slug);
+    if (redir) redirect(`/producto/${redir}`);
+    notFound();
+  }
 
   const related = await storeApi.related(product.id, 4);
 

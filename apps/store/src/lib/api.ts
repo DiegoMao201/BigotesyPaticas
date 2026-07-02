@@ -210,6 +210,12 @@ export const storeApi = {
   bySlug: async (slug: string): Promise<Product | null> => {
     try { return await get<Product>(`/v1/products/by-slug/${slug}`); } catch { return null; }
   },
+  slugRedirect: async (slug: string): Promise<string | null> => {
+    try {
+      const r = await get<{ new_slug: string }>(`/v1/search/redirect?old=${encodeURIComponent(slug)}`);
+      return r.new_slug;
+    } catch { return null; }
+  },
   related: async (productId: string, limit = 4): Promise<Product[]> => {
     try { return await get<Product[]>(`/v1/products/${productId}/related?limit=${limit}`); } catch { return []; }
   },
