@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: 'Términos y Condiciones',
   description: 'Términos y condiciones de uso del sitio web y servicio de Bigotes y Paticas.',
   alternates: { canonical: 'https://bigotesypaticas.com/terminos' },
+  openGraph: { url: 'https://bigotesypaticas.com/terminos' },
 };
 
 export default function TerminosPage() {

@@ -15,7 +15,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!landing) return { title: 'Página no encontrada | Bigotes y Paticas' };
 
   return {
-    title: `${landing.title} | Bigotes y Paticas`,
+    // El title del DB ya incluye la marca — usar absolute para no duplicarla con el template del layout
+    title: { absolute: landing.title },
     description: landing.meta_description ?? undefined,
     alternates: { canonical: `https://bigotesypaticas.com/landing/${landing.slug}` },
     openGraph: {

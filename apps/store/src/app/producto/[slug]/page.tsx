@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const priceStr = Number(product.price).toLocaleString('es-CO');
 
   return {
-    title: seo?.meta_title || `${product.name} — $${priceStr} | Bigotes y Paticas`,
+    title: seo?.meta_title || `${product.name} — $${priceStr}`,
     description:
       seo?.meta_description ||
       enrichedDesc ||
