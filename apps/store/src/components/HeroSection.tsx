@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { ArrowRight, Star, Truck, VolumeX, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -13,6 +13,14 @@ const VIDEO_POSTER = process.env.NEXT_PUBLIC_HERO_VIDEO_POSTER ?? `${CDN}/login-
 export function HeroSection() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
+  const [rating, setRating] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch('/api/v1/public/gbp-reviews?limit=1')
+      .then((r) => r.json())
+      .then((d) => { if (d?.aggregate?.avg) setRating(d.aggregate.avg); })
+      .catch(() => null);
+  }, []);
 
   return (
     <section className="relative min-h-[88vh] flex items-center overflow-hidden">
@@ -80,12 +88,14 @@ export function HeroSection() {
 
           {/* Stats */}
           <div className="flex flex-wrap items-center gap-6 pt-2">
-            <div className="flex items-center gap-1.5">
-              {[1,2,3,4,5].map((i) => (
-                <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
-              ))}
-              <span className="text-white font-bold ml-1">4.9</span>
-            </div>
+            {rating !== null && (
+              <div className="flex items-center gap-1.5">
+                {[1,2,3,4,5].map((i) => (
+                  <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
+                ))}
+                <span className="text-white font-bold ml-1">{rating % 1 === 0 ? rating.toFixed(0) : rating.toFixed(1)}</span>
+              </div>
+            )}
             <div className="text-white/75 text-sm">+500 productos disponibles</div>
             <div className="flex items-center gap-1.5 text-white/75 text-sm">
               <Truck className="h-4 w-4 text-teal-300" />
