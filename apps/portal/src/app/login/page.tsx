@@ -282,6 +282,15 @@ function LoginPageInner() {
                     Crear cuenta gratis
                   </a>
                 </p>
+
+                <div className="border-t border-gray-100 mt-2 pt-3 text-center">
+                  <a
+                    href="https://bigotesypaticas.com"
+                    className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-primary-700 transition-colors"
+                  >
+                    ← Volver a la tienda
+                  </a>
+                </div>
               </motion.form>
             ) : (
               <OnboardingStep
