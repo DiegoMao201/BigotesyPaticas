@@ -16,7 +16,7 @@ function buildTemplate(customer: Customer): string {
     : 'https://mi.bigotesypaticas.com/registro';
 
   // Keep under ~300 chars so WhatsApp reliably passes the full text to the native app
-  return `Hola ${firstName}! Soy de Bigotes y Paticas. Creamos una app donde puedes pedir domicilio, llevar el carnet de ${petName} y ganar puntos. Registrate gratis: ${url}`;
+  return `¡Hola ${firstName}! Soy de Bigotes y Paticas 🐾 Creamos un portal gratis donde podés pedir domicilio, llevar el historial de ${petName} y ganar Puntos Bigotes con cada compra. Registrate: ${url} — Tienda: bigotesypaticas.com · @bigotesypaticas`;
 }
 
 interface Props {

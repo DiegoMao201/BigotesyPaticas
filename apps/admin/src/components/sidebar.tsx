@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Package, ShoppingCart, Boxes, Users, BarChart3,
   Settings, LogOut, AlertTriangle, TrendingUp, CreditCard, Tag,
-  Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain, PawPrint, Star, CalendarDays, Film,
+  Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain, PawPrint, Star, CalendarDays, Film, Share2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
@@ -13,6 +13,8 @@ import { useAuth } from '@/lib/auth-store';
 import { setToken, adminPortal } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { ShareStoreModal } from '@/components/ShareStoreModal';
 
 const NAV_GROUPS = [
   {
@@ -82,6 +84,7 @@ export function Sidebar({
   const router = useRouter();
   const user = useAuth((s) => s.user);
   const clear = useAuth((s) => s.clear);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const { data: pendingNotifs } = useQuery({
     queryKey: ['pending-notifs'],
@@ -179,6 +182,15 @@ export function Sidebar({
 
       {/* User footer */}
       <div className="p-3 border-t border-border/60 space-y-2">
+        {/* Compartir tienda — acceso rápido */}
+        <button
+          onClick={() => setShareOpen(true)}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold bg-[#25D366] text-white hover:bg-[#20b358] transition-all shadow-sm"
+        >
+          <Share2 className="h-4 w-4" />
+          Compartir por WhatsApp
+        </button>
+
         {user && (
           <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-brand/5">
             <div className="w-8 h-8 rounded-full gradient-brand flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -198,6 +210,8 @@ export function Sidebar({
           Cerrar sesión
         </button>
       </div>
+
+      <ShareStoreModal open={shareOpen} onClose={() => setShareOpen(false)} />
     </aside>
   );
 }

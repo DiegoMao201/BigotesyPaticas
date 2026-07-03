@@ -33,6 +33,10 @@ function buildWhatsAppMsg(order: Order): string {
     `📅 *Fecha:* ${new Date(order.occurred_at).toLocaleDateString('es-CO', { dateStyle: 'medium' })}\n\n` +
     `🛍️ *Productos:*\n${items}\n\n` +
     `💰 *Total:* *$${Number(order.grand_total).toLocaleString('es-CO')}*\n\n` +
+    `📱 *¿Ya conocés nuestro portal?* Llevá el historial de tu mascota, acumulá Puntos Bigotes y pedí domicilio:\n` +
+    `👉 https://mi.bigotesypaticas.com/registro\n\n` +
+    `🛒 bigotesypaticas.com · 📸 @bigotesypaticas\n` +
+    `📍 Mall Zamara Plaza, Local 2 · 320 687 6633\n\n` +
     `¡Gracias por confiar en nosotros! 🐶🐱🐾`
   );
 }

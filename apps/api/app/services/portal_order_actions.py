@@ -116,9 +116,11 @@ def _render_template(template_code: str, data: dict) -> str:
 
     if template_code == "order_received":
         return (
-            f"Hola {first}! 🐾 Recibimos tu pedido en Bigotes y Paticas.\n\n"
+            f"¡Hola {first}! 🐾 Recibimos tu pedido en *Bigotes y Paticas*.\n\n"
             f"{items_text}\n\n{totals}\n\n"
-            f"Estamos revisando disponibilidad. Te avisamos pronto!"
+            f"Revisamos disponibilidad y te confirmamos muy pronto.\n\n"
+            f"📱 Seguí tu pedido en el portal: https://mi.bigotesypaticas.com\n"
+            f"📸 Instagram: @bigotesypaticas"
         )
 
     if template_code == "changes_to_confirm":
@@ -126,36 +128,49 @@ def _render_template(template_code: str, data: dict) -> str:
             f"\n\n📌 {data['customer_facing_notes']}" if data.get("customer_facing_notes") else ""
         )
         return (
-            f"Hola {first}! Revisamos tu pedido y hay cambios 🐾\n\n"
+            f"¡Hola {first}! Revisamos tu pedido y tenemos unos cambios 🐾\n\n"
             f"{items_text}\n\n{totals}{note}\n\n"
-            f"Por favor responde *SÍ* para confirmar o dinos si tienes alguna duda."
+            f"Respondé *SÍ* para confirmar o escribinos si tenés alguna duda. ¡Estamos aquí para ayudarte!\n\n"
+            f"📱 Tu portal de clientes: https://mi.bigotesypaticas.com"
         )
 
     if template_code == "order_invoiced":
         pm = data.get("payment_method") or "pendiente"
         return (
-            f"Hola {first}! Tu pedido fue facturado ✅ y está siendo preparado con todo el amor 🐾\n\n"
+            f"¡Hola {first}! Tu pedido fue facturado ✅ y está siendo preparado con todo el cariño 🐾\n\n"
             f"Pago: {pm}\n\n"
-            f"Te avisamos cuando salga a domicilio!"
+            f"Te avisamos cuando salga a domicilio.\n\n"
+            f"📱 Seguí el estado en tu portal: https://mi.bigotesypaticas.com\n"
+            f"🛒 Catálogo completo: https://bigotesypaticas.com"
         )
 
     if template_code == "ready_for_delivery":
         addr = data.get("shipping_address") or "pendiente"
         return (
-            f"Hola {first}! Tu pedido ya está en camino 🚚🐾\n\n"
-            f"Dirección: {addr}\n\n"
-            f"Estaremos pronto por allá!"
+            f"¡Hola {first}! Tu pedido ya va en camino 🚚🐾\n\n"
+            f"📍 Dirección: {addr}\n\n"
+            f"¡Estaremos pronto por allá! Pago contra entrega.\n\n"
+            f"📱 Tu portal: https://mi.bigotesypaticas.com\n"
+            f"📸 @bigotesypaticas · 🛒 bigotesypaticas.com"
         )
 
     if template_code == "delivered_with_review_cta":
         short_id = order_id[-8:].upper()
         return (
-            f"Hola {first}! Tu pedido #{short_id} fue entregado con éxito ✅🐾\n\n"
-            f"Esperamos que tu mascota disfrute cada producto. ¿Nos regalas 2 minutos para calificar tu compra?\n\n"
-            f"👇 Entra al portal y gana *20 Puntos Bigotes* por cada reseña (30 si subes foto):\n"
-            f"https://portal.bigotesypaticas.com/orders/{order_id}/calificar\n\n"
-            f"¡Tu opinión ayuda a otras familias con mascotas! 🐶🐱\n\n"
-            f"Bigotes y Paticas 🏠🐾"
+            f"¡Hola {first}! Tu pedido #{short_id} fue entregado con éxito ✅🐾\n\n"
+            f"¿Tu mascota ya lo aprobó? 🐶🐱 Esperamos que lo disfrute muchísimo.\n\n"
+            f"⭐ *Calificá tu compra y ganás 20 Puntos Bigotes* (30 si subís foto):\n"
+            f"👉 https://mi.bigotesypaticas.com\n\n"
+            f"¿Aún no tenés cuenta en el portal? Registrate gratis en 30 segundos:\n"
+            f"👉 https://mi.bigotesypaticas.com/registro\n\n"
+            f"En el portal podés:\n"
+            f"✓ Acumular Puntos Bigotes con cada compra\n"
+            f"✓ Llevar el carnet de salud de tu mascota\n"
+            f"✓ Pedir domicilio sin llamar\n\n"
+            f"📸 Seguinos en Instagram: @bigotesypaticas\n"
+            f"🛒 Tienda: https://bigotesypaticas.com\n"
+            f"📍 Mall Zamara Plaza, Local 2 · 320 687 6633\n\n"
+            f"¡Gracias por confiar en Bigotes y Paticas! 🏠🐾"
         )
 
     return ""
