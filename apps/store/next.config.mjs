@@ -14,7 +14,16 @@ const nextConfig = {
   },
   async redirects() {
     return [
-      // Posts publicados que referencian productos que no existen en catálogo
+      // www → non-www (301 permanente para que Google unifique autoridad SEO)
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.bigotesypaticas.com' }],
+        destination: 'https://bigotesypaticas.com/:path*',
+        permanent: true,
+      },
+      // /ofertas no existe — redirige a catálogo general
+      { source: '/ofertas', destination: '/categorias/todos', permanent: true },
+      // Post Jul 2 publicado con producto inexistente en catálogo
       { source: '/producto/royal-canin-maxi-adult-15kg', destination: '/categorias/perros', permanent: false },
     ];
   },
