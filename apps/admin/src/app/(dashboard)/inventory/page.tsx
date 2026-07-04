@@ -13,7 +13,7 @@ import {
   Copy, MessageCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { api, inventory, analytics, inventoryCounts, type StockRow, type CountSessionOut, type CountSessionDetail, type UploadPreviewRow } from '@/lib/api';
+import { api, inventory, analytics, inventoryCounts, sales, type StockRow, type CountSessionOut, type CountSessionDetail, type UploadPreviewRow, type Order } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -68,6 +68,9 @@ export default function InventoryPage() {
   const [movProdName, setMovProdName] = useState<string | null>(null);
   const [movDropOpen, setMovDropOpen] = useState(false);
 
+  // Movements tab — order quick-view modal
+  const [previewOrderNum, setPreviewOrderNum] = useState<string | null>(null);
+
   const handleSort = useCallback((field: SortField) => {
     if (sortBy === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -103,6 +106,14 @@ export default function InventoryPage() {
     queryFn: () => inventory.movements({ product_id: movProdId ?? undefined, limit: 500 }),
     enabled: tab === 'movements',
   });
+
+  const { data: previewOrderData, isLoading: loadingPreviewOrder } = useQuery({
+    queryKey: ['order-preview', previewOrderNum],
+    queryFn: () => sales.list({ q: previewOrderNum!, page_size: 1 }),
+    enabled: !!previewOrderNum,
+    staleTime: 60_000,
+  });
+  const previewOrder: Order | null = previewOrderData?.items?.[0] ?? null;
 
   const adjustMut = useMutation({
     mutationFn: inventory.adjust,
@@ -457,13 +468,13 @@ export default function InventoryPage() {
                         <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums font-medium">{m.quantity_after}</td>
                         <td className="px-4 py-2.5 text-xs max-w-xs">
                           {m.order_number ? (
-                            <a
-                              href={`/sales?q=${encodeURIComponent(m.order_number)}`}
+                            <button
+                              onClick={() => setPreviewOrderNum(m.order_number)}
                               className="inline-flex items-center gap-1 font-mono font-bold text-brand-700 hover:text-brand-900 hover:underline"
-                              title="Ver venta"
+                              title="Ver detalle de la venta"
                             >
                               #{m.order_number}
-                            </a>
+                            </button>
                           ) : (
                             <span className="text-muted-foreground">
                               {m.reference_type && <span className="font-mono mr-1">{m.reference_type}</span>}
@@ -491,6 +502,100 @@ export default function InventoryPage() {
       {tab === 'ajustes' && <AjustesTab />}
 
       {tab === 'conteo' && <ConteoTab />}
+
+      {/* Modal vista rápida de venta desde movimientos */}
+      {previewOrderNum && (
+        <Dialog open onClose={() => setPreviewOrderNum(null)}>
+          <div className="p-6 space-y-4 w-full max-w-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-lg">
+                Venta <span className="font-mono text-brand-700">#{previewOrderNum}</span>
+              </h3>
+              <Button variant="outline" size="sm" onClick={() => setPreviewOrderNum(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {loadingPreviewOrder && (
+              <div className="text-center py-8 text-muted-foreground">Cargando…</div>
+            )}
+
+            {!loadingPreviewOrder && !previewOrder && (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                No se encontró la orden <span className="font-mono">#{previewOrderNum}</span>
+              </div>
+            )}
+
+            {previewOrder && (
+              <>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-muted/30 rounded-xl p-4">
+                  <div><span className="text-muted-foreground">Canal:</span> <span className="font-medium">{previewOrder.channel}</span></div>
+                  <div><span className="text-muted-foreground">Fecha:</span> <span className="font-medium">{formatDate(previewOrder.occurred_at)}</span></div>
+                  <div><span className="text-muted-foreground">Pago:</span> <span className={`ml-1 font-semibold ${previewOrder.payment_status === 'Pagado' ? 'text-emerald-600' : 'text-amber-600'}`}>{previewOrder.payment_status}</span></div>
+                  <div><span className="text-muted-foreground">Estado:</span> <span className={`ml-1 font-semibold ${previewOrder.status === 'cancelled' ? 'text-rose-600' : 'text-emerald-600'}`}>{previewOrder.status}</span></div>
+                  {previewOrder.notes && <div className="col-span-2 text-muted-foreground">📝 {previewOrder.notes}</div>}
+                </div>
+
+                <table className="w-full text-sm rounded-xl border border-border overflow-hidden">
+                  <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="text-left px-3 py-2">Producto</th>
+                      <th className="text-right px-3 py-2">Cant.</th>
+                      <th className="text-right px-3 py-2">Precio</th>
+                      <th className="text-right px-3 py-2">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewOrder.items.map((it) => (
+                      <tr key={it.id} className="border-t border-border">
+                        <td className="px-3 py-2">
+                          <div className="font-medium">{it.name_snapshot}</div>
+                          <div className="text-xs text-muted-foreground font-mono">{it.sku_snapshot}</div>
+                        </td>
+                        <td className="px-3 py-2 text-right">{it.quantity}</td>
+                        <td className="px-3 py-2 text-right">{formatCurrency(Number(it.unit_price))}</td>
+                        <td className="px-3 py-2 text-right font-semibold">{formatCurrency(Number(it.line_total))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-muted/30 border-t-2 border-border font-bold text-sm">
+                    {Number(previewOrder.discount_total) > 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-1 text-right text-rose-500 font-normal text-xs">Descuentos</td>
+                        <td className="px-3 py-1 text-right text-rose-500">-{formatCurrency(Number(previewOrder.discount_total))}</td>
+                      </tr>
+                    )}
+                    <tr>
+                      <td colSpan={3} className="px-3 py-2 text-right">Total</td>
+                      <td className="px-3 py-2 text-right text-emerald-700 text-base">{formatCurrency(Number(previewOrder.grand_total))}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+
+                {previewOrder.payments.length > 0 && (
+                  <div className="text-sm">
+                    <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Pagos recibidos</p>
+                    {previewOrder.payments.map((p) => (
+                      <div key={p.id} className="flex justify-between py-0.5">
+                        <span className="text-muted-foreground">{p.method}</span>
+                        <span className="font-semibold text-emerald-600">{formatCurrency(Number(p.amount))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-1">
+                  <a href={`/sales?q=${encodeURIComponent(previewOrder.order_number)}`}>
+                    <Button variant="outline" size="sm">
+                      Ver venta completa →
+                    </Button>
+                  </a>
+                </div>
+              </>
+            )}
+          </div>
+        </Dialog>
+      )}
 
       {adjustRow && (
         <Dialog open onClose={() => setAdjustRow(null)}>
