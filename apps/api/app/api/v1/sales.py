@@ -110,6 +110,8 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
 
     subtotal = Decimal("0")
     discount_total = Decimal("0")
+    # Colecto movimientos ANTES del flush para poder asignar order.id después
+    pending_movements: list[StockMovement] = []
 
     for item_in in payload.items:
         prod = products[item_in.product_id]
@@ -151,20 +153,17 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
             )
         stock.quantity -= item_in.quantity
 
-        db.add(
-            StockMovement(
-                product_id=prod.id,
-                location_id=loc.id,
-                movement_type="SALE",
-                quantity_delta=-item_in.quantity,
-                quantity_after=stock.quantity,
-                unit_cost=unit_cost,
-                reference_type="ORDER",
-                reference_id=None,  # se setea tras flush
-                occurred_at=occurred_at,
-                created_by=user.email,
-            )
-        )
+        pending_movements.append(StockMovement(
+            product_id=prod.id,
+            location_id=loc.id,
+            movement_type="SALE",
+            quantity_delta=-item_in.quantity,
+            quantity_after=stock.quantity,
+            unit_cost=unit_cost,
+            reference_type="ORDER",
+            occurred_at=occurred_at,
+            created_by=user.email,
+        ))
 
     order.subtotal = subtotal
     order.discount_total = discount_total
@@ -194,17 +193,10 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
     db.add(order)
     await db.flush()  # obtiene order.id
 
-    # Asociar movimientos al order_id (parche en lote)
-    for item in order.items:
-        # buscar el movimiento que insertamos arriba para este producto
-        for mv in [
-            obj
-            for obj in db.new
-            if isinstance(obj, StockMovement)
-            and obj.product_id == item.product_id
-            and obj.reference_id is None
-        ]:
-            mv.reference_id = order.id
+    # Ahora que tenemos order.id, añadimos los movimientos con reference_id correcto
+    for mv in pending_movements:
+        mv.reference_id = order.id
+        db.add(mv)
 
     await db.commit()
     await db.refresh(order)

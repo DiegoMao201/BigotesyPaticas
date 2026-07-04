@@ -475,9 +475,10 @@ export default function InventoryPage() {
                             >
                               #{m.order_number}
                             </button>
+                          ) : m.movement_type === 'SALE' ? (
+                            <span className="text-muted-foreground italic text-[11px]">venta histórica</span>
                           ) : (
                             <span className="text-muted-foreground">
-                              {m.reference_type && <span className="font-mono mr-1">{m.reference_type}</span>}
                               {m.notes}
                             </span>
                           )}
