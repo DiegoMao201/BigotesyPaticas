@@ -42,8 +42,10 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copia el código de la API
 COPY apps/api /app
 
-# Usuario no-root
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+# Usuario no-root — start.sh ya está en /app/ vía COPY apps/api /app
+RUN useradd -m -u 1000 appuser \
+    && chown -R appuser:appuser /app \
+    && chmod +x /app/start.sh
 USER appuser
 
 EXPOSE 8000
@@ -51,6 +53,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
     CMD curl -fsS http://localhost:8000/health || exit 1
 
-# Migraciones + seed (auth + catálogo demo) + servidor
-# El bucle en background actúa como cron: publica posts aprobados cada 5 minutos
-CMD ["sh", "-c", "alembic upgrade head && python -m app.cli.seed && python -m app.cli.seed_catalog && (while true; do python3 scripts/publish_scheduled_posts.py >> /tmp/publish_feed.log 2>&1; python3 scripts/publish_stories.py >> /tmp/publish_stories.log 2>&1; sleep 300; done) & exec gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --access-logfile - --error-logfile -"]
+CMD ["/app/start.sh"]

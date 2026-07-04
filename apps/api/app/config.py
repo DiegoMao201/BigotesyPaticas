@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://postgres:devpass@localhost:5432/bp_dev"
     database_url_sync: str = "postgresql+psycopg://postgres:devpass@localhost:5432/bp_dev"
-    db_pool_size: int = 10
-    db_max_overflow: int = 20
+    db_pool_size: int = 3   # 3 × 4 workers = 12 conexiones base (seguro para max_connections=100)
+    db_max_overflow: int = 7  # burst máx: 10 × 4 = 40 conexiones totales
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"
