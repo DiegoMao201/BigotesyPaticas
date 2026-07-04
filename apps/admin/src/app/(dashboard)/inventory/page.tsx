@@ -455,9 +455,21 @@ export default function InventoryPage() {
                           {m.quantity_delta > 0 ? '+' : ''}{m.quantity_delta}
                         </td>
                         <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums font-medium">{m.quantity_after}</td>
-                        <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-xs">
-                          {m.reference_type && <span className="font-mono text-foreground/60 mr-1">{m.reference_type}</span>}
-                          {m.notes && <span className="truncate">{m.notes}</span>}
+                        <td className="px-4 py-2.5 text-xs max-w-xs">
+                          {m.order_number ? (
+                            <a
+                              href={`/sales?q=${encodeURIComponent(m.order_number)}`}
+                              className="inline-flex items-center gap-1 font-mono font-bold text-brand-700 hover:text-brand-900 hover:underline"
+                              title="Ver venta"
+                            >
+                              #{m.order_number}
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {m.reference_type && <span className="font-mono mr-1">{m.reference_type}</span>}
+                              {m.notes}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}

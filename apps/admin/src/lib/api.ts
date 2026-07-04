@@ -722,6 +722,7 @@ export interface MovementRow {
   unit_cost: number | null;
   reference_type: string | null;
   reference_id: string | null;
+  order_number: string | null;
   notes: string | null;
   occurred_at: string;
   created_by: string | null;

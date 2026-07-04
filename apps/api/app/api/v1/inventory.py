@@ -12,6 +12,7 @@ from sqlalchemy import func, or_, select
 from app.deps import CurrentUser, DBSession, require_permission
 from app.models.catalog import Product
 from app.models.inventory import Stock, StockLocation, StockMovement
+from app.models.sales import Order
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -377,6 +378,7 @@ class MovementOut(BaseModel):
     unit_cost: float | None = None
     reference_type: str | None = None
     reference_id: str | None = None
+    order_number: str | None = None   # nro de factura cuando movement_type = SALE
     notes: str | None = None
     occurred_at: datetime
     created_by: str | None = None
@@ -390,8 +392,13 @@ async def list_movements(
     movement_type: str | None = None,
     limit: int = Query(100, ge=1, le=500),
 ):
-    stmt = select(StockMovement, Product.name, Product.sku).join(
-        Product, Product.id == StockMovement.product_id
+    stmt = (
+        select(StockMovement, Product.name, Product.sku, Order.order_number)
+        .join(Product, Product.id == StockMovement.product_id)
+        .outerjoin(
+            Order,
+            (StockMovement.reference_type == "ORDER") & (StockMovement.reference_id == Order.id),
+        )
     )
     if product_id:
         stmt = stmt.where(StockMovement.product_id == product_id)
@@ -411,11 +418,12 @@ async def list_movements(
             unit_cost=float(m.unit_cost) if m.unit_cost is not None else None,
             reference_type=m.reference_type,
             reference_id=str(m.reference_id) if m.reference_id else None,
+            order_number=order_number,
             notes=m.notes,
             occurred_at=m.occurred_at,
             created_by=m.created_by,
         )
-        for m, name, sku in rows
+        for m, name, sku, order_number in rows
     ]
     return {"items": items, "total": len(items)}
 
