@@ -13,7 +13,8 @@ import { useAuth } from '@/lib/auth-store';
 import { setToken, adminPortal } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ShareStoreModal } from '@/components/ShareStoreModal';
 
 const NAV_GROUPS = [
@@ -85,6 +86,8 @@ export function Sidebar({
   const user = useAuth((s) => s.user);
   const clear = useAuth((s) => s.clear);
   const [shareOpen, setShareOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const { data: pendingNotifs } = useQuery({
     queryKey: ['pending-notifs'],
@@ -211,7 +214,11 @@ export function Sidebar({
         </button>
       </div>
 
-      <ShareStoreModal open={shareOpen} onClose={() => setShareOpen(false)} />
+      {/* Modal fuera del aside para evitar que backdrop-blur-sm capture position:fixed */}
+      {mounted && createPortal(
+        <ShareStoreModal open={shareOpen} onClose={() => setShareOpen(false)} />,
+        document.body,
+      )}
     </aside>
   );
 }
