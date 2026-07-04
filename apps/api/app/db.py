@@ -37,7 +37,9 @@ engine = create_async_engine(
     settings.database_url,
     pool_size=settings.db_pool_size,
     max_overflow=settings.db_max_overflow,
-    pool_pre_ping=True,
+    pool_pre_ping=True,        # detecta conexiones muertas antes de usarlas
+    pool_recycle=1800,         # recicla conexiones cada 30 min para evitar stale sockets
+    pool_timeout=30,           # espera máx 30 s para obtener una conexión del pool
     echo=False,
 )
 

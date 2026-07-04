@@ -74,11 +74,13 @@ async function refreshAccessToken(): Promise<string> {
   return data.access_token as string;
 }
 
+const FETCH_TIMEOUT_MS = 20_000; // 20 s — operaciones de escritura raramente tardan más
+
 export async function api<T = unknown>(
   path: string,
-  init: RequestInit & { auth?: boolean; _retry?: boolean } = {},
+  init: RequestInit & { auth?: boolean; _retry?: boolean; _netRetry?: boolean } = {},
 ): Promise<T> {
-  const { auth = true, _retry = false, headers, ...rest } = init;
+  const { auth = true, _retry = false, _netRetry = false, headers, ...rest } = init;
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
   const token = auth ? getToken() : null;
   const finalHeaders: Record<string, string> = {
@@ -87,7 +89,28 @@ export async function api<T = unknown>(
   };
   if (token) finalHeaders.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(url, { ...rest, headers: finalHeaders, cache: 'no-store' });
+  // Timeout automático para detectar API caída o red lenta
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(url, { ...rest, headers: finalHeaders, cache: 'no-store', signal: controller.signal });
+  } catch (err: unknown) {
+    clearTimeout(timeoutId);
+    const isAbort = err instanceof DOMException && err.name === 'AbortError';
+    const msg = isAbort
+      ? 'El servidor tardó demasiado. Verificá tu conexión e intentá de nuevo.'
+      : 'No se pudo conectar con el servidor. Verificá tu conexión e intentá de nuevo.';
+    // Un reintento automático para errores de red transitorios (API reiniciando)
+    if (!_netRetry) {
+      await new Promise((r) => setTimeout(r, 1200));
+      return api<T>(path, { ...init, _netRetry: true });
+    }
+    throw new ApiError(msg, 0, null);
+  }
+  clearTimeout(timeoutId);
+
   const ct = res.headers.get('content-type') || '';
   const data = ct.includes('application/json') ? await res.json() : await res.text();
 
@@ -98,10 +121,8 @@ export async function api<T = unknown>(
         _refreshPromise = refreshAccessToken().finally(() => { _refreshPromise = null; });
       }
       await _refreshPromise;
-      // Retry with new token
       return api<T>(path, { ...init, _retry: true });
     } catch {
-      // clearAuth + redirect ya se hicieron en refreshAccessToken
       throw new ApiError('Sesión expirada, por favor inicia sesión de nuevo', 401, null);
     }
   }
