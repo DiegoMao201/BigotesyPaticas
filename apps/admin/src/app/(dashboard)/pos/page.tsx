@@ -159,7 +159,18 @@ function ProductSearch({ onAdd }: { onAdd: (p: Product) => void }) {
             )}
             <div className="font-medium text-sm leading-tight line-clamp-2">{p.name}</div>
             <div className="text-xs text-muted-foreground font-mono">{p.sku}</div>
-            <div className="text-sm font-bold text-brand-700">{formatCurrency(Number(p.price))}</div>
+            <div className="flex items-center justify-between gap-1 mt-0.5">
+              <div className="text-sm font-bold text-brand-700">{formatCurrency(Number(p.price))}</div>
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap ${
+                (p.stock_qty ?? 0) === 0
+                  ? 'bg-rose-100 text-rose-600'
+                  : (p.stock_qty ?? 0) <= 5
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-emerald-100 text-emerald-700'
+              }`}>
+                {(p.stock_qty ?? 0) === 0 ? 'Agotado' : `${p.stock_qty} uds`}
+              </span>
+            </div>
           </button>
         ))}
         {data?.items.length === 0 && (

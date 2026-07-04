@@ -62,6 +62,12 @@ export default function InventoryPage() {
   const [editing, setEditing] = useState<EditingPrice | null>(null);
   const editCostRef = useRef<HTMLInputElement>(null);
 
+  // Movements tab — product filter
+  const [movProdSearch, setMovProdSearch] = useState('');
+  const [movProdId, setMovProdId] = useState<string | null>(null);
+  const [movProdName, setMovProdName] = useState<string | null>(null);
+  const [movDropOpen, setMovDropOpen] = useState(false);
+
   const handleSort = useCallback((field: SortField) => {
     if (sortBy === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -85,9 +91,16 @@ export default function InventoryPage() {
     staleTime: 60_000,
   });
 
+  const { data: movProdResults } = useQuery({
+    queryKey: ['mov-prod-search', movProdSearch],
+    queryFn: () => inventory.list({ q: movProdSearch, page_size: 8 }),
+    enabled: tab === 'movements' && movProdSearch.length >= 2 && !movProdId,
+    staleTime: 30_000,
+  });
+
   const { data: movements, isLoading: loadingMovements } = useQuery({
-    queryKey: ['inventory-movements'],
-    queryFn: () => inventory.movements({ limit: 200 }),
+    queryKey: ['inventory-movements', movProdId],
+    queryFn: () => inventory.movements({ product_id: movProdId ?? undefined, limit: 500 }),
     enabled: tab === 'movements',
   });
 
@@ -316,42 +329,150 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {tab === 'movements' && (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="text-left px-4 py-3">Fecha</th>
-                  <th className="text-left px-4 py-3">Producto</th>
-                  <th className="text-left px-4 py-3">Tipo</th>
-                  <th className="text-right px-4 py-3">Delta</th>
-                  <th className="text-right px-4 py-3">Resultante</th>
-                  <th className="text-left px-4 py-3">Notas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingMovements ? (
-                  <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Cargando…</td></tr>
-                ) : movements?.items.map((m) => (
-                  <tr key={m.id} className="border-t border-border hover:bg-muted/20">
-                    <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">{formatDate(m.occurred_at)}</td>
-                    <td className="px-4 py-2"><div className="font-medium text-xs">{m.product_name}</div><div className="text-xs text-muted-foreground font-mono">{m.product_sku}</div></td>
-                    <td className="px-4 py-2">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${m.movement_type === 'PURCHASE' ? 'bg-emerald-100 text-emerald-700' : m.movement_type === 'SALE' ? 'bg-blue-100 text-blue-700' : m.movement_type === 'ADJUSTMENT' ? 'bg-amber-100 text-amber-700' : 'bg-muted text-muted-foreground'}`}>
-                        {m.movement_type === 'PURCHASE' ? 'Compra' : m.movement_type === 'SALE' ? 'Venta' : m.movement_type === 'ADJUSTMENT' ? 'Ajuste' : m.movement_type}
-                      </span>
-                    </td>
-                    <td className={`px-4 py-2 text-right font-semibold ${m.quantity_delta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{m.quantity_delta > 0 ? '+' : ''}{m.quantity_delta}</td>
-                    <td className="px-4 py-2 text-right text-muted-foreground">{m.quantity_after}</td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground max-w-xs truncate">{m.notes}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {tab === 'movements' && (() => {
+        const items = movements?.items ?? [];
+        const totalSold = items.filter(m => m.movement_type === 'SALE').reduce((s, m) => s + Math.abs(m.quantity_delta), 0);
+        const totalIn   = items.filter(m => m.movement_type === 'PURCHASE').reduce((s, m) => s + m.quantity_delta, 0);
+        const totalAdj  = items.filter(m => m.movement_type === 'ADJUSTMENT').reduce((s, m) => s + m.quantity_delta, 0);
+        const currentStock = items.length > 0 ? items[0].quantity_after : null;
+
+        function movTypeLabel(t: string) {
+          return t === 'PURCHASE' ? 'Compra' : t === 'SALE' ? 'Venta' : t === 'ADJUSTMENT' ? 'Ajuste' : t === 'RETURN' ? 'Devolución' : t === 'COUNT_ADJUST' ? 'Conteo' : t;
+        }
+        function movTypeCls(t: string) {
+          return t === 'PURCHASE' ? 'bg-emerald-100 text-emerald-700' : t === 'SALE' ? 'bg-blue-100 text-blue-700' : t === 'ADJUSTMENT' ? 'bg-amber-100 text-amber-700' : t === 'RETURN' ? 'bg-purple-100 text-purple-700' : 'bg-muted text-muted-foreground';
+        }
+
+        return (
+          <div className="space-y-4">
+            {/* Product search */}
+            <Card className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar producto para ver su historial…"
+                    className="pl-9"
+                    value={movProdName ?? movProdSearch}
+                    onChange={(e) => {
+                      if (movProdId) { setMovProdId(null); setMovProdName(null); }
+                      setMovProdSearch(e.target.value);
+                      setMovDropOpen(true);
+                    }}
+                    onFocus={() => setMovDropOpen(true)}
+                  />
+                  {/* Dropdown */}
+                  {movDropOpen && !movProdId && (movProdResults?.items ?? []).length > 0 && (
+                    <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-border rounded-xl shadow-lg overflow-hidden">
+                      {movProdResults!.items.map((p) => (
+                        <button
+                          key={p.product_id}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60 text-left transition-colors"
+                          onMouseDown={(e) => { e.preventDefault(); setMovProdId(p.product_id); setMovProdName(p.name); setMovProdSearch(''); setMovDropOpen(false); }}
+                        >
+                          <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <div>
+                            <div className="text-sm font-medium">{p.name}</div>
+                            <div className="text-xs text-muted-foreground font-mono">{p.sku}</div>
+                          </div>
+                          <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full ${p.quantity > 5 ? 'bg-emerald-100 text-emerald-700' : p.quantity > 0 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+                            {p.quantity} uds
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {movProdId && (
+                  <button
+                    onClick={() => { setMovProdId(null); setMovProdName(null); setMovProdSearch(''); }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs text-muted-foreground hover:bg-muted/60 transition-colors whitespace-nowrap"
+                  >
+                    <X className="h-3 w-3" /> Ver todos
+                  </button>
+                )}
+              </div>
+
+              {/* Summary cards — solo cuando hay producto seleccionado */}
+              {movProdId && items.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+                  <div className="bg-muted/40 rounded-xl p-3 text-center">
+                    <div className="text-xl font-extrabold text-foreground">{currentStock ?? '—'}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">Stock actual</div>
+                  </div>
+                  <div className="bg-rose-50 rounded-xl p-3 text-center">
+                    <div className="text-xl font-extrabold text-rose-600">−{totalSold}</div>
+                    <div className="text-xs text-rose-500 mt-0.5">Vendido</div>
+                  </div>
+                  <div className="bg-emerald-50 rounded-xl p-3 text-center">
+                    <div className="text-xl font-extrabold text-emerald-600">+{totalIn}</div>
+                    <div className="text-xs text-emerald-600 mt-0.5">Entradas (compras)</div>
+                  </div>
+                  <div className="bg-amber-50 rounded-xl p-3 text-center">
+                    <div className={`text-xl font-extrabold ${totalAdj >= 0 ? 'text-amber-600' : 'text-rose-600'}`}>{totalAdj >= 0 ? '+' : ''}{totalAdj}</div>
+                    <div className="text-xs text-amber-600 mt-0.5">Ajustes / Conteo</div>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Table */}
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="text-left px-4 py-3">Fecha</th>
+                      {!movProdId && <th className="text-left px-4 py-3">Producto</th>}
+                      <th className="text-left px-4 py-3">Tipo</th>
+                      <th className="text-right px-4 py-3">Delta</th>
+                      <th className="text-right px-4 py-3">Stock resultante</th>
+                      <th className="text-left px-4 py-3">Referencia / Notas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadingMovements ? (
+                      <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Cargando…</td></tr>
+                    ) : items.length === 0 ? (
+                      <tr><td colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
+                        {movProdId ? 'Sin movimientos registrados para este producto' : 'Sin movimientos'}
+                      </td></tr>
+                    ) : items.map((m) => (
+                      <tr key={m.id} className="border-t border-border hover:bg-muted/20">
+                        <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDate(m.occurred_at)}</td>
+                        {!movProdId && (
+                          <td className="px-4 py-2.5">
+                            <div className="font-medium text-xs">{m.product_name}</div>
+                            <div className="text-xs text-muted-foreground font-mono">{m.product_sku}</div>
+                          </td>
+                        )}
+                        <td className="px-4 py-2.5">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${movTypeCls(m.movement_type)}`}>
+                            {movTypeLabel(m.movement_type)}
+                          </span>
+                        </td>
+                        <td className={`px-4 py-2.5 text-right font-bold tabular-nums ${m.quantity_delta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {m.quantity_delta > 0 ? '+' : ''}{m.quantity_delta}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums font-medium">{m.quantity_after}</td>
+                        <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-xs">
+                          {m.reference_type && <span className="font-mono text-foreground/60 mr-1">{m.reference_type}</span>}
+                          {m.notes && <span className="truncate">{m.notes}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!movProdId && items.length > 0 && (
+                <div className="px-4 py-2 border-t border-border bg-muted/20 text-xs text-muted-foreground">
+                  Mostrando los últimos {items.length} movimientos · Buscá un producto para ver su historial completo
+                </div>
+              )}
+            </Card>
           </div>
-        </Card>
-      )}
+        );
+      })()}
 
       {tab === 'analytics' && <AnalyticsTab />}
 
