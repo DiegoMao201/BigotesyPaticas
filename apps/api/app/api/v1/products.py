@@ -385,6 +385,20 @@ async def get_product(product_id: uuid.UUID, db: DBSession):
     return p_out
 
 
+@router.get("/by-slug/{slug}/redirect-target")
+async def get_product_redirect_target(slug: str, db: DBSession):
+    """Devuelve el slug de categoría de un producto aunque esté eliminado u oculto.
+    Usado por el store para redirigir 301 en lugar de mostrar 404."""
+    row = (
+        await db.execute(
+            select(Category.slug)
+            .join(Product, Product.category_id == Category.id)
+            .where(Product.slug == slug)
+        )
+    ).scalar_one_or_none()
+    return {"category_slug": row or "todos"}
+
+
 @router.get("/by-slug/{slug}", response_model=ProductOut)
 async def get_product_by_slug(slug: str, db: DBSession):
     p = (await db.execute(select(Product).where(Product.slug == slug))).scalar_one_or_none()

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { storeApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
@@ -57,7 +57,9 @@ export default async function ProductPage({ params }: Props) {
   if (!product) {
     const redir = await storeApi.slugRedirect(params.slug);
     if (redir) redirect(`/producto/${redir}`);
-    notFound();
+    // Producto oculto o eliminado → redirigir a su categoría (301 implícito en redirect())
+    const categorySlug = await storeApi.productRedirectTarget(params.slug);
+    redirect(`/categorias/${categorySlug}`);
   }
 
   const related = await storeApi.related(product.id, 4);
