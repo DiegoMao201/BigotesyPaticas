@@ -175,6 +175,7 @@ a{text-decoration:none;color:inherit;display:block;}
   <a href="https://wa.me/?text=%C2%A1Hola%21%20%F0%9F%90%BE%20Te%20comparto%20la%20tarjeta%20digital%20de%20%2ABigotes%20y%20Paticas%2A%20%E2%80%94%20abrila%20para%20ver%20toda%20la%20info%20y%20acceder%20al%20portal%2C%20tienda%2C%20WhatsApp%20y%20m%C3%A1s%3A%0Ahttps%3A//bigotesypaticas.com/tarjeta.html" target="_blank" rel="noopener" class="btn-wa">
     💬 &nbsp;Compartir por WhatsApp
   </a>
+  <button class="btn-sec" onclick="downloadStatus()" style="width:100%;background:rgba(37,211,102,.13);border-color:rgba(37,211,102,.35);color:#25D366;font-size:13.5px;">📲 Imagen para Estado de WhatsApp</button>
   <div class="btn-row2">
     <button class="btn-sec" onclick="downloadPNG()">🖼️ Descargar PNG</button>
     <button class="btn-sec" id="btnCopy" onclick="copyLink()">🔗 Copiar link</button>
@@ -318,6 +319,168 @@ function roundRect(ctx,x,y,w,h,r){
   ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
   ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
   ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
+}
+
+async function downloadStatus() {
+  const btn = event.target;
+  btn.textContent = '⏳ Generando...';
+  btn.disabled = true;
+  try {
+    const cnv = document.getElementById('cnv');
+    const W = 1080, H = 1920;
+    cnv.width = W; cnv.height = H;
+    const ctx = cnv.getContext('2d');
+
+    // Fondo degradado oscuro
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#071e1c');
+    bg.addColorStop(0.45, '#0d3c38');
+    bg.addColorStop(1, '#071e1c');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Círculos decorativos de fondo
+    const circles = [[W*0.85,H*0.12,220],[W*0.1,H*0.55,160],[W*0.9,H*0.72,130],[W*0.15,H*0.88,100]];
+    circles.forEach(([cx,cy,r])=>{
+      const rg = ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+      rg.addColorStop(0,'rgba(245,166,65,.07)'); rg.addColorStop(1,'rgba(245,166,65,0)');
+      ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    });
+
+    // Huellas decorativas dispersas
+    const paws = ['🐾','🐾','🐾','🐾','🐾','🐾'];
+    const pawPos = [[80,200],[940,380],[60,700],[980,900],[100,1300],[950,1550],[W/2-200,1750],[W/2+150,100]];
+    ctx.font='40px sans-serif'; ctx.globalAlpha=0.06;
+    pawPos.forEach(([px,py])=>{ ctx.fillText('🐾',px,py); });
+    ctx.globalAlpha=1;
+
+    // Franja dorada superior
+    const goldTop = ctx.createLinearGradient(0,0,W,0);
+    goldTop.addColorStop(0,'#c47d1a'); goldTop.addColorStop(0.5,'#f5a641'); goldTop.addColorStop(1,'#c47d1a');
+    ctx.fillStyle=goldTop; ctx.fillRect(0,0,W,10);
+
+    // Logo — tomamos el que ya está en el DOM
+    const logoEl = document.querySelector('.logo-img');
+    const LS = 220, LX = (W-LS)/2, LY = 90;
+    // Sombra del logo
+    ctx.save();
+    ctx.shadowColor='rgba(245,166,65,.4)'; ctx.shadowBlur=40;
+    ctx.fillStyle='rgba(245,166,65,.15)';
+    roundRect(ctx,LX-8,LY-8,LS+16,LS+16,42); ctx.fill();
+    ctx.restore();
+    ctx.save(); roundRect(ctx,LX,LY,LS,LS,34); ctx.clip();
+    ctx.drawImage(logoEl,LX,LY,LS,LS); ctx.restore();
+    // Borde dorado logo
+    ctx.strokeStyle='rgba(245,166,65,.6)'; ctx.lineWidth=4;
+    roundRect(ctx,LX,LY,LS,LS,34); ctx.stroke();
+
+    let y = LY + LS + 44;
+
+    // Nombre
+    ctx.textAlign='center';
+    ctx.fillStyle='#f8f3e8';
+    ctx.font='bold 72px system-ui,sans-serif';
+    ctx.fillText('Bigotes y Paticas', W/2, y); y+=58;
+    // Subtítulo naranja
+    ctx.fillStyle='#f5a641';
+    ctx.font='bold 28px system-ui,sans-serif';
+    ctx.letterSpacing='8px';
+    ctx.fillText('PET SHOP PREMIUM', W/2, y); y+=36;
+    ctx.font='22px system-ui,sans-serif';
+    ctx.fillStyle='rgba(248,243,232,.5)';
+    ctx.fillText('Pereira & Dosquebradas · Colombia', W/2, y); y+=54;
+
+    // Divisor dorado
+    const div=ctx.createLinearGradient(0,0,W,0);
+    div.addColorStop(0,'transparent'); div.addColorStop(0.2,'rgba(245,166,65,.15)');
+    div.addColorStop(0.5,'rgba(245,166,65,.6)'); div.addColorStop(0.8,'rgba(245,166,65,.15)'); div.addColorStop(1,'transparent');
+    ctx.fillStyle=div; ctx.fillRect(80,y,W-160,2); y+=40;
+
+    // Cards de servicios (3 filas)
+    const services = [
+      {ico:'🛒', title:'+ 900 Productos', desc:'Alimentos, accesorios y salud para tu mascota', accent:false},
+      {ico:'🚚', title:'Domicilio gratis', desc:'Pedidos desde $30.000 en Pereira y Dosquebradas', accent:false},
+      {ico:'🐾', title:'Portal de Clientes', desc:'Puntos Bigotes · Historial · Pedidos online', accent:true},
+      {ico:'💳', title:'Todos los pagos', desc:'Efectivo · Nequi · Daviplata · Crédito · Débito', accent:false},
+    ];
+    const CW=W-160, CH=130, CX=80;
+    for(const s of services){
+      // Fondo card
+      ctx.fillStyle=s.accent?'rgba(245,166,65,.13)':'rgba(255,255,255,.05)';
+      roundRect(ctx,CX,y,CW,CH,20); ctx.fill();
+      ctx.strokeStyle=s.accent?'rgba(245,166,65,.35)':'rgba(255,255,255,.09)';
+      ctx.lineWidth=1.5; roundRect(ctx,CX,y,CW,CH,20); ctx.stroke();
+      // Icono
+      ctx.font='42px sans-serif'; ctx.textAlign='left';
+      ctx.fillText(s.ico, CX+28, y+78);
+      // Título
+      ctx.fillStyle=s.accent?'#f5a641':'#f8f3e8';
+      ctx.font=`bold 32px system-ui,sans-serif`;
+      ctx.fillText(s.title, CX+90, y+52);
+      // Descripción
+      ctx.fillStyle='rgba(248,243,232,.52)';
+      ctx.font='22px system-ui,sans-serif';
+      ctx.fillText(s.desc, CX+90, y+88);
+      y += CH+16;
+    }
+    y += 20;
+
+    // QR centrado
+    const qrEl = document.querySelector('.qr-img');
+    const QS=180, QX=(W-QS)/2;
+    ctx.fillStyle='#f8f3e8';
+    roundRect(ctx,QX-16,y-16,QS+32,QS+32,20); ctx.fill();
+    ctx.drawImage(qrEl,QX,y,QS,QS);
+    ctx.strokeStyle='rgba(245,166,65,.5)'; ctx.lineWidth=3;
+    roundRect(ctx,QX-16,y-16,QS+32,QS+32,20); ctx.stroke();
+
+    // Texto sobre QR
+    ctx.textAlign='center';
+    ctx.fillStyle='rgba(248,243,232,.45)'; ctx.font='bold 20px system-ui,sans-serif';
+    ctx.fillText('▼  ESCANEÁ PARA ABRIR  ▼', W/2, y-26);
+    y += QS+32+28;
+
+    // Divisor
+    ctx.fillStyle=div; ctx.fillRect(80,y,W-160,2); y+=46;
+
+    // URL grande llamativa
+    ctx.fillStyle='rgba(255,255,255,.07)';
+    roundRect(ctx,60,y,W-120,110,24); ctx.fill();
+    ctx.strokeStyle='rgba(245,166,65,.3)'; ctx.lineWidth=2;
+    roundRect(ctx,60,y,W-120,110,24); ctx.stroke();
+    ctx.textAlign='center';
+    ctx.fillStyle='rgba(248,243,232,.5)'; ctx.font='bold 20px system-ui,sans-serif';
+    ctx.fillText('ABRÍ EN TU NAVEGADOR', W/2, y+36);
+    ctx.fillStyle='#f5a641'; ctx.font='bold 44px system-ui,sans-serif';
+    ctx.fillText('bigotesypaticas.com', W/2, y+82);
+    y += 130;
+
+    // Social handles
+    const socials=[['📸','@bigotesypaticas'],['📘','Bigotes y Paticas'],['💬','320 687 6633']];
+    ctx.font='24px system-ui,sans-serif'; ctx.fillStyle='rgba(248,243,232,.45)';
+    socials.forEach((s,i)=>{
+      const tx = W/2 + (i-1)*300;
+      ctx.fillText(s[0]+'  '+s[1], tx, y+28);
+    });
+    y += 70;
+
+    // Franja dorada inferior
+    const goldBot=ctx.createLinearGradient(0,0,W,0);
+    goldBot.addColorStop(0,'#c47d1a'); goldBot.addColorStop(0.5,'#f5a641'); goldBot.addColorStop(1,'#c47d1a');
+    ctx.fillStyle=goldBot; ctx.fillRect(0,H-10,W,10);
+    // Pie de página
+    ctx.fillStyle='rgba(248,243,232,.3)'; ctx.font='20px system-ui,sans-serif';
+    ctx.fillText('bigotesypaticasdosquebradas@gmail.com · Mall Zamara Plaza, Local 2', W/2, H-28);
+
+    const link=document.createElement('a');
+    link.download='BigotesyPaticas-Estado-WA.png';
+    link.href=cnv.toDataURL('image/png');
+    link.click();
+    btn.textContent='✅ ¡Lista para subir!';
+    setTimeout(()=>{btn.textContent='📲 Imagen para Estado WhatsApp';btn.disabled=false;},3000);
+  } catch(e) {
+    btn.textContent='❌ Error'; btn.disabled=false; console.error(e);
+  }
 }
 
 if(navigator.share){
