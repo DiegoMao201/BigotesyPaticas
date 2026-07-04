@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText, XCircle, ShoppingCart, Search, RefreshCw, Eye,
@@ -216,16 +215,15 @@ function OrderDetailModal({ order, onClose, onCancelDone, onPaymentDone }: { ord
 
 export default function SalesPage() {
   const qc = useQueryClient();
-  const searchParams = useSearchParams();
   const [showDateWarning, setShowDateWarning] = useState(true);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
 
   // Pre-llena el buscador si se llega desde inventario con ?q=NUM_ORDEN
   useEffect(() => {
-    const q = searchParams.get('q');
+    const q = new URLSearchParams(window.location.search).get('q');
     if (q) setSearch(q);
-  }, [searchParams]);
+  }, []);
   const [statusFilter, setStatusFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [channelFilter, setChannelFilter] = useState('');
