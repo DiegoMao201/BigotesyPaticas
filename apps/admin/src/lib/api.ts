@@ -273,6 +273,8 @@ export interface Order {
   channel: string;
   status: string;
   customer_id: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
   subtotal: string;
   discount_total: string;
   tax_total: string;

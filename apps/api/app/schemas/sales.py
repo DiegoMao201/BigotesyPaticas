@@ -62,6 +62,8 @@ class OrderOut(BaseModel):
     channel: str
     status: str
     customer_id: uuid.UUID | None = None
+    customer_name: str | None = None
+    customer_phone: str | None = None
     subtotal: Decimal
     discount_total: Decimal
     tax_total: Decimal

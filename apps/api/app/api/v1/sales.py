@@ -313,8 +313,30 @@ async def list_orders(
     offset = (page - 1) * page_size
     rows = (await db.execute(stmt.offset(offset).limit(page_size))).scalars().all()
 
+    # Batch-load nombres de clientes para evitar N+1 queries
+    from app.models.crm import Customer as CRMCustomer
+    from app.schemas.sales import OrderOut
+
+    customer_ids = [o.customer_id for o in rows if o.customer_id]
+    customers_map: dict = {}
+    if customer_ids:
+        cust_rows = (await db.execute(
+            select(CRMCustomer.id, CRMCustomer.full_name, CRMCustomer.phone)
+            .where(CRMCustomer.id.in_(customer_ids))
+        )).all()
+        customers_map = {c.id: c for c in cust_rows}
+
+    items = []
+    for o in rows:
+        out = OrderOut.model_validate(o)
+        if o.customer_id and o.customer_id in customers_map:
+            cust = customers_map[o.customer_id]
+            out.customer_name = cust.full_name
+            out.customer_phone = cust.phone
+        items.append(out)
+
     return {
-        "items": rows,
+        "items": items,
         "total": total,
         "total_revenue": total_revenue,
         "avg_ticket": avg_ticket,

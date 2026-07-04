@@ -529,6 +529,21 @@ export default function InventoryPage() {
 
             {previewOrder && (
               <>
+                {/* Cliente */}
+                <div className={`rounded-xl p-3 text-sm flex items-center gap-3 ${previewOrder.customer_name ? 'bg-brand-50 border border-brand-200' : 'bg-muted/30'}`}>
+                  <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center shrink-0 text-brand-700 font-bold text-sm">
+                    {previewOrder.customer_name ? previewOrder.customer_name.charAt(0).toUpperCase() : '?'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground truncate">
+                      {previewOrder.customer_name ?? <span className="text-muted-foreground font-normal italic">Sin cliente registrado</span>}
+                    </p>
+                    {previewOrder.customer_phone && (
+                      <p className="text-xs text-muted-foreground">{previewOrder.customer_phone}</p>
+                    )}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-muted/30 rounded-xl p-4">
                   <div><span className="text-muted-foreground">Canal:</span> <span className="font-medium">{previewOrder.channel}</span></div>
                   <div><span className="text-muted-foreground">Fecha:</span> <span className="font-medium">{formatDate(previewOrder.occurred_at)}</span></div>
@@ -551,7 +566,9 @@ export default function InventoryPage() {
                       <tr key={it.id} className="border-t border-border">
                         <td className="px-3 py-2">
                           <div className="font-medium">{it.name_snapshot}</div>
-                          <div className="text-xs text-muted-foreground font-mono">{it.sku_snapshot}</div>
+                          {it.sku_snapshot && !/^[0-9a-f]{32}$/i.test(it.sku_snapshot) && (
+                            <div className="text-xs text-muted-foreground font-mono">{it.sku_snapshot}</div>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-right">{it.quantity}</td>
                         <td className="px-3 py-2 text-right">{formatCurrency(Number(it.unit_price))}</td>
