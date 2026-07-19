@@ -141,23 +141,56 @@ def _table_header(ws, row: int, cols: list[tuple[int, str]]) -> None:
 # ═══════════════════════════════════════════════════════
 
 
+def _months_ago_first_day(months: int) -> date:
+    """Retorna el primer día del mes que está (months-1) meses antes del actual."""
+    today = date.today()
+    m = today.month - (months - 1)
+    y = today.year
+    while m <= 0:
+        m += 12
+        y -= 1
+    return date(y, m, 1)
+
+
 async def _fetch_monthly_sales(db: DBSession, months: int) -> list[dict]:
-    """Retorna ventas mes a mes de los últimos N meses."""
-    since = (date.today().replace(day=1) - timedelta(days=30 * (months - 1)))
+    """Retorna ventas mes a mes de los últimos N meses.
+
+    IMPORTANTE: revenue y COGS se calculan en CTEs separadas para evitar que el
+    LEFT JOIN con order_items multiplique grand_total por el número de ítems.
+    La fecha usa zona horaria Colombia para que los meses coincidan con el admin.
+    """
+    since = _months_ago_first_day(months)
     rows = (
         await db.execute(
             text("""
+            WITH revenue AS (
+              SELECT
+                DATE_TRUNC('month', o.occurred_at AT TIME ZONE 'America/Bogota') AS month,
+                COALESCE(SUM(o.grand_total), 0)::float AS revenue,
+                COUNT(o.id)::int                       AS orders
+              FROM sales.orders o
+              WHERE o.occurred_at >= :since
+                AND COALESCE(o.status, '') NOT IN ('cancelled', 'refunded')
+              GROUP BY DATE_TRUNC('month', o.occurred_at AT TIME ZONE 'America/Bogota')
+            ),
+            cogs_agg AS (
+              SELECT
+                DATE_TRUNC('month', o.occurred_at AT TIME ZONE 'America/Bogota') AS month,
+                COALESCE(SUM(oi.unit_cost * oi.quantity), 0)::float AS cogs
+              FROM sales.orders o
+              JOIN sales.order_items oi ON oi.order_id = o.id
+              WHERE o.occurred_at >= :since
+                AND COALESCE(o.status, '') NOT IN ('cancelled', 'refunded')
+              GROUP BY DATE_TRUNC('month', o.occurred_at AT TIME ZONE 'America/Bogota')
+            )
             SELECT
-              DATE_TRUNC('month', o.occurred_at) AS month,
-              COALESCE(SUM(o.grand_total), 0)::float        AS revenue,
-              COALESCE(SUM(oi.unit_cost * oi.quantity), 0)::float AS cogs,
-              COUNT(DISTINCT o.id)::int                     AS orders
-            FROM sales.orders o
-            LEFT JOIN sales.order_items oi ON oi.order_id = o.id
-            WHERE o.occurred_at >= :since
-              AND COALESCE(o.status, '') NOT IN ('cancelled', 'refunded')
-            GROUP BY DATE_TRUNC('month', o.occurred_at)
-            ORDER BY month
+              r.month,
+              r.revenue,
+              COALESCE(c.cogs, 0) AS cogs,
+              r.orders
+            FROM revenue r
+            LEFT JOIN cogs_agg c ON c.month = r.month
+            ORDER BY r.month
             """),
             {"since": since},
         )
@@ -176,7 +209,7 @@ async def _fetch_monthly_sales(db: DBSession, months: int) -> list[dict]:
 
 async def _fetch_all_expenses(db: DBSession, months: int) -> list[dict]:
     """Retorna todos los gastos de los últimos N meses."""
-    since = date.today().replace(day=1) - timedelta(days=30 * (months - 1))
+    since = _months_ago_first_day(months)
     rows = (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "gasto"))).scalars().all()
     result = []
     for r in rows:
@@ -233,7 +266,7 @@ async def _fetch_inventory_value(db: DBSession) -> dict:
 
 async def _fetch_purchases_monthly(db: DBSession, months: int) -> dict[str, float]:
     """Retorna compras a proveedores mes a mes."""
-    since = date.today().replace(day=1) - timedelta(days=30 * (months - 1))
+    since = _months_ago_first_day(months)
     rows = (
         await db.execute(
             text("""
@@ -253,7 +286,7 @@ async def _fetch_purchases_monthly(db: DBSession, months: int) -> dict[str, floa
 
 
 async def _fetch_revenue_by_method(db: DBSession, months: int) -> list[dict]:
-    since = date.today().replace(day=1) - timedelta(days=30 * (months - 1))
+    since = _months_ago_first_day(months)
     rows = (
         await db.execute(
             text("""
