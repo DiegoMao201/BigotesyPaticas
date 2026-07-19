@@ -224,7 +224,7 @@ export const products = {
   categories: () => api<{ id: string; name: string; slug: string }[]>('/v1/categories'),
   exportXlsx: async (): Promise<Blob> => {
     const token = getToken();
-    const res = await fetch(`${API_BASE}/v1/admin/products/export-xlsx`, {
+    const res = await fetch(`${API_BASE}/v1/catalog/export-excel`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     });
@@ -235,7 +235,7 @@ export const products = {
     const token = getToken();
     const form = new FormData();
     form.append('file', file);
-    const res = await fetch(`${API_BASE}/v1/admin/products/import-xlsx`, {
+    const res = await fetch(`${API_BASE}/v1/catalog/import-excel`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: form,
@@ -243,7 +243,14 @@ export const products = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Error al importar');
-    return data;
+    // Normalize response shape
+    return {
+      ok: (data.total_errors ?? 0) === 0,
+      updated: data.updated ?? 0,
+      skipped: 0,
+      errors: data.total_errors ?? 0,
+      error_details: data.errors ?? [],
+    };
   },
 };
 
