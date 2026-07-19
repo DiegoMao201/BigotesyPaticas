@@ -684,6 +684,14 @@ export const finance = {
     if (end) qs.set('end', end);
     return api<FinanceSummary>(`/v1/finance/summary?${qs.toString()}`);
   },
+  exportExcel: async (months = 12): Promise<Blob> => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/v1/finance/export-excel?months=${months}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Error al generar el informe Excel');
+    return res.blob();
+  },
 };
 
 // ─── Inventory extended ───────────────────────────────────────────

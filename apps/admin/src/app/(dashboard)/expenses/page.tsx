@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, TrendingDown, Wallet, Calendar, Filter } from 'lucide-react';
+import { Plus, TrendingDown, Wallet, Calendar, Filter, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { expenses, type ExpensesPage } from '@/lib/api';
+import { expenses, finance, type ExpensesPage } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ export default function ExpensesPage() {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<{ start?: string; end?: string; categoria?: string; metodo_pago?: string }>({});
   const [openCreate, setOpenCreate] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['expenses', page, filters],
@@ -40,6 +41,25 @@ export default function ExpensesPage() {
     onError: (e: Error) => toast.error(e.message || 'Error al crear gasto'),
   });
 
+  async function handleExportExcel() {
+    setExportingExcel(true);
+    const toastId = toast.loading('Generando informe ejecutivo con análisis IA… (30–60 seg)');
+    try {
+      const blob = await finance.exportExcel(12);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `BigotesyPaticas_Informe_Financiero_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Informe descargado correctamente', { id: toastId });
+    } catch (e) {
+      toast.error('Error al generar el informe', { id: toastId });
+    } finally {
+      setExportingExcel(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -49,9 +69,22 @@ export default function ExpensesPage() {
           </h1>
           <p className="text-sm text-muted-foreground">Control financiero de egresos operativos</p>
         </div>
-        <Button onClick={() => setOpenCreate(true)}>
-          <Plus className="w-4 h-4 mr-1" /> Nuevo gasto
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={exportingExcel}
+            className="gap-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+          >
+            {exportingExcel
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <FileSpreadsheet className="w-4 h-4" />}
+            {exportingExcel ? 'Generando…' : 'Informe Ejecutivo'}
+          </Button>
+          <Button onClick={() => setOpenCreate(true)}>
+            <Plus className="w-4 h-4 mr-1" /> Nuevo gasto
+          </Button>
+        </div>
       </div>
 
       {/* KPIs */}
