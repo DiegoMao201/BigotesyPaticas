@@ -330,12 +330,66 @@ _COL_MAP = {
 }
 
 
+def _slugify_simple(text_val: str) -> str:
+    import unicodedata, re
+    t = unicodedata.normalize("NFKD", text_val).encode("ascii", "ignore").decode("ascii")
+    t = re.sub(r"[^\w\s-]", "", t.lower())
+    return re.sub(r"[\s_-]+", "-", t).strip("-") or "item"
+
+
+async def _get_or_create_category(db, cat_name: str, cat_map: dict) -> uuid.UUID | None:
+    """Devuelve el ID de la categoría, creándola si no existe."""
+    if not cat_name:
+        return None
+    key = cat_name.strip().lower()
+    if key in cat_map:
+        return cat_map[key]
+    # Crear nueva
+    new_id = uuid.uuid4()
+    slug = _slugify_simple(cat_name)
+    existing = (await db.execute(
+        text("SELECT COUNT(*) FROM catalog.categories WHERE slug = :s"), {"s": slug}
+    )).scalar()
+    if existing:
+        slug = f"{slug}-{str(new_id)[:4]}"
+    await db.execute(text("""
+        INSERT INTO catalog.categories (id, name, slug, is_active, sort_order, created_at, updated_at)
+        VALUES (:id::uuid, :name, :slug, true, 0, NOW(), NOW())
+    """), {"id": str(new_id), "name": cat_name.strip(), "slug": slug})
+    cat_map[key] = new_id
+    return new_id
+
+
+async def _get_or_create_brand(db, brand_name: str, brand_map: dict) -> uuid.UUID | None:
+    """Devuelve el ID de la marca, creándola si no existe."""
+    if not brand_name:
+        return None
+    key = brand_name.strip().lower()
+    if key in brand_map:
+        return brand_map[key]
+    new_id = uuid.uuid4()
+    slug = _slugify_simple(brand_name)
+    existing = (await db.execute(
+        text("SELECT COUNT(*) FROM catalog.brands WHERE slug = :s"), {"s": slug}
+    )).scalar()
+    if existing:
+        slug = f"{slug}-{str(new_id)[:4]}"
+    await db.execute(text("""
+        INSERT INTO catalog.brands (id, name, slug, is_active, created_at, updated_at)
+        VALUES (:id::uuid, :name, :slug, true, NOW(), NOW())
+    """), {"id": str(new_id), "name": brand_name.strip(), "slug": slug})
+    brand_map[key] = new_id
+    return new_id
+
+
 @catalog_export_router.post("/import-excel")
 async def import_products_excel(
     db: DBSession,
     file: UploadFile = File(...),
 ):
-    """Importa el Excel editado y actualiza los productos en masa."""
+    """Importa el Excel: actualiza existentes, crea nuevos, crea categorías/marcas nuevas."""
+    import json as _json
+
     content = await file.read()
     try:
         wb = load_workbook(io.BytesIO(content), data_only=True)
@@ -343,189 +397,206 @@ async def import_products_excel(
         raise HTTPException(400, "Archivo Excel inválido")
 
     if "Productos" not in wb.sheetnames:
-        raise HTTPException(400, "El archivo no tiene una hoja llamada 'Productos'")
+        raise HTTPException(400, "El archivo no tiene hoja 'Productos'")
 
     ws = wb["Productos"]
 
-    # Detectar encabezados en fila 2
+    # Encabezados en fila 1 o 2 (tolerante)
     headers: dict[int, str] = {}
     for cell in ws[2]:
         if cell.value and str(cell.value).strip() in _COL_MAP:
             headers[cell.column] = _COL_MAP[str(cell.value).strip()]
+    if not headers:
+        for cell in ws[1]:
+            if cell.value and str(cell.value).strip() in _COL_MAP:
+                headers[cell.column] = _COL_MAP[str(cell.value).strip()]
 
-    if "id" not in headers.values():
-        raise HTTPException(400, "Columna ID no encontrada — no se puede importar sin ella")
-
-    # Cargar categorías y marcas para mapear nombre → id
+    # Cargar categorías y marcas actuales (case-insensitive)
     cats_rows = await db.execute(
         select(Category.id, Category.name).where(Category.deleted_at == None)  # noqa: E711
     )
     brands_rows = await db.execute(
         select(Brand.id, Brand.name).where(Brand.deleted_at == None)  # noqa: E711
     )
-    cat_map = {r.name.strip().lower(): r.id for r in cats_rows.all()}
-    brand_map = {r.name.strip().lower(): r.id for r in brands_rows.all()}
+    cat_map: dict[str, uuid.UUID] = {r.name.strip().lower(): r.id for r in cats_rows.all()}
+    brand_map: dict[str, uuid.UUID] = {r.name.strip().lower(): r.id for r in brands_rows.all()}
 
-    updated = 0
-    errors = []
+    # SKUs existentes para detectar duplicados al crear
+    sku_rows = await db.execute(
+        text("SELECT sku FROM catalog.products WHERE deleted_at IS NULL")
+    )
+    existing_skus = {r[0] for r in sku_rows.all()}
 
-    for row in ws.iter_rows(min_row=3, values_only=True):
-        # Saltar filas vacías
+    updated = created = 0
+    errors: list[str] = []
+
+    def _str(v) -> str | None:
+        return str(v).strip() if v not in (None, "") else None
+
+    def _float(v) -> float | None:
+        try:
+            return float(v) if v not in (None, "") else None
+        except (ValueError, TypeError):
+            return None
+
+    def _bool(v, default: bool = False) -> bool:
+        if v is None:
+            return default
+        return str(v).strip().upper() in ("SÍ", "SI", "S", "YES", "TRUE", "1")
+
+    data_start = 3 if "id" in headers.values() else 2
+    for row in ws.iter_rows(min_row=data_start, values_only=True):
         if not any(v for v in row):
             continue
 
-        row_data: dict[str, object] = {}
-        for col_i, field in headers.items():
-            val = row[col_i - 1]
-            row_data[field] = val
+        row_data: dict[str, object] = {
+            field: row[col_i - 1]
+            for col_i, field in headers.items()
+            if col_i <= len(row)
+        }
 
         product_id_raw = row_data.get("id")
-        if not product_id_raw:
-            continue
+        sku_raw = _str(row_data.get("sku"))
+        name_raw = _str(row_data.get("name"))
 
+        # ── Resolver categoría y marca (crear si no existen) ──────────────────
+        cat_name_raw  = _str(row_data.get("category_name"))
+        brand_name_raw = _str(row_data.get("brand_name"))
+        cat_id   = await _get_or_create_category(db, cat_name_raw or "", cat_map)
+        brand_id = await _get_or_create_brand(db, brand_name_raw or "", brand_map)
+
+        peso_val = _str(row_data.get("peso"))
+        tags_raw = row_data.get("tags_csv")
+        tag_list: list[str] = (
+            [t.strip() for t in str(tags_raw).split(",") if t.strip()]
+            if tags_raw not in (None, "") else []
+        )
+
+        # ── CREAR producto nuevo (sin ID o ID no en BD) ───────────────────────
+        is_new = False
         try:
-            product_id = uuid.UUID(str(product_id_raw).strip())
-        except ValueError:
-            errors.append(f"ID inválido: {product_id_raw}")
+            pid = uuid.UUID(str(product_id_raw).strip()) if product_id_raw else None
+        except (ValueError, AttributeError):
+            pid = None
+
+        if pid is None:
+            # Fila sin ID → crear producto nuevo
+            if not name_raw:
+                errors.append("Fila sin ID ni Nombre — omitida")
+                continue
+            if not sku_raw:
+                import re as _re
+                sku_raw = _re.sub(r"[^\w-]", "-", name_raw.lower())[:64]
+            if sku_raw in existing_skus:
+                errors.append(f"SKU duplicado al crear: '{sku_raw}' — omitido")
+                continue
+            pid = uuid.uuid4()
+            slug_base = _slugify_simple(name_raw)
+            slug_check = (await db.execute(
+                text("SELECT COUNT(*) FROM catalog.products WHERE slug LIKE :s"),
+                {"s": f"{slug_base}%"}
+            )).scalar()
+            slug = slug_base if not slug_check else f"{slug_base}-{str(pid)[:4]}"
+            await db.execute(text("""
+                INSERT INTO catalog.products
+                  (id, sku, name, slug, category_id, brand_id,
+                   short_description, description,
+                   price, cost, compare_at_price,
+                   is_active, is_published, is_featured,
+                   primary_image_url, pet_type, life_stage, size_range,
+                   seo_title, seo_description,
+                   tags, attributes,
+                   images, created_at, updated_at)
+                VALUES
+                  (:id::uuid, :sku, :name, :slug, :cat_id::uuid, :brand_id::uuid,
+                   :short_desc, :desc,
+                   :price, :cost, :cap,
+                   :is_active, :is_published, :is_featured,
+                   :img, :pet_type, :life_stage, :size_range,
+                   :seo_t, :seo_d,
+                   :tags::jsonb, :attrs::jsonb,
+                   '[]'::jsonb, NOW(), NOW())
+            """), {
+                "id": str(pid), "sku": sku_raw, "name": name_raw, "slug": slug,
+                "cat_id": str(cat_id) if cat_id else None,
+                "brand_id": str(brand_id) if brand_id else None,
+                "short_desc": _str(row_data.get("short_description")),
+                "desc": _str(row_data.get("description")),
+                "price": _float(row_data.get("price")) or 0,
+                "cost": _float(row_data.get("cost")) or 0,
+                "cap": _float(row_data.get("compare_at_price")),
+                "is_active": _bool(row_data.get("is_active_label"), True),
+                "is_published": _bool(row_data.get("is_published_label"), False),
+                "is_featured": _bool(row_data.get("is_featured_label"), False),
+                "img": _str(row_data.get("primary_image_url")),
+                "pet_type": _str(row_data.get("pet_type")),
+                "life_stage": _str(row_data.get("life_stage")),
+                "size_range": _str(row_data.get("size_range")),
+                "seo_t": _str(row_data.get("seo_title")),
+                "seo_d": _str(row_data.get("seo_description")),
+                "tags": _json.dumps(tag_list, ensure_ascii=False),
+                "attrs": _json.dumps({"peso": peso_val} if peso_val else {}, ensure_ascii=False),
+            })
+            existing_skus.add(sku_raw)
+            created += 1
             continue
 
-        # Construir dict de updates
-        updates: dict[str, object] = {"updated_at": datetime.now(UTC)}
+        # ── ACTUALIZAR producto existente ─────────────────────────────────────
+        params: dict[str, object] = {
+            "pid": str(pid),
+            "cat_id": str(cat_id) if cat_id else None,
+            "brand_id": str(brand_id) if brand_id else None,
+            "name": name_raw,
+            "short_desc": _str(row_data.get("short_description")),
+            "desc": _str(row_data.get("description")),
+            "price": _float(row_data.get("price")),
+            "cost": _float(row_data.get("cost")),
+            "cap": _float(row_data.get("compare_at_price")),
+            "is_active": _bool(row_data.get("is_active_label"), True) if row_data.get("is_active_label") is not None else None,
+            "is_published": _bool(row_data.get("is_published_label"), False) if row_data.get("is_published_label") is not None else None,
+            "is_featured": _bool(row_data.get("is_featured_label"), False) if row_data.get("is_featured_label") is not None else None,
+            "img": _str(row_data.get("primary_image_url")),
+            "pet_type": _str(row_data.get("pet_type")),
+            "life_stage": _str(row_data.get("life_stage")),
+            "size_range": _str(row_data.get("size_range")),
+            "seo_t": _str(row_data.get("seo_title")),
+            "seo_d": _str(row_data.get("seo_description")),
+            "tags": _json.dumps(tag_list, ensure_ascii=False),
+        }
+        if sku_raw:
+            params["sku"] = sku_raw
 
-        def _str(v) -> str | None:
-            return str(v).strip() if v not in (None, "") else None
+        await db.execute(text("""
+            UPDATE catalog.products SET
+                name              = COALESCE(:name, name),
+                category_id       = :cat_id::uuid,
+                brand_id          = :brand_id::uuid,
+                short_description = :short_desc,
+                description       = :desc,
+                price             = COALESCE(:price, price),
+                cost              = COALESCE(:cost, cost),
+                compare_at_price  = :cap,
+                is_active         = COALESCE(:is_active, is_active),
+                is_published      = COALESCE(:is_published, is_published),
+                is_featured       = COALESCE(:is_featured, is_featured),
+                primary_image_url = COALESCE(:img, primary_image_url),
+                pet_type          = :pet_type,
+                life_stage        = :life_stage,
+                size_range        = :size_range,
+                seo_title         = :seo_t,
+                seo_description   = :seo_d,
+                tags              = :tags::jsonb,
+                updated_at        = NOW()
+            WHERE id = :pid::uuid AND deleted_at IS NULL
+        """), params)
 
-        def _float(v) -> float | None:
-            try:
-                return float(v) if v not in (None, "") else None
-            except (ValueError, TypeError):
-                return None
-
-        def _bool(v) -> bool | None:
-            if v is None:
-                return None
-            return str(v).strip().upper() in ("SÍ", "SI", "S", "YES", "TRUE", "1")
-
-        if "sku" in row_data and row_data["sku"]:
-            updates["sku"] = str(row_data["sku"]).strip()
-        if "name" in row_data and row_data["name"]:
-            updates["name"] = str(row_data["name"]).strip()
-        if "short_description" in row_data:
-            updates["short_description"] = _str(row_data["short_description"])
-        if "description" in row_data:
-            updates["description"] = _str(row_data["description"])
-
-        price = _float(row_data.get("price"))
-        if price is not None:
-            updates["price"] = price
-        cost = _float(row_data.get("cost"))
-        if cost is not None:
-            updates["cost"] = cost
-        cap = _float(row_data.get("compare_at_price"))
-        if cap is not None:
-            updates["compare_at_price"] = cap
-        elif row_data.get("compare_at_price") in ("", None):
-            updates["compare_at_price"] = None
-
-        # Booleans
-        for label_field, db_field in [
-            ("is_active_label", "is_active"),
-            ("is_published_label", "is_published"),
-            ("is_featured_label", "is_featured"),
-        ]:
-            if label_field in row_data and row_data[label_field] is not None:
-                updates[db_field] = _bool(row_data[label_field])
-
-        # Imagen
-        if "primary_image_url" in row_data:
-            updates["primary_image_url"] = _str(row_data["primary_image_url"])
-
-        # Filtros de catálogo
-        if "pet_type" in row_data:
-            updates["pet_type"] = _str(row_data["pet_type"])
-        if "life_stage" in row_data:
-            updates["life_stage"] = _str(row_data["life_stage"])
-        if "size_range" in row_data:
-            updates["size_range"] = _str(row_data["size_range"])
-
-        # Peso → attributes
-        if "peso" in row_data and row_data["peso"] not in (None, ""):
-            updates["attributes"] = text(
-                "attributes || jsonb_build_object('peso', :peso::text)"
-            )
-            # Se maneja abajo con raw SQL
-
-        # Tags
-        if "tags_csv" in row_data:
-            raw_tags = row_data["tags_csv"]
-            if raw_tags not in (None, ""):
-                tag_list = [t.strip() for t in str(raw_tags).split(",") if t.strip()]
-                updates["tags"] = tag_list
-            else:
-                updates["tags"] = []
-
-        # SEO
-        if "seo_title" in row_data:
-            updates["seo_title"] = _str(row_data["seo_title"])
-        if "seo_description" in row_data:
-            updates["seo_description"] = _str(row_data["seo_description"])
-
-        # Categoría
-        cat_raw = row_data.get("category_name")
-        if cat_raw not in (None, ""):
-            cat_key = str(cat_raw).strip().lower()
-            cat_id = cat_map.get(cat_key)
-            if cat_id:
-                updates["category_id"] = cat_id
-            else:
-                errors.append(f"Categoría no encontrada: '{cat_raw}' (SKU {row_data.get('sku', '?')})")
-
-        # Marca
-        brand_raw = row_data.get("brand_name")
-        if brand_raw not in (None, ""):
-            brand_key = str(brand_raw).strip().lower()
-            brand_id = brand_map.get(brand_key)
-            if brand_id:
-                updates["brand_id"] = brand_id
-            else:
-                errors.append(f"Marca no encontrada: '{brand_raw}' (SKU {row_data.get('sku', '?')})")
-
-        # Separar peso del resto (needs jsonb merge via raw SQL)
-        peso_val = row_data.get("peso")
-        non_json_updates = {k: v for k, v in updates.items() if not isinstance(v, type(text("")))}
-
-        if peso_val not in (None, ""):
-            await db.execute(
-                text("""
-                    UPDATE catalog.products
-                    SET attributes = attributes || jsonb_build_object('peso', :peso::text),
-                        updated_at = :now
-                    WHERE id = :pid
-                """),
-                {"peso": str(peso_val).strip(), "now": datetime.now(UTC), "pid": str(product_id)},
-            )
-
-        # Tags es JSONB — usar raw SQL para evitar problemas de tipo
-        tags_val = non_json_updates.pop("tags", None)
-        if tags_val is not None:
-            import json
-            await db.execute(
-                text("UPDATE catalog.products SET tags = :tags::jsonb WHERE id = :pid"),
-                {"tags": json.dumps(tags_val, ensure_ascii=False), "pid": str(product_id)},
-            )
-
-        # El resto de los campos con SQLAlchemy ORM update
-        simple = {k: v for k, v in non_json_updates.items() if k not in ("updated_at",)}
-        if simple:
-            simple["updated_at"] = datetime.now(UTC)
-            await db.execute(
-                text(
-                    "UPDATE catalog.products SET "
-                    + ", ".join(f"{k} = :{k}" for k in simple)
-                    + " WHERE id = :pid AND deleted_at IS NULL"
-                ),
-                {**simple, "pid": str(product_id)},
-            )
+        if peso_val:
+            await db.execute(text("""
+                UPDATE catalog.products
+                SET attributes = attributes || jsonb_build_object('peso', :peso::text),
+                    updated_at = NOW()
+                WHERE id = :pid::uuid
+            """), {"peso": peso_val, "pid": str(pid)})
 
         updated += 1
 
@@ -533,7 +604,9 @@ async def import_products_excel(
 
     return {
         "updated": updated,
+        "created": created,
         "errors": errors[:50],
         "total_errors": len(errors),
-        "message": f"{updated} productos actualizados" + (f", {len(errors)} advertencias" if errors else ""),
+        "message": f"{updated} actualizados, {created} creados"
+                   + (f", {len(errors)} advertencias" if errors else ""),
     }
