@@ -94,8 +94,9 @@ async def _upsert_product_supplier(db: DBSession, product: Product, supplier_id)
             select(SupplierSkuMap)
             .where(SupplierSkuMap.supplier_id == supplier_id)
             .where(SupplierSkuMap.product_id == product.id)
+            .limit(1)
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
     now = datetime.now(UTC)
     if existing is not None:
         existing.last_seen_at = now
