@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText, XCircle, ShoppingCart, Search, RefreshCw, Eye,
   TrendingUp, DollarSign, Hash, MessageCircle, AlertTriangle,
+  Package, User,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { sales, adminEtl, API_BASE, type Order, type OrdersListResponse } from '@/lib/api';
@@ -229,6 +230,8 @@ export default function SalesPage() {
   const [channelFilter, setChannelFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [productFilter, setProductFilter] = useState('');
+  const [customerFilter, setCustomerFilter] = useState('');
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
 
   const fixDatesMut = useMutation({
@@ -242,10 +245,12 @@ export default function SalesPage() {
   });
 
   const { data, isLoading } = useQuery<OrdersListResponse>({
-    queryKey: ['orders', page, search, statusFilter, paymentFilter, channelFilter, dateFrom, dateTo],
+    queryKey: ['orders', page, search, productFilter, customerFilter, statusFilter, paymentFilter, channelFilter, dateFrom, dateTo],
     queryFn: () => sales.list({
       page, page_size: 30,
       q: search || undefined,
+      product_q: productFilter || undefined,
+      customer_q: customerFilter || undefined,
       status: statusFilter || undefined,
       payment_status: paymentFilter || undefined,
       channel: channelFilter || undefined,
@@ -254,6 +259,8 @@ export default function SalesPage() {
     }),
     staleTime: 15_000,
   });
+
+  const hasProductOrCustomerFilter = !!(productFilter || customerFilter);
 
   const totalRevenue = data?.total_revenue ?? 0;
   const avgTicket = data?.avg_ticket ?? 0;
@@ -326,7 +333,7 @@ export default function SalesPage() {
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-            <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Buscar por # orden…" className="pl-9" />
+            <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Buscar por # orden, producto o cliente…" className="pl-9" />
           </div>
           <div className="flex items-center gap-2">
             <label className="text-xs text-muted-foreground">Desde</label>
@@ -339,6 +346,21 @@ export default function SalesPage() {
               </Button>
             )}
           </div>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Package className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+            <Input value={productFilter} onChange={(e) => { setProductFilter(e.target.value); setPage(1); }} placeholder="Filtrar por producto…" className="pl-9" />
+          </div>
+          <div className="relative flex-1 min-w-[200px]">
+            <User className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+            <Input value={customerFilter} onChange={(e) => { setCustomerFilter(e.target.value); setPage(1); }} placeholder="Filtrar por cliente…" className="pl-9" />
+          </div>
+          {hasProductOrCustomerFilter && (
+            <Button size="sm" variant="outline" onClick={() => { setProductFilter(''); setCustomerFilter(''); setPage(1); }}>
+              <XCircle className="w-3 h-3 mr-1" /> Limpiar
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex gap-2 flex-wrap">

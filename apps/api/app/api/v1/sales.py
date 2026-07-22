@@ -211,22 +211,73 @@ async def get_order(order_id: uuid.UUID, db: DBSession) -> OrderOut:
     return o
 
 
+def _product_match_condition(q: str):
+    """Coincide si algún ítem de la orden (nombre/SKU) matchea, o —para ventas legadas sin
+    order_items normalizados— si la lista de productos en notas lo menciona."""
+    from sqlalchemy import String, cast, exists, or_
+
+    pattern = f"%{q}%"
+    item_match = exists().where(
+        OrderItem.order_id == Order.id,
+        or_(
+            OrderItem.name_snapshot.ilike(pattern),
+            OrderItem.sku_snapshot.ilike(pattern),
+        ),
+    )
+    return or_(item_match, cast(Order.notes, String).ilike(pattern))
+
+
+def _customer_match_condition(q: str):
+    """Coincide por nombre, teléfono o documento del cliente asociado a la orden."""
+    from sqlalchemy import exists, or_
+
+    from app.models.crm import Customer as CRMCustomer
+
+    pattern = f"%{q}%"
+    return exists().where(
+        CRMCustomer.id == Order.customer_id,
+        or_(
+            CRMCustomer.full_name.ilike(pattern),
+            CRMCustomer.phone.ilike(pattern),
+            CRMCustomer.document_id.ilike(pattern),
+        ),
+    )
+
+
+def _orders_search_condition(q: str):
+    """Búsqueda general (OR): # orden, notas, producto o cliente — para el buscador rápido."""
+    from sqlalchemy import String, cast, or_
+
+    pattern = f"%{q}%"
+    return or_(
+        Order.order_number.ilike(pattern),
+        cast(Order.notes, String).ilike(pattern),
+        _product_match_condition(q),
+        _customer_match_condition(q),
+    )
+
+
 @router.get("/orders")
 async def list_orders(
     db: DBSession,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     q: str | None = None,
+    product_q: str | None = None,
+    customer_q: str | None = None,
     status_filter: str | None = Query(None, alias="status"),
     channel: str | None = None,
     payment_status: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
 ):
-    """Lista órdenes con búsqueda por número o cliente, filtros y paginación."""
-    from datetime import date as dt_date
+    """Lista órdenes con búsqueda por número, producto o cliente, filtros y paginación.
 
-    from sqlalchemy import String, cast, or_
+    `q` es un buscador rápido de texto libre (OR entre orden/producto/cliente/notas).
+    `product_q` y `customer_q` son filtros dedicados que se combinan con AND entre sí
+    y con `q`, para acotar p.ej. "facturas de este cliente que incluyan este producto".
+    """
+    from datetime import date as dt_date
 
     stmt = select(Order).order_by(desc(Order.occurred_at))
     count_stmt = select(func.count()).select_from(Order)
@@ -241,11 +292,15 @@ async def list_orders(
         stmt = stmt.where(Order.payment_status == payment_status)
         count_stmt = count_stmt.where(Order.payment_status == payment_status)
     if q:
-        pattern = f"%{q}%"
-        cond = or_(
-            Order.order_number.ilike(pattern),
-            cast(Order.notes, String).ilike(pattern),
-        )
+        cond = _orders_search_condition(q)
+        stmt = stmt.where(cond)
+        count_stmt = count_stmt.where(cond)
+    if product_q:
+        cond = _product_match_condition(product_q)
+        stmt = stmt.where(cond)
+        count_stmt = count_stmt.where(cond)
+    if customer_q:
+        cond = _customer_match_condition(customer_q)
         stmt = stmt.where(cond)
         count_stmt = count_stmt.where(cond)
     if date_from:
@@ -284,12 +339,11 @@ async def list_orders(
     if payment_status:
         rev_stmt = rev_stmt.where(Order.payment_status == payment_status)
     if q:
-        pattern = f"%{q}%"
-        cond = or_(
-            Order.order_number.ilike(pattern),
-            cast(Order.notes, String).ilike(pattern),
-        )
-        rev_stmt = rev_stmt.where(cond)
+        rev_stmt = rev_stmt.where(_orders_search_condition(q))
+    if product_q:
+        rev_stmt = rev_stmt.where(_product_match_condition(product_q))
+    if customer_q:
+        rev_stmt = rev_stmt.where(_customer_match_condition(customer_q))
     if date_from:
         try:
             d = dt_date.fromisoformat(date_from)

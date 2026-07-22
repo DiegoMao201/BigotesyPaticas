@@ -309,11 +309,13 @@ export interface OrdersListResponse {
 }
 
 export const sales = {
-  list: (params: { page?: number; page_size?: number; q?: string; status?: string; payment_status?: string; channel?: string; date_from?: string; date_to?: string } = {}) => {
+  list: (params: { page?: number; page_size?: number; q?: string; product_q?: string; customer_q?: string; status?: string; payment_status?: string; channel?: string; date_from?: string; date_to?: string } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
     if (params.page_size) qs.set('page_size', String(params.page_size));
     if (params.q) qs.set('q', params.q);
+    if (params.product_q) qs.set('product_q', params.product_q);
+    if (params.customer_q) qs.set('customer_q', params.customer_q);
     if (params.status) qs.set('status', params.status);
     if (params.payment_status) qs.set('payment_status', params.payment_status);
     if (params.channel) qs.set('channel', params.channel);
