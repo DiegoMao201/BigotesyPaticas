@@ -203,7 +203,11 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
     return order
 
 
-@router.get("/orders/{order_id}", response_model=OrderOut)
+@router.get(
+    "/orders/{order_id}",
+    response_model=OrderOut,
+    dependencies=[Depends(require_permission("sales:read"))],
+)
 async def get_order(order_id: uuid.UUID, db: DBSession) -> OrderOut:
     o = (await db.execute(select(Order).where(Order.id == order_id))).scalar_one_or_none()
     if o is None:
@@ -257,7 +261,7 @@ def _orders_search_condition(q: str):
     )
 
 
-@router.get("/orders")
+@router.get("/orders", dependencies=[Depends(require_permission("sales:read"))])
 async def list_orders(
     db: DBSession,
     page: int = Query(1, ge=1),
