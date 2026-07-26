@@ -77,6 +77,58 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
+  /* Botón flotante SOS — elevado sobre el bottom nav */
+  .sos-fab {
+    @apply absolute flex flex-col items-center gap-0.5;
+    left: 50%;
+    top: -28px;
+    transform: translateX(-50%);
+    z-index: 50;
+  }
+  .sos-fab-inner {
+    @apply relative flex h-14 w-14 items-center justify-center rounded-full;
+    background: linear-gradient(135deg, #ff7a63, #e8433a);
+    box-shadow: 0 10px 24px rgba(232, 67, 58, 0.4), 0 2px 6px rgba(0, 0, 0, 0.15);
+    border: 3px solid var(--bg-warm);
+  }
+  .sos-fab-ring {
+    @apply absolute rounded-full;
+    inset: -4px;
+    background: rgba(232, 67, 58, 0.3);
+    animation: pulse-soft 2.2s ease-in-out infinite;
+  }
+  .sos-fab-label {
+    @apply text-[10px] font-bold tracking-wide text-[#e8433a];
+  }
+  .sos-fab-label-active {
+    @apply underline decoration-2 underline-offset-2;
+  }
+
+  /* Hero de la sección SOS — paleta de urgencia, distinta a la marca teal */
+  .sos-hero {
+    background: linear-gradient(145deg, #ff7a63 0%, #e8433a 55%, #c62f28 100%);
+    border-radius: 0 0 28px 28px;
+    box-shadow: 0 8px 24px rgba(232, 67, 58, 0.25);
+  }
+
+  .sos-submit-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3.5
+           text-sm font-bold text-white shadow-lg transition-all
+           active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+    background: linear-gradient(135deg, #ff7a63, #e8433a);
+    box-shadow: 0 8px 20px rgba(232, 67, 58, 0.3);
+  }
+  .sos-badge {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide;
+    background: #fdeee9;
+    color: #c62f28;
+  }
+  .sos-badge-success {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide;
+    background: #e1f5ee;
+    color: #085041;
+  }
+
   /* Input estilo portal */
   .input-field {
     @apply w-full rounded-xl border border-border bg-white px-4 py-3 text-sm

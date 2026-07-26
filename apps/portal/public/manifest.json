@@ -37,6 +37,11 @@
   ],
   "shortcuts": [
     {
+      "name": "Reportar mascota perdida",
+      "url": "/sos/new",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
       "name": "Mis mascotas",
       "url": "/pets",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]

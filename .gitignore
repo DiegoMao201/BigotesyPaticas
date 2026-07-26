@@ -67,6 +67,12 @@ local-assets/
 # Contexto técnico local — no va al repo
 CONTEXT.md
 
+# Plan móvil/comunidad + su bitácora de seguimiento — locales, no van al repo
+MOBILE_COMMUNITY_MASTER_PLAN.md
+docs/MOBILE_COMMUNITY_MASTER_PLAN.md
+MOBILE_COMMUNITY_PROGRESS.md
+docs/MOBILE_COMMUNITY_PROGRESS.md
+
 
 # Media local — fotos y videos para posts (no subir al repo)
 media/

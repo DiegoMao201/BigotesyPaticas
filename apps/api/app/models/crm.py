@@ -56,3 +56,16 @@ class Customer(UUIDPKMixin, TimestampMixin, SoftDeleteMixin, Base):
     referred_by_customer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
+
+    # Geolocalización + preferencias de notificación (comunidad SOS, fase 1)
+    last_lat: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    last_lng: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    last_location_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    sos_radius_km: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    notification_prefs: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=lambda: {"sos": True, "promos": True, "appointments": True},
+    )

@@ -17,6 +17,9 @@ const TYPE_COLORS: Record<string, { bg: string; dot: string }> = {
   order_delivered:   { bg: '#F0FDF4', dot: '#639922' },
   appointment:       { bg: '#E1F5EE', dot: '#187f77' },
   health_reminder:   { bg: '#FEF3C7', dot: '#D97706' },
+  sos_nearby:        { bg: '#FDEEE9', dot: '#e8433a' },
+  sos_sighting:      { bg: '#FDEEE9', dot: '#e8433a' },
+  sos_found:         { bg: '#E1F5EE', dot: '#187f77' },
   default:           { bg: '#F9FAFB', dot: '#9CA3AF' },
 };
 

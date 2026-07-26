@@ -147,6 +147,123 @@ export const pets = {
   carnetUrl: (petId: string) => `${BASE}/pets/${petId}/carnet.pdf?t=${Date.now()}`,
 };
 
+// ── SOS Mascotas Perdidas ──────────────────────────────────────────────
+// Cuelga de /v1/sos/* en el backend, no de /v1/portal/*, por eso usa su propia base.
+
+const SOS_BASE = '/api/v1/sos';
+
+async function requestSos<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${SOS_BASE}${path}`, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiError(res.status, body.detail ?? 'Error del servidor');
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
+export interface SOSSighting {
+  id: string;
+  spotter_name: string | null;
+  lat: number;
+  lng: number;
+  photo_url: string | null;
+  note: string | null;
+  seen_at: string;
+}
+
+export interface SOSEvent {
+  id: string;
+  pet_id: string | null;
+  reporter_customer_id: string;
+  reporter_name: string | null;
+  pet_name: string;
+  species: string;
+  breed: string | null;
+  color: string;
+  photos: string[];
+  last_seen_lat: number;
+  last_seen_lng: number;
+  last_seen_at: string;
+  contact_phone: string;
+  reward: number | null;
+  status: 'active' | 'found' | 'closed' | 'expired';
+  radius_km: number;
+  notified_count: number;
+  found_at: string | null;
+  created_at: string;
+  distance_km: number | null;
+  sightings?: SOSSighting[];
+}
+
+export type SOSReportInput = {
+  pet_id?: string | null;
+  pet_name: string;
+  species: 'perro' | 'gato' | 'otro';
+  breed?: string | null;
+  color: string;
+  last_seen_lat: number;
+  last_seen_lng: number;
+  last_seen_at?: string;
+  contact_phone: string;
+  reward?: number | null;
+  radius_km?: number;
+};
+
+export const sos = {
+  report: (data: SOSReportInput) =>
+    requestSos<SOSEvent>('/report', { method: 'POST', body: JSON.stringify(data) }),
+  nearby: (lat: number, lng: number, km = 15, status = 'active') =>
+    requestSos<SOSEvent[]>(
+      `/nearby?lat=${lat}&lng=${lng}&km=${km}&status=${encodeURIComponent(status)}`
+    ),
+  get: (id: string) => requestSos<SOSEvent>(`/${id}`),
+  sighting: (
+    id: string,
+    data: { lat: number; lng: number; photo_url?: string | null; note?: string | null; seen_at?: string }
+  ) => requestSos<{ ok: boolean }>(`/${id}/sighting`, { method: 'POST', body: JSON.stringify(data) }),
+  markFound: (id: string) =>
+    requestSos<{ ok: boolean; status: string }>(`/${id}/found`, { method: 'POST' }),
+  uploadPhoto: async (
+    id: string,
+    file: File
+  ): Promise<{ ok: boolean; url: string; thumb_url: string; photos: string[] }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${SOS_BASE}/${id}/photos`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new ApiError(res.status, body.detail ?? 'Error al subir foto');
+    }
+    return res.json();
+  },
+};
+
+// ── Ubicación del cliente (para SOS + futuro directorio de aliados) ────
+
+export const portalLocation = {
+  update: (lat: number, lng: number) =>
+    request<{ ok: boolean }>('/location', { method: 'POST', body: JSON.stringify({ lat, lng }) }),
+  updatePreferences: (data: {
+    sos?: boolean;
+    promos?: boolean;
+    appointments?: boolean;
+    sos_radius_km?: number;
+  }) =>
+    request<{ ok: boolean; notification_prefs: Record<string, boolean>; sos_radius_km: number }>(
+      '/location/preferences',
+      { method: 'PUT', body: JSON.stringify(data) }
+    ),
+};
+
 // ── Orders ────────────────────────────────────────────────────────────
 
 export interface Order {

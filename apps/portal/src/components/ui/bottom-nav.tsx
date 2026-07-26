@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Heart, Home, Package, Calendar, User } from 'lucide-react';
+import { Heart, Home, Package, Calendar, User, PawPrint } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -16,9 +16,17 @@ const NAV_ITEMS = [
 
 export function BottomNav() {
   const pathname = usePathname();
+  const sosActive = pathname.startsWith('/sos');
 
   return (
     <nav className="bottom-nav">
+      <Link href="/sos" className="sos-fab" aria-label="Reportar mascota perdida (SOS)">
+        <motion.div whileTap={{ scale: 0.88 }} className="sos-fab-inner">
+          <span className="sos-fab-ring" />
+          <PawPrint className="h-6 w-6 text-white" strokeWidth={2.4} />
+        </motion.div>
+        <span className={cn('sos-fab-label', sosActive && 'sos-fab-label-active')}>SOS</span>
+      </Link>
       <div className="flex items-center justify-around px-2 py-2">
         {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
           const active = pathname === href || pathname.startsWith(href + '/');

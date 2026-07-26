@@ -56,6 +56,7 @@ class Pet(UUIDPKMixin, TimestampMixin, Base):
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None, index=True
     )
+    is_lost: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     health_records: Mapped[list[HealthRecord]] = relationship(
         "HealthRecord", back_populates="pet", cascade="all, delete-orphan", lazy="selectin"
