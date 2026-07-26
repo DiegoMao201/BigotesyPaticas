@@ -6,13 +6,13 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy import update as sa_update
 
 from app.api.v1.portal_notifications import notify_customer
-from app.deps import DBSession
+from app.deps import DBSession, require_permission
 from app.models.crm import Customer
 from app.models.portal import (
     ActivityLog,
@@ -31,7 +31,11 @@ from app.services.portal_order_actions import (
     queue_customer_notification,
 )
 
-router = APIRouter(prefix="/admin/portal", tags=["admin-portal"])
+router = APIRouter(
+    prefix="/admin/portal",
+    tags=["admin-portal"],
+    dependencies=[Depends(require_permission("crm:read"))],
+)
 
 
 # ── schemas ───────────────────────────────────────────────────────────────────
@@ -166,7 +170,7 @@ async def list_portal_orders(
     return result
 
 
-@router.patch("/orders/{order_id}")
+@router.patch("/orders/{order_id}", dependencies=[Depends(require_permission("crm:write"))])
 async def update_portal_order(
     order_id: uuid.UUID,
     payload: OrderStatusUpdate,
@@ -318,7 +322,7 @@ async def list_portal_appointments(
     return result
 
 
-@router.patch("/appointments/{appt_id}")
+@router.patch("/appointments/{appt_id}", dependencies=[Depends(require_permission("crm:write"))])
 async def update_portal_appointment(
     appt_id: uuid.UUID,
     payload: ApptStatusUpdate,
@@ -663,7 +667,7 @@ WORKFLOW_TRANSITIONS: dict[str, list[str]] = {
 }
 
 
-@router.patch("/orders/{order_id}/workflow")
+@router.patch("/orders/{order_id}/workflow", dependencies=[Depends(require_permission("crm:write"))])
 async def change_workflow_status(
     order_id: uuid.UUID, payload: ChangeWorkflowPayload, db: DBSession
 ) -> dict:
@@ -714,7 +718,7 @@ async def change_workflow_status(
 # ── PATCH item quantity ────────────────────────────────────────────────────────
 
 
-@router.patch("/orders/{order_id}/items/{item_id}/quantity")
+@router.patch("/orders/{order_id}/items/{item_id}/quantity", dependencies=[Depends(require_permission("crm:write"))])
 async def edit_item_quantity(
     order_id: uuid.UUID, item_id: uuid.UUID, payload: EditQuantityPayload, db: DBSession
 ) -> dict:
@@ -759,7 +763,7 @@ async def edit_item_quantity(
 # ── POST substitute item ──────────────────────────────────────────────────────
 
 
-@router.post("/orders/{order_id}/items/{item_id}/substitute")
+@router.post("/orders/{order_id}/items/{item_id}/substitute", dependencies=[Depends(require_permission("crm:write"))])
 async def substitute_item(
     order_id: uuid.UUID, item_id: uuid.UUID, payload: SubstitutePayload, db: DBSession
 ) -> dict:
@@ -820,7 +824,7 @@ async def substitute_item(
 # ── POST add item ─────────────────────────────────────────────────────────────
 
 
-@router.post("/orders/{order_id}/items")
+@router.post("/orders/{order_id}/items", dependencies=[Depends(require_permission("crm:write"))])
 async def add_item_to_order(order_id: uuid.UUID, payload: AddItemPayload, db: DBSession) -> dict:
     from app.models.catalog import Product
 
@@ -866,7 +870,7 @@ async def add_item_to_order(order_id: uuid.UUID, payload: AddItemPayload, db: DB
 # ── DELETE remove item ────────────────────────────────────────────────────────
 
 
-@router.delete("/orders/{order_id}/items/{item_id}")
+@router.delete("/orders/{order_id}/items/{item_id}", dependencies=[Depends(require_permission("crm:write"))])
 async def remove_item_from_order(
     order_id: uuid.UUID, item_id: uuid.UUID, payload: RemoveItemPayload, db: DBSession
 ) -> dict:
@@ -916,7 +920,7 @@ async def remove_item_from_order(
 # ── POST apply discount ───────────────────────────────────────────────────────
 
 
-@router.post("/orders/{order_id}/discount")
+@router.post("/orders/{order_id}/discount", dependencies=[Depends(require_permission("crm:write"))])
 async def apply_discount(order_id: uuid.UUID, payload: DiscountPayload, db: DBSession) -> dict:
     order = (
         await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
@@ -941,7 +945,7 @@ async def apply_discount(order_id: uuid.UUID, payload: DiscountPayload, db: DBSe
 # ── PATCH shipping address ────────────────────────────────────────────────────
 
 
-@router.patch("/orders/{order_id}/shipping-address")
+@router.patch("/orders/{order_id}/shipping-address", dependencies=[Depends(require_permission("crm:write"))])
 async def change_shipping_address(
     order_id: uuid.UUID, payload: AddressPayload, db: DBSession
 ) -> dict:
@@ -966,7 +970,7 @@ async def change_shipping_address(
 # ── PATCH notes ───────────────────────────────────────────────────────────────
 
 
-@router.patch("/orders/{order_id}/notes")
+@router.patch("/orders/{order_id}/notes", dependencies=[Depends(require_permission("crm:write"))])
 async def update_order_notes(order_id: uuid.UUID, payload: NotesPayload, db: DBSession) -> dict:
     order = (
         await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
@@ -994,7 +998,7 @@ async def update_order_notes(order_id: uuid.UUID, payload: NotesPayload, db: DBS
 # ── POST confirm customer approval ────────────────────────────────────────────
 
 
-@router.post("/orders/{order_id}/confirm-customer-approval")
+@router.post("/orders/{order_id}/confirm-customer-approval", dependencies=[Depends(require_permission("crm:write"))])
 async def confirm_customer_approval(
     order_id: uuid.UUID, payload: ConfirmApprovalPayload, db: DBSession
 ) -> dict:
@@ -1021,7 +1025,7 @@ async def confirm_customer_approval(
 # ── POST mark notifications sent ──────────────────────────────────────────────
 
 
-@router.post("/orders/{order_id}/notifications/mark-sent")
+@router.post("/orders/{order_id}/notifications/mark-sent", dependencies=[Depends(require_permission("crm:write"))])
 async def mark_notifications_sent(
     order_id: uuid.UUID, payload: MarkSentPayload, db: DBSession
 ) -> dict:
@@ -1048,7 +1052,7 @@ async def mark_notifications_sent(
 # ── POST cancel order ─────────────────────────────────────────────────────────
 
 
-@router.post("/orders/{order_id}/cancel")
+@router.post("/orders/{order_id}/cancel", dependencies=[Depends(require_permission("crm:write"))])
 async def cancel_order(order_id: uuid.UUID, payload: CancelOrderPayload, db: DBSession) -> dict:
     order = (
         await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
@@ -1139,7 +1143,7 @@ async def get_appointment_detail(appt_id: uuid.UUID, db: DBSession) -> dict:
     }
 
 
-@router.patch("/appointments/{appt_id}/reschedule")
+@router.patch("/appointments/{appt_id}/reschedule", dependencies=[Depends(require_permission("crm:write"))])
 async def reschedule_appointment(
     appt_id: uuid.UUID, payload: RescheduleApptPayload, db: DBSession
 ) -> dict:
@@ -1185,7 +1189,7 @@ async def reschedule_appointment(
     }
 
 
-@router.patch("/appointments/{appt_id}/confirm-choice")
+@router.patch("/appointments/{appt_id}/confirm-choice", dependencies=[Depends(require_permission("crm:write"))])
 async def confirm_appt_customer_choice(
     appt_id: uuid.UUID, payload: ConfirmApptChoicePayload, db: DBSession
 ) -> dict:
@@ -1213,7 +1217,7 @@ async def confirm_appt_customer_choice(
     return {"ok": True}
 
 
-@router.patch("/appointments/{appt_id}/complete")
+@router.patch("/appointments/{appt_id}/complete", dependencies=[Depends(require_permission("crm:write"))])
 async def complete_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
     appt = (
         await db.execute(select(Appointment).where(Appointment.id == appt_id))
@@ -1228,7 +1232,7 @@ async def complete_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
     return {"ok": True}
 
 
-@router.patch("/appointments/{appt_id}/no-show")
+@router.patch("/appointments/{appt_id}/no-show", dependencies=[Depends(require_permission("crm:write"))])
 async def no_show_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
     appt = (
         await db.execute(select(Appointment).where(Appointment.id == appt_id))
@@ -1331,7 +1335,7 @@ class MarkNotifPayload(BaseModel):
     channel: str = "whatsapp"
 
 
-@router.post("/notifications/{notif_id}/mark-sent")
+@router.post("/notifications/{notif_id}/mark-sent", dependencies=[Depends(require_permission("crm:write"))])
 async def mark_notification_sent(
     notif_id: uuid.UUID,
     payload: MarkNotifPayload,
@@ -1359,7 +1363,7 @@ async def mark_notification_sent(
     return {"ok": True, "status": "sent_by_admin", "sent_at": notif.sent_at.isoformat()}
 
 
-@router.post("/notifications/{notif_id}/skip")
+@router.post("/notifications/{notif_id}/skip", dependencies=[Depends(require_permission("crm:write"))])
 async def skip_notification(notif_id: uuid.UUID, db: DBSession) -> dict:
     """Omite una notificación pendiente (Diego decidió no enviar este mensaje)."""
     notif = (
