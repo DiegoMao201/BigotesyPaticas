@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2, LocateFixed, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Loader2, LocateFixed, CheckCircle2, Camera, ImagePlus } from 'lucide-react';
 import { sos, type SOSReportInput } from '@/lib/api';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useAuthStore } from '@/lib/auth-store';
@@ -26,17 +26,25 @@ export default function ReportSOSPage() {
     contact_phone: customer?.phone ?? '',
     radius_km: 5,
   });
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   const set = <K extends keyof SOSReportInput>(k: K, v: SOSReportInput[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  const { mutate, isPending } = useMutation({
+  function handlePhotoFile(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return toast.error('Selecciona una imagen (JPEG, PNG o WebP)');
+    if (file.size > 5 * 1024 * 1024) return toast.error('La imagen no debe superar 5 MB');
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  }
+
+  const { mutateAsync } = useMutation({
     mutationFn: (data: SOSReportInput) => sos.report(data),
-    onSuccess: (event) => {
-      toast.success('🐾 Reporte publicado — la comunidad ya fue notificada');
-      router.push(`/sos/${event.id}`);
-    },
-    onError: (err: Error) => toast.error(err.message ?? 'No se pudo publicar el reporte'),
   });
 
   async function handleSubmit(e: React.FormEvent) {
@@ -54,11 +62,27 @@ export default function ReportSOSPage() {
       }
     }
 
-    mutate({
-      ...(form as SOSReportInput),
-      last_seen_lat: loc.lat,
-      last_seen_lng: loc.lng,
-    });
+    setSubmitting(true);
+    try {
+      const event = await mutateAsync({
+        ...(form as SOSReportInput),
+        last_seen_lat: loc.lat,
+        last_seen_lng: loc.lng,
+      });
+      if (photoFile) {
+        try {
+          await sos.uploadPhoto(event.id, photoFile);
+        } catch {
+          toast.error('El reporte se publicó, pero la foto no se pudo subir. Puedes agregarla desde el detalle.');
+        }
+      }
+      toast.success('🐾 Reporte publicado — la comunidad ya fue notificada');
+      router.push(`/sos/${event.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo publicar el reporte');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -77,6 +101,63 @@ export default function ReportSOSPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <div>
+          <label className="text-xs font-semibold text-muted uppercase tracking-wide mb-1.5 block">
+            Foto de tu mascota
+          </label>
+          <div
+            className="rounded-2xl border-2 border-dashed flex flex-col items-center justify-center py-6 gap-3 relative overflow-hidden"
+            style={{ borderColor: '#e8433a60' }}
+          >
+            {photoPreview ? (
+              <div className="relative h-28 w-28 rounded-2xl overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photoPreview} alt="Foto de la mascota" className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="h-14 w-14 rounded-2xl flex items-center justify-center" style={{ background: '#FDEEE9' }}>
+                  <ImagePlus className="h-7 w-7" style={{ color: '#e8433a' }} />
+                </div>
+                <p className="font-semibold text-foreground text-sm">Sube una foto para identificarla más fácil</p>
+                <p className="text-muted text-xs">Opcional pero muy recomendado · máx 5 MB</p>
+              </div>
+            )}
+            <input
+              ref={galleryRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handlePhotoFile(e.target.files?.[0])}
+            />
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => handlePhotoFile(e.target.files?.[0])}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <button
+              type="button"
+              onClick={() => galleryRef.current?.click()}
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm border-2 border-border bg-white text-muted"
+            >
+              <ImagePlus className="h-4 w-4" /> Galería
+            </button>
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm border-2"
+              style={{ borderColor: '#e8433a', color: '#c62f28' }}
+            >
+              <Camera className="h-4 w-4" /> Cámara
+            </button>
+          </div>
+        </div>
+
         <div>
           <label className="text-xs font-semibold text-muted uppercase tracking-wide mb-1.5 block">Nombre *</label>
           <input
@@ -202,8 +283,8 @@ export default function ReportSOSPage() {
           {geoError && <p className="text-xs text-red-600 mt-1.5">{geoError}</p>}
         </div>
 
-        <button type="submit" disabled={isPending} className="sos-submit-btn">
-          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : '🐾 Publicar reporte'}
+        <button type="submit" disabled={submitting} className="sos-submit-btn">
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : '🐾 Publicar reporte'}
         </button>
       </form>
     </div>

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Phone, MessageCircle, MapPin, Gift, Eye,
-  CheckCircle2, Loader2, PartyPopper,
+  CheckCircle2, Loader2, PartyPopper, ImagePlus,
 } from 'lucide-react';
 import { sos } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
@@ -23,11 +23,28 @@ export default function SOSDetailPage() {
 
   const [showSightingForm, setShowSightingForm] = useState(false);
   const [note, setNote] = useState('');
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const { data: event, isLoading } = useQuery({
     queryKey: ['sos-detail', id],
     queryFn: () => sos.get(id),
   });
+
+  const { mutate: uploadPhoto, isPending: uploadingPhoto } = useMutation({
+    mutationFn: (file: File) => sos.uploadPhoto(id, file),
+    onSuccess: () => {
+      toast.success('📷 Foto agregada');
+      qc.invalidateQueries({ queryKey: ['sos-detail', id] });
+    },
+    onError: (err: Error) => toast.error(err.message ?? 'No se pudo subir la foto'),
+  });
+
+  function handlePhotoFile(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return toast.error('Selecciona una imagen (JPEG, PNG o WebP)');
+    if (file.size > 5 * 1024 * 1024) return toast.error('La imagen no debe superar 5 MB');
+    uploadPhoto(file);
+  }
 
   const { mutate: sendSighting, isPending: sendingSighting } = useMutation({
     mutationFn: async () => {
@@ -108,13 +125,37 @@ export default function SOSDetailPage() {
             </div>
           </div>
 
-          {event.photos.length > 1 && (
+          {(event.photos.length > 1 || (isReporter && isActive)) && (
             <div className="flex gap-2 overflow-x-auto scrollbar-hide">
               {event.photos.slice(1).map((url) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img key={url} src={url} alt={event.pet_name} className="h-16 w-16 rounded-xl object-cover shrink-0" />
               ))}
+              {isReporter && isActive && (
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                  className="h-16 w-16 rounded-xl border-2 border-dashed flex items-center justify-center shrink-0"
+                  style={{ borderColor: '#e8433a60' }}
+                >
+                  {uploadingPhoto ? (
+                    <Loader2 className="h-5 w-5 animate-spin" style={{ color: '#e8433a' }} />
+                  ) : (
+                    <ImagePlus className="h-5 w-5" style={{ color: '#e8433a' }} />
+                  )}
+                </button>
+              )}
             </div>
+          )}
+          {isReporter && isActive && (
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handlePhotoFile(e.target.files?.[0])}
+            />
           )}
 
           <div className="flex flex-col gap-1.5 text-xs text-muted pt-1 border-t border-border">
