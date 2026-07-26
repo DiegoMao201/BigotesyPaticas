@@ -170,6 +170,35 @@ async def list_portal_orders(
     return result
 
 
+# Estados de workflow_status que aún requieren gestión del admin (todo lo que no es terminal)
+PENDING_WORKFLOW_STATUSES = [
+    "received",
+    "under_review",
+    "awaiting_customer",
+    "ready_to_invoice",
+    "invoiced",
+    "in_preparation",
+    "ready_for_delivery",
+    "in_transit",
+]
+
+
+@router.get("/orders/pending-summary")
+async def pending_orders_summary(db: DBSession) -> dict:
+    """Resumen liviano para el aviso global de pedidos del portal sin gestionar."""
+    rows = (
+        await db.execute(
+            select(PortalOrder.id, PortalOrder.created_at)
+            .where(PortalOrder.workflow_status.in_(PENDING_WORKFLOW_STATUSES))
+            .order_by(PortalOrder.created_at.desc())
+        )
+    ).all()
+    return {
+        "count": len(rows),
+        "newest_created_at": rows[0].created_at.isoformat() if rows else None,
+    }
+
+
 @router.patch("/orders/{order_id}", dependencies=[Depends(require_permission("crm:write"))])
 async def update_portal_order(
     order_id: uuid.UUID,

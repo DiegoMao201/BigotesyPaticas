@@ -1357,6 +1357,10 @@ export const adminPortal = {
     api<{ ok: boolean }>(`/v1/admin/portal/orders/${orderId}/cancel`,
       { method: 'POST', body: JSON.stringify({ reason }) }),
 
+  // Aviso global de pedidos del portal sin gestionar (popup cada 10 min)
+  pendingOrdersSummary: () =>
+    api<{ count: number; newest_created_at: string | null }>('/v1/admin/portal/orders/pending-summary'),
+
   // Sprint 5.2: notificaciones pendientes (modal WhatsApp admin)
   pendingNotifications: (minAgeMinutes = 0) =>
     api<PendingNotification[]>(`/v1/admin/portal/notifications/pending?min_age_minutes=${minAgeMinutes}`),
