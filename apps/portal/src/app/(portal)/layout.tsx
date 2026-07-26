@@ -7,6 +7,7 @@ import { auth } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { BottomNav } from '@/components/ui/bottom-nav';
 import { WhatsAppButton } from '@/components/ui/whatsapp-button';
+import { SOSButton } from '@/components/ui/sos-button';
 import { CartButton } from '@/components/cart/CartButton';
 import { PageLoader } from '@/components/ui/loading-spinner';
 import { TermsModal } from '@/components/portal/TermsModal';
@@ -42,6 +43,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       {children}
       <CartButton />
       <BottomNav />
+      <SOSButton />
       <WhatsAppButton />
 
       {/* Modal de términos — solo primera vez */}
