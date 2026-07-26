@@ -16,7 +16,7 @@ export function generateContextualMessage(
 ): string {
   if (cart.items.length > 0) {
     const total = cart.subtotal();
-    const envio = total >= 30000 ? 0 : 8000;
+    const envio = total >= 30000 ? 0 : 3000;
     const lines = cart.items
       .map(
         (i) =>

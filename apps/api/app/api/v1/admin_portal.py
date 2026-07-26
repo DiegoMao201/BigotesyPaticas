@@ -550,7 +550,7 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
 
     subtotal = sum(float(i.subtotal or 0) for i in items)
     discount = float(order.discount_amount or 0)
-    shipping = 0.0 if subtotal >= 30000 else 8000.0
+    shipping = 0.0 if subtotal >= 30000 else 3000.0
     total = subtotal - discount + shipping
 
     customer = (

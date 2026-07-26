@@ -19,7 +19,7 @@ export function CartDrawer({ open, onClose }: Props) {
   const updateQuantity = usePortalCart((s) => s.updateQuantity);
   const removeItem = usePortalCart((s) => s.removeItem);
 
-  const shipping = isFreeShipping ? 0 : 8000;
+  const shipping = isFreeShipping ? 0 : 3000;
   const missingForFree = Math.max(0, 30000 - subtotal);
 
   function goToCheckout() {

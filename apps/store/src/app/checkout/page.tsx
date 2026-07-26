@@ -10,7 +10,7 @@ import { MessageCircle, ArrowLeft, Package, ShoppingBag, CheckCircle } from 'luc
 import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
 
 const FREE_SHIPPING_THRESHOLD = 30_000;
-const SHIPPING_COST = 8_000;
+const SHIPPING_COST = 3_000;
 
 function buildWhatsAppMessage(
   items: { name: string; quantity: number; price: number }[],

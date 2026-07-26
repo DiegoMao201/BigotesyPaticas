@@ -45,7 +45,7 @@ export default function PedidoPage() {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [generalNotes, setGeneralNotes] = useState('');
 
-  const shipping = isFreeShipping ? 0 : 8000;
+  const shipping = isFreeShipping ? 0 : 3000;
   const total = subtotal + shipping;
 
   const mutation = useMutation({

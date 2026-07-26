@@ -39,7 +39,7 @@ export default function CartPage() {
     .filter((p: { id: string }) => !items.find((i) => i.productId === p.id))
     .slice(0, 4);
 
-  const shipping = subtotal >= 30000 ? 0 : 8000;
+  const shipping = subtotal >= 30000 ? 0 : 3000;
   const total = subtotal + shipping;
 
   const shareCart = () => {

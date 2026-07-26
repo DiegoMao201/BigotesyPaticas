@@ -214,7 +214,7 @@ async def create_multi_order(
     subtotal = sum(
         float(products_map[uuid.UUID(i.product_id)].price or 0) * i.quantity for i in payload.items
     )
-    shipping = 0 if subtotal >= 30000 else 8000
+    shipping = 0 if subtotal >= 30000 else 3000
     _total = subtotal + shipping
     points_to_earn = int(subtotal / 1000)
 
@@ -453,7 +453,7 @@ async def order_timeline(
 
     subtotal = sum(float(i.subtotal or 0) for i in items)
     discount = float(order.discount_amount or 0) if hasattr(order, "discount_amount") else 0.0
-    shipping = 0.0 if subtotal >= 30000 else 8000.0
+    shipping = 0.0 if subtotal >= 30000 else 3000.0
     total = subtotal - discount + shipping
 
     ws = getattr(order, "workflow_status", order.status)

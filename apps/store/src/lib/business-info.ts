@@ -76,7 +76,7 @@ export const BUSINESS_INFO = {
 
   shipping: {
     freeShippingMinimum: 30000,
-    standardShippingCost: 8000,
+    standardShippingCost: 3000,
     transitDaysMin: 1,
     transitDaysMax: 3,
     handlingDaysMin: 0,
