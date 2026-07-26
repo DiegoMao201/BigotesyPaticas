@@ -13,6 +13,7 @@ import { PageLoader } from '@/components/ui/loading-spinner';
 import { TermsModal } from '@/components/portal/TermsModal';
 import { GoogleReviewPrompt } from '@/components/reviews/GoogleReviewPrompt';
 import { NotificationBell } from '@/components/portal/NotificationBell';
+import { LocationTracker } from '@/components/portal/LocationTracker';
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -35,6 +36,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="min-h-screen pb-24" style={{ background: 'transparent' }}>
+      <LocationTracker />
+
       {/* Campana de notificaciones — esquina superior derecha */}
       <div className="fixed top-3 right-3 z-30">
         <NotificationBell />
