@@ -133,8 +133,15 @@
   /* Completion banner */
   .completion-banner {
     @apply rounded-2xl p-4;
-    background: linear-gradient(135deg, #534AB7, #7c5cbf);
-    box-shadow: 0 4px 20px rgba(83, 74, 183, 0.25);
+    background: linear-gradient(135deg, #d85a30, #a8431f);
+    box-shadow: 0 4px 20px rgba(216, 90, 48, 0.28);
+  }
+
+  /* Card "VIP" oscuro de marca — puntos, resúmenes destacados */
+  .brand-dark-card {
+    @apply rounded-2xl p-4;
+    background: linear-gradient(150deg, #0d4a45 0%, #073934 55%, #04211e 100%);
+    box-shadow: 0 6px 28px rgba(5, 35, 32, 0.35);
   }
 }
 

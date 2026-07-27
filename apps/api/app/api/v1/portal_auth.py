@@ -114,6 +114,8 @@ class MeResponse(BaseModel):
     terms_accepted_at: str | None = None
     data_consent_at: str | None = None
     referral_code: str | None = None
+    notification_prefs: dict = {}
+    sos_radius_km: int = 5
 
 
 class AcceptTermsRequest(BaseModel):
@@ -346,6 +348,8 @@ def _me_response(customer: Customer) -> MeResponse:
         else None,
         data_consent_at=customer.data_consent_at.isoformat() if customer.data_consent_at else None,
         referral_code=customer.referral_code,
+        notification_prefs=customer.notification_prefs or {},
+        sos_radius_km=customer.sos_radius_km,
     )
 
 

@@ -89,18 +89,28 @@ export default function DashboardPage() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-start justify-between"
       >
+        <div className="flex items-center gap-1.5 mb-2">
+          <Logo size={18} />
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: theme.accent }}
+          >
+            Bigotes y Paticas
+          </span>
+        </div>
+
+        <div className="flex items-start justify-between">
         <div>
           <p className="text-muted text-sm font-medium">{saludo},</p>
           <h1
-            className="font-display text-[22px] font-semibold leading-tight"
+            className="font-display text-[30px] font-extrabold leading-[1.05] tracking-tight"
             style={{ color: theme.dark }}
           >
             {nombre} 🐾
           </h1>
           {urgentAlerts > 0 && (
-            <p className="text-xs mt-0.5 font-medium" style={{ color: theme.accent }}>
+            <p className="text-xs mt-1 font-semibold" style={{ color: theme.accent }}>
               Tienes {urgentAlerts} alerta{urgentAlerts !== 1 ? 's' : ''} pendiente{urgentAlerts !== 1 ? 's' : ''}
             </p>
           )}
@@ -116,6 +126,7 @@ export default function DashboardPage() {
             {customer?.full_name?.[0]?.toUpperCase() ?? '?'}
           </motion.div>
         </Link>
+        </div>
       </motion.div>
 
       {/* ── Selector de mascotas ───────────────────────────────────────── */}
@@ -249,30 +260,36 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="rounded-2xl p-4"
-          style={{
-            background: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-          }}
+          className="brand-dark-card relative overflow-hidden"
         >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2.5">
-              <div className="h-9 w-9 rounded-xl bg-white/15 flex items-center justify-center">
-                <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-              </div>
-              <div>
-                <p className="text-white/70 text-[10px] font-semibold uppercase tracking-wide">Puntos Bigotes</p>
-                <p className="text-white text-2xl font-bold leading-none count-up">{loyaltyData.total_active.toLocaleString('es-CO')}</p>
-              </div>
+          {/* Textura de marca — huellas sutiles */}
+          <div
+            className="absolute inset-0 opacity-[0.06] pointer-events-none"
+            style={{
+              backgroundImage:
+                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='%23ffffff'%3E%3Cellipse cx='26' cy='20' rx='5' ry='7'/%3E%3Cellipse cx='38' cy='16' rx='4' ry='6'/%3E%3Cellipse cx='49' cy='20' rx='4' ry='6'/%3E%3Cellipse cx='57' cy='30' rx='4' ry='5'/%3E%3Cellipse cx='38' cy='38' rx='10' ry='13'/%3E%3C/g%3E%3C/svg%3E\")",
+              backgroundSize: '80px 80px',
+            }}
+          />
+          <div className="relative flex items-center justify-between mb-3">
+            <p className="text-white/60 text-[10px] font-bold uppercase tracking-[0.12em]">
+              Puntos Bigotes
+            </p>
+            <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center">
+              <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
             </div>
+          </div>
+          <div className="relative flex items-end justify-between">
+            <p className="text-white text-4xl font-display font-extrabold leading-none count-up tracking-tight">
+              {loyaltyData.total_active.toLocaleString('es-CO')}
+            </p>
             <div className="text-right">
-              <p className="text-white/60 text-[10px] uppercase tracking-wide">Próximo premio</p>
+              <p className="text-white/50 text-[10px] uppercase tracking-wide">Próximo premio</p>
               <p className="text-amber-400 font-bold text-sm">$15.000 off</p>
-              <p className="text-white/50 text-[10px]">{ptsToNextPrize} pts más</p>
             </div>
           </div>
           {/* Barra de progreso */}
-          <div className="h-2 rounded-full bg-white/10 overflow-hidden mt-1">
+          <div className="relative h-2 rounded-full bg-white/10 overflow-hidden mt-3">
             <motion.div
               className="h-full rounded-full"
               style={{ background: 'linear-gradient(90deg, #f5a641, #fbbf24)' }}
@@ -281,6 +298,7 @@ export default function DashboardPage() {
               transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
             />
           </div>
+          <p className="relative text-white/50 text-[10px] mt-1.5">{ptsToNextPrize} puntos más para tu próximo premio</p>
         </motion.div>
       )}
 
@@ -298,26 +316,36 @@ export default function DashboardPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25 }}
-        className="grid grid-cols-3 gap-3"
+        className="grid grid-cols-2 gap-3"
       >
         {[
-          { href: '/pets', emoji: '🐾', label: 'Mascotas' },
-          { href: '/orders/new', emoji: '📦', label: 'Pedir' },
-          { href: '/appointments/new', emoji: '📅', label: 'Cita' },
-          { href: '/dashboard/invitar', emoji: '🎁', label: 'Invitar' },
-        ].map(({ href, emoji, label }, i) => (
+          { href: '/pets', emoji: '🐾', label: 'Mascotas', sub: 'Salud y carnet', grad: 'linear-gradient(135deg,#1ea89e,#085041)' },
+          { href: '/orders/new', emoji: '📦', label: 'Pedir', sub: 'Alimento y más', grad: 'linear-gradient(135deg,#ff8a5c,#c2410c)' },
+          { href: '/appointments/new', emoji: '📅', label: 'Agendar cita', sub: 'Baño, vacunas...', grad: 'linear-gradient(135deg,#f5b942,#b8760a)' },
+          { href: '/dashboard/invitar', emoji: '🎁', label: 'Invitar', sub: 'Gana puntos', grad: 'linear-gradient(150deg,#0d4a45,#062e2a)' },
+        ].map(({ href, emoji, label, sub, grad }, i) => (
           <motion.div
             key={href}
-            whileHover={{ y: -2, scale: 1.02 }}
-            whileTap={{ scale: 0.96 }}
-            transition={{ type: 'spring', stiffness: 400 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.28 + i * 0.05 }}
+            whileHover={{ y: -3 }}
+            whileTap={{ scale: 0.97 }}
           >
             <Link
               href={href}
-              className="card-glass flex flex-col items-center gap-2 py-5 transition-shadow hover:shadow-card-hover"
+              className="relative flex flex-col gap-3 rounded-2xl bg-white p-4 overflow-hidden shadow-card transition-shadow hover:shadow-card-hover"
             >
-              <span className="text-2xl">{emoji}</span>
-              <span className="text-xs font-semibold" style={{ color: theme.dark }}>{label}</span>
+              <div
+                className="h-11 w-11 rounded-xl flex items-center justify-center text-xl shrink-0 shadow-sm"
+                style={{ background: grad }}
+              >
+                {emoji}
+              </div>
+              <div className="min-w-0">
+                <p className="font-display font-bold text-[15px] leading-tight text-foreground">{label}</p>
+                <p className="text-muted text-[11px] mt-0.5 truncate">{sub}</p>
+              </div>
             </Link>
           </motion.div>
         ))}

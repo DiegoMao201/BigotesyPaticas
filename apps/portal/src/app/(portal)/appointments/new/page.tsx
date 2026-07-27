@@ -7,10 +7,11 @@ import { DayPicker } from 'react-day-picker';
 import { es } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2, CalendarDays, Clock } from 'lucide-react';
+import { Loader2, CalendarDays, Clock } from 'lucide-react';
 import { appointments, pets } from '@/lib/api';
 import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
 import { getSpeciesEmoji, cn } from '@/lib/utils';
+import { PageHeader } from '@/components/ui/page-header';
 import 'react-day-picker/dist/style.css';
 
 const SERVICES = [
@@ -94,13 +95,7 @@ export default function NewAppointmentPage() {
 
   return (
     <div className="p-4 pt-6 pb-8 flex flex-col gap-5">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => router.back()} className="p-2 -ml-2 rounded-xl hover:bg-gray-100">
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <h1 className="font-display text-xl font-bold text-foreground">Solicitar cita</h1>
-      </div>
+      <PageHeader title="Solicitar cita" subtitle="Baño, grooming o consulta veterinaria" back />
 
       {/* Paso 1: Mascota */}
       {petsData && petsData.length > 0 && (

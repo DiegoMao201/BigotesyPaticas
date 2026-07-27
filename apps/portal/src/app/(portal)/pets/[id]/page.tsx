@@ -65,7 +65,10 @@ export default function PetDetailPage() {
   return (
     <div data-pet-theme={pet.color_theme} className="flex flex-col">
       {/* Header con color de mascota */}
-      <div className="px-4 pt-10 pb-8 rounded-b-3xl" style={{ backgroundColor: theme.primary }}>
+      <div
+        className="px-4 pt-10 pb-8 rounded-b-3xl"
+        style={{ background: `linear-gradient(160deg, ${theme.primary}, ${theme.dark})` }}
+      >
         {/* Barra superior: atrás + descargar */}
         <div className="flex items-center justify-between mb-6">
           <button

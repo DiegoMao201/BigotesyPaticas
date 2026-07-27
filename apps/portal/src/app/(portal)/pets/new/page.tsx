@@ -4,10 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { pets, type PetCreate } from '@/lib/api';
 import { PET_THEME_COLORS } from '@/lib/pet-store';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/ui/page-header';
 
 const SPECIES = [
   { value: 'perro', emoji: '🐶', label: 'Perro' },
@@ -48,12 +49,7 @@ export default function NewPetPage() {
 
   return (
     <div className="p-4 pt-6 flex flex-col gap-5">
-      <div className="flex items-center gap-3">
-        <button onClick={() => router.back()} className="p-2 -ml-2 rounded-xl hover:bg-gray-100">
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <h1 className="font-display text-xl font-bold text-foreground">Nueva mascota</h1>
-      </div>
+      <PageHeader title="Nueva mascota" subtitle="Lleva su carnet y salud al día" back />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* Nombre */}

@@ -253,8 +253,11 @@ export default function NewOrderPage() {
   return (
     <div className="flex flex-col">
       {/* Header teal */}
-      <div className="bg-primary-700 px-5 pt-8 pb-6 text-white">
-        <h1 className="font-display text-2xl font-bold">¿Qué quieres pedir hoy?</h1>
+      <div
+        className="px-5 pt-8 pb-6 text-white rounded-b-3xl"
+        style={{ background: 'linear-gradient(160deg, #187f77, #085041)' }}
+      >
+        <h1 className="font-display text-2xl font-extrabold tracking-tight">¿Qué quieres pedir hoy?</h1>
         <p className="text-primary-100 text-sm mt-1">Lo que más compras está aquí abajo</p>
       </div>
 
@@ -298,11 +301,14 @@ export default function NewOrderPage() {
                     />
                   ))
                 : topProducts.map((prod) => (
-                    <motion.button
+                    <motion.div
                       key={prod.id}
+                      role="button"
+                      tabIndex={0}
                       whileTap={{ scale: 0.96 }}
                       onClick={() => selectProduct(prod as any)}
-                      className="min-w-[130px] flex flex-col rounded-2xl border border-border bg-white shadow-sm overflow-hidden shrink-0 text-left hover:shadow-card-hover transition-shadow"
+                      onKeyDown={(e) => e.key === 'Enter' && selectProduct(prod as any)}
+                      className="min-w-[130px] flex flex-col rounded-2xl border border-border bg-white shadow-sm overflow-hidden shrink-0 text-left hover:shadow-card-hover transition-shadow cursor-pointer"
                     >
                       <div className="h-20 bg-gray-50 flex items-center justify-center overflow-hidden">
                         {prod.image_url ? (
@@ -332,7 +338,7 @@ export default function NewOrderPage() {
                           🛒 Carrito
                         </button>
                       </div>
-                    </motion.button>
+                    </motion.div>
                   ))}
             </div>
           </div>
@@ -367,13 +373,16 @@ export default function NewOrderPage() {
                 </div>
               )}
               {filteredProducts.map((product, i) => (
-                <motion.button
+                <motion.div
                   key={product.id}
+                  role="button"
+                  tabIndex={0}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03 }}
                   onClick={() => selectProduct(product)}
-                  className="card flex items-center gap-4 py-3 text-left hover:shadow-card-hover transition-shadow active:scale-[0.98]"
+                  onKeyDown={(e) => e.key === 'Enter' && selectProduct(product)}
+                  className="card flex items-center gap-4 py-3 text-left hover:shadow-card-hover transition-shadow active:scale-[0.98] cursor-pointer"
                 >
                   <div className="h-12 w-12 rounded-xl bg-primary-50 flex items-center justify-center text-2xl shrink-0 overflow-hidden">
                     {product.image_url ? (
@@ -408,7 +417,7 @@ export default function NewOrderPage() {
                       🛒 Carrito
                     </button>
                   </div>
-                </motion.button>
+                </motion.div>
               ))}
               {!catalogLoading && filteredProducts.length === 0 && (
                 <div className="text-center py-6 text-muted">

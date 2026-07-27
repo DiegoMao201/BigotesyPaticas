@@ -54,6 +54,8 @@ export interface MeResponse {
   terms_accepted_at: string | null;
   data_consent_at: string | null;
   referral_code: string | null;
+  notification_prefs: { sos?: boolean; promos?: boolean; appointments?: boolean };
+  sos_radius_km: number;
 }
 
 export const auth = {

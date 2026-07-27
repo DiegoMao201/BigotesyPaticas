@@ -149,14 +149,14 @@ export function ProfileCompletion() {
                 ) : (
                   <motion.div key="form" className="flex flex-col gap-4">
                     <div>
-                      <div className="h-10 w-10 rounded-xl bg-purple-100 flex items-center justify-center mb-3">
-                        <Sparkles className="h-5 w-5 text-purple-600" />
+                      <div className="h-10 w-10 rounded-xl bg-[#FAECE7] flex items-center justify-center mb-3">
+                        <Sparkles className="h-5 w-5 text-[#D85A30]" />
                       </div>
                       <h3 className="font-display font-bold text-foreground text-xl">
                         {activeField.label}
                       </h3>
                       <p className="text-muted text-sm mt-1">{activeField.reason}</p>
-                      <p className="text-purple-600 text-xs font-semibold mt-0.5">
+                      <p className="text-[#D85A30] text-xs font-semibold mt-0.5">
                         +{activeField.points_reward} pts al guardar
                       </p>
                     </div>
@@ -184,7 +184,7 @@ export function ProfileCompletion() {
                         disabled={!inputVal || isPending}
                         onClick={() => saveField(activeField)}
                         className="flex-1 py-3 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
-                        style={{ background: 'linear-gradient(135deg, #534AB7, #7c5cbf)' }}
+                        style={{ background: 'linear-gradient(135deg, #d85a30, #a8431f)' }}
                       >
                         {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Guardar →'}
                       </button>

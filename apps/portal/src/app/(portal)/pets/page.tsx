@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Plus, ChevronRight, AlertCircle, Download } from 'lucide-react';
@@ -8,10 +9,12 @@ import { pets } from '@/lib/api';
 import { PET_THEME_COLORS } from '@/lib/pet-store';
 import { getSpeciesEmoji } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { PageHeader } from '@/components/ui/page-header';
 
 import { Logo } from '@/components/brand/Logo';
 
 export default function PetsPage() {
+  const router = useRouter();
   const { data: petsData, isLoading } = useQuery({
     queryKey: ['portal-pets'],
     queryFn: pets.list,
@@ -21,12 +24,15 @@ export default function PetsPage() {
 
   return (
     <div className="p-4 pt-6 flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-bold text-foreground">Mis mascotas</h1>
-        <Link href="/pets/new" className="btn-primary py-2 px-4 text-xs">
-          <Plus className="h-4 w-4" /> Nueva
-        </Link>
-      </div>
+      <PageHeader
+        title="Mis mascotas"
+        subtitle={petsData && petsData.length > 0 ? `${petsData.length} registrada${petsData.length !== 1 ? 's' : ''}` : undefined}
+        action={
+          <Link href="/pets/new" className="btn-primary py-2 px-4 text-xs">
+            <Plus className="h-4 w-4" /> Nueva
+          </Link>
+        }
+      />
 
       {petsData?.length === 0 && (
         <div className="card flex flex-col items-center gap-4 py-12 text-center">
@@ -49,10 +55,16 @@ export default function PetsPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
             >
-              <Link href={`/pets/${pet.id}`} className="card flex items-center gap-4 py-4 hover:shadow-card-hover transition-shadow">
+              <div
+                role="link"
+                tabIndex={0}
+                onClick={() => router.push(`/pets/${pet.id}`)}
+                onKeyDown={(e) => e.key === 'Enter' && router.push(`/pets/${pet.id}`)}
+                className="card flex items-center gap-4 py-4 hover:shadow-card-hover transition-shadow cursor-pointer"
+              >
                 <div
-                  className="h-14 w-14 rounded-2xl flex items-center justify-center text-2xl shrink-0"
-                  style={{ backgroundColor: theme.light }}
+                  className="h-14 w-14 rounded-2xl flex items-center justify-center text-2xl shrink-0 shadow-sm"
+                  style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.dark})` }}
                 >
                   {getSpeciesEmoji(pet.species)}
                 </div>
@@ -96,7 +108,7 @@ export default function PetsPage() {
                   </a>
                   <ChevronRight className="h-5 w-5 text-muted" />
                 </div>
-              </Link>
+              </div>
             </motion.div>
           );
         })}
