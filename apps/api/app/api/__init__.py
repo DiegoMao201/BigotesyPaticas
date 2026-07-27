@@ -21,6 +21,7 @@ from app.api.v1 import (
     inventory_counts,
     landings,
     messenger,
+    partners_public,
     portal_appointments,
     portal_auth,
     portal_intelligence,
@@ -88,6 +89,8 @@ api_router.include_router(portal_location.router, prefix="/v1")
 api_router.include_router(admin_portal.router, prefix="/v1")
 # Fase 1 comunidad: SOS mascotas perdidas
 api_router.include_router(sos.router, prefix="/v1")
+# Fase 3 comunidad: directorio de aliados/servicios
+api_router.include_router(partners_public.router, prefix="/v1")
 # Sprint 5: reseñas de productos + GBP sync
 api_router.include_router(reviews.router)
 api_router.include_router(reviews.admin_router)

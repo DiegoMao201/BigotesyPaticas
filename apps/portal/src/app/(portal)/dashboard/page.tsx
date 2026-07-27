@@ -351,6 +351,24 @@ export default function DashboardPage() {
         ))}
       </motion.div>
 
+      {/* ── Directorio de aliados (Fase 3) ────────────────────────────── */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+        <Link
+          href="/servicios"
+          className="relative flex items-center gap-3 rounded-2xl p-4 overflow-hidden shadow-card hover:shadow-card-hover transition-shadow"
+          style={{ background: 'linear-gradient(135deg,#1ea89e,#085041)' }}
+        >
+          <div className="h-11 w-11 rounded-xl bg-white/15 flex items-center justify-center text-xl shrink-0">
+            🩺
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-display font-bold text-white text-[15px] leading-tight">Aliados cerca de ti</p>
+            <p className="text-white/75 text-[11px] mt-0.5">Veterinarias, paseadores, refugios y peluquerías</p>
+          </div>
+          <ChevronRight className="h-5 w-5 text-white/70 shrink-0" />
+        </Link>
+      </motion.div>
+
       {/* ── Actividad reciente ────────────────────────────────────────── */}
       {recentOrders && recentOrders.length > 0 && (
         <motion.div

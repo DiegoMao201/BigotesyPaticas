@@ -50,6 +50,11 @@
       "name": "Hacer un pedido",
       "url": "/orders/new",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Directorio de aliados",
+      "url": "/servicios",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

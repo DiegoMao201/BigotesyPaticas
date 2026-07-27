@@ -4,6 +4,7 @@ set -e
 alembic upgrade head
 python -m app.cli.seed
 python -m app.cli.seed_catalog
+python -m app.cli.seed_partners
 
 # Cron en background: publica posts y stories cada 5 min
 while true; do

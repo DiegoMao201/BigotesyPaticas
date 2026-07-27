@@ -110,6 +110,18 @@
     color: #085041;
   }
 
+  /* Hero de la sección Aliados/Servicios — teal de marca, misma forma que .sos-hero */
+  .partners-hero {
+    background: linear-gradient(145deg, #1ea89e 0%, #187f77 55%, #085041 100%);
+    border-radius: 0 0 28px 28px;
+    box-shadow: 0 8px 24px rgba(24, 127, 119, 0.25);
+  }
+  .partner-badge {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide;
+    background: #e1f5ee;
+    color: #085041;
+  }
+
   /* Input estilo portal */
   .input-field {
     @apply w-full rounded-xl border border-border bg-white px-4 py-3 text-sm

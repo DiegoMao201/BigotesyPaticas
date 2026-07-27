@@ -266,6 +266,71 @@ export const portalLocation = {
     ),
 };
 
+// ── Directorio de aliados/servicios (Fase 3) ────────────────────────────
+// Cuelga de /v1/partners/*, endpoint público (sin auth), por eso usa su propia base.
+
+const PARTNERS_BASE = '/api/v1/partners';
+
+async function requestPartners<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${PARTNERS_BASE}${path}`, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiError(res.status, body.detail ?? 'Error del servidor');
+  }
+  return res.json() as Promise<T>;
+}
+
+export type PartnerType = 'vet' | 'walker' | 'shelter' | 'groomer';
+
+export interface Partner {
+  id: string;
+  slug: string;
+  partner_type: PartnerType;
+  business_name: string;
+  city: string;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  logo_url: string | null;
+  cover_url: string | null;
+  bio: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  rating_avg: number;
+  rating_count: number;
+  verified: boolean;
+}
+
+export interface PartnerService {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  duration_min: number | null;
+  price: number | null;
+  price_type: 'fixed' | 'from' | 'quote';
+  category: string;
+  requires_pet: boolean;
+}
+
+export const partners = {
+  list: (params: { type?: PartnerType; city?: string; page?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.type) qs.set('type', params.type);
+    if (params.city) qs.set('city', params.city);
+    qs.set('page', String(params.page ?? 1));
+    return requestPartners<{ items: Partner[]; total: number; page: number; page_size: number }>(
+      `?${qs.toString()}`
+    );
+  },
+  get: (slug: string) => requestPartners<Partner>(`/${slug}`),
+  services: (slug: string) => requestPartners<PartnerService[]>(`/${slug}/services`),
+};
+
 // ── Orders ────────────────────────────────────────────────────────────
 
 export interface Order {
