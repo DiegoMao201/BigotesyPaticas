@@ -153,17 +153,19 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
             )
         stock.quantity -= item_in.quantity
 
-        pending_movements.append(StockMovement(
-            product_id=prod.id,
-            location_id=loc.id,
-            movement_type="SALE",
-            quantity_delta=-item_in.quantity,
-            quantity_after=stock.quantity,
-            unit_cost=unit_cost,
-            reference_type="ORDER",
-            occurred_at=occurred_at,
-            created_by=user.email,
-        ))
+        pending_movements.append(
+            StockMovement(
+                product_id=prod.id,
+                location_id=loc.id,
+                movement_type="SALE",
+                quantity_delta=-item_in.quantity,
+                quantity_after=stock.quantity,
+                unit_cost=unit_cost,
+                reference_type="ORDER",
+                occurred_at=occurred_at,
+                created_by=user.email,
+            )
+        )
 
     order.subtotal = subtotal
     order.discount_total = discount_total
@@ -378,10 +380,13 @@ async def list_orders(
     customer_ids = [o.customer_id for o in rows if o.customer_id]
     customers_map: dict = {}
     if customer_ids:
-        cust_rows = (await db.execute(
-            select(CRMCustomer.id, CRMCustomer.full_name, CRMCustomer.phone)
-            .where(CRMCustomer.id.in_(customer_ids))
-        )).all()
+        cust_rows = (
+            await db.execute(
+                select(CRMCustomer.id, CRMCustomer.full_name, CRMCustomer.phone).where(
+                    CRMCustomer.id.in_(customer_ids)
+                )
+            )
+        ).all()
         customers_map = {c.id: c for c in cust_rows}
 
     items = []
@@ -539,12 +544,13 @@ async def get_invoice_pdf(
     db: DBSession,
     user: CurrentUser,
 ):
-    """Genera factura/comprobante en PDF usando HTML puro (sin WeasyPrint)."""
+    """Genera el comprobante de venta en PDF real (WeasyPrint) con diseño de marca."""
+    from app.services.invoice_pdf import generate_invoice_pdf, render_invoice_html
+
     o = (await db.execute(select(Order).where(Order.id == order_id))).scalar_one_or_none()
     if o is None:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
 
-    # Customer name
     cust_name = "Consumidor Final"
     cust_doc = ""
     if o.customer_id:
@@ -557,249 +563,13 @@ async def get_invoice_pdf(
             cust_name = c.full_name or "Consumidor Final"
             cust_doc = c.document_id or ""
 
-    def compact_ref(sku: str) -> str:
-        raw = (sku or "").strip()
-        if not raw:
-            return "-"
-        if len(raw) <= 16:
-            return raw
-        safe = "".join(ch for ch in raw if ch.isalnum())
-        return f"REF-{(safe or raw)[-6:].upper()}"
-
-    items_rows = ""
-    for item in o.items:
-        total_line = float(item.unit_price) * item.quantity - float(item.discount)
-        disc_str = f"-${float(item.discount):,.0f}" if float(item.discount) > 0 else "-"
-        items_rows += f"""
-        <tr>
-          <td class="product-cell">
-            <div class="product-name">{item.name_snapshot}</div>
-          </td>
-          <td class="center"><span class="ref-chip">{compact_ref(item.sku_snapshot or "")}</span></td>
-          <td class="right">{item.quantity}</td>
-          <td class="right">${float(item.unit_price):,.0f}</td>
-          <td class="right discount">{disc_str}</td>
-          <td class="right bold">${total_line:,.0f}</td>
-        </tr>"""
-
-    payments_rows = ""
-    for pay in o.payments:
-        method = (pay.method or "").replace("_", " ").title()
-        payments_rows += (
-            f"<tr><td>{method}</td><td class='right bold'>${float(pay.amount):,.0f}</td></tr>"
-        )
-
-    html = f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Factura {o.order_number}</title>
-<style>
-    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{
-        font-family: 'Avenir Next', 'Segoe UI', Tahoma, Geneva, sans-serif;
-        font-size: 12px;
-        color: #1f2937;
-        padding: 28px;
-        background: #f6fbfb;
-    }}
-    .sheet {{
-        background: #ffffff;
-        border: 1px solid #dbe7e6;
-        border-radius: 16px;
-        overflow: hidden;
-        box-shadow: 0 20px 50px rgba(13, 74, 69, 0.08);
-    }}
-    .brand-strip {{
-        height: 10px;
-        background: linear-gradient(90deg, #0d4a45 0%, #187f77 50%, #f5a641 100%);
-    }}
-    .content {{ padding: 22px 24px 20px; }}
-    .header {{ display: flex; justify-content: space-between; gap: 16px; margin-bottom: 18px; }}
-    .brand {{ font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: #0d4a45; }}
-    .brand small {{ display: block; font-size: 11px; font-weight: 500; color: #4b5563; margin-top: 4px; }}
-    .invoice-card {{
-        min-width: 220px;
-        border-radius: 12px;
-        background: #edfaf9;
-        border: 1px solid #cbe9e6;
-        padding: 10px 12px;
-        text-align: right;
-    }}
-    .invoice-no {{ font-size: 19px; font-weight: 800; color: #0d4a45; }}
-    .muted {{ color: #6b7280; font-size: 11px; }}
-    .badge {{
-        display: inline-block;
-        margin-top: 6px;
-        padding: 3px 10px;
-        border-radius: 999px;
-        font-size: 10px;
-        font-weight: 700;
-        text-transform: uppercase;
-        background: #d1fae5;
-        color: #065f46;
-    }}
-    .badge.cancelled {{ background: #fee2e2; color: #991b1b; }}
-    .meta {{
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-        margin: 6px 0 18px;
-    }}
-    .meta-card {{
-        background: #f8fafc;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        padding: 10px 12px;
-    }}
-    .meta-title {{ font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin-bottom: 5px; }}
-    .meta-value {{ font-size: 13px; font-weight: 600; color: #111827; }}
-    table {{ width: 100%; border-collapse: collapse; }}
-    th {{
-        background: #fef3e0;
-        color: #7c3d0a;
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        padding: 8px 10px;
-        text-align: left;
-    }}
-    td {{ padding: 8px 10px; border-bottom: 1px solid #edf2f7; }}
-    tbody tr:nth-child(odd) {{ background: #fcfdfd; }}
-    .right {{ text-align: right; }}
-    .center {{ text-align: center; }}
-    .bold {{ font-weight: 700; }}
-    .discount {{ color: #dc2626; }}
-    .product-cell {{ min-width: 220px; }}
-    .product-name {{ font-weight: 600; color: #0f172a; }}
-    .ref-chip {{
-        display: inline-block;
-        font-family: 'JetBrains Mono', 'Consolas', monospace;
-        font-size: 11px;
-        font-weight: 700;
-        color: #0d4a45;
-        background: #d4f5f3;
-        border: 1px solid #a3eeea;
-        border-radius: 999px;
-        padding: 2px 8px;
-    }}
-    .summary {{
-        margin-top: 14px;
-        display: grid;
-        grid-template-columns: 1fr 250px;
-        gap: 16px;
-        align-items: start;
-    }}
-    .payments-card {{
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        padding: 10px 12px;
-        background: #ffffff;
-    }}
-    .payments-title {{ font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin-bottom: 6px; font-weight: 700; }}
-    .totals {{
-        border: 1px solid #dbe7e6;
-        border-radius: 12px;
-        background: #f9fcfc;
-        padding: 8px;
-    }}
-    .totals td {{ border: none; padding: 4px 8px; }}
-    .totals .grand {{
-        font-size: 15px;
-        font-weight: 800;
-        color: #0d4a45;
-        border-top: 2px solid #187f77;
-        padding-top: 8px;
-    }}
-    .notes {{
-        margin-top: 14px;
-        border: 1px dashed #cbd5e1;
-        border-radius: 10px;
-        padding: 10px 12px;
-        color: #334155;
-        background: #f8fafc;
-    }}
-    .footer {{
-        margin-top: 18px;
-        padding-top: 12px;
-        border-top: 1px solid #e5e7eb;
-        color: #6b7280;
-        font-size: 10px;
-        text-align: center;
-    }}
-</style>
-</head>
-<body>
-<div class="sheet">
-    <div class="brand-strip"></div>
-    <div class="content">
-        <div class="header">
-            <div>
-                <div class="brand">Bigotes y Paticas<small>Tienda de mascotas · Dosquebradas, Colombia · bigotesypaticasdosquebradas@gmail.com</small></div>
-            </div>
-            <div class="invoice-card">
-                <div class="invoice-no">{o.order_number}</div>
-                <div class="muted">{o.occurred_at.strftime("%d/%m/%Y %H:%M")}</div>
-                <span class="badge {'cancelled' if o.status == 'cancelled' else ''}">{o.status.upper()}</span>
-            </div>
-        </div>
-
-        <div class="meta">
-            <div class="meta-card">
-                <div class="meta-title">Cliente</div>
-                <div class="meta-value">{cust_name}</div>
-                <div class="muted">{cust_doc or 'Sin documento'}</div>
-            </div>
-            <div class="meta-card">
-                <div class="meta-title">Canal y estado de pago</div>
-                <div class="meta-value">{o.channel}</div>
-                <div class="muted">{o.payment_status}</div>
-            </div>
-        </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Producto</th>
-                    <th class="center">Referencia</th>
-                    <th class="right">Cant.</th>
-                    <th class="right">Precio</th>
-                    <th class="right">Descuento</th>
-                    <th class="right">Total</th>
-                </tr>
-            </thead>
-            <tbody>{items_rows}</tbody>
-        </table>
-
-        <div class="summary">
-            <div class="payments-card">
-                <div class="payments-title">Pagos recibidos</div>
-                <table>
-                    <tbody>{payments_rows}</tbody>
-                </table>
-                {f'<div style="color:#059669; font-weight:700; margin-top:6px; font-size:12px;">Cambio entregado: ${float(o.paid_amount - o.grand_total):,.0f}</div>' if float(o.paid_amount) > float(o.grand_total) else ''}
-            </div>
-            <table class="totals">
-                <tr><td>Subtotal</td><td class="right">${float(o.subtotal):,.0f}</td></tr>
-                {f'<tr><td style="color:#dc2626">Descuentos</td><td class="right" style="color:#dc2626">-${float(o.discount_total):,.0f}</td></tr>' if float(o.discount_total) > 0 else ''}
-                <tr class="grand"><td>TOTAL</td><td class="right">${float(o.grand_total):,.0f}</td></tr>
-            </table>
-        </div>
-
-        {f'<div class="notes"><strong>Notas:</strong> {o.notes}</div>' if o.notes else ''}
-
-        <div class="footer">
-            Gracias por tu compra. Este documento es un comprobante de venta oficial de Bigotes y Paticas.
-        </div>
-    </div>
-</div>
-</body>
-</html>"""
+    html = render_invoice_html(order=o, customer_name=cust_name, customer_doc=cust_doc)
+    pdf_bytes = generate_invoice_pdf(html)
 
     return StreamingResponse(
-        io.BytesIO(html.encode("utf-8")),
-        media_type="text/html",
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="factura-{o.order_number}.html"',
+            "Content-Disposition": f'attachment; filename="factura-{o.order_number}.pdf"',
         },
     )

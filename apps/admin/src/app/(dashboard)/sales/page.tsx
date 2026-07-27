@@ -8,8 +8,7 @@ import {
   Package, User,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { sales, adminEtl, API_BASE, type Order, type OrdersListResponse } from '@/lib/api';
-import { useAuth } from '@/lib/auth-store';
+import { sales, adminEtl, ApiError, type Order, type OrdersListResponse } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,7 +42,6 @@ function buildWhatsAppMsg(order: Order): string {
 }
 
 function OrderDetailModal({ order, onClose, onCancelDone, onPaymentDone }: { order: Order; onClose: () => void; onCancelDone: () => void; onPaymentDone: () => void }) {
-  const token = useAuth((s) => s.token);
   const qc = useQueryClient();
   const [cancelReason, setCancelReason] = useState('');
   const [showCancel, setShowCancel] = useState(false);
@@ -76,18 +74,20 @@ function OrderDetailModal({ order, onClose, onCancelDone, onPaymentDone }: { ord
   });
 
   function downloadInvoice() {
-    fetch(`${API_BASE}/v1/sales/orders/${order.id}/invoice`, {
-      headers: { Authorization: `Bearer ${token ?? ''}` },
-    })
-      .then((r) => { if (!r.ok) throw new Error('Error'); return r.blob(); })
+    sales.downloadInvoice(order.id)
       .then((blob) => {
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `comprobante-${order.order_number}.html`;
+        a.href = url;
+        a.download = `comprobante-${order.order_number}.pdf`;
         a.click();
+        URL.revokeObjectURL(url);
         toast.success('Comprobante descargado');
       })
-      .catch(() => toast.error('No se pudo generar el comprobante'));
+      .catch((e: unknown) => {
+        const msg = e instanceof ApiError ? e.message : 'No se pudo generar el comprobante';
+        toast.error(msg);
+      });
   }
 
   const waText = buildWhatsAppMsg(order);

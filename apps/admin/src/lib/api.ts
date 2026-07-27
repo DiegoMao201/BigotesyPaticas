@@ -335,6 +335,34 @@ export const sales = {
       body: JSON.stringify({ reason }),
     }),
   invoiceUrl: (id: string) => `${API_BASE}/v1/sales/orders/${id}/invoice`,
+  downloadInvoice: async (id: string, _retry = false): Promise<Blob> => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/v1/sales/orders/${id}/invoice`, {
+      headers: { Authorization: `Bearer ${token ?? ''}` },
+      cache: 'no-store',
+    });
+
+    if (res.status === 401 && !_retry) {
+      try {
+        if (!_refreshPromise) {
+          _refreshPromise = refreshAccessToken().finally(() => { _refreshPromise = null; });
+        }
+        await _refreshPromise;
+        return sales.downloadInvoice(id, true);
+      } catch {
+        throw new ApiError('Sesión expirada, por favor inicia sesión de nuevo', 401, null);
+      }
+    }
+
+    if (!res.ok) {
+      const ct = res.headers.get('content-type') || '';
+      const data = ct.includes('application/json') ? await res.json().catch(() => null) : null;
+      const detail = data && typeof data === 'object' ? (data as { detail?: string }).detail : null;
+      throw new ApiError(detail || `No se pudo generar el comprobante (${res.status})`, res.status, data);
+    }
+
+    return res.blob();
+  },
 };
 
 // ─── Analytics ────────────────────────────────────────────────────
