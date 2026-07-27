@@ -1637,3 +1637,36 @@ export const stories = {
       body: '{}',
     }),
 };
+
+// ── Aliados (Fase 3 comunidad) ───────────────────────────────────────────────
+
+export interface AdminPartner {
+  id: string;
+  slug: string;
+  partner_type: 'vet' | 'walker' | 'shelter' | 'groomer';
+  business_name: string;
+  legal_name: string;
+  document_id: string;
+  email: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  address: string | null;
+  city: string;
+  bio: string | null;
+  rating_avg: number;
+  rating_count: number;
+  is_published: boolean;
+  is_verified: boolean;
+  created_at: string;
+}
+
+export const adminPartners = {
+  list: (status: 'pending' | 'published' | 'all' = 'pending') =>
+    api<AdminPartner[]>(`/v1/admin/partners?status=${status}`),
+  approve: (id: string) =>
+    api<{ ok: boolean }>(`/v1/admin/partners/${id}/approve`, { method: 'PATCH' }),
+  reject: (id: string) =>
+    api<{ ok: boolean }>(`/v1/admin/partners/${id}/reject`, { method: 'PATCH' }),
+  toggleVerified: (id: string) =>
+    api<{ ok: boolean; verified: boolean }>(`/v1/admin/partners/${id}/verify`, { method: 'PATCH' }),
+};

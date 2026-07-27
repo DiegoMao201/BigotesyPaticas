@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Boxes, Users, BarChart3,
   Settings, LogOut, AlertTriangle, TrendingUp, CreditCard, Tag,
   Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain, PawPrint, Star, CalendarDays, Film, Share2,
+  Handshake,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
@@ -33,6 +34,7 @@ const NAV_GROUPS = [
       { href: '/pos', label: 'Punto de Venta', icon: ShoppingBag, highlight: true },
       { href: '/sales', label: 'Ventas', icon: ShoppingCart },
       { href: '/customers', label: 'Clientes', icon: Users },
+      { href: '/partners', label: 'Aliados', icon: Handshake, highlight: true },
     ],
   },
   {

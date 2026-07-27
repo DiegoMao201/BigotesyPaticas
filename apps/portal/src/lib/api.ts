@@ -317,11 +317,47 @@ export interface PartnerService {
   requires_pet: boolean;
 }
 
+export interface PartnerAvailability {
+  date: string;
+  service_id: string;
+  slots: { time: string; available: boolean }[];
+}
+
+export interface BookingCreateResult {
+  id: string;
+  partner_id: string;
+  service_id: string;
+  scheduled_at: string;
+  status: string;
+}
+
+export interface MyBooking {
+  id: string;
+  partner_id: string;
+  partner_slug: string;
+  partner_name: string;
+  partner_type: PartnerType;
+  partner_phone: string | null;
+  service_name: string | null;
+  scheduled_at: string;
+  duration_min: number;
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
+  price_snapshot: number | null;
+  notes_customer: string | null;
+  cancelled_reason: string | null;
+  created_at: string;
+  reviewed: boolean;
+}
+
 export const partners = {
-  list: (params: { type?: PartnerType; city?: string; page?: number } = {}) => {
+  list: (params: { type?: PartnerType; city?: string; page?: number; lat?: number; lng?: number } = {}) => {
     const qs = new URLSearchParams();
     if (params.type) qs.set('type', params.type);
     if (params.city) qs.set('city', params.city);
+    if (params.lat != null && params.lng != null) {
+      qs.set('lat', String(params.lat));
+      qs.set('lng', String(params.lng));
+    }
     qs.set('page', String(params.page ?? 1));
     return requestPartners<{ items: Partner[]; total: number; page: number; page_size: number }>(
       `?${qs.toString()}`
@@ -329,6 +365,44 @@ export const partners = {
   },
   get: (slug: string) => requestPartners<Partner>(`/${slug}`),
   services: (slug: string) => requestPartners<PartnerService[]>(`/${slug}/services`),
+  availability: (slug: string, serviceId: string, date: string) =>
+    requestPartners<PartnerAvailability>(`/${slug}/availability?service_id=${serviceId}&date=${date}`),
+  book: (
+    slug: string,
+    data: { service_id: string; scheduled_at: string; pet_id?: string; notes_customer?: string }
+  ) =>
+    requestPartners<BookingCreateResult>(`/${slug}/bookings`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+// ── Mis reservas con aliados ─────────────────────────────────────────
+
+const BOOKINGS_BASE = '/api/v1/portal/bookings';
+
+async function requestBookings<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BOOKINGS_BASE}${path}`, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiError(res.status, body.detail ?? 'Error del servidor');
+  }
+  return res.json() as Promise<T>;
+}
+
+export const myBookings = {
+  list: (upcomingOnly = false) =>
+    requestBookings<MyBooking[]>(`?upcoming_only=${upcomingOnly}`),
+  cancel: (id: string) => requestBookings<{ ok: boolean }>(`/${id}/cancel`, { method: 'PATCH' }),
+  review: (id: string, rating: number, comment?: string) =>
+    requestBookings<{ ok: boolean }>(`/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ rating, comment }),
+    }),
 };
 
 // ── Orders ────────────────────────────────────────────────────────────

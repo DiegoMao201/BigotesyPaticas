@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Handshake, Star, MapPin } from 'lucide-react';
+import { Handshake, Star, MapPin, CalendarCheck } from 'lucide-react';
 import { partners, type PartnerType } from '@/lib/api';
+import { useGeolocation } from '@/hooks/useGeolocation';
+import { PartnersMap } from '@/components/maps/PartnersMap';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 const TYPE_FILTERS: { value: PartnerType | 'all'; label: string; emoji: string }[] = [
@@ -25,10 +27,20 @@ const PARTNER_EMOJI: Record<PartnerType, string> = {
 
 export default function ServiciosListPage() {
   const [type, setType] = useState<PartnerType | 'all'>('all');
+  const { coords, getCurrentPosition } = useGeolocation();
+
+  useEffect(() => {
+    getCurrentPosition().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['partners', type],
-    queryFn: () => partners.list({ type: type === 'all' ? undefined : type }),
+    queryKey: ['partners', type, coords?.lat, coords?.lng],
+    queryFn: () =>
+      partners.list({
+        type: type === 'all' ? undefined : type,
+        ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+      }),
   });
 
   return (
@@ -51,6 +63,12 @@ export default function ServiciosListPage() {
         <p className="text-white/90 text-sm mt-3 leading-relaxed">
           Veterinarias, paseadores, refugios y peluquerías de confianza cerca de ti.
         </p>
+        <Link
+          href="/servicios/mis-reservas"
+          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/15 backdrop-blur px-4 py-2.5 text-sm font-semibold text-white active:scale-95 transition-transform"
+        >
+          <CalendarCheck className="h-4 w-4" /> Mis reservas
+        </Link>
       </div>
 
       <div className="px-4 flex flex-col gap-4">
@@ -71,6 +89,10 @@ export default function ServiciosListPage() {
             </button>
           ))}
         </div>
+
+        {!isLoading && data && data.items.length > 0 && (
+          <PartnersMap partners={data.items} userLocation={coords} />
+        )}
 
         {isLoading && <LoadingSpinner />}
 

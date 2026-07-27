@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.75rem;
+  }
+
+  * { @apply border-border; }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply text-foreground font-sans antialiased bg-background;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary-700 px-5 py-2.5
+           text-sm font-semibold text-white shadow-sm transition-all
+           hover:bg-primary-800 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-white px-5 py-2.5
+           text-sm font-semibold text-foreground transition-all
+           hover:bg-primary-50 hover:border-primary-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-danger-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-2.5
+           text-sm font-semibold text-red-600 transition-all
+           hover:bg-red-50 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .card {
+    @apply rounded-2xl bg-white p-5 shadow-card border border-black/[0.03];
+  }
+
+  .input-field {
+    @apply w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-foreground
+           placeholder:text-muted/70 outline-none transition-shadow
+           focus:ring-2 focus:ring-primary-200 focus:border-primary-400;
+  }
+
+  .label-field {
+    @apply block text-xs font-semibold text-muted uppercase tracking-wide mb-1.5;
+  }
+
+  /* Hero de secciones de auth (login/registro) — degradado de marca */
+  .auth-hero {
+    background: radial-gradient(120% 120% at 0% 0%, #1ea89e 0%, #187f77 45%, #0d4a45 100%);
+  }
+
+  .stat-card {
+    @apply card flex items-center gap-4;
+  }
+
+  .stat-icon {
+    @apply h-11 w-11 rounded-xl flex items-center justify-center text-white shrink-0;
+  }
+}

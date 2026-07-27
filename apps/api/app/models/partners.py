@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -15,9 +15,10 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    Time,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import CITEXT, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.common import Base, SoftDeleteMixin, TimestampMixin, UUIDPKMixin
@@ -85,3 +86,122 @@ class Service(UUIDPKMixin, TimestampMixin, Base):
     category: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     requires_pet: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class PartnerUser(UUIDPKMixin, TimestampMixin, Base):
+    """Cuenta de acceso al panel del aliado (login propio, separado de admin/portal)."""
+
+    __tablename__ = "partner_users"
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_partner_users_email"),
+        CheckConstraint("role IN ('owner','staff')", name="ck_partner_users_role"),
+        {"schema": "partners"},
+    )
+
+    partner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("partners.partners.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    email: Mapped[str] = mapped_column(CITEXT, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="owner")
+    full_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class ServiceSlot(UUIDPKMixin, TimestampMixin, Base):
+    """Disponibilidad recurrente semanal configurada por el aliado."""
+
+    __tablename__ = "service_slots"
+    __table_args__ = (
+        CheckConstraint("day_of_week BETWEEN 0 AND 6", name="ck_service_slots_dow"),
+        {"schema": "partners"},
+    )
+
+    partner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("partners.partners.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    service_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("partners.services.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    day_of_week: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    slot_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    max_bookings: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class Booking(UUIDPKMixin, TimestampMixin, Base):
+    """Reserva de un cliente con un aliado para un servicio en una franja horaria."""
+
+    __tablename__ = "bookings"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','confirmed','completed','cancelled','no_show')",
+            name="ck_bookings_status",
+        ),
+        {"schema": "partners"},
+    )
+
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("crm.customers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    partner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("partners.partners.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    service_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("partners.services.id", ondelete="SET NULL"), nullable=True
+    )
+    pet_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("portal.pets.id", ondelete="SET NULL"), nullable=True
+    )
+    scheduled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    duration_min: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    price_snapshot: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    notes_customer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes_partner: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cancelled_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
+class PartnerReview(UUIDPKMixin, TimestampMixin, Base):
+    """Calificación del cliente tras una reserva completada."""
+
+    __tablename__ = "partner_reviews"
+    __table_args__ = (
+        UniqueConstraint("booking_id", name="uq_partner_reviews_booking"),
+        CheckConstraint("rating BETWEEN 1 AND 5", name="ck_partner_reviews_rating"),
+        {"schema": "partners"},
+    )
+
+    booking_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("partners.bookings.id", ondelete="CASCADE"), nullable=False
+    )
+    partner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("partners.partners.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("crm.customers.id", ondelete="CASCADE"), nullable=False
+    )
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
