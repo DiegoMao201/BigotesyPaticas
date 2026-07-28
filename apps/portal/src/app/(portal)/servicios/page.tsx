@@ -1,14 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Handshake, Star, MapPin, CalendarCheck } from 'lucide-react';
+import { Handshake, Star, MapPin, CalendarCheck, Search, LocateFixed } from 'lucide-react';
 import { partners, type PartnerType } from '@/lib/api';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { PartnersMap } from '@/components/maps/PartnersMap';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { loadMapsScript } from '@/lib/maps';
+
+const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? '';
 
 const TYPE_FILTERS: { value: PartnerType | 'all'; label: string; emoji: string }[] = [
   { value: 'all', label: 'Todos', emoji: '🐾' },
@@ -28,18 +31,54 @@ const PARTNER_EMOJI: Record<PartnerType, string> = {
 export default function ServiciosListPage() {
   const [type, setType] = useState<PartnerType | 'all'>('all');
   const { coords, getCurrentPosition } = useGeolocation();
+  const [searchedLocation, setSearchedLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [searchedAddress, setSearchedAddress] = useState('');
+  const addressInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getCurrentPosition().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Buscador de dirección — para verificar cobertura sin depender del GPS,
+  // mismo patrón que DeliveryZoneChecker en apps/store.
+  useEffect(() => {
+    if (!MAPS_KEY) return;
+    loadMapsScript(MAPS_KEY, () => {
+      if (!addressInputRef.current) return;
+      const autocomplete = new window.google.maps.places.Autocomplete(addressInputRef.current, {
+        bounds: new window.google.maps.LatLngBounds(
+          new window.google.maps.LatLng(4.65, -75.85),
+          new window.google.maps.LatLng(4.97, -75.55)
+        ),
+        componentRestrictions: { country: 'co' },
+        fields: ['geometry', 'formatted_address', 'name'],
+      });
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (!place.geometry?.location) return;
+        setSearchedLocation({ lat: place.geometry.location.lat(), lng: place.geometry.location.lng() });
+        setSearchedAddress(place.formatted_address ?? place.name ?? '');
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const effectiveLocation = searchedLocation ?? coords;
+
+  function useMyLocationInstead() {
+    setSearchedLocation(null);
+    setSearchedAddress('');
+    if (addressInputRef.current) addressInputRef.current.value = '';
+    getCurrentPosition().catch(() => {});
+  }
+
   const { data, isLoading } = useQuery({
-    queryKey: ['partners', type, coords?.lat, coords?.lng],
+    queryKey: ['partners', type, effectiveLocation?.lat, effectiveLocation?.lng],
     queryFn: () =>
       partners.list({
         type: type === 'all' ? undefined : type,
-        ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+        ...(effectiveLocation ? { lat: effectiveLocation.lat, lng: effectiveLocation.lng } : {}),
       }),
   });
 
@@ -72,6 +111,33 @@ export default function ServiciosListPage() {
       </div>
 
       <div className="px-4 flex flex-col gap-4">
+        {/* Buscador de dirección — verifica cobertura de aliados en cualquier zona */}
+        {MAPS_KEY && (
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" />
+              <input
+                ref={addressInputRef}
+                type="text"
+                placeholder="Busca tu dirección para ver aliados cerca"
+                className="input-field pl-9"
+              />
+            </div>
+            {searchedLocation && (
+              <button
+                onClick={useMyLocationInstead}
+                className="shrink-0 rounded-xl border border-border bg-white px-3 flex items-center justify-center text-primary-700"
+                title="Usar mi ubicación actual"
+              >
+                <LocateFixed className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
+        {searchedAddress && (
+          <p className="text-xs text-muted -mt-2 px-1">📍 Mostrando aliados cerca de: {searchedAddress}</p>
+        )}
+
         {/* Filtros por tipo */}
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           {TYPE_FILTERS.map((f) => (
@@ -91,7 +157,7 @@ export default function ServiciosListPage() {
         </div>
 
         {!isLoading && data && data.items.length > 0 && (
-          <PartnersMap partners={data.items} userLocation={coords} />
+          <PartnersMap partners={data.items} userLocation={effectiveLocation} />
         )}
 
         {isLoading && <LoadingSpinner />}

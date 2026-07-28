@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Handshake, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
+import { Handshake, ArrowRight, ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { partnerAuth, ApiError, type PartnerType, type RegisterPayload } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
@@ -45,6 +45,7 @@ export default function RegistroPage() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -232,11 +233,45 @@ export default function RegistroPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label-field">Contraseña</label>
-                  <input type="password" className="input-field" value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="Mínimo 6 caracteres" />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      className="input-field pr-9"
+                      value={form.password}
+                      onChange={(e) => set('password', e.target.value)}
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                      tabIndex={-1}
+                      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="label-field">Repetir contraseña</label>
-                  <input type="password" className="input-field" value={form.password2} onChange={(e) => set('password2', e.target.value)} placeholder="••••••••" />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      className="input-field pr-9"
+                      value={form.password2}
+                      onChange={(e) => set('password2', e.target.value)}
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                      tabIndex={-1}
+                      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
               </div>
 

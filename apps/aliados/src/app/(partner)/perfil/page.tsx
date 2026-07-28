@@ -94,7 +94,15 @@ export default function PerfilPage() {
         </div>
         <div>
           <label className="label-field">Ubicación en el mapa</label>
-          <LocationPicker lat={form.lat} lng={form.lng} onChange={(lat, lng) => setForm({ ...form, lat, lng })} />
+          {/* Fallback directo a `data` (no solo `form`): evita que el mapa monte con
+              lat/lng en null por un frame antes de que el efecto de sincronización
+              corra, lo que dispararía el guardado automático sobre el valor por
+              defecto y borraría una ubicación ya guardada. */}
+          <LocationPicker
+            lat={form.lat ?? data.lat}
+            lng={form.lng ?? data.lng}
+            onChange={(lat, lng) => setForm({ ...form, lat, lng })}
+          />
         </div>
         <div>
           <label className="label-field">Sobre tu negocio</label>
