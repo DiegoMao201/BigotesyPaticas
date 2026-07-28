@@ -21,21 +21,33 @@ interface AuthState {
 // instante aunque sí exista una sesión guardada. Sin este flag, cualquier
 // guard que redirija apenas `!token` dispara antes de que la rehidratación
 // termine.
+//
+// IMPORTANTE: `onRehydrateStorage` no puede referenciar el propio `useAuth`
+// por nombre (p. ej. `useAuth.setState(...)`) — en el build minificado esa
+// auto-referencia cayó en un TDZ real (`ReferenceError: Cannot access 'n'
+// before initialization`) porque el callback corre en un microtask que a
+// veces se dispara antes de que termine de asignarse el const `useAuth`.
+// En su lugar, capturamos `set` directamente del closure del store.
+let markHydrated: (() => void) | null = null;
+
 export const useAuth = create<AuthState>()(
   persist(
-    (set, get) => ({
-      partnerUser: null,
-      token: null,
-      refreshToken: null,
-      hasHydrated: false,
-      setSession: (partnerUser, token, refreshToken) => set({ partnerUser, token, refreshToken }),
-      updatePartner: (partial) => {
-        const current = get().partnerUser;
-        if (!current) return;
-        set({ partnerUser: { ...current, partner: { ...current.partner, ...partial } } });
-      },
-      clear: () => set({ partnerUser: null, token: null, refreshToken: null }),
-    }),
+    (set, get) => {
+      markHydrated = () => set({ hasHydrated: true });
+      return {
+        partnerUser: null,
+        token: null,
+        refreshToken: null,
+        hasHydrated: false,
+        setSession: (partnerUser, token, refreshToken) => set({ partnerUser, token, refreshToken }),
+        updatePartner: (partial) => {
+          const current = get().partnerUser;
+          if (!current) return;
+          set({ partnerUser: { ...current, partner: { ...current.partner, ...partial } } });
+        },
+        clear: () => set({ partnerUser: null, token: null, refreshToken: null }),
+      };
+    },
     {
       name: 'bp_aliados_session',
       // `hasHydrated` NUNCA debe persistirse — si queda guardado como `false`
@@ -47,10 +59,8 @@ export const useAuth = create<AuthState>()(
         token: state.token,
         refreshToken: state.refreshToken,
       }),
-      onRehydrateStorage: () => (state, error) => {
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG onRehydrateStorage fired]', { state, error });
-        useAuth.setState({ hasHydrated: true });
+      onRehydrateStorage: () => () => {
+        markHydrated?.();
       },
     }
   )
