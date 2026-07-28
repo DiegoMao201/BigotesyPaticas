@@ -9,12 +9,13 @@ export default function PendienteAprobacionPage() {
   const router = useRouter();
   const partnerUser = useAuth((s) => s.partnerUser);
   const token = useAuth((s) => s.token);
+  const hasHydrated = useAuth((s) => s.hasHydrated);
 
   useEffect(() => {
-    if (!token) router.replace('/login');
-  }, [token, router]);
+    if (hasHydrated && !token) router.replace('/login');
+  }, [hasHydrated, token, router]);
 
-  if (!partnerUser) return null;
+  if (!hasHydrated || !partnerUser) return null;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">

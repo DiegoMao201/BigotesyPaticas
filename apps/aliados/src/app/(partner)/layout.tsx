@@ -9,13 +9,17 @@ import { useAuth } from '@/lib/auth-store';
 export default function PartnerLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const token = useAuth((s) => s.token);
+  const hasHydrated = useAuth((s) => s.hasHydrated);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    if (!token) router.replace('/login');
-  }, [token, router]);
+    // Esperamos a que zustand-persist rehidrate desde localStorage antes de
+    // decidir si redirigir — si no, cualquier recarga de página (F5, o abrir
+    // el link directo) manda al login aunque sí haya una sesión guardada.
+    if (hasHydrated && !token) router.replace('/login');
+  }, [hasHydrated, token, router]);
 
-  if (!token) return null;
+  if (!hasHydrated || !token) return null;
 
   return (
     <div className="flex min-h-screen bg-background">
