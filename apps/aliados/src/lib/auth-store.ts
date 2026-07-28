@@ -47,7 +47,9 @@ export const useAuth = create<AuthState>()(
         token: state.token,
         refreshToken: state.refreshToken,
       }),
-      onRehydrateStorage: () => () => {
+      onRehydrateStorage: () => (state, error) => {
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG onRehydrateStorage fired]', { state, error });
         useAuth.setState({ hasHydrated: true });
       },
     }

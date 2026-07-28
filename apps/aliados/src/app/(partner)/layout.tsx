@@ -19,6 +19,9 @@ export default function PartnerLayout({ children }: { children: ReactNode }) {
     if (hasHydrated && !token) router.replace('/login');
   }, [hasHydrated, token, router]);
 
+  // eslint-disable-next-line no-console
+  console.log('[DEBUG PartnerLayout render]', { hasHydrated, hasToken: !!token });
+
   if (!hasHydrated || !token) return null;
 
   return (
