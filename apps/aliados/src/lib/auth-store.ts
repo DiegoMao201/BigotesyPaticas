@@ -38,6 +38,15 @@ export const useAuth = create<AuthState>()(
     }),
     {
       name: 'bp_aliados_session',
+      // `hasHydrated` NUNCA debe persistirse — si queda guardado como `false`
+      // (ej. por un write que ocurre antes de que termine de hidratar), la
+      // siguiente carga rehidrata ese `false` y la app queda bloqueada en
+      // blanco para siempre, sin importar lo que haga onRehydrateStorage.
+      partialize: (state) => ({
+        partnerUser: state.partnerUser,
+        token: state.token,
+        refreshToken: state.refreshToken,
+      }),
       onRehydrateStorage: () => () => {
         useAuth.setState({ hasHydrated: true });
       },
