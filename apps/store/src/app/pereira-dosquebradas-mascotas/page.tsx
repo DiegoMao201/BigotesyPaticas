@@ -70,7 +70,7 @@ export default function PereiraPage() {
           </p>
           <p className="text-lg text-muted-foreground leading-relaxed mb-8">
             Nuestro petshop tiene servicio de domicilio en <strong>24 a 72 horas</strong> en toda
-            la zona urbana de Pereira y Dosquebradas, Risaralda. Más de 900 productos disponibles.
+            la zona urbana de Pereira y Dosquebradas, Risaralda. Más de 500 productos disponibles.
           </p>
           <div className="flex flex-wrap gap-3">
             <Link
@@ -124,7 +124,7 @@ export default function PereiraPage() {
               {
                 icon: '⭐',
                 title: 'Marcas premium verificadas',
-                desc: 'Hill\'s Science Diet, Royal Canin, Pro Plan, Bravecto y más de 900 productos seleccionados por veterinarios.',
+                desc: 'Hill\'s Science Diet, Royal Canin, Pro Plan, Bravecto y más de 500 productos seleccionados por veterinarios.',
               },
               {
                 icon: '🐾',
@@ -235,7 +235,7 @@ export default function PereiraPage() {
               },
               {
                 q: '¿Bigotes y Paticas es un pet shop?',
-                a: 'Sí, somos el pet shop de Pereira y Dosquebradas con más variedad y el mejor servicio de domicilio de Risaralda. Nuestro petshop tiene más de 900 productos para perros, gatos y otras mascotas, con envío gratis desde $30.000.',
+                a: 'Sí, somos el pet shop de Pereira y Dosquebradas con más variedad y el mejor servicio de domicilio de Risaralda. Nuestro petshop tiene más de 500 productos para perros, gatos y otras mascotas, con envío gratis desde $30.000.',
               },
               {
                 q: '¿Qué es un pet shop y qué venden?',
@@ -257,7 +257,7 @@ export default function PereiraPage() {
             ¿Listo para pedir con domicilio en Pereira o Dosquebradas?
           </h2>
           <p className="text-teal-200 mb-8 text-lg max-w-lg mx-auto">
-            Explora nuestro catálogo de más de 900 productos y recíbelos en la puerta de tu casa.
+            Explora nuestro catálogo de más de 500 productos y recíbelos en la puerta de tu casa.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link

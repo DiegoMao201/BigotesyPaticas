@@ -23,6 +23,12 @@ const nextConfig = {
       },
       // /ofertas no existe — redirige a catálogo general
       { source: '/ofertas', destination: '/categorias/todos', permanent: true },
+      // /legal/privacidad no existe — la página real es /politica-privacidad
+      { source: '/legal/privacidad', destination: '/politica-privacidad', permanent: true },
+      // /pet-shop-pereira era contenido casi duplicado de /pereira-dosquebradas-mascotas
+      // (mismas marcas, mismo FAQ, sin enlaces internos) — Google lo marcaba como
+      // canónica distinta / rastreada sin indexar. Se consolida en una sola página.
+      { source: '/pet-shop-pereira', destination: '/pereira-dosquebradas-mascotas', permanent: true },
       // Post Jul 2 publicado con producto inexistente en catálogo
       { source: '/producto/royal-canin-maxi-adult-15kg', destination: '/categorias/perros', permanent: false },
     ];

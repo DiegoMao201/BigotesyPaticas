@@ -20,7 +20,7 @@ const SCENARIOS: Scenario[] = [
     message:
       '¡Hola! 🐾 Somos *Bigotes y Paticas*, tu pet shop de confianza en Dosquebradas y Pereira.\n\n' +
       '🛒 *Tienda online:* https://bigotesypaticas.com\n' +
-      '  +900 productos: concentrados, accesorios, medicamentos y más\n' +
+      '  +500 productos: concentrados, accesorios, medicamentos y más\n' +
       '  Envío gratis en pedidos desde $30.000\n\n' +
       '📱 *Portal de clientes:* https://mi.bigotesypaticas.com\n' +
       '  Pedí domicilio, acumulá Puntos Bigotes y llevá el carnet de tu mascota\n\n' +

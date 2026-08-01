@@ -107,6 +107,8 @@ export default async function BlogPostPage({ params }: Props) {
           <img
             src={post.cover_image_url}
             alt={post.title}
+            fetchPriority="high"
+            decoding="async"
             className="w-full rounded-3xl aspect-video object-cover mb-10 shadow-sm"
           />
         )}

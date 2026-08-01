@@ -60,7 +60,7 @@ export const metadata: Metadata = {
     url: 'https://bigotesypaticas.com',
     siteName: 'Bigotes y Paticas',
     title: 'Bigotes y Paticas — Pet Shop Pereira y Dosquebradas con domicilio',
-    description: 'Pet shop con domicilio en Pereira y Dosquebradas. Más de 900 productos para mascotas. Envío gratis desde $30.000.',
+    description: 'Pet shop con domicilio en Pereira y Dosquebradas. Más de 500 productos para mascotas. Envío gratis desde $30.000.',
     images: [{
       url: 'https://bigotesypaticas.com/opengraph-image.png',
       width: 1200,
@@ -71,7 +71,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Bigotes y Paticas — Pet Shop Pereira y Dosquebradas',
-    description: 'Pet shop con domicilio en Pereira y Dosquebradas. Más de 900 productos. Envío 24-72h.',
+    description: 'Pet shop con domicilio en Pereira y Dosquebradas. Más de 500 productos. Envío 24-72h.',
     images: ['https://bigotesypaticas.com/opengraph-image.png'],
   },
   robots: {

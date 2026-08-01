@@ -89,7 +89,7 @@ export default async function LandingPage({ params }: Props) {
       <div className="container-tight py-6">
         <div className="flex flex-wrap gap-3 justify-center text-sm">
           {[
-            '✓ Más de 900 productos',
+            '✓ Más de 500 productos',
             '✓ Envío 24-72h',
             '✓ Marcas premium: Hills, Royal Canin, Pro Plan',
             '✓ Pago contra entrega disponible',
@@ -128,6 +128,8 @@ export default async function LandingPage({ params }: Props) {
                       <img
                         src={p.primary_image_url}
                         alt={p.name}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                       />
                     ) : (

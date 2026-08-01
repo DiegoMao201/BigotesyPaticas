@@ -126,6 +126,8 @@ export default async function ProductPage({ params }: Props) {
                 <img
                   src={allImages[0]}
                   alt={product.name}
+                  fetchPriority="high"
+                  decoding="async"
                   className="w-full h-full object-contain p-6"
                 />
               ) : (
@@ -161,6 +163,8 @@ export default async function ProductPage({ params }: Props) {
                     <img
                       src={img}
                       alt={`${product.name} ${i + 2}`}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-contain p-2"
                     />
                   </div>
@@ -361,6 +365,8 @@ export default async function ProductPage({ params }: Props) {
                         <img
                           src={p.primary_image_url}
                           alt={p.name}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-contain drop-shadow-sm group-hover:scale-105 transition-transform duration-300"
                         />
                       ) : (

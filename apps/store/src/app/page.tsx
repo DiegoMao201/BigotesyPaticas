@@ -85,6 +85,8 @@ export default async function HomePage() {
                     <img
                       src={p.primary_image_url}
                       alt={p.name}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110 drop-shadow-sm"
                     />
                   ) : (

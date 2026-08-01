@@ -5,22 +5,15 @@ import { AlertTriangle, ExternalLink } from 'lucide-react';
 export const metadata: Metadata = {
   title: 'Nutrición y salud oral en perros y gatos — Bigotes y Paticas',
   description:
-    'El 80% de perros mayores de 3 años ya tienen enfermedad periodontal activa. Aprende cómo la alimentación correcta protege la salud bucal de tu mascota.',
+    'La enfermedad periodontal es una de las causas más comunes de consulta veterinaria. Aprende cómo la alimentación correcta protege la salud bucal de tu mascota.',
   alternates: { canonical: 'https://bigotesypaticas.com/nutricion-salud-oral' },
   openGraph: {
     title: 'Salud oral y nutrición para mascotas — Bigotes y Paticas Pereira',
     description:
-      'La enfermedad periodontal no duele, pero mata en silencio. Descubre cómo prevenirla desde la alimentación.',
+      'La enfermedad periodontal no duele, pero avanza en silencio. Descubre cómo prevenirla desde la alimentación.',
     url: 'https://bigotesypaticas.com/nutricion-salud-oral',
   },
 };
-
-const STATS = [
-  { cifra: '80%', label: 'de perros mayores de 3 años ya tienen enfermedad periodontal' },
-  { cifra: '5 años', label: 'sin intervención: pierden piezas dentales funcionales' },
-  { cifra: '3x', label: 'más frecuente en razas mini y small' },
-  { cifra: '70%', label: 'de gatos adultos presentan algún grado de enfermedad dental' },
-];
 
 const SENALES = [
   'Mal aliento persistente (más allá del olor normal)',
@@ -66,25 +59,11 @@ export default function NutricionSaludOralPage() {
         <div className="max-w-3xl mx-auto text-center">
           <div className="text-5xl mb-6">🦷</div>
           <h1 className="text-3xl md:text-5xl font-display font-extrabold mb-4 leading-tight">
-            La enfermedad periodontal no duele.<br />Por eso mata en silencio.
+            La enfermedad periodontal no duele.<br />Por eso avanza en silencio.
           </h1>
           <p className="text-lg text-white/80 max-w-2xl mx-auto">
-            El 80% de perros mayores de 3 años ya tienen enfermedad periodontal activa. No es halitosis normal: es infección bacteriana destruyendo encías, ligamentos y hueso. Y la alimentación correcta puede frenarla desde hoy.
+            La enfermedad periodontal es una de las condiciones más comunes en perros y gatos adultos. No es halitosis normal: es infección bacteriana que puede afectar encías, ligamentos y hueso. Y la alimentación correcta puede ayudar a frenarla desde hoy.
           </p>
-        </div>
-      </div>
-
-      {/* Cifras */}
-      <div className="bg-[#f5f0e8] py-14 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {STATS.map((s) => (
-              <div key={s.cifra} className="bg-white rounded-2xl p-6 text-center shadow-sm border border-[#e8e0d0]">
-                <p className="text-3xl font-extrabold text-[#187f77] mb-2">{s.cifra}</p>
-                <p className="text-sm text-gray-600 leading-tight">{s.label}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 

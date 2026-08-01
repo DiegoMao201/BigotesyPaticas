@@ -251,6 +251,8 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
                       <img
                         src={p.primary_image_url}
                         alt={p.name}
+                        loading="lazy"
+                        decoding="async"
                         className={`w-full h-full object-contain p-2.5
                                    group-hover:scale-105 transition-transform duration-300
                                    ${!p.in_stock ? 'grayscale opacity-70' : ''}`}

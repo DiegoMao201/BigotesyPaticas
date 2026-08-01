@@ -1,32 +1,24 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Calendar, Shield, AlertTriangle, ExternalLink, Phone } from 'lucide-react';
+import { Calendar, Shield, AlertTriangle, ExternalLink } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Jornadas de esterilización en Pereira y Dosquebradas — Bigotes y Paticas',
+  title: 'Esterilización responsable en Pereira y Dosquebradas — Bigotes y Paticas',
   description:
-    'Información sobre jornadas de esterilización subsidiada en Pereira y Dosquebradas. Por qué esterilizar a tu mascota es el acto más responsable que puedes hacer.',
+    'Por qué esterilizar a tu mascota es el acto más responsable que puedes hacer, y dónde consultar jornadas subsidiadas en Pereira y Dosquebradas.',
   alternates: { canonical: 'https://bigotesypaticas.com/jornadas-esterilizacion' },
   openGraph: {
-    title: 'Jornadas de esterilización en Pereira y Dosquebradas',
-    description:
-      'Una hembra sin esterilizar puede ser ancestro de 67.000 descendientes en 6 años. Conoce las jornadas subsidiadas en Risaralda.',
+    title: 'Esterilización responsable en Pereira y Dosquebradas',
+    description: 'Los beneficios reales de esterilizar a tu mascota, explicados sin mitos.',
     url: 'https://bigotesypaticas.com/jornadas-esterilizacion',
   },
 };
-
-const STATS = [
-  { cifra: '~45.000', label: 'perros en condición de calle en Risaralda' },
-  { cifra: '73%', label: 'de camadas callejeras no fueron planificadas' },
-  { cifra: '67.000', label: 'descendientes posibles de 1 hembra en 6 años' },
-  { cifra: '90%', label: 'reducción de tumores mamarios si se esteriliza antes del primer celo' },
-];
 
 const BENEFICIOS = [
   {
     titulo: 'Previene enfermedades graves',
     descripcion:
-      'En hembras: elimina el riesgo de piometra (infección uterina mortal) y reduce hasta un 90% el riesgo de tumores mamarios si se hace antes del primer celo. En machos: previene hiperplasia prostática y tumores testiculares.',
+      'En hembras: elimina el riesgo de piometra (infección uterina mortal) y reduce el riesgo de tumores mamarios, especialmente si se hace antes del primer celo. En machos: previene hiperplasia prostática y tumores testiculares.',
     icono: '🛡️',
   },
   {
@@ -36,9 +28,9 @@ const BENEFICIOS = [
     icono: '🧠',
   },
   {
-    titulo: 'Mayor esperanza de vida',
+    titulo: 'Mejora la calidad de vida',
     descripcion:
-      'Estudios veterinarios documentan que perros y gatos esterilizados viven en promedio entre 1 y 3 años más que los no esterilizados, al eliminar los riesgos reproductivos y reducir el estrés hormonal crónico.',
+      'Al eliminar los riesgos reproductivos y reducir el estrés hormonal crónico, perros y gatos esterilizados suelen tener menos problemas de salud asociados a lo largo de su vida.',
     icono: '❤️',
   },
   {
@@ -51,24 +43,16 @@ const BENEFICIOS = [
 
 const DONDE = [
   {
-    nombre: 'Secretaría de Salud de Pereira',
-    info: 'El municipio coordina jornadas de esterilización subsidiada periódicamente. Comunícate directamente para conocer fechas y requisitos.',
-    contacto: 'salud.pereira.gov.co · línea 195',
+    nombre: 'Secretaría de Salud de tu municipio',
+    info: 'Tanto Pereira como Dosquebradas coordinan jornadas de esterilización subsidiada periódicamente. Comunícate con la alcaldía de tu municipio para conocer fechas, requisitos y cupos vigentes.',
   },
   {
-    nombre: 'Secretaría de Salud de Dosquebradas',
-    info: 'El municipio tiene su propio programa de esterilización con costos subsidiados. Los cupos son limitados y se asignan por orden de solicitud.',
-    contacto: 'dosquebradas.gov.co',
+    nombre: 'Clínicas veterinarias locales',
+    info: 'Varias clínicas veterinarias en Pereira y Dosquebradas ofrecen tarifas especiales o convenios con programas municipales. Consulta directamente en tu clínica más cercana.',
   },
   {
-    nombre: 'Clínicas Veterinarias con convenio',
-    info: 'Varias clínicas veterinarias en Pereira y Dosquebradas trabajan con tarifas especiales en convenio con las alcaldías y fundaciones. Consulta en tu clínica más cercana.',
-    contacto: 'Pregunta por convenios con la Secretaría de Salud',
-  },
-  {
-    nombre: 'ONG locales — FUNPAZ y AANIMALES',
-    info: 'Estas organizaciones gestionan jornadas específicas con donaciones y apoyo de clínicas aliadas. Están activas en redes sociales con información actualizada de fechas.',
-    contacto: '@funpazrisaralda · @aanimalesrisaralda',
+    nombre: 'Fundaciones y ONG de rescate animal',
+    info: 'Distintas organizaciones locales gestionan jornadas de esterilización con apoyo de clínicas aliadas. Búscalas en redes sociales para conocer fechas actualizadas.',
   },
 ];
 
@@ -87,24 +71,7 @@ export default function JornadasEsterilizacionPage() {
             Esterilizar no es mutilación.<br />Es el acto más responsable.
           </h1>
           <p className="text-lg text-white/80 max-w-2xl mx-auto">
-            Una hembra sin esterilizar puede ser origen de hasta <strong className="text-white">67.000 descendientes en solo 6 años</strong>. En Risaralda hay aproximadamente 45.000 perros en condición de calle. La matemática es clara.
-          </p>
-        </div>
-      </div>
-
-      {/* Cifras */}
-      <div className="bg-[#f5f0e8] py-14 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {STATS.map((s) => (
-              <div key={s.cifra} className="bg-white rounded-2xl p-6 text-center shadow-sm border border-[#e8e0d0]">
-                <p className="text-3xl font-extrabold text-[#187f77] mb-2">{s.cifra}</p>
-                <p className="text-sm text-gray-600 leading-tight">{s.label}</p>
-              </div>
-            ))}
-          </div>
-          <p className="text-center text-xs text-gray-400 mt-6">
-            Fuentes: Secretaría de Salud de Pereira · ONG Risaralda · Estudios veterinarios AVMA
+            Una sola pareja sin esterilizar puede generar muchas más camadas de las que cualquier hogar de paso puede absorber. Esterilizar es la medida más efectiva para frenar el abandono animal.
           </p>
         </div>
       </div>
@@ -165,11 +132,7 @@ export default function JornadasEsterilizacionPage() {
                   <Calendar className="w-5 h-5 text-[#187f77] shrink-0 mt-0.5" />
                   <h3 className="font-semibold text-[#0d4a45] text-sm">{d.nombre}</h3>
                 </div>
-                <p className="text-sm text-gray-600 mb-3 leading-relaxed">{d.info}</p>
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <Phone className="w-3.5 h-3.5" />
-                  <span>{d.contacto}</span>
-                </div>
+                <p className="text-sm text-gray-600 leading-relaxed">{d.info}</p>
               </div>
             ))}
           </div>

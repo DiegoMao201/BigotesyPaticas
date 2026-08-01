@@ -94,8 +94,7 @@ export const BUSINESS_INFO = {
   mapsUrl:
     "https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Dosquebradas",
 
-  // Agregar cuando se activen redes sociales
-  sameAs: [] as string[],
+  sameAs: ["https://www.instagram.com/bigotesypaticas/"] as string[],
 
   legal: {
     nit: "1088266407",

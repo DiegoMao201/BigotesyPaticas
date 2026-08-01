@@ -22,7 +22,7 @@ export function StoreMapEmbed({ height = 420, zoom = 17, className = '' }: Props
     if (!KEY || !mapRef.current) return;
     const el = mapRef.current;
 
-    loadMapsScript(KEY, () => {
+    const init = () => loadMapsScript(KEY, () => {
       const center = { lat: BUSINESS_INFO.geo.latitude, lng: BUSINESS_INFO.geo.longitude };
 
       const map = new window.google.maps.Map(el, {
@@ -59,6 +59,21 @@ export function StoreMapEmbed({ height = 420, zoom = 17, className = '' }: Props
       info.open(map, marker);
       marker.addListener('click', () => info.open(map, marker));
     });
+
+    // El SDK de Google Maps es pesado — solo se carga cuando el mapa está por
+    // entrar en viewport, para no competir por ancho de banda con el LCP.
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          init();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '300px' },
+    );
+    observer.observe(el);
+
+    return () => observer.disconnect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

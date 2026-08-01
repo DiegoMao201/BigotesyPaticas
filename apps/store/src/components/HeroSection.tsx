@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 const CDN = 'https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding';
 const VIDEO_MP4  = process.env.NEXT_PUBLIC_HERO_VIDEO_MP4  ?? `${CDN}/login-bg.mp4`;
 const VIDEO_WEBM = process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM ?? `${CDN}/login-bg.webm`;
-const VIDEO_POSTER = process.env.NEXT_PUBLIC_HERO_VIDEO_POSTER ?? `${CDN}/login-bg.jpg`;
+const VIDEO_POSTER = process.env.NEXT_PUBLIC_HERO_VIDEO_POSTER ?? `${CDN}/login-poster.jpg`;
 
 export function HeroSection() {
   const videoRef = useRef<HTMLVideoElement>(null);

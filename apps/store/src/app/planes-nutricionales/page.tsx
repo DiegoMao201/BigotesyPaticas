@@ -5,22 +5,14 @@ import { ExternalLink, Scale, TrendingDown } from 'lucide-react';
 export const metadata: Metadata = {
   title: 'Planes nutricionales para perros y gatos — Bigotes y Paticas Pereira',
   description:
-    'El 62% de perros adultos en Pereira presentan sobrepeso. Aprende cómo calcular la ración correcta y elegir el alimento adecuado para tu mascota según su etapa de vida.',
+    'El sobrepeso es uno de los problemas de salud más comunes en mascotas. Aprende cómo calcular la ración correcta y elegir el alimento adecuado según su etapa de vida.',
   alternates: { canonical: 'https://bigotesypaticas.com/planes-nutricionales' },
   openGraph: {
     title: 'Planes nutricionales para mascotas — Bigotes y Paticas',
-    description:
-      '2 kg de sobrepeso en un perro de 10 kg equivalen a que tú cargues 15 kg extras en la espalda. Descubre cómo calcular la ración ideal.',
+    description: 'Descubre cómo calcular la ración ideal y evitar el sobrepeso en tu perro o gato.',
     url: 'https://bigotesypaticas.com/planes-nutricionales',
   },
 };
-
-const STATS = [
-  { cifra: '62%', label: 'de perros adultos en Pereira tienen sobrepeso' },
-  { cifra: '3x', label: 'más rápido se desgasta el cartílago articular con sobrepeso' },
-  { cifra: '20%', label: 'sobrecarga articular con solo 2 kg extras en un perro de 10 kg' },
-  { cifra: '2–3 años', label: 'menos de vida útil en mascotas con obesidad crónica' },
-];
 
 const ETAPAS = [
   {
@@ -65,25 +57,11 @@ export default function PlanesNutricionalesPage() {
             </div>
           </div>
           <h1 className="text-3xl md:text-5xl font-display font-extrabold mb-4 leading-tight">
-            2 kg de sobrepeso en tu perro<br />equivalen a 15 kg extras en tu espalda.
+            El sobrepeso es una de las causas<br />más comunes de dolor articular en mascotas.
           </h1>
           <p className="text-lg text-white/80 max-w-2xl mx-auto">
-            En el Eje Cafetero, los veterinarios reportan que el <strong className="text-white">62% de perros adultos tienen sobrepeso</strong>. La mayoría desarrolla problemas articulares después de los 7 años. La nutrición correcta no es un lujo — es la diferencia entre caminar sin dolor o no hacerlo.
+            Un pequeño exceso de peso ya representa una carga extra sobre las articulaciones, y con el tiempo eso pasa factura. La nutrición correcta no es un lujo — es la diferencia entre caminar sin dolor o no hacerlo.
           </p>
-        </div>
-      </div>
-
-      {/* Cifras */}
-      <div className="bg-[#f5f0e8] py-14 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {STATS.map((s) => (
-              <div key={s.cifra} className="bg-white rounded-2xl p-6 text-center shadow-sm border border-[#e8e0d0]">
-                <p className="text-3xl font-extrabold text-[#187f77] mb-2">{s.cifra}</p>
-                <p className="text-sm text-gray-600 leading-tight">{s.label}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 

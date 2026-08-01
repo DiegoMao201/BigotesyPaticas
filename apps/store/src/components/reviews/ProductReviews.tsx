@@ -176,7 +176,7 @@ export function ProductReviews({
                     {rev.photo_urls.map((url, i) => (
                       <a key={i} href={url} target="_blank" rel="noopener noreferrer">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt="" className="w-16 h-16 rounded-xl object-cover border border-border" />
+                        <img src={url} alt="" loading="lazy" decoding="async" className="w-16 h-16 rounded-xl object-cover border border-border" />
                       </a>
                     ))}
                   </div>

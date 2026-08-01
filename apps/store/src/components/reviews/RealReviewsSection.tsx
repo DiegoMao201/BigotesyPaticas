@@ -58,6 +58,8 @@ function ReviewCard({ review }: { review: GBPReview }) {
           <img
             src={review.reviewer_photo}
             alt={review.reviewer_name}
+            loading="lazy"
+            decoding="async"
             className="w-9 h-9 rounded-full object-cover"
           />
         ) : (
