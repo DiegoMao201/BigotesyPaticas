@@ -197,42 +197,54 @@ async def _upsert_supplier_sku_map(
     purchase: Purchase,
     items: list[PurchaseItem],
 ) -> None:
-    """Actualiza memoria SKU proveedor -> producto interno para auto-match futuro."""
+    """Actualiza memoria SKU proveedor -> producto interno para auto-match futuro.
+
+    Usa una caché local por sku_proveedor dentro de la misma llamada: si la
+    factura trae el mismo sku_proveedor en más de una línea (ej. el mismo
+    producto en dos lotes), la sesión tiene autoflush=False (app/db.py) y la
+    segunda línea no vería el insert pendiente de la primera al hacer el
+    SELECT — terminaba intentando insertar dos veces la misma clave única
+    (supplier_id, sku_proveedor) y violando el constraint uq_supplier_sku.
+    """
     if purchase.supplier_id is None:
         return
 
+    seen: dict[str, SupplierSkuMap] = {}
     for item in items:
         sku_prov = (item.sku_proveedor or "").strip()
         if not sku_prov or item.product_id is None:
             continue
 
-        existing = (
-            await db.execute(
-                select(SupplierSkuMap).where(
-                    SupplierSkuMap.supplier_id == purchase.supplier_id,
-                    SupplierSkuMap.sku_proveedor == sku_prov,
+        entry = seen.get(sku_prov)
+        if entry is None:
+            entry = (
+                await db.execute(
+                    select(SupplierSkuMap).where(
+                        SupplierSkuMap.supplier_id == purchase.supplier_id,
+                        SupplierSkuMap.sku_proveedor == sku_prov,
+                    )
                 )
-            )
-        ).scalar_one_or_none()
+            ).scalar_one_or_none()
 
-        if existing is None:
-            db.add(
-                SupplierSkuMap(
-                    supplier_id=purchase.supplier_id,
-                    sku_proveedor=sku_prov,
-                    product_id=item.product_id,
-                    factor_pack=max(1, int(item.factor_pack or 1)),
-                    last_unit_cost=float(item.unit_cost),
-                    last_tax_pct=float(item.tax_pct),
-                    last_seen_at=purchase.purchased_at,
-                )
+        if entry is None:
+            entry = SupplierSkuMap(
+                supplier_id=purchase.supplier_id,
+                sku_proveedor=sku_prov,
+                product_id=item.product_id,
+                factor_pack=max(1, int(item.factor_pack or 1)),
+                last_unit_cost=float(item.unit_cost),
+                last_tax_pct=float(item.tax_pct),
+                last_seen_at=purchase.purchased_at,
             )
+            db.add(entry)
         else:
-            existing.product_id = item.product_id
-            existing.factor_pack = max(1, int(item.factor_pack or 1))
-            existing.last_unit_cost = float(item.unit_cost)
-            existing.last_tax_pct = float(item.tax_pct)
-            existing.last_seen_at = purchase.purchased_at
+            entry.product_id = item.product_id
+            entry.factor_pack = max(1, int(item.factor_pack or 1))
+            entry.last_unit_cost = float(item.unit_cost)
+            entry.last_tax_pct = float(item.tax_pct)
+            entry.last_seen_at = purchase.purchased_at
+
+        seen[sku_prov] = entry
 
 
 # ─── Endpoints ────────────────────────────────────────────────────
