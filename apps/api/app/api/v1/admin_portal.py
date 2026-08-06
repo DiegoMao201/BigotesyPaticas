@@ -25,6 +25,7 @@ from app.models.portal import (
     PortalSession,
 )
 from app.services.portal_order_actions import (
+    InsufficientStockError,
     bridge_to_sales,
     credit_loyalty_points,
     process_referral_reward,
@@ -58,6 +59,25 @@ class ApptStatusUpdate(BaseModel):
 def _pet_name_subquery(db_session):
     """Subquery no es necesaria — usamos join directo en las consultas."""
     pass
+
+
+async def _stock_availability(db: DBSession, product_ids: set[uuid.UUID]) -> dict[uuid.UUID, int]:
+    """Suma inventory.Stock.quantity por producto (todas las ubicaciones).
+
+    Una sola query agrupada — evita N+1 al revisar disponibilidad de varios pedidos.
+    """
+    if not product_ids:
+        return {}
+    from app.models.inventory import Stock
+
+    rows = (
+        await db.execute(
+            select(Stock.product_id, func.sum(Stock.quantity))
+            .where(Stock.product_id.in_(product_ids))
+            .group_by(Stock.product_id)
+        )
+    ).all()
+    return {pid: int(total or 0) for pid, total in rows}
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
@@ -148,6 +168,52 @@ async def list_portal_orders(
         q = q.where(PortalOrder.status == status)
 
     rows = (await db.execute(q)).all()
+    orders = [order for order, _, _ in rows]
+
+    # Ítems por pedido (tabla nueva) — para pedidos legado sin filas ahí, se usa
+    # el producto/cantidad guardados directo en PortalOrder como fallback, igual
+    # que en _order_render_data() / bridge_to_sales().
+    order_ids = [o.id for o in orders]
+    items_by_order: dict[uuid.UUID, list[PortalOrderItem]] = {}
+    if order_ids:
+        item_rows = (
+            (
+                await db.execute(
+                    select(PortalOrderItem).where(
+                        PortalOrderItem.portal_order_id.in_(order_ids),
+                        PortalOrderItem.is_removed.is_(False),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for it in item_rows:
+            items_by_order.setdefault(it.portal_order_id, []).append(it)
+
+    all_product_ids: set[uuid.UUID] = set()
+    for o in orders:
+        items = items_by_order.get(o.id)
+        if items:
+            all_product_ids.update(i.product_id for i in items if i.product_id)
+        elif o.product_id:
+            all_product_ids.add(o.product_id)
+    stock_by_product = await _stock_availability(db, all_product_ids)
+
+    def _has_stock_issues(order: PortalOrder) -> bool:
+        items = items_by_order.get(order.id)
+        if items:
+            checks = [(i.product_id, i.quantity) for i in items]
+        elif order.product_id:
+            checks = [(order.product_id, order.quantity)]
+        else:
+            return False
+        for pid, qty in checks:
+            available = stock_by_product.get(pid)
+            if available is not None and available < qty:
+                return True
+        return False
+
     result = []
     for order, customer_name, pet_name in rows:
         result.append(
@@ -159,12 +225,14 @@ async def list_portal_orders(
                 "quantity": order.quantity,
                 "unit_price": float(order.unit_price) if order.unit_price else None,
                 "status": order.status,
+                "workflow_status": order.workflow_status,
                 "invoice_number": order.invoice_number,
                 "sales_order_id": str(order.sales_order_id) if order.sales_order_id else None,
                 "notes": order.notes,
                 "created_at": order.created_at.isoformat(),
                 "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
                 "points_awarded": order.points_awarded,
+                "has_stock_issues": _has_stock_issues(order),
             }
         )
     return result
@@ -247,7 +315,16 @@ async def update_portal_order(
 
     elif new_status == "invoiced":
         # Usar función compartida (idempotente)
-        await bridge_to_sales(order, db)
+        try:
+            await bridge_to_sales(order, db)
+        except InsufficientStockError as e:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "No se puede facturar: falta stock en uno o más productos.",
+                    "shortages": e.shortages,
+                },
+            ) from e
         await notify_customer(
             db,
             order.customer_id,
@@ -531,22 +608,34 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
         .all()
     )
 
-    items_data = [
-        {
-            "id": str(i.id),
-            "product_id": str(i.product_id) if i.product_id else None,
-            "sku": i.sku,
-            "name": i.name,
-            "image_url": i.image_url,
-            "quantity": i.quantity,
-            "unit_price": float(i.unit_price) if i.unit_price else 0,
-            "subtotal": float(i.subtotal) if i.subtotal else 0,
-            "notes": i.notes,
-            "is_substituted": i.is_substituted,
-            "substituted_from_name": i.substituted_from_name,
-        }
-        for i in items
-    ]
+    stock_by_product = await _stock_availability(
+        db, {i.product_id for i in items if i.product_id}
+    )
+
+    items_data = []
+    has_stock_issues = False
+    for i in items:
+        available = stock_by_product.get(i.product_id) if i.product_id else None
+        stock_ok = available is None or available >= i.quantity
+        if not stock_ok:
+            has_stock_issues = True
+        items_data.append(
+            {
+                "id": str(i.id),
+                "product_id": str(i.product_id) if i.product_id else None,
+                "sku": i.sku,
+                "name": i.name,
+                "image_url": i.image_url,
+                "quantity": i.quantity,
+                "unit_price": float(i.unit_price) if i.unit_price else 0,
+                "subtotal": float(i.subtotal) if i.subtotal else 0,
+                "notes": i.notes,
+                "is_substituted": i.is_substituted,
+                "substituted_from_name": i.substituted_from_name,
+                "available_stock": available,
+                "stock_ok": stock_ok,
+            }
+        )
 
     subtotal = sum(float(i.subtotal or 0) for i in items)
     discount = float(order.discount_amount or 0)
@@ -590,6 +679,7 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
         "created_at": order.created_at.isoformat(),
         "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
         "items": items_data,
+        "has_stock_issues": has_stock_issues,
     }
 
 
@@ -724,7 +814,16 @@ async def change_workflow_status(
 
     # ── Portar lógica del endpoint viejo ──────────────────────────────────────
     if new == "invoiced":
-        await bridge_to_sales(order, db)
+        try:
+            await bridge_to_sales(order, db)
+        except InsufficientStockError as e:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "No se puede facturar: falta stock en uno o más productos.",
+                    "shortages": e.shortages,
+                },
+            ) from e
 
     if new == "delivered":
         await credit_loyalty_points(order, db)
@@ -783,10 +882,15 @@ async def edit_item_quantity(
     order = (
         await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
     ).scalar_one_or_none()
+    pending_notif = None
     if order and order.workflow_status in ("received", "under_review"):
         order.workflow_status = "awaiting_customer"
+        pending_notif = await queue_customer_notification(order, "awaiting_customer", db)
     await db.commit()
-    return await _get_order_with_items(db, order_id)
+    result = await _get_order_with_items(db, order_id)
+    if pending_notif:
+        result["pending_notification"] = pending_notif
+    return result
 
 
 # ── POST substitute item ──────────────────────────────────────────────────────
@@ -844,10 +948,15 @@ async def substitute_item(
     order = (
         await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
     ).scalar_one_or_none()
+    pending_notif = None
     if order and order.workflow_status in ("received", "under_review"):
         order.workflow_status = "awaiting_customer"
+        pending_notif = await queue_customer_notification(order, "awaiting_customer", db)
     await db.commit()
-    return await _get_order_with_items(db, order_id)
+    result = await _get_order_with_items(db, order_id)
+    if pending_notif:
+        result["pending_notification"] = pending_notif
+    return result
 
 
 # ── POST add item ─────────────────────────────────────────────────────────────
@@ -940,10 +1049,15 @@ async def remove_item_from_order(
     order = (
         await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
     ).scalar_one_or_none()
+    pending_notif = None
     if order and order.workflow_status in ("received", "under_review"):
         order.workflow_status = "awaiting_customer"
+        pending_notif = await queue_customer_notification(order, "awaiting_customer", db)
     await db.commit()
-    return await _get_order_with_items(db, order_id)
+    result = await _get_order_with_items(db, order_id)
+    if pending_notif:
+        result["pending_notification"] = pending_notif
+    return result
 
 
 # ── POST apply discount ───────────────────────────────────────────────────────

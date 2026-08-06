@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Users, ShoppingCart, Calendar, Star,
   RefreshCw, CheckCircle, Clock, ChevronRight,
-  Package, Truck, XCircle, Loader2, Eye,
+  Package, Truck, XCircle, Loader2, Eye, AlertTriangle,
 } from 'lucide-react';
 import { adminPortal, type PortalOrder, type PortalAppointment } from '@/lib/api';
 import { Card } from '@/components/ui/card';
@@ -279,13 +279,20 @@ export default function PetMonitorPage() {
                 const wsInfo = WORKFLOW_STATUS[ws] ?? { label: ws, color: 'bg-gray-100 text-gray-600', emoji: '📦' };
                 const isAwaiting = ws === 'awaiting_customer';
                 return (
-                  <Card key={order.id} className={`p-4 border transition-shadow hover:shadow-md ${isAwaiting ? 'border-amber-300 bg-amber-50/30' : 'border-gray-100'}`}>
+                  <Card key={order.id} className={`p-4 border transition-shadow hover:shadow-md ${
+                    order.has_stock_issues ? 'border-red-300 bg-red-50/40' : isAwaiting ? 'border-amber-300 bg-amber-50/30' : 'border-gray-100'
+                  }`}>
                     <div className="flex items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${wsInfo.color}`}>
                             {wsInfo.emoji} {wsInfo.label}
                           </span>
+                          {order.has_stock_issues && (
+                            <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                              <AlertTriangle size={11} /> Sin stock
+                            </span>
+                          )}
                           {isAwaiting && (
                             <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-bold animate-pulse">
                               ⏳ Requiere contacto

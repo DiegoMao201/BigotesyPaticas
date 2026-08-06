@@ -10,6 +10,7 @@ Todas las funciones son idempotentes.
 from __future__ import annotations
 
 import math
+import uuid
 from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
@@ -25,6 +26,19 @@ from app.models.portal import (
 )
 
 # ── Mapeo de workflow_status a template de notificación ───────────────────────
+
+class InsufficientStockError(Exception):
+    """Se lanza cuando bridge_to_sales() detecta que uno o más ítems del pedido
+    no tienen stock suficiente para facturar. `shortages` es una lista de
+    dicts {sku, name, requested, available} para mostrarle al admin."""
+
+    def __init__(self, shortages: list[dict]):
+        self.shortages = shortages
+        super().__init__(
+            "Stock insuficiente: "
+            + ", ".join(f"{s['name']} (pedido {s['requested']}, disponible {s['available']})" for s in shortages)
+        )
+
 
 NOTIFICATION_TEMPLATES: dict[str, str] = {
     "received": "order_received",
@@ -209,6 +223,74 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
     total = sum(float(i.subtotal or 0) for i in items)
     if not total and order.unit_price:
         total = float(order.unit_price) * (order.quantity or 1)
+
+    # ── Validar + descontar inventario real ANTES de crear la factura ────────
+    # Mismo patrón que el POS (app/api/v1/sales.py): lock de fila + StockMovement.
+    # Si falta stock, se lanza InsufficientStockError y NO se crea nada (rollback
+    # automático de get_db() al propagar la excepción).
+    from app.models.catalog import Product
+    from app.models.inventory import Stock, StockLocation, StockMovement
+
+    if items:
+        stock_lines = [(i.product_id, i.quantity, i.name or "") for i in items if i.product_id]
+    elif order.product_id:
+        stock_lines = [(order.product_id, order.quantity or 1, order.product_name)]
+    else:
+        stock_lines = []
+
+    if stock_lines:
+        loc = (
+            await db.execute(select(StockLocation).where(StockLocation.is_default == 1).limit(1))
+        ).scalar_one_or_none()
+        if not loc:
+            loc = (
+                await db.execute(select(StockLocation).order_by(StockLocation.created_at).limit(1))
+            ).scalar_one_or_none()
+
+        shortages: list[dict] = []
+        locked_stocks: dict[uuid.UUID, Stock] = {}
+        if loc:
+            for product_id, qty, name in stock_lines:
+                stock = (
+                    await db.execute(
+                        select(Stock)
+                        .where(Stock.product_id == product_id)
+                        .where(Stock.location_id == loc.id)
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                available = stock.quantity if stock else 0
+                if available < qty:
+                    prod = (
+                        await db.execute(select(Product.sku).where(Product.id == product_id))
+                    ).scalar_one_or_none()
+                    shortages.append(
+                        {"sku": prod or "", "name": name, "requested": qty, "available": available}
+                    )
+                else:
+                    locked_stocks[product_id] = stock
+
+            if shortages:
+                raise InsufficientStockError(shortages)
+
+            occurred_at = datetime.now(UTC)
+            for product_id, qty, _name in stock_lines:
+                stock = locked_stocks[product_id]
+                stock.quantity -= qty
+                db.add(
+                    StockMovement(
+                        product_id=product_id,
+                        location_id=loc.id,
+                        movement_type="SALE",
+                        quantity_delta=-qty,
+                        quantity_after=stock.quantity,
+                        reference_type="PORTAL_ORDER",
+                        reference_id=order.id,
+                        occurred_at=occurred_at,
+                        created_by="admin_portal",
+                        notes=f"Facturación pedido portal #{str(order.id)[:8]}",
+                    )
+                )
 
     invoice_num = await _next_order_number(db)
     now = datetime.now(UTC)

@@ -1251,6 +1251,7 @@ export interface PortalOrder {
   created_at: string;
   delivered_at: string | null;
   points_awarded: number;
+  has_stock_issues: boolean;
 }
 
 export interface PortalOrderItem {
@@ -1265,6 +1266,8 @@ export interface PortalOrderItem {
   notes: string | null;
   is_substituted: boolean;
   substituted_from_name: string | null;
+  available_stock: number | null;
+  stock_ok: boolean;
 }
 
 export interface PortalOrderDetail {
@@ -1292,6 +1295,8 @@ export interface PortalOrderDetail {
   created_at: string;
   delivered_at: string | null;
   items: PortalOrderItem[];
+  has_stock_issues: boolean;
+  pending_notification?: PendingNotification;
 }
 
 export interface ActivityLogEntry {

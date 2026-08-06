@@ -8,9 +8,18 @@ import {
   X, ChevronRight, MessageCircle, Package, MapPin,
   StickyNote, Percent, UserCheck, XCircle, Clock,
   CheckCircle2, AlertCircle, Copy, Send, SkipForward,
+  AlertTriangle, Minus, Plus, Trash2,
 } from 'lucide-react';
-import { adminPortal, type PortalOrderDetail, type ActivityLogEntry, type PendingNotification } from '@/lib/api';
+import { adminPortal, ApiError, type PortalOrderDetail, type ActivityLogEntry, type PendingNotification } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+
+function stockShortageMessage(err: unknown): string | null {
+  if (!(err instanceof ApiError) || err.status !== 409) return null;
+  const detail = (err.detail as { detail?: { shortages?: { name: string; requested: number; available: number }[] } })?.detail;
+  const shortages = detail?.shortages;
+  if (!shortages?.length) return null;
+  return shortages.map((s) => `${s.name}: pediste ${s.requested}, solo hay ${s.available}`).join(' · ');
+}
 
 const WORKFLOW_LABELS: Record<string, { label: string; color: string }> = {
   received:            { label: 'Recibido',              color: 'bg-blue-100 text-blue-700' },
@@ -78,6 +87,33 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
       invalidate();
       if (d.pending_notification) setPendingNotif(d.pending_notification);
     },
+    onError: (e: Error) => {
+      const shortage = stockShortageMessage(e);
+      toast.error(shortage ? `Sin stock para facturar — ${shortage}` : e.message, {
+        duration: shortage ? 10000 : undefined,
+      });
+    },
+  });
+
+  const editQtyMut = useMutation({
+    mutationFn: ({ itemId, quantity }: { itemId: string; quantity: number }) =>
+      adminPortal.editItemQty(orderId, itemId, quantity, 'Ajuste de cantidad por disponibilidad'),
+    onSuccess: (d) => {
+      toast.success('Cantidad actualizada');
+      invalidate();
+      if (d.pending_notification) setPendingNotif(d.pending_notification);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeItemMut = useMutation({
+    mutationFn: (itemId: string) =>
+      adminPortal.removeItem(orderId, itemId, 'Producto agotado, no se pudo conseguir'),
+    onSuccess: (d) => {
+      toast.success('Producto quitado del pedido');
+      invalidate();
+      if (d.pending_notification) setPendingNotif(d.pending_notification);
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -123,6 +159,7 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
   const nextOptions = NEXT_STATUS[ws] ?? [];
   const canCancel = !['delivered', 'cancelled', 'returned'].includes(ws);
   const isAwaiting = ws === 'awaiting_customer';
+  const canEditItems = ['received', 'under_review', 'awaiting_customer', 'ready_to_invoice'].includes(ws);
 
   const whatsappMsg = () => {
     const phone = order.customer_phone?.replace(/\D/g, '') ?? '';
@@ -168,6 +205,13 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
           <span className="font-bold text-teal-800">Total: {formatCurrency(order.total)}</span>
         </div>
 
+        {order.has_stock_issues && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border-b border-red-100 text-red-700 text-xs font-semibold shrink-0">
+            <AlertTriangle size={14} className="shrink-0" />
+            Falta stock en uno o más productos — no se podrá facturar hasta resolverlo (ajustá cantidad, sustituí o quitá el producto).
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex border-b shrink-0">
           {(['items', 'activity', 'notes'] as const).map((t) => (
@@ -194,24 +238,65 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                 </div>
               )}
               {order.items.map((item) => (
-                <div key={item.id} className={`flex items-center gap-3 bg-white border rounded-xl p-3 ${item.is_substituted ? 'border-amber-200 bg-amber-50' : 'border-gray-100'}`}>
-                  <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
-                    {item.image_url
-                      ? <img src={item.image_url} alt={item.name ?? ''} className="h-full w-full object-contain p-1" />
-                      : <Package size={20} className="text-gray-400" />
-                    }
+                <div key={item.id} className={`flex flex-col gap-2 bg-white border rounded-xl p-3 ${
+                  !item.stock_ok ? 'border-red-300 bg-red-50/40' : item.is_substituted ? 'border-amber-200 bg-amber-50' : 'border-gray-100'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+                      {item.image_url
+                        ? <img src={item.image_url} alt={item.name ?? ''} className="h-full w-full object-contain p-1" />
+                        : <Package size={20} className="text-gray-400" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 leading-snug">{item.name}</p>
+                      {item.is_substituted && (
+                        <p className="text-xs text-amber-600">↔ Sustituyó: {item.substituted_from_name}</p>
+                      )}
+                      {item.sku && <p className="text-xs text-gray-400">{item.sku}</p>}
+                      {!item.stock_ok && (
+                        <p className="text-xs font-semibold text-red-600 flex items-center gap-1 mt-0.5">
+                          <AlertTriangle size={12} /> Solo {item.available_stock ?? 0} disponible{item.available_stock === 1 ? '' : 's'}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs text-gray-500">x{item.quantity}</p>
+                      <p className="text-sm font-bold text-gray-900">{formatCurrency(item.subtotal)}</p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 leading-snug">{item.name}</p>
-                    {item.is_substituted && (
-                      <p className="text-xs text-amber-600">↔ Sustituyó: {item.substituted_from_name}</p>
-                    )}
-                    {item.sku && <p className="text-xs text-gray-400">{item.sku}</p>}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-xs text-gray-500">x{item.quantity}</p>
-                    <p className="text-sm font-bold text-gray-900">{formatCurrency(item.subtotal)}</p>
-                  </div>
+
+                  {canEditItems && (
+                    <div className="flex items-center gap-2 pl-[60px]">
+                      <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg">
+                        <button
+                          type="button"
+                          onClick={() => item.quantity > 1 && editQtyMut.mutate({ itemId: item.id, quantity: item.quantity - 1 })}
+                          disabled={editQtyMut.isPending || item.quantity <= 1}
+                          className="p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30"
+                        >
+                          <Minus size={12} />
+                        </button>
+                        <span className="text-xs font-semibold w-5 text-center">{item.quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => editQtyMut.mutate({ itemId: item.id, quantity: item.quantity + 1 })}
+                          disabled={editQtyMut.isPending}
+                          className="p-1.5 text-gray-500 hover:text-gray-800 disabled:opacity-30"
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItemMut.mutate(item.id)}
+                        disabled={removeItemMut.isPending}
+                        className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
+                      >
+                        <Trash2 size={12} /> Quitar
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
 
