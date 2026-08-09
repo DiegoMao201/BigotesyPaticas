@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Film, CheckCircle2, XCircle, RefreshCw, Play, Clock,
   Instagram, AlertTriangle, Wand2, ToggleLeft, ToggleRight,
-  Calendar, Image, Newspaper, Facebook,
+  Calendar, Image, Newspaper, Facebook, X, Maximize2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { stories, type StoryItem } from '@/lib/api';
@@ -57,12 +57,38 @@ function ActionButtons({ story, onApprove, onReject, loading }: {
   );
 }
 
+// ── Vista previa a pantalla completa (imagen) ─────────────────────────────────
+
+function ImagePreviewModal({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+        aria-label="Cerrar"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      <img
+        src={url}
+        alt="Vista previa"
+        className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
 // ── Story Card (9:16 video) ───────────────────────────────────────────────────
 
 function StoryCard({ story, onApprove, onReject, loading }: {
   story: StoryItem; onApprove: () => void; onReject: () => void; loading: boolean;
 }) {
   const [playing, setPlaying] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   return (
     <Card className="overflow-hidden border border-border">
       <div className="relative bg-black aspect-[9/16] max-h-64 flex items-center justify-center overflow-hidden">
@@ -83,12 +109,22 @@ function StoryCard({ story, onApprove, onReject, loading }: {
               </button>
             </>
           )
-        ) : story.base_image_url
-          ? <img src={story.base_image_url} alt="Story" className="w-full h-full object-cover" />
-          : <div className="flex flex-col items-center gap-2 text-white/40">
-              <Film className="h-10 w-10" /><span className="text-xs">Sin video aún</span>
+        ) : story.base_image_url ? (
+          <button
+            onClick={() => setPreviewing(true)}
+            className="relative w-full h-full group"
+            aria-label="Ver imagen completa"
+          >
+            <img src={story.base_image_url} alt="Story" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+              <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
-        }
+          </button>
+        ) : (
+          <div className="flex flex-col items-center gap-2 text-white/40">
+            <Film className="h-10 w-10" /><span className="text-xs">Sin video aún</span>
+          </div>
+        )}
         <div className="absolute top-2 left-2"><StatusBadge status={story.status} /></div>
         {story.dry_run && (
           <span className="absolute top-2 right-2 text-[10px] bg-purple-600 text-white px-1.5 py-0.5 rounded font-medium">
@@ -96,6 +132,9 @@ function StoryCard({ story, onApprove, onReject, loading }: {
           </span>
         )}
       </div>
+      {previewing && story.base_image_url && (
+        <ImagePreviewModal url={story.base_image_url} onClose={() => setPreviewing(false)} />
+      )}
       <div className="p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -143,16 +182,27 @@ function StoryCard({ story, onApprove, onReject, loading }: {
 function FeedPostCard({ story, onApprove, onReject, loading }: {
   story: StoryItem; onApprove: () => void; onReject: () => void; loading: boolean;
 }) {
+  const [previewing, setPreviewing] = useState(false);
   return (
     <Card className="overflow-hidden border border-border">
       {/* Imagen cuadrada */}
       <div className="relative aspect-square bg-gray-100 overflow-hidden">
-        {story.base_image_url
-          ? <img src={story.base_image_url} alt="Post" className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center text-gray-300">
-              <Image className="h-10 w-10" />
+        {story.base_image_url ? (
+          <button
+            onClick={() => setPreviewing(true)}
+            className="relative w-full h-full group"
+            aria-label="Ver imagen completa"
+          >
+            <img src={story.base_image_url} alt="Post" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+              <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
-        }
+          </button>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-300">
+            <Image className="h-10 w-10" />
+          </div>
+        )}
         <div className="absolute top-2 left-2"><StatusBadge status={story.status} /></div>
         {/* Badges de redes */}
         <div className="absolute bottom-2 right-2 flex gap-1">
@@ -164,6 +214,9 @@ function FeedPostCard({ story, onApprove, onReject, loading }: {
           </span>
         </div>
       </div>
+      {previewing && story.base_image_url && (
+        <ImagePreviewModal url={story.base_image_url} onClose={() => setPreviewing(false)} />
+      )}
 
       <div className="p-3 space-y-2">
         <div className="flex items-center justify-between gap-2">
@@ -273,7 +326,7 @@ export default function StoriesPage() {
   const [statusTab, setStatusTab] = useState<StatusTab>('pending');
   const [actionId, setActionId] = useState<string | null>(null);
 
-  const statusFilter = statusTab === 'all' ? undefined : statusTab === 'approved' ? 'approved' : statusTab;
+  const statusFilter = statusTab === 'all' ? undefined : statusTab === 'pending' ? 'pending_approval' : statusTab;
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['stories', section, statusTab],
