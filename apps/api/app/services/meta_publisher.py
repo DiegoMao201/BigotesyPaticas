@@ -45,13 +45,18 @@ async def publish_to_meta(post: dict, target: str, dry_run: bool = True) -> dict
 
     caption = _build_caption(post, platform=target)
     image_url = post.get("image_url", "")
-    if not image_url:
-        raise ValueError("Post sin image_url")
 
     if target == "instagram":
+        # Instagram no tiene forma de publicar solo texto en el feed — su API
+        # (container /media) siempre exige image_url o video_url.
+        if not image_url:
+            raise ValueError("Instagram no permite posts sin imagen (limitación de la plataforma)")
         return _publish_instagram(image_url, caption)
     elif target == "facebook":
-        return _publish_facebook(image_url, caption, token=_token("facebook"))
+        # Facebook sí soporta texto puro vía /{page}/feed cuando no hay imagen.
+        if image_url:
+            return _publish_facebook(image_url, caption, token=_token("facebook"))
+        return _publish_facebook_text(caption, token=_token("facebook"))
     else:
         raise ValueError(f"Target desconocido: {target}")
 
@@ -155,4 +160,25 @@ def _publish_facebook(image_url: str, caption: str, token: str = "") -> dict:
     r.raise_for_status()
     post_id = r.json().get("post_id") or r.json().get("id")
     log.info("FB publicado: %s", post_id)
+    return {"facebook_post_id": post_id}
+
+
+def _publish_facebook_text(caption: str, token: str = "") -> dict:
+    """Publica un post de solo texto en Facebook vía /{page}/feed (sin imagen)."""
+    page = PAGE_ID or os.environ.get("META_PAGE_ID", "")
+    token = token or _token("facebook")
+    if not page:
+        raise RuntimeError("META_PAGE_ID no configurado")
+
+    r = requests.post(
+        f"{META_BASE}/{page}/feed",
+        params={
+            "message": caption,
+            "access_token": token,
+        },
+        timeout=30,
+    )
+    r.raise_for_status()
+    post_id = r.json().get("id")
+    log.info("FB (solo texto) publicado: %s", post_id)
     return {"facebook_post_id": post_id}
