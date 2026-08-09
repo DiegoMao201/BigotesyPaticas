@@ -66,19 +66,20 @@ def get_pending_stories(cur) -> list[dict]:
     return [dict(zip(cols, row, strict=False)) for row in cur.fetchall()]
 
 
-def publish_ig_story(video_url: str, caption: str) -> str:
-    """Publica video story en Instagram. Retorna ig_story_id."""
+def publish_ig_story(media_url: str, caption: str, is_video: bool = True) -> str:
+    """Publica story (video o imagen) en Instagram. Retorna ig_story_id."""
     ig_id = os.environ.get("META_INSTAGRAM_BUSINESS_ID", "")
     token = _token()
     if not ig_id:
         raise RuntimeError("META_INSTAGRAM_BUSINESS_ID no configurado")
 
-    # Step 1: crear container de video story
+    # Step 1: crear container de story (video o imagen)
+    media_params = {"video_url": media_url} if is_video else {"image_url": media_url}
     r = requests.post(
         f"{META_BASE}/{ig_id}/media",
         params={
             "media_type": "STORIES",
-            "video_url": video_url,
+            **media_params,
             "caption": caption[:2200],
             "access_token": token,
         },
@@ -166,6 +167,37 @@ def publish_fb_story(video_url: str) -> str:
     return story_id
 
 
+def publish_fb_story_image(image_url: str) -> str:
+    """Publica story de imagen en Facebook Page (flujo photo_stories, distinto
+    al de video: primero se sube la foto sin publicarla al feed, luego se
+    convierte en story). Retorna fb_story_id."""
+    page_id = os.environ.get("META_PAGE_ID", "")
+    page_token = os.environ.get("META_MESSENGER_TOKEN") or _token()
+    if not page_id:
+        raise RuntimeError("META_PAGE_ID no configurado")
+
+    # Fase 1: subir la foto sin publicarla en el feed
+    photo_r = requests.post(
+        f"{META_BASE}/{page_id}/photos",
+        params={"url": image_url, "published": "false", "access_token": page_token},
+        timeout=60,
+    )
+    photo_r.raise_for_status()
+    photo_id = photo_r.json()["id"]
+    log.info("FB story foto subida (sin publicar): %s", photo_id)
+
+    # Fase 2: convertir la foto en story
+    story_r = requests.post(
+        f"{META_BASE}/{page_id}/photo_stories",
+        params={"photo_id": photo_id, "access_token": page_token},
+        timeout=30,
+    )
+    story_r.raise_for_status()
+    story_id = story_r.json().get("post_id") or story_r.json().get("id", "")
+    log.info("FB story (imagen) publicada: %s", story_id)
+    return story_id
+
+
 async def publish_story(story: dict, dry_run: bool, cur, conn) -> bool:
     story_id = str(story["id"])
 
@@ -181,19 +213,20 @@ async def publish_story(story: dict, dry_run: bool, cur, conn) -> bool:
     if dry_run:
         log.info("[dry-run] Story %s — NO se publica en Meta", story_id[:8])
     else:
-        video_url = story.get("video_url", "")
+        is_image = story.get("media_type") == "image"
+        media_url = story.get("base_image_url", "") if is_image else story.get("video_url", "")
         caption = story.get("caption", "") or ""
-        if not video_url:
-            error = "Sin video_url"
+        if not media_url:
+            error = "Sin video_url" if not is_image else "Sin base_image_url"
         else:
             try:
-                ig_id = publish_ig_story(video_url, caption)
+                ig_id = publish_ig_story(media_url, caption, is_video=not is_image)
             except Exception as e:
                 log.warning("IG story falló: %s", e)
                 error = str(e)[:300]
 
             try:
-                fb_id = publish_fb_story(video_url)
+                fb_id = publish_fb_story_image(media_url) if is_image else publish_fb_story(media_url)
             except Exception as e:
                 log.warning("FB story falló: %s", e)
                 if not error:
