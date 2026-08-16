@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -142,6 +143,110 @@ async def portal_overview(db: DBSession) -> dict:
         "loyalty_points_30d": int(points_30d),
         "as_of": now.isoformat(),
     }
+
+
+@router.get("/customers/recent-logins")
+async def recent_logins(db: DBSession) -> list[dict]:
+    """Clientes que iniciaron sesión en el portal en las últimas 24h y todavía
+    no tienen ningún pedido -- candidatos para el mensaje de bienvenida +
+    incentivo de doble puntos en su primer pedido (promo permanente, ver
+    credit_loyalty_points()). El envío sigue siendo manual: se arma el link
+    de wa.me listo, el admin da clic para enviarlo."""
+    now = datetime.now(UTC)
+
+    sessions = (
+        await db.execute(
+            select(PortalSession.customer_id, func.max(PortalSession.created_at).label("last_login"))
+            .where(
+                PortalSession.expires_at > now,
+                PortalSession.created_at >= now - timedelta(hours=24),
+            )
+            .group_by(PortalSession.customer_id)
+        )
+    ).all()
+    if not sessions:
+        return []
+
+    customer_ids = [s.customer_id for s in sessions]
+
+    order_counts = dict(
+        (
+            await db.execute(
+                select(PortalOrder.customer_id, func.count())
+                .where(PortalOrder.customer_id.in_(customer_ids))
+                .group_by(PortalOrder.customer_id)
+            )
+        ).all()
+    )
+
+    contacted_ids = {
+        row[0]
+        for row in (
+            await db.execute(
+                select(ActivityLog.entity_id).where(
+                    ActivityLog.entity_type == "customer",
+                    ActivityLog.action == "login_incentive_sent",
+                    ActivityLog.entity_id.in_(customer_ids),
+                    ActivityLog.created_at >= now - timedelta(days=30),
+                )
+            )
+        ).all()
+    }
+
+    customers = {
+        c.id: c
+        for c in (await db.execute(select(Customer).where(Customer.id.in_(customer_ids)))).scalars().all()
+    }
+
+    result = []
+    for s in sessions:
+        cust = customers.get(s.customer_id)
+        if not cust or order_counts.get(s.customer_id, 0) > 0:
+            continue  # ya tiene pedidos, no aplica el incentivo de "primer pedido"
+
+        first_name = (cust.full_name or "").split(" ")[0] or ""
+        saludo = f"¡Hola {first_name}!" if first_name else "¡Hola!"
+        msg = (
+            f"{saludo} 🐾 Vimos que entraste a tu portal de Bigotes y Paticas, ¡gracias por "
+            f"registrarte! Si haces tu primer pedido, te llevas el DOBLE de puntos de fidelidad 🎉. "
+            f"Entra aquí: https://mi.bigotesypaticas.com"
+        )
+        phone_digits = "".join(ch for ch in (cust.phone or "") if ch.isdigit())
+        wa_phone = (phone_digits if phone_digits.startswith("57") else f"57{phone_digits}") if phone_digits else ""
+        wa_link = f"https://wa.me/{wa_phone}?text={quote(msg)}" if wa_phone else f"https://wa.me/?text={quote(msg)}"
+
+        result.append(
+            {
+                "customer_id": str(s.customer_id),
+                "customer_name": cust.full_name,
+                "phone": cust.phone,
+                "last_login": s.last_login.isoformat(),
+                "message": msg,
+                "whatsapp_link": wa_link,
+                "already_contacted": s.customer_id in contacted_ids,
+            }
+        )
+
+    result.sort(key=lambda r: r["last_login"], reverse=True)
+    return result
+
+
+@router.post("/customers/{customer_id}/mark-login-contacted")
+async def mark_login_contacted(customer_id: uuid.UUID, db: DBSession) -> dict:
+    """Registra que ya se envió el mensaje de bienvenida/incentivo a este
+    cliente, para no volver a mostrarlo en la lista los próximos 30 días."""
+    db.add(
+        ActivityLog(
+            entity_type="customer",
+            entity_id=customer_id,
+            action="login_incentive_sent",
+            actor_type="admin",
+            notes="Mensaje de bienvenida + doble puntos primer pedido, enviado por WhatsApp",
+            visible_to_customer=False,
+        )
+    )
+    await db.commit()
+    return {"ok": True}
 
 
 @router.get("/orders")

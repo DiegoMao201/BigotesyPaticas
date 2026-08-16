@@ -375,10 +375,31 @@ async def credit_loyalty_points(order: PortalOrder, db: DBSession) -> int:
         total = float(order.unit_price) * (order.quantity or 1)
 
     points = math.floor(total / 1000)
+
+    # Promo permanente: doble puntos en el primer pedido entregado del cliente.
+    is_first_order = False
+    if points > 0:
+        prior = (
+            await db.execute(
+                select(LoyaltyPoint.id)
+                .where(
+                    LoyaltyPoint.customer_id == order.customer_id,
+                    LoyaltyPoint.reason == "portal_order",
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        is_first_order = prior is None
+        if is_first_order:
+            points *= 2
+
     order.points_awarded = points
 
     if points > 0:
         now = datetime.now(UTC)
+        description = f"Entrega de pedido: {order.product_name}"
+        if is_first_order:
+            description += " (¡doble puntos por tu primer pedido!)"
         db.add(
             LoyaltyPoint(
                 customer_id=order.customer_id,
@@ -386,7 +407,7 @@ async def credit_loyalty_points(order: PortalOrder, db: DBSession) -> int:
                 reason="portal_order",
                 reference_type="portal_order",
                 reference_id=order.id,
-                description=f"Entrega de pedido: {order.product_name}",
+                description=description,
                 expires_at=now + timedelta(days=365),
             )
         )

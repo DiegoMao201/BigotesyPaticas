@@ -5,9 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Users, ShoppingCart, Calendar, Star,
   RefreshCw, CheckCircle, Clock, ChevronRight,
-  Package, Truck, XCircle, Loader2, Eye, AlertTriangle,
+  Package, Truck, XCircle, Loader2, Eye, AlertTriangle, MessageCircle,
 } from 'lucide-react';
-import { adminPortal, type PortalOrder, type PortalAppointment } from '@/lib/api';
+import { adminPortal, type PortalOrder, type PortalAppointment, type RecentLogin } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -117,6 +117,17 @@ export default function PetMonitorPage() {
     refetchInterval: 30_000,
   });
 
+  const { data: recentLogins = [], refetch: refetchLogins } = useQuery({
+    queryKey: ['admin-portal-recent-logins'],
+    queryFn: adminPortal.recentLogins,
+    refetchInterval: 30_000,
+  });
+
+  const { mutate: markContacted } = useMutation({
+    mutationFn: (customerId: string) => adminPortal.markLoginContacted(customerId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-portal-recent-logins'] }),
+  });
+
   useEffect(() => {
     if (kpis) setLastRefresh(new Date());
   }, [kpis]);
@@ -125,6 +136,7 @@ export default function PetMonitorPage() {
     refetchKpis();
     refetchOrders();
     refetchAppts();
+    refetchLogins();
     setLastRefresh(new Date());
   }
 
@@ -208,6 +220,53 @@ export default function PetMonitorPage() {
             accent="emerald"
           />
         </div>
+      )}
+
+      {/* Logins recientes sin pedido -- incentivo de bienvenida + doble puntos */}
+      {recentLogins.length > 0 && (
+        <Card className="p-4 border border-teal-200 bg-teal-50/30">
+          <div className="flex items-center gap-2 mb-3">
+            <MessageCircle className="h-4 w-4 text-teal-600" />
+            <h2 className="text-sm font-semibold text-gray-900">
+              Entraron al portal y aún no compran ({recentLogins.filter((l) => !l.already_contacted).length} sin contactar)
+            </h2>
+          </div>
+          <div className="flex flex-col gap-2">
+            {recentLogins.map((login: RecentLogin) => (
+              <div
+                key={login.customer_id}
+                className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${
+                  login.already_contacted ? 'border-gray-200 bg-white/60' : 'border-teal-200 bg-white'
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {login.customer_name ?? 'Sin nombre'}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {login.phone ?? 'sin teléfono'} · {formatAgo(login.last_login)}
+                    {login.already_contacted && ' · ya contactado'}
+                  </p>
+                </div>
+                <a
+                  href={login.whatsapp_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => !login.already_contacted && markContacted(login.customer_id)}
+                >
+                  <Button
+                    size="sm"
+                    variant={login.already_contacted ? 'outline' : 'default'}
+                    className="gap-1.5 shrink-0"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    {login.already_contacted ? 'Reenviar' : 'Enviar WhatsApp'}
+                  </Button>
+                </a>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       {/* Main tabs: Pedidos / Citas */}

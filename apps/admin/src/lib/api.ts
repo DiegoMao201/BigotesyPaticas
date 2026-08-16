@@ -1236,6 +1236,16 @@ export interface PortalKPIs {
   as_of: string;
 }
 
+export interface RecentLogin {
+  customer_id: string;
+  customer_name: string | null;
+  phone: string | null;
+  last_login: string;
+  message: string;
+  whatsapp_link: string;
+  already_contacted: boolean;
+}
+
 export interface PortalOrder {
   id: string;
   customer_name: string | null;
@@ -1343,6 +1353,10 @@ export interface PortalAppointment {
 
 export const adminPortal = {
   overview: () => api<PortalKPIs>('/v1/admin/portal/overview'),
+  recentLogins: () => api<RecentLogin[]>('/v1/admin/portal/customers/recent-logins'),
+  markLoginContacted: (customerId: string) =>
+    api<{ ok: boolean }>(`/v1/admin/portal/customers/${customerId}/mark-login-contacted`,
+      { method: 'POST', body: '{}' }),
   orders: (status?: string) =>
     api<PortalOrder[]>(`/v1/admin/portal/orders${status ? `?status=${status}` : ''}`),
   updateOrder: (id: string, body: { status: string; notes?: string; cancel_reason?: string }) =>
