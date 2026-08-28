@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Heart, AlertTriangle, PawPrint, ExternalLink, Home, Search } from 'lucide-react';
+import { Heart, AlertTriangle, PawPrint, ExternalLink, LifeBuoy, HomeIcon, MapPin } from 'lucide-react';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
+import { QuickPostForm } from '@/components/adoption/QuickPostForm';
 
 export const revalidate = 300;
 
@@ -32,10 +33,12 @@ function timeAgo(iso: string) {
 }
 
 export default async function AdopcionPage() {
-  const [offers, wants] = await Promise.all([
+  const [offers, wants, foundEvents] = await Promise.all([
     storeApi.adoptionListings('offer'),
     storeApi.adoptionListings('want'),
+    storeApi.foundAnimals(),
   ]);
+  const recentFound = foundEvents.slice(0, 4);
 
   return (
     <div className="min-h-screen">
@@ -58,23 +61,99 @@ export default async function AdopcionPage() {
             Cada perro callejero en Pereira<br />tiene una historia que merece contarse.
           </h1>
           <p className="text-lg text-white/80 max-w-2xl mx-auto">
-            Este es el foro de adopción de la comunidad Bigotes y Paticas: quien tiene un animal para dar en adopción
-            lo publica aquí, y quien busca adoptar también. Directo, real, sin intermediarios.
+            El centro de la comunidad de Bigotes y Paticas: aquí se publica quién da un animal en adopción, quién
+            busca adoptar, quién perdió a su mascota y quién encontró una. Directo, real, sin intermediarios.
           </p>
-          <div className="flex flex-wrap justify-center gap-3 mt-6">
-            <Link
-              href="https://mi.bigotesypaticas.com/adopcion/publicar"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#0d4a45] rounded-xl font-bold text-sm hover:bg-white/90 transition-colors"
-            >
-              <Home className="w-4 h-4" /> Doy un animal en adopción
-            </Link>
-            <Link
-              href="https://mi.bigotesypaticas.com/adopcion/buscar"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white/15 backdrop-blur text-white rounded-xl font-bold text-sm hover:bg-white/25 transition-colors"
-            >
-              <Search className="w-4 h-4" /> Busco adoptar
+          <a
+            href="#foro"
+            className="inline-flex items-center gap-2 mt-6 px-7 py-3.5 bg-white text-[#0d4a45] rounded-xl font-bold text-sm hover:bg-white/90 transition-colors shadow-lg"
+          >
+            💬 Publicar en el foro ahora
+          </a>
+        </div>
+      </div>
+
+      {/* Puente a perdidos / encontrados */}
+      <div className="container-wide pt-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <Link
+            href="/mascotas-perdidas"
+            className="group flex items-center gap-4 rounded-3xl p-6 text-white transition-transform hover:-translate-y-1"
+            style={{ background: 'linear-gradient(135deg, #ff7a63, #c62f28)' }}
+          >
+            <div className="h-14 w-14 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
+              <LifeBuoy className="h-7 w-7" />
+            </div>
+            <div>
+              <p className="font-display font-bold text-lg">¿Se te perdió tu mascota?</p>
+              <p className="text-sm text-white/85">Repórtala y que la comunidad te ayude a buscarla →</p>
+            </div>
+          </Link>
+          <Link
+            href="/mascotas-encontradas"
+            className="group flex items-center gap-4 rounded-3xl p-6 text-white transition-transform hover:-translate-y-1"
+            style={{ background: 'linear-gradient(135deg, #2fc4a8, #085041)' }}
+          >
+            <div className="h-14 w-14 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
+              <HomeIcon className="h-7 w-7" />
+            </div>
+            <div>
+              <p className="font-display font-bold text-lg">¿Encontraste un animalito?</p>
+              <p className="text-sm text-white/85">Publica sus fotos para ayudarlo a volver a casa →</p>
+            </div>
+          </Link>
+        </div>
+      </div>
+
+      {/* Encontrados recientemente (vitrina) */}
+      {recentFound.length > 0 && (
+        <div className="container-wide py-14">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-display font-bold text-[#0d4a45]">🐾 Encontrados recientemente</h2>
+            <Link href="/mascotas-encontradas" className="text-sm font-semibold text-[#187f77] hover:underline">
+              Ver todos →
             </Link>
           </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {recentFound.map((ev) => (
+              <Link
+                key={ev.id}
+                href={`/mascotas-encontradas/${ev.id}`}
+                className="group block rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-shadow"
+              >
+                {ev.cover_thumb_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={ev.cover_thumb_url} alt={ev.title} loading="lazy" className="w-full h-32 object-cover group-hover:scale-105 transition-transform duration-300" />
+                ) : (
+                  <div className="w-full h-32 bg-gradient-to-br from-[#187f77] to-[#085041] flex items-center justify-center">
+                    <PawPrint className="h-8 w-8 text-white/70" />
+                  </div>
+                )}
+                <div className="p-3">
+                  <p className="text-xs font-semibold line-clamp-1">{ev.title}</p>
+                  {ev.address && (
+                    <p className="text-[11px] text-muted-foreground inline-flex items-center gap-1 mt-0.5 line-clamp-1">
+                      <MapPin className="h-2.5 w-2.5 shrink-0" /> {ev.address}
+                    </p>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Foro rápido */}
+      <div id="foro" className="bg-[#f5f0e8] py-14 px-4 scroll-mt-6">
+        <div className="max-w-2xl mx-auto">
+          <QuickPostForm />
+          <p className="text-center text-xs text-gray-500 mt-4">
+            ¿Vas a dar en adopción y quieres subir varias fotos con dirección exacta?{' '}
+            <a href="https://mi.bigotesypaticas.com/adopcion/publicar" className="underline font-medium">
+              Publica la versión completa aquí
+            </a>
+            .
+          </p>
         </div>
       </div>
 
@@ -101,10 +180,15 @@ export default async function AdopcionPage() {
                 )}
                 <div className="p-5">
                   <h3 className="font-display font-bold text-lg line-clamp-1 mb-1">{l.title}</h3>
-                  <p className="text-sm text-muted-foreground capitalize mb-2 line-clamp-1">
-                    {l.species}{l.breed ? ` · ${l.breed}` : ''}
-                  </p>
-                  <span className="text-xs text-muted-foreground">{timeAgo(l.created_at)}</span>
+                  {(l.species || l.breed) && (
+                    <p className="text-sm text-muted-foreground capitalize mb-2 line-clamp-1">
+                      {l.species}{l.breed ? ` · ${l.breed}` : ''}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                    <span>{timeAgo(l.created_at)}</span>
+                    {l.reporter_name && <span>· Publicó {l.reporter_name}</span>}
+                  </div>
                 </div>
               </Link>
             ))}
@@ -128,7 +212,10 @@ export default async function AdopcionPage() {
                 >
                   <h3 className="font-display font-bold mb-1">{l.title}</h3>
                   {l.species && <p className="text-sm text-muted-foreground capitalize mb-2">{l.species}{l.breed ? ` · ${l.breed}` : ''}</p>}
-                  <span className="text-xs text-muted-foreground">{timeAgo(l.created_at)}</span>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                    <span>{timeAgo(l.created_at)}</span>
+                    {l.reporter_name && <span>· Publicó {l.reporter_name}</span>}
+                  </div>
                 </Link>
               ))}
             </div>

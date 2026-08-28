@@ -183,6 +183,7 @@ export interface FoundEvent {
 export interface AdoptionListing {
   id: string;
   post_type: 'offer' | 'want';
+  reporter_name: string | null;
   title: string;
   description: string | null;
   species: string | null;

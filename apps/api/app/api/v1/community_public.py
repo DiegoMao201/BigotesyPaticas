@@ -13,13 +13,16 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.deps import DBSession
 from app.models.community import AdoptionListing, RescueAnimal, RescueEvent, SOSEvent
 
 router = APIRouter(prefix="/public/community", tags=["community-public"])
+
+MAX_QUICK_POSTS_PER_PHONE_PER_DAY = 5
 
 
 def _lost_out(row: SOSEvent) -> dict:
@@ -73,6 +76,7 @@ def _adoption_out(row: AdoptionListing) -> dict:
     return {
         "id": str(row.id),
         "post_type": row.post_type,
+        "reporter_name": row.reporter_name,
         "title": row.title,
         "description": row.description,
         "species": row.species,
@@ -86,6 +90,14 @@ def _adoption_out(row: AdoptionListing) -> dict:
         "status": row.status,
         "created_at": row.created_at.isoformat(),
     }
+
+
+class QuickAdoptionPostIn(BaseModel):
+    post_type: str
+    reporter_name: str = Field(min_length=2, max_length=150)
+    contact_phone: str = Field(min_length=7, max_length=40)
+    message: str = Field(min_length=5, max_length=1000)
+    accepted_privacy: bool
 
 
 # ── mascotas perdidas ─────────────────────────────────────────────────
@@ -179,3 +191,46 @@ async def public_get_adoption(listing_id: uuid.UUID, db: DBSession) -> dict:
     if not row:
         raise HTTPException(status_code=404, detail="Publicación no encontrada")
     return _adoption_out(row)
+
+
+@router.post("/adoption/quick-post", status_code=status.HTTP_201_CREATED)
+async def public_quick_adoption_post(payload: QuickAdoptionPostIn, db: DBSession) -> dict:
+    """Foro rápido del store: cualquiera publica con solo nombre + teléfono,
+    sin necesidad de cuenta en el portal. Se muestra de inmediato (sin
+    revisión previa) -- el admin puede borrarla después si hace falta."""
+    if payload.post_type not in {"offer", "want"}:
+        raise HTTPException(status_code=422, detail="post_type debe ser 'offer' o 'want'")
+    if not payload.accepted_privacy:
+        raise HTTPException(
+            status_code=422, detail="Debes aceptar que tu nombre y teléfono sean visibles para publicar"
+        )
+
+    phone = payload.contact_phone.strip()
+    from datetime import UTC, datetime, timedelta
+
+    recent_count = (
+        await db.execute(
+            select(AdoptionListing).where(
+                AdoptionListing.contact_phone == phone,
+                AdoptionListing.created_at >= datetime.now(UTC) - timedelta(hours=24),
+            )
+        )
+    ).all()
+    if len(recent_count) >= MAX_QUICK_POSTS_PER_PHONE_PER_DAY:
+        raise HTTPException(status_code=429, detail="Ya publicaste varias veces hoy, intenta más tarde")
+
+    message = payload.message.strip()
+    listing = AdoptionListing(
+        reporter_customer_id=None,
+        reporter_name=payload.reporter_name.strip(),
+        post_type=payload.post_type,
+        title=message[:80],
+        description=message,
+        contact_phone=phone,
+        photos=[],
+        status="open",
+    )
+    db.add(listing)
+    await db.commit()
+    await db.refresh(listing)
+    return _adoption_out(listing)

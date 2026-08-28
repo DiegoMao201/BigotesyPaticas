@@ -43,6 +43,7 @@ def _listing_out(row: AdoptionListing) -> dict:
     return {
         "id": str(row.id),
         "post_type": row.post_type,
+        "reporter_name": row.reporter_name,
         "title": row.title,
         "description": row.description,
         "species": row.species,

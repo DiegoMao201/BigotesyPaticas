@@ -412,7 +412,11 @@ async def delete_rescue_animal_admin(event_id: uuid.UUID, animal_id: uuid.UUID, 
 # acá el admin solo modera.
 
 
-def _adoption_admin_out(listing, reporter_name: str | None, reporter_phone: str | None) -> dict:
+def _adoption_admin_out(listing, customer_name: str | None, customer_phone: str | None) -> dict:
+    # Publicado desde el portal (tiene cuenta) -> nombre/tel de crm.customers.
+    # Publicado desde el foro rápido del store (sin cuenta) -> listing.reporter_name
+    # + listing.contact_phone (lo que la persona escribió directamente).
+    is_quick_post = listing.reporter_customer_id is None
     return {
         "id": str(listing.id),
         "post_type": listing.post_type,
@@ -428,8 +432,9 @@ def _adoption_admin_out(listing, reporter_name: str | None, reporter_phone: str 
         "photos": listing.photos or [],
         "status": listing.status,
         "created_at": listing.created_at.isoformat(),
-        "reporter_name": reporter_name,
-        "reporter_phone": reporter_phone,
+        "reporter_name": customer_name or listing.reporter_name,
+        "reporter_phone": customer_phone or (listing.contact_phone if is_quick_post else None),
+        "is_quick_post": is_quick_post,
     }
 
 
