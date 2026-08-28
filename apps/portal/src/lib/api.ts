@@ -279,6 +279,16 @@ export interface RescueEvent {
   distance_km: number | null;
 }
 
+export type RescueEventInput = {
+  title: string;
+  description?: string | null;
+  address?: string | null;
+  lat: number;
+  lng: number;
+  found_at?: string;
+  contact_phone: string;
+};
+
 export const rescues = {
   list: (opts?: { lat?: number; lng?: number }) => {
     const p = new URLSearchParams();
@@ -288,6 +298,27 @@ export const rescues = {
     return requestSos<RescueEvent[]>(`/rescues${qs ? `?${qs}` : ''}`);
   },
   get: (id: string) => requestSos<RescueEvent>(`/rescues/${id}`),
+  report: (data: RescueEventInput) =>
+    requestSos<RescueEvent>('/rescues', { method: 'POST', body: JSON.stringify(data) }),
+  uploadAnimals: async (
+    eventId: string,
+    files: File[],
+    descriptions?: string[]
+  ): Promise<{ ok: boolean; animals: RescueAnimal[] }> => {
+    const form = new FormData();
+    files.forEach((f) => form.append('files', f));
+    if (descriptions) form.append('descriptions', JSON.stringify(descriptions));
+    const res = await fetch(`${SOS_BASE}/rescues/${eventId}/animals`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new ApiError(res.status, body.detail ?? 'Error al subir fotos');
+    }
+    return res.json();
+  },
 };
 
 // ── Ubicación del cliente (para SOS + futuro directorio de aliados) ────

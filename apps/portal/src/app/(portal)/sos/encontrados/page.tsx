@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { PawPrint, MapPin, ChevronLeft, ImageOff } from 'lucide-react';
+import { PawPrint, MapPin, ChevronLeft, ImageOff, Plus, AlertTriangle } from 'lucide-react';
 import { rescues } from '@/lib/api';
 import { formatRelativeDate } from '@/lib/utils';
 import { useGeolocation } from '@/hooks/useGeolocation';
@@ -19,7 +19,7 @@ export default function RescuedAnimalsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { data: events, isLoading } = useQuery({
+  const { data: events, isLoading, isError, refetch } = useQuery({
     queryKey: ['rescues-list', coords?.lat, coords?.lng],
     queryFn: () => rescues.list(coords ? { lat: coords.lat, lng: coords.lng } : undefined),
   });
@@ -43,20 +43,36 @@ export default function RescuedAnimalsPage() {
         <p className="text-white/90 text-sm mt-3 leading-relaxed">
           Animales rescatados que están a salvo en un refugio o albergue, esperando a que su familia los reconozca.
         </p>
+        <Link
+          href="/sos/encontrados/reportar"
+          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#187f77] shadow-lg active:scale-95 transition-transform"
+        >
+          <Plus className="h-4 w-4" /> Reportar animalito encontrado
+        </Link>
       </div>
 
       <div className="px-4 flex flex-col gap-4">
         {isLoading && <LoadingSpinner />}
 
-        {!isLoading && events && events.length > 0 && (
+        {isError && (
+          <div className="card border-amber-300 bg-amber-50 flex flex-col items-center gap-2 py-6 text-center">
+            <AlertTriangle className="h-6 w-6 text-amber-600" />
+            <p className="text-sm text-amber-800">No pudimos cargar los animalitos encontrados</p>
+            <button onClick={() => refetch()} className="btn-outline py-2 px-4 text-xs">
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        {!isLoading && !isError && events && events.length > 0 && (
           <RescuesMap events={events} userLocation={coords} height={200} />
         )}
 
-        {!isLoading && events?.length === 0 && (
+        {!isLoading && !isError && events?.length === 0 && (
           <div className="card flex flex-col items-center gap-2 py-12 text-center">
             <span className="text-4xl">🏠</span>
             <p className="font-semibold text-foreground">No hay animalitos encontrados por ahora</p>
-            <p className="text-xs text-muted">Te avisaremos apenas se reporte alguno cerca de ti</p>
+            <p className="text-xs text-muted">¿Encontraste alguno? Sé el primero en reportarlo</p>
           </div>
         )}
 

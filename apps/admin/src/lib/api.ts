@@ -1713,38 +1713,23 @@ export interface RescueEvent {
   contact_phone: string | null;
   status: 'open' | 'closed';
   created_at: string;
+  reporter_name: string | null;
+  reporter_phone: string | null;
   animal_count: number;
   unclaimed_count: number;
-  cover_thumb_url: string | null;
   animals: RescueAnimal[];
 }
 
+// Reportado por el cliente desde el portal (app/api/v1/rescues.py) -- el
+// admin solo modera: lista, cierra el evento, marca animal reunido, borra foto.
 export const adminRescues = {
-  list: (status: 'open' | 'closed' = 'open') =>
-    api<RescueEvent[]>(`/v1/sos/rescues?status=${status}`),
-  get: (id: string) => api<RescueEvent>(`/v1/sos/rescues/${id}`),
-  create: (payload: { title: string; description?: string; address?: string; lat: number; lng: number; found_at?: string; contact_phone?: string }) =>
-    api<RescueEvent>('/v1/sos/rescues', { method: 'POST', body: JSON.stringify(payload) }),
-  update: (id: string, payload: { title?: string; description?: string; address?: string; contact_phone?: string; status?: 'open' | 'closed' }) =>
-    api<RescueEvent>(`/v1/sos/rescues/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  uploadAnimals: async (eventId: string, files: File[], descriptions?: string[]): Promise<{ ok: boolean; animals: RescueAnimal[] }> => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('bp_admin_token') : null;
-    const fd = new FormData();
-    files.forEach((f) => fd.append('files', f));
-    if (descriptions) fd.append('descriptions', JSON.stringify(descriptions));
-    const res = await fetch(`${API_BASE}/v1/sos/rescues/${eventId}/animals`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: fd,
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: 'Error al subir fotos' }));
-      throw new Error(err.detail || 'Error al subir fotos');
-    }
-    return res.json();
-  },
-  updateAnimal: (eventId: string, animalId: string, payload: { description?: string; species?: string; status?: 'unclaimed' | 'reunited' }) =>
-    api<RescueAnimal>(`/v1/sos/rescues/${eventId}/animals/${animalId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  list: (status: 'open' | 'closed' | 'all' = 'all') =>
+    api<RescueEvent[]>(`/v1/admin/portal/rescues?status=${status}`),
+  get: (id: string) => api<RescueEvent>(`/v1/admin/portal/rescues/${id}`),
+  setEventStatus: (id: string, status: 'open' | 'closed') =>
+    api<{ ok: boolean; status: string }>(`/v1/admin/portal/rescues/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  setAnimalStatus: (eventId: string, animalId: string, status: 'unclaimed' | 'reunited') =>
+    api<{ ok: boolean; status: string }>(`/v1/admin/portal/rescues/${eventId}/animals/${animalId}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   deleteAnimal: (eventId: string, animalId: string) =>
-    api<{ ok: boolean }>(`/v1/sos/rescues/${eventId}/animals/${animalId}`, { method: 'DELETE' }),
+    api<{ ok: boolean }>(`/v1/admin/portal/rescues/${eventId}/animals/${animalId}`, { method: 'DELETE' }),
 };

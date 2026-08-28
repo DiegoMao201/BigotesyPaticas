@@ -249,6 +249,164 @@ async def mark_login_contacted(customer_id: uuid.UUID, db: DBSession) -> dict:
     return {"ok": True}
 
 
+# ── SOS: moderación de animales encontrados/rescatados ──────────────────
+# Los reporta el cliente desde el portal (ver app/api/v1/rescues.py); acá el
+# admin solo modera: ve todos los reportes, cierra el evento cuando ya pasó
+# tiempo prudente, marca un animal como reunido con su familia, o quita una
+# foto inapropiada/duplicada.
+
+
+def _rescue_admin_out(event, reporter_name: str | None, reporter_phone: str | None, animals: list) -> dict:
+    return {
+        "id": str(event.id),
+        "title": event.title,
+        "description": event.description,
+        "address": event.address,
+        "lat": float(event.lat),
+        "lng": float(event.lng),
+        "found_at": event.found_at.isoformat(),
+        "contact_phone": event.contact_phone,
+        "status": event.status,
+        "created_at": event.created_at.isoformat(),
+        "reporter_name": reporter_name,
+        "reporter_phone": reporter_phone,
+        "animal_count": len(animals),
+        "unclaimed_count": sum(1 for a in animals if a.status == "unclaimed"),
+        "animals": [
+            {
+                "id": str(a.id),
+                "photo_url": a.photo_url,
+                "thumb_url": a.thumb_url,
+                "species": a.species,
+                "description": a.description,
+                "status": a.status,
+            }
+            for a in animals
+        ],
+    }
+
+
+@router.get("/rescues")
+async def list_rescue_events_admin(db: DBSession, status_filter: str = Query(default="all", alias="status")) -> list[dict]:
+    from app.models.community import RescueAnimal, RescueEvent
+
+    q = select(RescueEvent, Customer.full_name, Customer.phone).join(
+        Customer, Customer.id == RescueEvent.reporter_customer_id, isouter=True
+    )
+    if status_filter != "all":
+        q = q.where(RescueEvent.status == status_filter)
+    rows = (await db.execute(q.order_by(RescueEvent.found_at.desc()))).all()
+
+    event_ids = [r[0].id for r in rows]
+    animals_by_event: dict[uuid.UUID, list] = {}
+    if event_ids:
+        animal_rows = (
+            (
+                await db.execute(
+                    select(RescueAnimal)
+                    .where(RescueAnimal.rescue_event_id.in_(event_ids))
+                    .order_by(RescueAnimal.sort_order, RescueAnimal.created_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for a in animal_rows:
+            animals_by_event.setdefault(a.rescue_event_id, []).append(a)
+
+    return [
+        _rescue_admin_out(event, reporter_name, reporter_phone, animals_by_event.get(event.id, []))
+        for event, reporter_name, reporter_phone in rows
+    ]
+
+
+@router.get("/rescues/{event_id}")
+async def get_rescue_event_admin(event_id: uuid.UUID, db: DBSession) -> dict:
+    from app.models.community import RescueAnimal, RescueEvent
+
+    row = (
+        await db.execute(
+            select(RescueEvent, Customer.full_name, Customer.phone)
+            .join(Customer, Customer.id == RescueEvent.reporter_customer_id, isouter=True)
+            .where(RescueEvent.id == event_id)
+        )
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Evento de rescate no encontrado")
+    event, reporter_name, reporter_phone = row
+
+    animals = (
+        (
+            await db.execute(
+                select(RescueAnimal)
+                .where(RescueAnimal.rescue_event_id == event_id)
+                .order_by(RescueAnimal.sort_order, RescueAnimal.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return _rescue_admin_out(event, reporter_name, reporter_phone, animals)
+
+
+class RescueEventStatusUpdate(BaseModel):
+    status: str
+
+
+@router.patch("/rescues/{event_id}", dependencies=[Depends(require_permission("crm:write"))])
+async def update_rescue_event_admin(event_id: uuid.UUID, payload: RescueEventStatusUpdate, db: DBSession) -> dict:
+    from app.models.community import RescueEvent
+
+    if payload.status not in {"open", "closed"}:
+        raise HTTPException(status_code=422, detail="status debe ser 'open' o 'closed'")
+    event = (await db.execute(select(RescueEvent).where(RescueEvent.id == event_id))).scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento de rescate no encontrado")
+    event.status = payload.status
+    await db.commit()
+    return {"ok": True, "status": event.status}
+
+
+class RescueAnimalStatusUpdate(BaseModel):
+    status: str
+
+
+@router.patch("/rescues/{event_id}/animals/{animal_id}", dependencies=[Depends(require_permission("crm:write"))])
+async def update_rescue_animal_admin(
+    event_id: uuid.UUID, animal_id: uuid.UUID, payload: RescueAnimalStatusUpdate, db: DBSession
+) -> dict:
+    from app.models.community import RescueAnimal
+
+    if payload.status not in {"unclaimed", "reunited"}:
+        raise HTTPException(status_code=422, detail="status debe ser 'unclaimed' o 'reunited'")
+    animal = (
+        await db.execute(
+            select(RescueAnimal).where(RescueAnimal.id == animal_id, RescueAnimal.rescue_event_id == event_id)
+        )
+    ).scalar_one_or_none()
+    if not animal:
+        raise HTTPException(status_code=404, detail="Ficha no encontrada")
+    animal.status = payload.status
+    await db.commit()
+    return {"ok": True, "status": animal.status}
+
+
+@router.delete("/rescues/{event_id}/animals/{animal_id}", dependencies=[Depends(require_permission("crm:write"))])
+async def delete_rescue_animal_admin(event_id: uuid.UUID, animal_id: uuid.UUID, db: DBSession) -> dict:
+    from app.models.community import RescueAnimal
+
+    animal = (
+        await db.execute(
+            select(RescueAnimal).where(RescueAnimal.id == animal_id, RescueAnimal.rescue_event_id == event_id)
+        )
+    ).scalar_one_or_none()
+    if not animal:
+        raise HTTPException(status_code=404, detail="Ficha no encontrada")
+    await db.delete(animal)
+    await db.commit()
+    return {"ok": True}
+
+
 @router.get("/orders")
 async def list_portal_orders(
     db: DBSession,
