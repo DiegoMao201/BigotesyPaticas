@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { storeApi } from '@/lib/api';
-import { BreadcrumbSchema } from '@/components/seo/JsonLd';
+import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
 import { PawPrint } from 'lucide-react';
 
 export const revalidate = 300;
@@ -15,6 +15,8 @@ export const metadata: Metadata = {
     'gato encontrado Dosquebradas',
     'animal rescatado Risaralda',
     'mascota encontrada Pereira',
+    'me encontre un perro Pereira',
+    'rescate de animales Dosquebradas',
   ],
   alternates: { canonical: 'https://bigotesypaticas.com/mascotas-encontradas' },
   openGraph: {
@@ -23,6 +25,18 @@ export const metadata: Metadata = {
     url: 'https://bigotesypaticas.com/mascotas-encontradas',
   },
 };
+
+const FOUND_FAQS = [
+  {
+    pregunta: '¿Qué hago si encontré un perro o gato perdido en Pereira o Dosquebradas?',
+    respuesta:
+      'Publícalo aquí desde tu portal de Bigotes y Paticas: sube las fotos, el lugar donde lo encontraste y tu teléfono. Aparece de inmediato para que su familia pueda reconocerlo.',
+  },
+  {
+    pregunta: '¿Cómo sé si un animal de esta lista es mío?',
+    respuesta: 'Revisa las fotos de cada publicación y escribe por WhatsApp directo a quien lo encontró para coordinar el reencuentro.',
+  },
+];
 
 function timeAgo(iso: string) {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -42,6 +56,7 @@ export default async function MascotasEncontradasPage() {
           { name: 'Animales Encontrados', url: 'https://bigotesypaticas.com/mascotas-encontradas' },
         ]}
       />
+      <FAQPageSchema faqs={FOUND_FAQS} />
 
       <div className="bg-gradient-to-b from-[#085041] to-[#187f77] text-white py-16 px-4">
         <div className="max-w-3xl mx-auto text-center">
@@ -103,6 +118,24 @@ export default async function MascotasEncontradasPage() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="bg-[#f5f0e8] py-14 px-4">
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-xl font-display font-bold text-[#0d4a45] mb-6 text-center">Preguntas frecuentes</h2>
+          <div className="space-y-4">
+            {FOUND_FAQS.map((f) => (
+              <div key={f.pregunta} className="rounded-2xl bg-white p-5 border border-border">
+                <h3 className="font-semibold text-[#0d4a45] mb-1.5">{f.pregunta}</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">{f.respuesta}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-sm text-gray-600 mt-6">
+            ¿Buscas adoptar o dar una mascota en adopción?{' '}
+            <Link href="/adopcion" className="font-semibold text-[#187f77]">Visita el foro de adopción</Link>.
+          </p>
+        </div>
       </div>
     </>
   );

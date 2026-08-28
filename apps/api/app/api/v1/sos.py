@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -16,8 +17,17 @@ from app.deps import DBSession
 from app.models.community import SOSEvent, SOSSighting
 from app.models.crm import Customer
 from app.services.media_upload import ALLOWED_CONTENT_TYPES, MAX_UPLOAD_BYTES, upload_image_webp
+from app.services.seo_notifications import notify_indexnow
 
 router = APIRouter(prefix="/sos", tags=["sos"])
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _ping_indexnow(urls: list[str]) -> None:
+    task = asyncio.create_task(notify_indexnow(urls))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 SPECIES = {"perro", "gato", "otro"}
 
@@ -166,6 +176,14 @@ async def report_lost_pet(
 
     await db.commit()
     await db.refresh(event)
+
+    _ping_indexnow(
+        [
+            "https://bigotesypaticas.com/mascotas-perdidas",
+            f"https://bigotesypaticas.com/mascotas-perdidas/{event.id}",
+            "https://bigotesypaticas.com/sitemap.xml",
+        ]
+    )
     return _sos_out(event)
 
 

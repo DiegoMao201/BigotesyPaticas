@@ -81,8 +81,8 @@ export function Footer() {
       </section>
 
       {/* Main columns */}
-      <div className="container-wide py-16 grid gap-10 md:grid-cols-5">
-        <div>
+      <div className="container-wide py-16 grid gap-10 md:grid-cols-7">
+        <div className="md:col-span-2">
           <div className="flex items-center gap-2 mb-4">
             <Logo size={40} variant="footer" />
             <span className="font-display font-bold text-lg">
@@ -132,6 +132,16 @@ export function Footer() {
             <li><Link href="/landing/domicilio-mascotas-dosquebradas" className="text-muted-foreground hover:text-brand">Domicilio Dosquebradas</Link></li>
             <li><Link href="/pereira-dosquebradas-mascotas" className="text-muted-foreground hover:text-brand">Pereira y Dosquebradas</Link></li>
             <li><Link href="/landing/tienda-mascotas-risaralda" className="text-muted-foreground hover:text-brand">Tienda Risaralda</Link></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 className="font-display font-semibold text-sm mb-4 uppercase tracking-wider">Comunidad</h4>
+          <ul className="space-y-2 text-sm">
+            <li><Link href="/adopcion" className="text-muted-foreground hover:text-brand">Foro de adopción</Link></li>
+            <li><Link href="/mascotas-perdidas" className="text-muted-foreground hover:text-brand">Mascotas perdidas</Link></li>
+            <li><Link href="/mascotas-encontradas" className="text-muted-foreground hover:text-brand">Animales encontrados</Link></li>
+            <li><Link href="/adopcion#foro" className="text-muted-foreground hover:text-brand">Publicar en el foro</Link></li>
           </ul>
         </div>
 

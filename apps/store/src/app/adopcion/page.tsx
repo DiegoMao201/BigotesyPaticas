@@ -2,28 +2,64 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Heart, AlertTriangle, PawPrint, ExternalLink, LifeBuoy, HomeIcon, MapPin } from 'lucide-react';
 import { storeApi } from '@/lib/api';
-import { BreadcrumbSchema } from '@/components/seo/JsonLd';
+import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
 import { QuickPostForm } from '@/components/adoption/QuickPostForm';
 
 export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: 'Adopción responsable en Pereira y Dosquebradas — Bigotes y Paticas',
+  title: 'Adopción, Rescate y Mascotas Perdidas en Pereira y Dosquebradas',
   description:
-    'Foro de adopción real: animales que buscan hogar y personas que buscan adoptar en Pereira y Dosquebradas. Publica o encuentra a tu próximo compañero.',
+    'Adoptar perro o gato, dar en adopción, reportar mascota perdida o animal encontrado en Pereira y Dosquebradas — todo en un solo foro real de la comunidad Bigotes y Paticas.',
   keywords: [
-    'adopción de perros Pereira',
-    'adopción de gatos Dosquebradas',
-    'adoptar mascota Risaralda',
+    'adoptar perro Pereira',
+    'adoptar perro Dosquebradas',
+    'adoptar gato Pereira',
+    'adoptar gato Dosquebradas',
+    'adopcion perro Dosquebradas',
+    'adopcion de mascotas Pereira',
+    'dar en adopcion perro',
+    'dar en adopcion gato',
+    'rescate de animales Pereira Dosquebradas',
+    'rescate perros Risaralda',
     'foro adopción animales',
+    'mascota perdida Pereira',
+    'mascota encontrada Dosquebradas',
   ],
   alternates: { canonical: 'https://bigotesypaticas.com/adopcion' },
   openGraph: {
-    title: 'Foro de Adopción — Bigotes y Paticas',
-    description: 'Animales que buscan hogar y personas que buscan adoptar, en Pereira y Dosquebradas.',
+    title: 'Adopción, Rescate y Mascotas Perdidas — Pereira y Dosquebradas',
+    description: 'El foro real de la comunidad: adopta, da en adopción, reporta o encuentra mascotas en Pereira y Dosquebradas.',
     url: 'https://bigotesypaticas.com/adopcion',
   },
 };
+
+const ADOPTION_FAQS = [
+  {
+    pregunta: '¿Cómo adopto un perro o gato en Pereira o Dosquebradas?',
+    respuesta:
+      'Revisa la sección "Animales en adopción" de esta página — son publicaciones reales de la comunidad, con foto y contacto directo. Escribe por WhatsApp a quien publicó para coordinar la adopción. También puedes publicar en el foro qué tipo de mascota buscas y que te contacten a ti.',
+  },
+  {
+    pregunta: '¿Cómo doy un perro o gato en adopción?',
+    respuesta:
+      'Publica en el foro de esta página con tu nombre y teléfono — toma 10 segundos y no necesitas crear una cuenta. Si quieres subir varias fotos y la dirección exacta de entrega, puedes hacer la publicación completa desde el portal de Bigotes y Paticas.',
+  },
+  {
+    pregunta: '¿Qué hago si se me perdió mi mascota en Pereira o Dosquebradas?',
+    respuesta:
+      'Repórtala en bigotesypaticas.com/mascotas-perdidas con foto, color y tu teléfono de contacto. La comunidad podrá verla y avisarte si la encuentra.',
+  },
+  {
+    pregunta: '¿Qué hago si encontré un perro o gato perdido?',
+    respuesta:
+      'Publícalo en bigotesypaticas.com/mascotas-encontradas con fotos y el lugar donde lo encontraste, para que su familia pueda reconocerlo y contactarte.',
+  },
+  {
+    pregunta: '¿Es gratis publicar en el foro de adopción?',
+    respuesta: 'Sí, publicar en el foro de Bigotes y Paticas es completamente gratis, tanto para dar en adopción como para buscar adoptar.',
+  },
+];
 
 function timeAgo(iso: string) {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -48,6 +84,7 @@ export default async function AdopcionPage() {
           { name: 'Adopción', url: 'https://bigotesypaticas.com/adopcion' },
         ]}
       />
+      <FAQPageSchema faqs={ADOPTION_FAQS} />
 
       {/* Hero */}
       <div className="bg-gradient-to-b from-[#0d4a45] to-[#187f77] text-white py-20 px-4">
@@ -263,6 +300,21 @@ export default async function AdopcionPage() {
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Preguntas frecuentes */}
+      <div className="bg-[#f5f0e8] py-16 px-4">
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-2xl font-display font-bold text-[#0d4a45] mb-8 text-center">Preguntas frecuentes</h2>
+          <div className="space-y-5">
+            {ADOPTION_FAQS.map((f) => (
+              <div key={f.pregunta} className="rounded-2xl bg-white p-5 border border-border">
+                <h3 className="font-semibold text-[#0d4a45] mb-1.5">{f.pregunta}</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">{f.respuesta}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>

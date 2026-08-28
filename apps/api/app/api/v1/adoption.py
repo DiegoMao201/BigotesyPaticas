@@ -20,10 +20,19 @@ from app.deps import DBSession
 from app.models.community import AdoptionListing
 from app.models.crm import Customer
 from app.services.media_upload import ALLOWED_CONTENT_TYPES, MAX_UPLOAD_BYTES, upload_image_webp
+from app.services.seo_notifications import notify_indexnow
 
 router = APIRouter(prefix="/adoption", tags=["adoption"])
 
 MAX_PHOTOS_PER_UPLOAD = 15
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _ping_indexnow(urls: list[str]) -> None:
+    task = asyncio.create_task(notify_indexnow(urls))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 class AdoptionListingIn(BaseModel):
@@ -86,6 +95,14 @@ async def create_adoption_listing(
     db.add(listing)
     await db.commit()
     await db.refresh(listing)
+
+    _ping_indexnow(
+        [
+            "https://bigotesypaticas.com/adopcion",
+            f"https://bigotesypaticas.com/adopcion/{listing.id}",
+            "https://bigotesypaticas.com/sitemap.xml",
+        ]
+    )
     return _listing_out(listing)
 
 

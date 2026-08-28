@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { storeApi } from '@/lib/api';
-import { BreadcrumbSchema } from '@/components/seo/JsonLd';
+import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
 import { Gift } from 'lucide-react';
 
 export const revalidate = 300; // 5 min -- son reportes urgentes, se refrescan seguido
@@ -14,6 +14,7 @@ export const metadata: Metadata = {
     'mascota perdida Pereira',
     'perro perdido Dosquebradas',
     'gato perdido Pereira',
+    'se me perdio el perro Pereira',
     'ayuda mascota perdida Risaralda',
   ],
   alternates: { canonical: 'https://bigotesypaticas.com/mascotas-perdidas' },
@@ -23,6 +24,18 @@ export const metadata: Metadata = {
     url: 'https://bigotesypaticas.com/mascotas-perdidas',
   },
 };
+
+const LOST_FAQS = [
+  {
+    pregunta: '¿Cómo reporto mi mascota perdida en Pereira o Dosquebradas?',
+    respuesta:
+      'Entra a tu portal de Bigotes y Paticas y usa la opción "Reportar mascota perdida": sube una foto, el color, dónde la viste por última vez y tu teléfono. El reporte aparece de inmediato en esta página.',
+  },
+  {
+    pregunta: '¿Qué hago si encuentro un perro o gato de esta lista?',
+    respuesta: 'Escríbele directo por WhatsApp a su familia usando el botón de contacto en el reporte — ellos te dirán cómo coordinar la entrega.',
+  },
+];
 
 function timeAgo(iso: string) {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -42,6 +55,7 @@ export default async function MascotasPerdidasPage() {
           { name: 'Mascotas Perdidas', url: 'https://bigotesypaticas.com/mascotas-perdidas' },
         ]}
       />
+      <FAQPageSchema faqs={LOST_FAQS} />
 
       <div className="bg-gradient-to-b from-[#c62f28] to-[#e8433a] text-white py-16 px-4">
         <div className="max-w-3xl mx-auto text-center">
@@ -112,6 +126,24 @@ export default async function MascotasPerdidasPage() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="bg-[#f5f0e8] py-14 px-4">
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-xl font-display font-bold text-[#0d4a45] mb-6 text-center">Preguntas frecuentes</h2>
+          <div className="space-y-4">
+            {LOST_FAQS.map((f) => (
+              <div key={f.pregunta} className="rounded-2xl bg-white p-5 border border-border">
+                <h3 className="font-semibold text-[#0d4a45] mb-1.5">{f.pregunta}</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">{f.respuesta}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-sm text-gray-600 mt-6">
+            ¿Buscas adoptar o dar una mascota en adopción?{' '}
+            <Link href="/adopcion" className="font-semibold text-[#187f77]">Visita el foro de adopción</Link>.
+          </p>
+        </div>
       </div>
     </>
   );

@@ -11,6 +11,7 @@ explícitamente para que la comunidad lo contacte.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -19,10 +20,19 @@ from sqlalchemy import select
 
 from app.deps import DBSession
 from app.models.community import AdoptionListing, RescueAnimal, RescueEvent, SOSEvent
+from app.services.seo_notifications import notify_indexnow
 
 router = APIRouter(prefix="/public/community", tags=["community-public"])
 
 MAX_QUICK_POSTS_PER_PHONE_PER_DAY = 5
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _ping_indexnow(urls: list[str]) -> None:
+    task = asyncio.create_task(notify_indexnow(urls))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 def _lost_out(row: SOSEvent) -> dict:
@@ -233,4 +243,12 @@ async def public_quick_adoption_post(payload: QuickAdoptionPostIn, db: DBSession
     db.add(listing)
     await db.commit()
     await db.refresh(listing)
+
+    _ping_indexnow(
+        [
+            "https://bigotesypaticas.com/adopcion",
+            f"https://bigotesypaticas.com/adopcion/{listing.id}",
+            "https://bigotesypaticas.com/sitemap.xml",
+        ]
+    )
     return _adoption_out(listing)
