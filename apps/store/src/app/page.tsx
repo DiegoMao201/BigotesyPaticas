@@ -11,6 +11,7 @@ import { storeApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { HeroSection } from '@/components/HeroSection';
 import { PortalCTA } from '@/components/PortalCTA';
+import { CommunityCTA } from '@/components/CommunityCTA';
 import { NewsletterForm } from '@/components/NewsletterForm';
 import { RealReviewsSection } from '@/components/reviews/RealReviewsSection';
 import { StoreMapEmbed } from '@/components/maps/StoreMapEmbed';
@@ -43,7 +44,12 @@ const MARQUEE_ITEMS = [
 ];
 
 export default async function HomePage() {
-  const featured = await storeApi.featured();
+  const [featured, adoptionListings, lostPets, foundAnimals] = await Promise.all([
+    storeApi.featured(),
+    storeApi.adoptionListings(),
+    storeApi.lostPets(),
+    storeApi.foundAnimals(),
+  ]);
 
   return (
     <>
@@ -154,6 +160,13 @@ export default async function HomePage() {
 
       {/* PORTAL CTA */}
       <PortalCTA />
+
+      {/* COMMUNITY CTA — adopción, perdidos, encontrados */}
+      <CommunityCTA
+        adoptionCount={adoptionListings.length}
+        lostCount={lostPets.length}
+        foundCount={foundAnimals.length}
+      />
 
       {/* REAL REVIEWS — Google Business Profile */}
       <RealReviewsSection />

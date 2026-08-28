@@ -4,10 +4,34 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Search, MessageCircle } from 'lucide-react';
+import { Search, MessageCircle, ArrowRight } from 'lucide-react';
 import { storeApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { getWhatsAppUrl } from '@/lib/whatsapp-messages';
+import { matchSitePages } from '@/lib/site-pages';
+
+function MatchedPages({ q }: { q: string }) {
+  const pages = matchSitePages(q);
+  if (pages.length === 0) return null;
+  return (
+    <div className="mb-8 flex flex-col gap-3">
+      {pages.map((p) => (
+        <Link
+          key={p.href}
+          href={p.href}
+          className="flex items-center gap-4 rounded-2xl border border-[#187f77]/25 bg-[#E6F5F1]/50 p-4 hover:bg-[#E6F5F1] transition-colors"
+        >
+          <span className="text-3xl shrink-0">{p.emoji}</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-display font-bold text-[#0d4a45]">{p.title}</p>
+            <p className="text-sm text-muted-foreground line-clamp-1">{p.description}</p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-[#187f77] shrink-0" />
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 function SearchResults() {
   const params = useSearchParams();
@@ -47,7 +71,19 @@ function SearchResults() {
     );
   }
 
+  const matchedPages = matchSitePages(q);
+
   if (data.items.length === 0) {
+    if (matchedPages.length > 0) {
+      return (
+        <div className="max-w-xl mx-auto py-6">
+          <MatchedPages q={q} />
+          <p className="text-center text-sm text-muted-foreground">
+            No encontramos productos para &ldquo;{q}&rdquo;, pero sí esta sección.
+          </p>
+        </div>
+      );
+    }
     const waUrl = getWhatsAppUrl(
       `¡Hola! Busqué "${q}" en su sitio web y no encontré resultados. ¿Tienen algo similar disponible?`
     );
@@ -84,6 +120,7 @@ function SearchResults() {
 
   return (
     <>
+      <MatchedPages q={q} />
       <p className="text-sm text-muted-foreground mb-6">
         {data.total} resultado{data.total !== 1 ? 's' : ''} para <strong>&ldquo;{q}&rdquo;</strong>
       </p>
