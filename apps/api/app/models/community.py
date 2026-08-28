@@ -49,6 +49,49 @@ class SOSEvent(UUIDPKMixin, TimestampMixin, Base):
     found_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class RescueEvent(UUIDPKMixin, TimestampMixin, Base):
+    """Grupo de animales encontrados/rescatados juntos en un mismo lugar."""
+
+    __tablename__ = "rescue_events"
+    __table_args__ = (
+        CheckConstraint("status IN ('open','closed')", name="ck_rescue_events_status"),
+        {"schema": "community"},
+    )
+
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    address: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    lat: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    lng: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    found_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    contact_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open", index=True)
+    created_by_admin: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class RescueAnimal(UUIDPKMixin, TimestampMixin, Base):
+    """Una foto/ficha individual dentro de un RescueEvent."""
+
+    __tablename__ = "rescue_animals"
+    __table_args__ = (
+        CheckConstraint("status IN ('unclaimed','reunited')", name="ck_rescue_animals_status"),
+        {"schema": "community"},
+    )
+
+    rescue_event_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("community.rescue_events.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    photo_url: Mapped[str] = mapped_column(Text, nullable=False)
+    thumb_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    species: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="unclaimed", index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
 class SOSSighting(UUIDPKMixin, Base):
     """Avistamiento reportado por alguien de la comunidad."""
 

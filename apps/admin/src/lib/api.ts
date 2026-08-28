@@ -1689,3 +1689,62 @@ export const adminPartners = {
   toggleVerified: (id: string) =>
     api<{ ok: boolean; verified: boolean }>(`/v1/admin/partners/${id}/verify`, { method: 'PATCH' }),
 };
+
+// ─── SOS: animales encontrados/rescatados ─────────────────────────────────
+
+export interface RescueAnimal {
+  id: string;
+  photo_url: string;
+  thumb_url: string | null;
+  species: string | null;
+  description: string | null;
+  status: 'unclaimed' | 'reunited';
+  sort_order: number;
+}
+
+export interface RescueEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  address: string | null;
+  lat: number;
+  lng: number;
+  found_at: string;
+  contact_phone: string | null;
+  status: 'open' | 'closed';
+  created_at: string;
+  animal_count: number;
+  unclaimed_count: number;
+  cover_thumb_url: string | null;
+  animals: RescueAnimal[];
+}
+
+export const adminRescues = {
+  list: (status: 'open' | 'closed' = 'open') =>
+    api<RescueEvent[]>(`/v1/sos/rescues?status=${status}`),
+  get: (id: string) => api<RescueEvent>(`/v1/sos/rescues/${id}`),
+  create: (payload: { title: string; description?: string; address?: string; lat: number; lng: number; found_at?: string; contact_phone?: string }) =>
+    api<RescueEvent>('/v1/sos/rescues', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id: string, payload: { title?: string; description?: string; address?: string; contact_phone?: string; status?: 'open' | 'closed' }) =>
+    api<RescueEvent>(`/v1/sos/rescues/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  uploadAnimals: async (eventId: string, files: File[], descriptions?: string[]): Promise<{ ok: boolean; animals: RescueAnimal[] }> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('bp_admin_token') : null;
+    const fd = new FormData();
+    files.forEach((f) => fd.append('files', f));
+    if (descriptions) fd.append('descriptions', JSON.stringify(descriptions));
+    const res = await fetch(`${API_BASE}/v1/sos/rescues/${eventId}/animals`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Error al subir fotos' }));
+      throw new Error(err.detail || 'Error al subir fotos');
+    }
+    return res.json();
+  },
+  updateAnimal: (eventId: string, animalId: string, payload: { description?: string; species?: string; status?: 'unclaimed' | 'reunited' }) =>
+    api<RescueAnimal>(`/v1/sos/rescues/${eventId}/animals/${animalId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteAnimal: (eventId: string, animalId: string) =>
+    api<{ ok: boolean }>(`/v1/sos/rescues/${eventId}/animals/${animalId}`, { method: 'DELETE' }),
+};

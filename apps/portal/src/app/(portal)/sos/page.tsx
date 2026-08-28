@@ -45,12 +45,20 @@ export default function SOSListPage() {
         <p className="text-white/90 text-sm mt-3 leading-relaxed">
           Toda la comunidad ayuda a encontrar mascotas perdidas cerca de ti. Si ves una, avísale a quien la reportó.
         </p>
-        <Link
-          href="/sos/new"
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#e8433a] shadow-lg active:scale-95 transition-transform"
-        >
-          <Plus className="h-4 w-4" /> Reportar mascota perdida
-        </Link>
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
+          <Link
+            href="/sos/new"
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#e8433a] shadow-lg active:scale-95 transition-transform"
+          >
+            <Plus className="h-4 w-4" /> Reportar mascota perdida
+          </Link>
+          <Link
+            href="/sos/encontrados"
+            className="inline-flex items-center gap-2 rounded-xl bg-white/15 backdrop-blur px-5 py-3 text-sm font-bold text-white active:scale-95 transition-transform"
+          >
+            🏠 Ver animalitos encontrados
+          </Link>
+        </div>
       </div>
 
       <div className="px-4 flex flex-col gap-4">

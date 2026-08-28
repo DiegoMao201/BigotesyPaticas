@@ -249,6 +249,47 @@ export const sos = {
   },
 };
 
+// ── SOS: animales encontrados/rescatados (agrupados por evento) ────────
+
+export interface RescueAnimal {
+  id: string;
+  photo_url: string;
+  thumb_url: string | null;
+  species: string | null;
+  description: string | null;
+  status: 'unclaimed' | 'reunited';
+  sort_order: number;
+}
+
+export interface RescueEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  address: string | null;
+  lat: number;
+  lng: number;
+  found_at: string;
+  contact_phone: string | null;
+  status: 'open' | 'closed';
+  created_at: string;
+  animal_count: number;
+  unclaimed_count: number;
+  cover_thumb_url: string | null;
+  animals: RescueAnimal[];
+  distance_km: number | null;
+}
+
+export const rescues = {
+  list: (opts?: { lat?: number; lng?: number }) => {
+    const p = new URLSearchParams();
+    if (opts?.lat != null) p.set('lat', String(opts.lat));
+    if (opts?.lng != null) p.set('lng', String(opts.lng));
+    const qs = p.toString();
+    return requestSos<RescueEvent[]>(`/rescues${qs ? `?${qs}` : ''}`);
+  },
+  get: (id: string) => requestSos<RescueEvent>(`/rescues/${id}`),
+};
+
 // ── Ubicación del cliente (para SOS + futuro directorio de aliados) ────
 
 export const portalLocation = {
