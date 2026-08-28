@@ -170,6 +170,9 @@ async def create_appointment(
     customer: Customer = PortalUser,
 ) -> AppointmentOut:
     scheduled = datetime.fromisoformat(payload.scheduled_at)
+    if scheduled.tzinfo is None:
+        # El portal manda "YYYY-MM-DDTHH:MM:SS" sin offset -- es hora Colombia.
+        scheduled = scheduled.replace(tzinfo=_TZ_CO)
     if scheduled <= datetime.now(UTC):
         raise HTTPException(status_code=422, detail="La cita debe ser en el futuro")
 
