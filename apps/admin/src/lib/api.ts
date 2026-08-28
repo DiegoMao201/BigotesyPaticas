@@ -1733,3 +1733,34 @@ export const adminRescues = {
   deleteAnimal: (eventId: string, animalId: string) =>
     api<{ ok: boolean }>(`/v1/admin/portal/rescues/${eventId}/animals/${animalId}`, { method: 'DELETE' }),
 };
+
+// ─── Foro de adopción ──────────────────────────────────────────────────
+
+export interface AdoptionListing {
+  id: string;
+  post_type: 'offer' | 'want';
+  title: string;
+  description: string | null;
+  species: string | null;
+  breed: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  delivery_notes: string | null;
+  contact_phone: string;
+  photos: string[];
+  status: 'open' | 'closed';
+  created_at: string;
+  reporter_name: string | null;
+  reporter_phone: string | null;
+}
+
+// Igual que adminRescues: lo publica el cliente desde el portal, el admin modera.
+export const adminAdoption = {
+  list: (status: 'open' | 'closed' | 'all' = 'all') =>
+    api<AdoptionListing[]>(`/v1/admin/portal/adoption-listings?status=${status}`),
+  setStatus: (id: string, status: 'open' | 'closed') =>
+    api<{ ok: boolean; status: string }>(`/v1/admin/portal/adoption-listings/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  remove: (id: string) =>
+    api<{ ok: boolean }>(`/v1/admin/portal/adoption-listings/${id}`, { method: 'DELETE' }),
+};

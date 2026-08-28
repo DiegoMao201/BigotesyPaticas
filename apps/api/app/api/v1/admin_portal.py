@@ -407,6 +407,83 @@ async def delete_rescue_animal_admin(event_id: uuid.UUID, animal_id: uuid.UUID, 
     return {"ok": True}
 
 
+# ── Foro de adopción: moderación ─────────────────────────────────────────
+# Igual que rescues: lo publica el cliente desde el portal (adoption.py);
+# acá el admin solo modera.
+
+
+def _adoption_admin_out(listing, reporter_name: str | None, reporter_phone: str | None) -> dict:
+    return {
+        "id": str(listing.id),
+        "post_type": listing.post_type,
+        "title": listing.title,
+        "description": listing.description,
+        "species": listing.species,
+        "breed": listing.breed,
+        "address": listing.address,
+        "lat": float(listing.lat) if listing.lat is not None else None,
+        "lng": float(listing.lng) if listing.lng is not None else None,
+        "delivery_notes": listing.delivery_notes,
+        "contact_phone": listing.contact_phone,
+        "photos": listing.photos or [],
+        "status": listing.status,
+        "created_at": listing.created_at.isoformat(),
+        "reporter_name": reporter_name,
+        "reporter_phone": reporter_phone,
+    }
+
+
+@router.get("/adoption-listings")
+async def list_adoption_listings_admin(
+    db: DBSession, status_filter: str = Query(default="all", alias="status")
+) -> list[dict]:
+    from app.models.community import AdoptionListing
+
+    q = select(AdoptionListing, Customer.full_name, Customer.phone).join(
+        Customer, Customer.id == AdoptionListing.reporter_customer_id, isouter=True
+    )
+    if status_filter != "all":
+        q = q.where(AdoptionListing.status == status_filter)
+    rows = (await db.execute(q.order_by(AdoptionListing.created_at.desc()))).all()
+    return [_adoption_admin_out(listing, name, phone) for listing, name, phone in rows]
+
+
+class AdoptionListingStatusUpdate(BaseModel):
+    status: str
+
+
+@router.patch("/adoption-listings/{listing_id}", dependencies=[Depends(require_permission("crm:write"))])
+async def update_adoption_listing_admin(
+    listing_id: uuid.UUID, payload: AdoptionListingStatusUpdate, db: DBSession
+) -> dict:
+    from app.models.community import AdoptionListing
+
+    if payload.status not in {"open", "closed"}:
+        raise HTTPException(status_code=422, detail="status debe ser 'open' o 'closed'")
+    listing = (
+        await db.execute(select(AdoptionListing).where(AdoptionListing.id == listing_id))
+    ).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Publicación no encontrada")
+    listing.status = payload.status
+    await db.commit()
+    return {"ok": True, "status": listing.status}
+
+
+@router.delete("/adoption-listings/{listing_id}", dependencies=[Depends(require_permission("crm:write"))])
+async def delete_adoption_listing_admin(listing_id: uuid.UUID, db: DBSession) -> dict:
+    from app.models.community import AdoptionListing
+
+    listing = (
+        await db.execute(select(AdoptionListing).where(AdoptionListing.id == listing_id))
+    ).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Publicación no encontrada")
+    await db.delete(listing)
+    await db.commit()
+    return {"ok": True}
+
+
 @router.get("/orders")
 async def list_portal_orders(
     db: DBSession,

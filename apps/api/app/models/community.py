@@ -95,6 +95,33 @@ class RescueAnimal(UUIDPKMixin, TimestampMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+class AdoptionListing(UUIDPKMixin, TimestampMixin, Base):
+    """Foro de adopción: 'offer' (doy un animal en adopción) o 'want' (busco adoptar)."""
+
+    __tablename__ = "adoption_listings"
+    __table_args__ = (
+        CheckConstraint("post_type IN ('offer','want')", name="ck_adoption_listings_post_type"),
+        CheckConstraint("status IN ('open','closed')", name="ck_adoption_listings_status"),
+        {"schema": "community"},
+    )
+
+    reporter_customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("crm.customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    post_type: Mapped[str] = mapped_column(String(10), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    species: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    breed: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    lat: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    lng: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    delivery_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contact_phone: Mapped[str] = mapped_column(String(40), nullable=False)
+    photos: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open", index=True)
+
+
 class SOSSighting(UUIDPKMixin, Base):
     """Avistamiento reportado por alguien de la comunidad."""
 

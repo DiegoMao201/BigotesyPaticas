@@ -1,22 +1,51 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Heart, ExternalLink, AlertTriangle, PawPrint } from 'lucide-react';
+import { Heart, AlertTriangle, PawPrint, ExternalLink, Home, Search } from 'lucide-react';
+import { storeApi } from '@/lib/api';
+import { BreadcrumbSchema } from '@/components/seo/JsonLd';
+
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: 'Adopción responsable en Pereira y Dosquebradas — Bigotes y Paticas',
   description:
-    'Por qué la adopción responsable transforma vidas, y cómo elegir bien si vas a sumar un perro o gato adulto a tu familia en Pereira y Dosquebradas.',
+    'Foro de adopción real: animales que buscan hogar y personas que buscan adoptar en Pereira y Dosquebradas. Publica o encuentra a tu próximo compañero.',
+  keywords: [
+    'adopción de perros Pereira',
+    'adopción de gatos Dosquebradas',
+    'adoptar mascota Risaralda',
+    'foro adopción animales',
+  ],
   alternates: { canonical: 'https://bigotesypaticas.com/adopcion' },
   openGraph: {
-    title: 'Adopta en Pereira y Dosquebradas — Bigotes y Paticas',
-    description: 'Por qué adoptar cambia todo, y cómo prepararte para hacerlo con responsabilidad.',
+    title: 'Foro de Adopción — Bigotes y Paticas',
+    description: 'Animales que buscan hogar y personas que buscan adoptar, en Pereira y Dosquebradas.',
     url: 'https://bigotesypaticas.com/adopcion',
   },
 };
 
-export default function AdopcionPage() {
+function timeAgo(iso: string) {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days < 1) return 'hoy';
+  if (days === 1) return 'ayer';
+  return `hace ${days} días`;
+}
+
+export default async function AdopcionPage() {
+  const [offers, wants] = await Promise.all([
+    storeApi.adoptionListings('offer'),
+    storeApi.adoptionListings('want'),
+  ]);
+
   return (
     <div className="min-h-screen">
+      <BreadcrumbSchema
+        items={[
+          { name: 'Inicio', url: 'https://bigotesypaticas.com' },
+          { name: 'Adopción', url: 'https://bigotesypaticas.com/adopcion' },
+        ]}
+      />
+
       {/* Hero */}
       <div className="bg-gradient-to-b from-[#0d4a45] to-[#187f77] text-white py-20 px-4">
         <div className="max-w-3xl mx-auto text-center">
@@ -29,8 +58,81 @@ export default function AdopcionPage() {
             Cada perro callejero en Pereira<br />tiene una historia que merece contarse.
           </h1>
           <p className="text-lg text-white/80 max-w-2xl mx-auto">
-            En Bigotes y Paticas no somos un refugio ni hacemos adopciones directas. Pero sí creemos que el primer paso para reducir el abandono animal en Risaralda es que más personas elijan adoptar.
+            Este es el foro de adopción de la comunidad Bigotes y Paticas: quien tiene un animal para dar en adopción
+            lo publica aquí, y quien busca adoptar también. Directo, real, sin intermediarios.
           </p>
+          <div className="flex flex-wrap justify-center gap-3 mt-6">
+            <Link
+              href="https://mi.bigotesypaticas.com/adopcion/publicar"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#0d4a45] rounded-xl font-bold text-sm hover:bg-white/90 transition-colors"
+            >
+              <Home className="w-4 h-4" /> Doy un animal en adopción
+            </Link>
+            <Link
+              href="https://mi.bigotesypaticas.com/adopcion/buscar"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white/15 backdrop-blur text-white rounded-xl font-bold text-sm hover:bg-white/25 transition-colors"
+            >
+              <Search className="w-4 h-4" /> Busco adoptar
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* En adopción */}
+      <div className="container-wide py-14">
+        <h2 className="text-2xl font-display font-bold text-[#0d4a45] mb-6">🏠 Animales en adopción</h2>
+        {offers.length === 0 ? (
+          <p className="text-muted-foreground">Todavía no hay publicaciones abiertas. ¡Sé el primero!</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {offers.map((l) => (
+              <Link
+                key={l.id}
+                href={`/adopcion/${l.id}`}
+                className="group block rounded-3xl border border-border bg-card overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
+              >
+                {l.photos[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={l.photos[0]} alt={l.title} loading="lazy" className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
+                ) : (
+                  <div className="w-full h-48 bg-gradient-to-br from-[#187f77] to-[#085041] flex items-center justify-center text-6xl">
+                    <PawPrint className="h-12 w-12 text-white/70" />
+                  </div>
+                )}
+                <div className="p-5">
+                  <h3 className="font-display font-bold text-lg line-clamp-1 mb-1">{l.title}</h3>
+                  <p className="text-sm text-muted-foreground capitalize mb-2 line-clamp-1">
+                    {l.species}{l.breed ? ` · ${l.breed}` : ''}
+                  </p>
+                  <span className="text-xs text-muted-foreground">{timeAgo(l.created_at)}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Buscan adoptar */}
+      <div className="bg-[#f5f0e8] py-14 px-4">
+        <div className="container-wide">
+          <h2 className="text-2xl font-display font-bold text-[#0d4a45] mb-6">🔍 Buscan adoptar</h2>
+          {wants.length === 0 ? (
+            <p className="text-gray-600">Todavía no hay solicitudes publicadas.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {wants.map((l) => (
+                <Link
+                  key={l.id}
+                  href={`/adopcion/${l.id}`}
+                  className="block rounded-2xl bg-white border border-border p-5 hover:shadow-md transition-shadow"
+                >
+                  <h3 className="font-display font-bold mb-1">{l.title}</h3>
+                  {l.species && <p className="text-sm text-muted-foreground capitalize mb-2">{l.species}{l.breed ? ` · ${l.breed}` : ''}</p>}
+                  <span className="text-xs text-muted-foreground">{timeAgo(l.created_at)}</span>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -59,7 +161,7 @@ export default function AdopcionPage() {
               <div>
                 <h3 className="font-semibold text-[#0d4a45] mb-1">Un adulto ya sabe quién es</h3>
                 <p className="text-gray-600 text-sm leading-relaxed">
-                  Con un perro o gato adulto sabes de entrada su tamaño, temperamento y energía. No hay sorpresas de "se me creció más de lo esperado". Los adultos en hogares de paso son evaluados por personas que los conocen de cerca.
+                  Con un perro o gato adulto sabes de entrada su tamaño, temperamento y energía. No hay sorpresas de "se me creció más de lo esperado".
                 </p>
               </div>
             </div>
@@ -70,7 +172,7 @@ export default function AdopcionPage() {
               <div>
                 <h3 className="font-semibold text-[#0d4a45] mb-1">Comprar alimenta el ciclo del abandono</h3>
                 <p className="text-gray-600 text-sm leading-relaxed">
-                  Cada compra de cachorro de criadero informal (la mayoría en Risaralda no están certificados) financia condiciones de reproducción intensiva. Mientras tanto, miles de animales con exactamente las mismas capacidades esperan en un hogar de paso.
+                  Cada compra de cachorro de criadero informal (la mayoría en Risaralda no están certificados) financia condiciones de reproducción intensiva. Mientras tanto, miles de animales con exactamente las mismas capacidades esperan un hogar.
                 </p>
               </div>
             </div>
@@ -78,20 +180,8 @@ export default function AdopcionPage() {
         </div>
       </div>
 
-      {/* Dónde adoptar */}
-      <div className="bg-[#f5f0e8] py-16 px-4">
-        <div className="max-w-2xl mx-auto text-center">
-          <h2 className="text-2xl font-display font-bold text-[#0d4a45] mb-3">
-            Dónde adoptar en Pereira y Dosquebradas
-          </h2>
-          <p className="text-gray-600 text-sm leading-relaxed">
-            Bigotes y Paticas no gestiona adopciones directamente. Hay fundaciones, hogares de paso y jornadas municipales activas en Pereira y Dosquebradas — búscalas en redes sociales y consulta con tu clínica veterinaria de confianza, que suele conocer las opciones vigentes en la zona.
-          </p>
-        </div>
-      </div>
-
       {/* CTA — si ya adoptaste */}
-      <div className="py-16 px-4">
+      <div className="pb-16 px-4">
         <div className="max-w-2xl mx-auto text-center">
           <div className="bg-[#0d4a45] rounded-3xl p-10 text-white">
             <h2 className="text-2xl font-display font-bold mb-4">

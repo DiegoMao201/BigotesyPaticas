@@ -37,6 +37,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/contacto`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE}/pereira-dosquebradas-mascotas`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${BASE}/tarjeta.html`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${BASE}/adopcion`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
+    { url: `${BASE}/mascotas-perdidas`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
+    { url: `${BASE}/mascotas-encontradas`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
   ];
 
   // Todos los productos publicados
@@ -92,5 +95,53 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     );
   }
 
-  return [...staticPages, ...productPages, ...blogPages, ...landingPages];
+  // Comunidad: mascotas perdidas, animales encontrados, foro de adopción
+  const lostPages: MetadataRoute.Sitemap = [];
+  const lostData = await fetchJson<{ id: string; created_at?: string }[]>('/v1/public/community/lost');
+  if (lostData) {
+    lostPages.push(
+      ...lostData.map((p) => ({
+        url: `${BASE}/mascotas-perdidas/${p.id}`,
+        lastModified: p.created_at ? new Date(p.created_at) : now,
+        changeFrequency: 'daily' as const,
+        priority: 0.65,
+      })),
+    );
+  }
+
+  const foundPages: MetadataRoute.Sitemap = [];
+  const foundData = await fetchJson<{ id: string; created_at?: string }[]>('/v1/public/community/found');
+  if (foundData) {
+    foundPages.push(
+      ...foundData.map((p) => ({
+        url: `${BASE}/mascotas-encontradas/${p.id}`,
+        lastModified: p.created_at ? new Date(p.created_at) : now,
+        changeFrequency: 'daily' as const,
+        priority: 0.65,
+      })),
+    );
+  }
+
+  const adoptionPages: MetadataRoute.Sitemap = [];
+  const adoptionData = await fetchJson<{ id: string; created_at?: string }[]>('/v1/public/community/adoption');
+  if (adoptionData) {
+    adoptionPages.push(
+      ...adoptionData.map((p) => ({
+        url: `${BASE}/adopcion/${p.id}`,
+        lastModified: p.created_at ? new Date(p.created_at) : now,
+        changeFrequency: 'weekly' as const,
+        priority: 0.6,
+      })),
+    );
+  }
+
+  return [
+    ...staticPages,
+    ...productPages,
+    ...blogPages,
+    ...landingPages,
+    ...lostPages,
+    ...foundPages,
+    ...adoptionPages,
+  ];
 }

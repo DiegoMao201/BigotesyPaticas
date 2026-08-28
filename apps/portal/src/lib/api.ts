@@ -153,9 +153,10 @@ export const pets = {
 // Cuelga de /v1/sos/* en el backend, no de /v1/portal/*, por eso usa su propia base.
 
 const SOS_BASE = '/api/v1/sos';
+const ADOPTION_BASE = '/api/v1/adoption';
 
-async function requestSos<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${SOS_BASE}${path}`, {
+async function requestBase<T>(base: string, path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${base}${path}`, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...init?.headers },
     ...init,
@@ -166,6 +167,14 @@ async function requestSos<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+async function requestSos<T>(path: string, init?: RequestInit): Promise<T> {
+  return requestBase<T>(SOS_BASE, path, init);
+}
+
+async function requestAdoption<T>(path: string, init?: RequestInit): Promise<T> {
+  return requestBase<T>(ADOPTION_BASE, path, init);
 }
 
 export interface SOSSighting {
@@ -309,6 +318,60 @@ export const rescues = {
     files.forEach((f) => form.append('files', f));
     if (descriptions) form.append('descriptions', JSON.stringify(descriptions));
     const res = await fetch(`${SOS_BASE}/rescues/${eventId}/animals`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new ApiError(res.status, body.detail ?? 'Error al subir fotos');
+    }
+    return res.json();
+  },
+};
+
+// ── Foro de adopción ─────────────────────────────────────────────────
+
+export interface AdoptionListing {
+  id: string;
+  post_type: 'offer' | 'want';
+  title: string;
+  description: string | null;
+  species: string | null;
+  breed: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  delivery_notes: string | null;
+  contact_phone: string;
+  photos: string[];
+  status: 'open' | 'closed';
+  created_at: string;
+}
+
+export type AdoptionListingInput = {
+  post_type: 'offer' | 'want';
+  title: string;
+  description?: string | null;
+  species?: string | null;
+  breed?: string | null;
+  address?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  delivery_notes?: string | null;
+  contact_phone: string;
+};
+
+export const adoption = {
+  list: (postType?: 'offer' | 'want') =>
+    requestAdoption<AdoptionListing[]>(`/listings${postType ? `?post_type=${postType}` : ''}`),
+  get: (id: string) => requestAdoption<AdoptionListing>(`/listings/${id}`),
+  create: (data: AdoptionListingInput) =>
+    requestAdoption<AdoptionListing>('/listings', { method: 'POST', body: JSON.stringify(data) }),
+  uploadPhotos: async (listingId: string, files: File[]): Promise<{ ok: boolean; photos: string[] }> => {
+    const form = new FormData();
+    files.forEach((f) => form.append('files', f));
+    const res = await fetch(`${ADOPTION_BASE}/listings/${listingId}/photos`, {
       method: 'POST',
       credentials: 'include',
       body: form,

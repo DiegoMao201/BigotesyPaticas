@@ -37,6 +37,8 @@ from app.api.v1 import (
     portal_pets,
     portal_service_status,
     products,
+    adoption,
+    community_public,
     purchases,
     purchases_xml,
     rescues,
@@ -95,6 +97,8 @@ api_router.include_router(admin_portal.router, prefix="/v1")
 # Fase 1 comunidad: SOS mascotas perdidas
 api_router.include_router(sos.router, prefix="/v1")
 api_router.include_router(rescues.router, prefix="/v1")
+api_router.include_router(adoption.router, prefix="/v1")
+api_router.include_router(community_public.router, prefix="/v1")
 # Fase 3 comunidad: directorio de aliados/servicios + agenda real + panel de aliados
 api_router.include_router(partners_public.router, prefix="/v1")
 api_router.include_router(portal_bookings.router, prefix="/v1")

@@ -137,6 +137,66 @@ export interface ProductsPage {
   per_page: number;
 }
 
+// ── Comunidad (perdidos / encontrados / adopción) — datos reales del portal ──
+
+export interface LostPet {
+  id: string;
+  pet_name: string;
+  species: string;
+  breed: string | null;
+  color: string;
+  photos: string[];
+  last_seen_lat: number;
+  last_seen_lng: number;
+  last_seen_at: string;
+  contact_phone: string;
+  reward: number | null;
+  status: string;
+  created_at: string;
+}
+
+export interface FoundAnimal {
+  id: string;
+  photo_url: string;
+  thumb_url: string | null;
+  species: string | null;
+  description: string | null;
+  status: string;
+}
+
+export interface FoundEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  address: string | null;
+  lat: number;
+  lng: number;
+  found_at: string;
+  contact_phone: string | null;
+  status: string;
+  created_at: string;
+  animal_count: number;
+  cover_thumb_url: string | null;
+  animals: FoundAnimal[];
+}
+
+export interface AdoptionListing {
+  id: string;
+  post_type: 'offer' | 'want';
+  title: string;
+  description: string | null;
+  species: string | null;
+  breed: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  delivery_notes: string | null;
+  contact_phone: string;
+  photos: string[];
+  status: string;
+  created_at: string;
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { next: { revalidate: 60 } });
   if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
@@ -244,5 +304,27 @@ export const storeApi = {
   },
   landings: async (): Promise<SeoLanding[]> => {
     try { return await get<SeoLanding[]>('/v1/landings'); } catch { return []; }
+  },
+
+  // Comunidad -- datos reales del portal (mi.bigotesypaticas.com), publicados
+  // aquí en solo-lectura para que Google los indexe y la gente los encuentre.
+  lostPets: async (): Promise<LostPet[]> => {
+    try { return await get<LostPet[]>('/v1/public/community/lost'); } catch { return []; }
+  },
+  lostPetById: async (id: string): Promise<LostPet | null> => {
+    try { return await get<LostPet>(`/v1/public/community/lost/${id}`); } catch { return null; }
+  },
+  foundAnimals: async (): Promise<FoundEvent[]> => {
+    try { return await get<FoundEvent[]>('/v1/public/community/found'); } catch { return []; }
+  },
+  foundEventById: async (id: string): Promise<FoundEvent | null> => {
+    try { return await get<FoundEvent>(`/v1/public/community/found/${id}`); } catch { return null; }
+  },
+  adoptionListings: async (postType?: 'offer' | 'want'): Promise<AdoptionListing[]> => {
+    const qs = postType ? `?post_type=${postType}` : '';
+    try { return await get<AdoptionListing[]>(`/v1/public/community/adoption${qs}`); } catch { return []; }
+  },
+  adoptionListingById: async (id: string): Promise<AdoptionListing | null> => {
+    try { return await get<AdoptionListing>(`/v1/public/community/adoption/${id}`); } catch { return null; }
   },
 };
