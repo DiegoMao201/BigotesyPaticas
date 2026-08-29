@@ -8,10 +8,11 @@ import {
   X, ChevronRight, MessageCircle, Package, MapPin,
   StickyNote, Percent, UserCheck, XCircle, Clock,
   CheckCircle2, AlertCircle, Copy, Send, SkipForward,
-  AlertTriangle, Minus, Plus, Trash2,
+  AlertTriangle, Minus, Plus, Trash2, Repeat, PackagePlus, Pencil,
 } from 'lucide-react';
-import { adminPortal, ApiError, type PortalOrderDetail, type ActivityLogEntry, type PendingNotification } from '@/lib/api';
+import { adminPortal, ApiError, type PortalOrderDetail, type ActivityLogEntry, type PendingNotification, type Product } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { ProductPickerModal } from '@/components/ProductPickerModal';
 
 function stockShortageMessage(err: unknown): string | null {
   if (!(err instanceof ApiError) || err.status !== 409) return null;
@@ -58,10 +59,15 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
   const [cancelReason, setCancelReason] = useState('');
   const [showCancel, setShowCancel] = useState(false);
   const [customerNoteText, setCustomerNoteText] = useState('');
+  const [internalNoteText, setInternalNoteText] = useState('');
   const [discountAmount, setDiscountAmount] = useState('');
   const [discountReason, setDiscountReason] = useState('');
   const [showDiscount, setShowDiscount] = useState(false);
   const [pendingNotif, setPendingNotif] = useState<PendingNotification | null>(null);
+  const [substitutingItemId, setSubstitutingItemId] = useState<string | null>(null);
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [addressText, setAddressText] = useState('');
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['portal-order-detail', orderId],
@@ -134,6 +140,41 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
     onSuccess: () => { toast.success('Nota guardada'); setCustomerNoteText(''); invalidate(); },
   });
 
+  const internalNotesMut = useMutation({
+    mutationFn: () => adminPortal.updateNotes(orderId, { internal_notes: internalNoteText }),
+    onSuccess: () => { toast.success('Nota interna guardada'); setInternalNoteText(''); invalidate(); },
+  });
+
+  const substituteMut = useMutation({
+    mutationFn: ({ itemId, product }: { itemId: string; product: Product }) =>
+      adminPortal.substituteItem(orderId, itemId, {
+        new_product_id: product.id,
+        reason: 'Producto no disponible, sustituido por el administrador',
+      }),
+    onSuccess: (d) => {
+      toast.success('Producto sustituido');
+      invalidate();
+      if (d.pending_notification) setPendingNotif(d.pending_notification);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const addItemMut = useMutation({
+    mutationFn: (product: Product) => adminPortal.addItem(orderId, { product_id: product.id, quantity: 1 }),
+    onSuccess: (d) => {
+      toast.success('Producto agregado al pedido');
+      invalidate();
+      if (d.pending_notification) setPendingNotif(d.pending_notification);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const addressMut = useMutation({
+    mutationFn: () => adminPortal.updateShippingAddress(orderId, addressText),
+    onSuccess: () => { toast.success('Dirección actualizada'); setEditingAddress(false); invalidate(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const markSentMut = useMutation({
     mutationFn: () => adminPortal.markNotifSent(orderId),
     onSuccess: () => { toast.success('Notificación marcada como enviada'); invalidate(); },
@@ -159,7 +200,7 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
   const nextOptions = NEXT_STATUS[ws] ?? [];
   const canCancel = !['delivered', 'cancelled', 'returned'].includes(ws);
   const isAwaiting = ws === 'awaiting_customer';
-  const canEditItems = ['received', 'under_review', 'awaiting_customer', 'ready_to_invoice'].includes(ws);
+  const canEditItems = !['delivered', 'cancelled', 'returned'].includes(ws);
 
   const whatsappMsg = () => {
     const phone = order.customer_phone?.replace(/\D/g, '') ?? '';
@@ -231,10 +272,33 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
           {tab === 'items' && (
             <>
-              {order.shipping_address && (
+              {!editingAddress ? (
                 <div className="flex items-start gap-2 bg-gray-50 rounded-xl p-3 text-sm">
                   <MapPin size={14} className="text-gray-400 mt-0.5 shrink-0" />
-                  <span className="text-gray-700">{order.shipping_address}</span>
+                  <span className="text-gray-700 flex-1">{order.shipping_address || 'Sin dirección registrada'}</span>
+                  <button
+                    onClick={() => { setAddressText(order.shipping_address ?? ''); setEditingAddress(true); }}
+                    className="text-gray-400 hover:text-teal-600 shrink-0"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-xl p-3 flex flex-col gap-2">
+                  <textarea
+                    value={addressText}
+                    onChange={(e) => setAddressText(e.target.value)}
+                    rows={2}
+                    autoFocus
+                    className="rounded-lg border border-gray-200 p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => addressMut.mutate()} disabled={!addressText.trim() || addressMut.isPending}
+                      className="bg-teal-600 text-white rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
+                      Guardar dirección
+                    </button>
+                    <button onClick={() => setEditingAddress(false)} className="text-xs text-gray-500 underline">Cancelar</button>
+                  </div>
                 </div>
               )}
               {order.items.map((item) => (
@@ -295,10 +359,28 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                       >
                         <Trash2 size={12} /> Quitar
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setSubstitutingItemId(item.id)}
+                        disabled={substituteMut.isPending}
+                        className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800 disabled:opacity-40"
+                      >
+                        <Repeat size={12} /> Sustituir
+                      </button>
                     </div>
                   )}
                 </div>
               ))}
+
+              {canEditItems && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddProduct(true)}
+                  className="flex items-center justify-center gap-1.5 text-sm text-teal-700 border-2 border-dashed border-teal-200 rounded-xl py-2.5 hover:bg-teal-50 transition-colors"
+                >
+                  <PackagePlus size={15} /> Agregar producto al pedido
+                </button>
+              )}
 
               {/* Discount section */}
               {!showDiscount ? (
@@ -390,6 +472,21 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                   Guardar nota
                 </button>
               </div>
+
+              <div className="flex flex-col gap-2 pt-2 border-t">
+                <p className="text-xs font-semibold text-gray-500">🔒 Nota interna (no la ve el cliente)</p>
+                <textarea
+                  value={internalNoteText}
+                  onChange={(e) => setInternalNoteText(e.target.value)}
+                  placeholder="Agregar nota interna del equipo..."
+                  rows={3}
+                  className="rounded-xl border border-gray-200 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                />
+                <button onClick={() => internalNotesMut.mutate()} disabled={!internalNoteText || internalNotesMut.isPending}
+                  className="self-start bg-yellow-500 text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">
+                  Guardar nota interna
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -466,6 +563,19 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
           onClose={() => setPendingNotif(null)}
         />
       )}
+
+      <ProductPickerModal
+        open={!!substitutingItemId}
+        onClose={() => setSubstitutingItemId(null)}
+        title="Sustituir por…"
+        onSelect={(product) => substitutingItemId && substituteMut.mutate({ itemId: substitutingItemId, product })}
+      />
+      <ProductPickerModal
+        open={showAddProduct}
+        onClose={() => setShowAddProduct(false)}
+        title="Agregar producto al pedido"
+        onSelect={(product) => addItemMut.mutate(product)}
+      />
     </>
   );
 }

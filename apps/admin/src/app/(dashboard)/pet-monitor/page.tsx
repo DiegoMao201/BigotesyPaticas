@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { OrderDetailDrawer } from './OrderDetailDrawer';
+import { AppointmentDetailDrawer } from './AppointmentDetailDrawer';
 
 function formatAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -97,6 +98,7 @@ export default function PetMonitorPage() {
   const [mainTab, setMainTab] = useState<'orders' | 'appointments'>('orders');
   const [workflowTab, setWorkflowTab] = useState<'active' | 'delivered' | 'cancelled'>('active');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [selectedApptId, setSelectedApptId] = useState<string | null>(null);
 
   const { data: kpis, isLoading: kpisLoading, isFetching, refetch: refetchKpis } = useQuery({
     queryKey: ['admin-portal-overview'],
@@ -409,7 +411,11 @@ export default function PetMonitorPage() {
               const statusInfo = APPT_STATUS[appt.status] ?? { label: appt.status, color: 'bg-gray-100 text-gray-600' };
               const isToday = new Date(appt.scheduled_at).toDateString() === new Date().toDateString();
               return (
-                <Card key={appt.id} className={`p-4 border ${isToday ? 'border-teal-200 bg-teal-50/30' : 'border-gray-100'}`}>
+                <Card
+                  key={appt.id}
+                  onClick={() => setSelectedApptId(appt.id)}
+                  className={`p-4 border cursor-pointer hover:shadow-md transition-shadow ${isToday ? 'border-teal-200 bg-teal-50/30' : 'border-gray-100'}`}
+                >
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -435,7 +441,7 @@ export default function PetMonitorPage() {
                         <p className="text-xs text-gray-400 mt-1 line-clamp-1">{appt.notes}</p>
                       )}
                     </div>
-                    <div className="flex flex-col gap-1.5 shrink-0">
+                    <div className="flex flex-col gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                       {appt.status === 'pending' && (
                         <>
                           <Button
@@ -495,6 +501,15 @@ export default function PetMonitorPage() {
         <OrderDetailDrawer
           orderId={selectedOrderId}
           onClose={() => setSelectedOrderId(null)}
+          onRefreshList={manualRefresh}
+        />
+      )}
+
+      {/* Appointment detail drawer */}
+      {selectedApptId && (
+        <AppointmentDetailDrawer
+          apptId={selectedApptId}
+          onClose={() => setSelectedApptId(null)}
           onRefreshList={manualRefresh}
         />
       )}

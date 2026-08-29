@@ -1776,6 +1776,22 @@ async def no_show_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
     return {"ok": True}
 
 
+class ApptNotesPayload(BaseModel):
+    notes: str
+
+
+@router.patch("/appointments/{appt_id}/notes", dependencies=[Depends(require_permission("crm:write"))])
+async def update_appointment_notes(appt_id: uuid.UUID, payload: ApptNotesPayload, db: DBSession) -> dict:
+    appt = (
+        await db.execute(select(Appointment).where(Appointment.id == appt_id))
+    ).scalar_one_or_none()
+    if not appt:
+        raise HTTPException(404, "Cita no encontrada")
+    appt.notes = payload.notes
+    await db.commit()
+    return {"ok": True}
+
+
 # ── Portal customer: order timeline ──────────────────────────────────────────
 
 

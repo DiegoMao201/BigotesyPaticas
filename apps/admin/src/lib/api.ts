@@ -1351,6 +1351,33 @@ export interface PortalAppointment {
   created_at: string;
 }
 
+export interface AppointmentDetail {
+  id: string;
+  customer_id: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  pet_name: string | null;
+  service_type: string;
+  scheduled_at: string;
+  duration_min: number;
+  status: string;
+  workflow_status: string | null;
+  price: number | null;
+  notes: string | null;
+  reschedule_reason: string | null;
+  reschedule_reason_category: string | null;
+  proposed_options: string[] | null;
+  compensation_points: number;
+  created_at: string;
+  activity: {
+    action: string;
+    actor_name: string | null;
+    changes: Record<string, unknown> | null;
+    visible_to_customer: boolean;
+    created_at: string;
+  }[];
+}
+
 export const adminPortal = {
   overview: () => api<PortalKPIs>('/v1/admin/portal/overview'),
   recentLogins: () => api<RecentLogin[]>('/v1/admin/portal/customers/recent-logins'),
@@ -1390,6 +1417,9 @@ export const adminPortal = {
   updateNotes: (orderId: string, body: { internal_notes?: string; customer_facing_notes?: string }) =>
     api<{ ok: boolean }>(`/v1/admin/portal/orders/${orderId}/notes`,
       { method: 'PATCH', body: JSON.stringify(body) }),
+  updateShippingAddress: (orderId: string, shipping_address: string) =>
+    api<{ ok: boolean }>(`/v1/admin/portal/orders/${orderId}/shipping-address`,
+      { method: 'PATCH', body: JSON.stringify({ shipping_address }) }),
   confirmApproval: (orderId: string, channel: string, notes?: string) =>
     api<{ ok: boolean; workflow_status: string }>(
       `/v1/admin/portal/orders/${orderId}/confirm-customer-approval`,
@@ -1429,7 +1459,7 @@ export const adminPortal = {
     if (opts?.status) p.set('status', opts.status);
     return api<PortalAppointment[]>(`/v1/admin/portal/appointments?${p}`);
   },
-  appointmentDetail: (id: string) => api<Record<string, unknown>>(`/v1/admin/portal/appointments/${id}/detail`),
+  appointmentDetail: (id: string) => api<AppointmentDetail>(`/v1/admin/portal/appointments/${id}/detail`),
   updateAppointment: (id: string, body: { status: string; cancel_reason?: string }) =>
     api<{ ok: boolean; id: string; status: string }>(
       `/v1/admin/portal/appointments/${id}`, { method: 'PATCH', body: JSON.stringify(body) }
@@ -1448,6 +1478,9 @@ export const adminPortal = {
     api<{ ok: boolean }>(`/v1/admin/portal/appointments/${id}/complete`, { method: 'PATCH', body: '{}' }),
   noShowAppointment: (id: string) =>
     api<{ ok: boolean }>(`/v1/admin/portal/appointments/${id}/no-show`, { method: 'PATCH', body: '{}' }),
+  updateApptNotes: (id: string, notes: string) =>
+    api<{ ok: boolean }>(`/v1/admin/portal/appointments/${id}/notes`,
+      { method: 'PATCH', body: JSON.stringify({ notes }) }),
 };
 
 // ─── Admin ETL ─────────────────────────────────────────────────────────────
