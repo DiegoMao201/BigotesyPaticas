@@ -144,12 +144,16 @@ async def _apply_stock_and_cost(
             continue  # No mapear productos sin ID
 
         # Actualizar costo del producto si el nuevo costo es > 0
+        # Bigotes y Paticas no es responsable de IVA: el IVA pagado al proveedor
+        # no se puede descontar y es costo real, por eso se incluye en Product.cost
+        # (misma convención que el sistema legacy: costo_neto_unit = base + iva).
         if item.unit_cost > 0:
             product = (
                 await db.execute(select(Product).where(Product.id == item.product_id))
             ).scalar_one_or_none()
             if product:
-                product.cost = Decimal(str(item.unit_cost))
+                cost_con_iva = round(item.unit_cost * (1 + float(item.tax_pct) / 100), 2)
+                product.cost = Decimal(str(cost_con_iva))
 
         # Unidades reales = quantity x factor_pack
         units = item.quantity * item.factor_pack
