@@ -198,10 +198,7 @@ def validate_one(item: dict, category_map: dict[str, str]) -> dict:
     short_desc = (item.get("short_description") or "").strip()[:500]
 
     tags = item.get("tags") or []
-    if isinstance(tags, list):
-        tags = [str(t).lower()[:50] for t in tags[:10] if t]
-    else:
-        tags = []
+    tags = [str(t).lower()[:50] for t in tags[:10] if t] if isinstance(tags, list) else []
 
     return {
         "category_slug": cat_slug,

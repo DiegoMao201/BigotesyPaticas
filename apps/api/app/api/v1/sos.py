@@ -29,6 +29,7 @@ def _ping_indexnow(urls: list[str]) -> None:
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
+
 SPECIES = {"perro", "gato", "otro"}
 
 

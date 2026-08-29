@@ -378,7 +378,7 @@ class MovementOut(BaseModel):
     unit_cost: float | None = None
     reference_type: str | None = None
     reference_id: str | None = None
-    order_number: str | None = None   # nro de factura cuando movement_type = SALE
+    order_number: str | None = None  # nro de factura cuando movement_type = SALE
     notes: str | None = None
     occurred_at: datetime
     created_by: str | None = None

@@ -226,7 +226,9 @@ async def publish_story(story: dict, dry_run: bool, cur, conn) -> bool:
                 error = str(e)[:300]
 
             try:
-                fb_id = publish_fb_story_image(media_url) if is_image else publish_fb_story(media_url)
+                fb_id = (
+                    publish_fb_story_image(media_url) if is_image else publish_fb_story(media_url)
+                )
             except Exception as e:
                 log.warning("FB story falló: %s", e)
                 if not error:

@@ -30,11 +30,11 @@ PALETTES: dict[str, dict[str, tuple[int, int, int]]] = {
 
 _EMOJI_RE = re.compile(
     "["
-    "\U0001F300-\U0001FAFF"
-    "\U00002600-\U000027BF"
-    "\U0001F1E6-\U0001F1FF"
-    "\U00002190-\U000021FF"
-    "\U00002B00-\U00002BFF"
+    "\U0001f300-\U0001faff"
+    "\U00002600-\U000027bf"
+    "\U0001f1e6-\U0001f1ff"
+    "\U00002190-\U000021ff"
+    "\U00002b00-\U00002bff"
     "️"
     "]+",
     flags=re.UNICODE,
@@ -61,7 +61,9 @@ def _vertical_gradient(size: tuple[int, int], top_rgb, bottom_rgb) -> Image.Imag
     return img
 
 
-def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
+def _wrap_text(
+    draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_width: int
+) -> list[str]:
     words = text.split()
     lines: list[str] = []
     cur = ""

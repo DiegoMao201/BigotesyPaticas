@@ -27,6 +27,7 @@ from app.models.portal import (
 
 # ── Mapeo de workflow_status a template de notificación ───────────────────────
 
+
 class InsufficientStockError(Exception):
     """Se lanza cuando bridge_to_sales() detecta que uno o más ítems del pedido
     no tienen stock suficiente para facturar. `shortages` es una lista de
@@ -36,7 +37,10 @@ class InsufficientStockError(Exception):
         self.shortages = shortages
         super().__init__(
             "Stock insuficiente: "
-            + ", ".join(f"{s['name']} (pedido {s['requested']}, disponible {s['available']})" for s in shortages)
+            + ", ".join(
+                f"{s['name']} (pedido {s['requested']}, disponible {s['available']})"
+                for s in shortages
+            )
         )
 
 

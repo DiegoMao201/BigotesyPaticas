@@ -156,7 +156,9 @@ async def recent_logins(db: DBSession) -> list[dict]:
 
     sessions = (
         await db.execute(
-            select(PortalSession.customer_id, func.max(PortalSession.created_at).label("last_login"))
+            select(
+                PortalSession.customer_id, func.max(PortalSession.created_at).label("last_login")
+            )
             .where(
                 PortalSession.expires_at > now,
                 PortalSession.created_at >= now - timedelta(hours=24),
@@ -195,7 +197,9 @@ async def recent_logins(db: DBSession) -> list[dict]:
 
     customers = {
         c.id: c
-        for c in (await db.execute(select(Customer).where(Customer.id.in_(customer_ids)))).scalars().all()
+        for c in (await db.execute(select(Customer).where(Customer.id.in_(customer_ids))))
+        .scalars()
+        .all()
     }
 
     result = []
@@ -212,8 +216,16 @@ async def recent_logins(db: DBSession) -> list[dict]:
             f"Entra aquí: https://mi.bigotesypaticas.com"
         )
         phone_digits = "".join(ch for ch in (cust.phone or "") if ch.isdigit())
-        wa_phone = (phone_digits if phone_digits.startswith("57") else f"57{phone_digits}") if phone_digits else ""
-        wa_link = f"https://wa.me/{wa_phone}?text={quote(msg)}" if wa_phone else f"https://wa.me/?text={quote(msg)}"
+        wa_phone = (
+            (phone_digits if phone_digits.startswith("57") else f"57{phone_digits}")
+            if phone_digits
+            else ""
+        )
+        wa_link = (
+            f"https://wa.me/{wa_phone}?text={quote(msg)}"
+            if wa_phone
+            else f"https://wa.me/?text={quote(msg)}"
+        )
 
         result.append(
             {
@@ -256,7 +268,9 @@ async def mark_login_contacted(customer_id: uuid.UUID, db: DBSession) -> dict:
 # foto inapropiada/duplicada.
 
 
-def _rescue_admin_out(event, reporter_name: str | None, reporter_phone: str | None, animals: list) -> dict:
+def _rescue_admin_out(
+    event, reporter_name: str | None, reporter_phone: str | None, animals: list
+) -> dict:
     return {
         "id": str(event.id),
         "title": event.title,
@@ -287,7 +301,9 @@ def _rescue_admin_out(event, reporter_name: str | None, reporter_phone: str | No
 
 
 @router.get("/rescues")
-async def list_rescue_events_admin(db: DBSession, status_filter: str = Query(default="all", alias="status")) -> list[dict]:
+async def list_rescue_events_admin(
+    db: DBSession, status_filter: str = Query(default="all", alias="status")
+) -> list[dict]:
     from app.models.community import RescueAnimal, RescueEvent
 
     q = select(RescueEvent, Customer.full_name, Customer.phone).join(
@@ -354,12 +370,16 @@ class RescueEventStatusUpdate(BaseModel):
 
 
 @router.patch("/rescues/{event_id}", dependencies=[Depends(require_permission("crm:write"))])
-async def update_rescue_event_admin(event_id: uuid.UUID, payload: RescueEventStatusUpdate, db: DBSession) -> dict:
+async def update_rescue_event_admin(
+    event_id: uuid.UUID, payload: RescueEventStatusUpdate, db: DBSession
+) -> dict:
     from app.models.community import RescueEvent
 
     if payload.status not in {"open", "closed"}:
         raise HTTPException(status_code=422, detail="status debe ser 'open' o 'closed'")
-    event = (await db.execute(select(RescueEvent).where(RescueEvent.id == event_id))).scalar_one_or_none()
+    event = (
+        await db.execute(select(RescueEvent).where(RescueEvent.id == event_id))
+    ).scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Evento de rescate no encontrado")
     event.status = payload.status
@@ -371,7 +391,10 @@ class RescueAnimalStatusUpdate(BaseModel):
     status: str
 
 
-@router.patch("/rescues/{event_id}/animals/{animal_id}", dependencies=[Depends(require_permission("crm:write"))])
+@router.patch(
+    "/rescues/{event_id}/animals/{animal_id}",
+    dependencies=[Depends(require_permission("crm:write"))],
+)
 async def update_rescue_animal_admin(
     event_id: uuid.UUID, animal_id: uuid.UUID, payload: RescueAnimalStatusUpdate, db: DBSession
 ) -> dict:
@@ -381,7 +404,9 @@ async def update_rescue_animal_admin(
         raise HTTPException(status_code=422, detail="status debe ser 'unclaimed' o 'reunited'")
     animal = (
         await db.execute(
-            select(RescueAnimal).where(RescueAnimal.id == animal_id, RescueAnimal.rescue_event_id == event_id)
+            select(RescueAnimal).where(
+                RescueAnimal.id == animal_id, RescueAnimal.rescue_event_id == event_id
+            )
         )
     ).scalar_one_or_none()
     if not animal:
@@ -391,13 +416,20 @@ async def update_rescue_animal_admin(
     return {"ok": True, "status": animal.status}
 
 
-@router.delete("/rescues/{event_id}/animals/{animal_id}", dependencies=[Depends(require_permission("crm:write"))])
-async def delete_rescue_animal_admin(event_id: uuid.UUID, animal_id: uuid.UUID, db: DBSession) -> dict:
+@router.delete(
+    "/rescues/{event_id}/animals/{animal_id}",
+    dependencies=[Depends(require_permission("crm:write"))],
+)
+async def delete_rescue_animal_admin(
+    event_id: uuid.UUID, animal_id: uuid.UUID, db: DBSession
+) -> dict:
     from app.models.community import RescueAnimal
 
     animal = (
         await db.execute(
-            select(RescueAnimal).where(RescueAnimal.id == animal_id, RescueAnimal.rescue_event_id == event_id)
+            select(RescueAnimal).where(
+                RescueAnimal.id == animal_id, RescueAnimal.rescue_event_id == event_id
+            )
         )
     ).scalar_one_or_none()
     if not animal:
@@ -472,7 +504,9 @@ class AdoptionListingStatusUpdate(BaseModel):
     status: str
 
 
-@router.patch("/adoption-listings/{listing_id}", dependencies=[Depends(require_permission("crm:write"))])
+@router.patch(
+    "/adoption-listings/{listing_id}", dependencies=[Depends(require_permission("crm:write"))]
+)
 async def update_adoption_listing_admin(
     listing_id: uuid.UUID, payload: AdoptionListingStatusUpdate, db: DBSession
 ) -> dict:
@@ -495,7 +529,10 @@ class AdoptionOutcomeUpdate(BaseModel):
     outcome_note: str | None = None
 
 
-@router.patch("/adoption-listings/{listing_id}/outcome", dependencies=[Depends(require_permission("crm:write"))])
+@router.patch(
+    "/adoption-listings/{listing_id}/outcome",
+    dependencies=[Depends(require_permission("crm:write"))],
+)
 async def update_adoption_outcome_admin(
     listing_id: uuid.UUID, payload: AdoptionOutcomeUpdate, db: DBSession
 ) -> dict:
@@ -517,7 +554,9 @@ async def update_adoption_outcome_admin(
     return {"ok": True, "outcome": listing.outcome}
 
 
-@router.delete("/adoption-listings/{listing_id}", dependencies=[Depends(require_permission("crm:write"))])
+@router.delete(
+    "/adoption-listings/{listing_id}", dependencies=[Depends(require_permission("crm:write"))]
+)
 async def delete_adoption_listing_admin(listing_id: uuid.UUID, db: DBSession) -> dict:
     from app.models.community import AdoptionListing
 
@@ -995,9 +1034,7 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
         .all()
     )
 
-    stock_by_product = await _stock_availability(
-        db, {i.product_id for i in items if i.product_id}
-    )
+    stock_by_product = await _stock_availability(db, {i.product_id for i in items if i.product_id})
 
     items_data = []
     has_stock_issues = False
@@ -1173,7 +1210,9 @@ WORKFLOW_TRANSITIONS: dict[str, list[str]] = {
 }
 
 
-@router.patch("/orders/{order_id}/workflow", dependencies=[Depends(require_permission("crm:write"))])
+@router.patch(
+    "/orders/{order_id}/workflow", dependencies=[Depends(require_permission("crm:write"))]
+)
 async def change_workflow_status(
     order_id: uuid.UUID, payload: ChangeWorkflowPayload, db: DBSession
 ) -> dict:
@@ -1233,7 +1272,10 @@ async def change_workflow_status(
 # ── PATCH item quantity ────────────────────────────────────────────────────────
 
 
-@router.patch("/orders/{order_id}/items/{item_id}/quantity", dependencies=[Depends(require_permission("crm:write"))])
+@router.patch(
+    "/orders/{order_id}/items/{item_id}/quantity",
+    dependencies=[Depends(require_permission("crm:write"))],
+)
 async def edit_item_quantity(
     order_id: uuid.UUID, item_id: uuid.UUID, payload: EditQuantityPayload, db: DBSession
 ) -> dict:
@@ -1283,7 +1325,10 @@ async def edit_item_quantity(
 # ── POST substitute item ──────────────────────────────────────────────────────
 
 
-@router.post("/orders/{order_id}/items/{item_id}/substitute", dependencies=[Depends(require_permission("crm:write"))])
+@router.post(
+    "/orders/{order_id}/items/{item_id}/substitute",
+    dependencies=[Depends(require_permission("crm:write"))],
+)
 async def substitute_item(
     order_id: uuid.UUID, item_id: uuid.UUID, payload: SubstitutePayload, db: DBSession
 ) -> dict:
@@ -1395,7 +1440,9 @@ async def add_item_to_order(order_id: uuid.UUID, payload: AddItemPayload, db: DB
 # ── DELETE remove item ────────────────────────────────────────────────────────
 
 
-@router.delete("/orders/{order_id}/items/{item_id}", dependencies=[Depends(require_permission("crm:write"))])
+@router.delete(
+    "/orders/{order_id}/items/{item_id}", dependencies=[Depends(require_permission("crm:write"))]
+)
 async def remove_item_from_order(
     order_id: uuid.UUID, item_id: uuid.UUID, payload: RemoveItemPayload, db: DBSession
 ) -> dict:
@@ -1475,7 +1522,9 @@ async def apply_discount(order_id: uuid.UUID, payload: DiscountPayload, db: DBSe
 # ── PATCH shipping address ────────────────────────────────────────────────────
 
 
-@router.patch("/orders/{order_id}/shipping-address", dependencies=[Depends(require_permission("crm:write"))])
+@router.patch(
+    "/orders/{order_id}/shipping-address", dependencies=[Depends(require_permission("crm:write"))]
+)
 async def change_shipping_address(
     order_id: uuid.UUID, payload: AddressPayload, db: DBSession
 ) -> dict:
@@ -1528,7 +1577,10 @@ async def update_order_notes(order_id: uuid.UUID, payload: NotesPayload, db: DBS
 # ── POST confirm customer approval ────────────────────────────────────────────
 
 
-@router.post("/orders/{order_id}/confirm-customer-approval", dependencies=[Depends(require_permission("crm:write"))])
+@router.post(
+    "/orders/{order_id}/confirm-customer-approval",
+    dependencies=[Depends(require_permission("crm:write"))],
+)
 async def confirm_customer_approval(
     order_id: uuid.UUID, payload: ConfirmApprovalPayload, db: DBSession
 ) -> dict:
@@ -1555,7 +1607,10 @@ async def confirm_customer_approval(
 # ── POST mark notifications sent ──────────────────────────────────────────────
 
 
-@router.post("/orders/{order_id}/notifications/mark-sent", dependencies=[Depends(require_permission("crm:write"))])
+@router.post(
+    "/orders/{order_id}/notifications/mark-sent",
+    dependencies=[Depends(require_permission("crm:write"))],
+)
 async def mark_notifications_sent(
     order_id: uuid.UUID, payload: MarkSentPayload, db: DBSession
 ) -> dict:
@@ -1673,7 +1728,9 @@ async def get_appointment_detail(appt_id: uuid.UUID, db: DBSession) -> dict:
     }
 
 
-@router.patch("/appointments/{appt_id}/reschedule", dependencies=[Depends(require_permission("crm:write"))])
+@router.patch(
+    "/appointments/{appt_id}/reschedule", dependencies=[Depends(require_permission("crm:write"))]
+)
 async def reschedule_appointment(
     appt_id: uuid.UUID, payload: RescheduleApptPayload, db: DBSession
 ) -> dict:
@@ -1719,7 +1776,10 @@ async def reschedule_appointment(
     }
 
 
-@router.patch("/appointments/{appt_id}/confirm-choice", dependencies=[Depends(require_permission("crm:write"))])
+@router.patch(
+    "/appointments/{appt_id}/confirm-choice",
+    dependencies=[Depends(require_permission("crm:write"))],
+)
 async def confirm_appt_customer_choice(
     appt_id: uuid.UUID, payload: ConfirmApptChoicePayload, db: DBSession
 ) -> dict:
@@ -1747,7 +1807,9 @@ async def confirm_appt_customer_choice(
     return {"ok": True}
 
 
-@router.patch("/appointments/{appt_id}/complete", dependencies=[Depends(require_permission("crm:write"))])
+@router.patch(
+    "/appointments/{appt_id}/complete", dependencies=[Depends(require_permission("crm:write"))]
+)
 async def complete_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
     appt = (
         await db.execute(select(Appointment).where(Appointment.id == appt_id))
@@ -1762,7 +1824,9 @@ async def complete_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
     return {"ok": True}
 
 
-@router.patch("/appointments/{appt_id}/no-show", dependencies=[Depends(require_permission("crm:write"))])
+@router.patch(
+    "/appointments/{appt_id}/no-show", dependencies=[Depends(require_permission("crm:write"))]
+)
 async def no_show_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
     appt = (
         await db.execute(select(Appointment).where(Appointment.id == appt_id))
@@ -1780,8 +1844,12 @@ class ApptNotesPayload(BaseModel):
     notes: str
 
 
-@router.patch("/appointments/{appt_id}/notes", dependencies=[Depends(require_permission("crm:write"))])
-async def update_appointment_notes(appt_id: uuid.UUID, payload: ApptNotesPayload, db: DBSession) -> dict:
+@router.patch(
+    "/appointments/{appt_id}/notes", dependencies=[Depends(require_permission("crm:write"))]
+)
+async def update_appointment_notes(
+    appt_id: uuid.UUID, payload: ApptNotesPayload, db: DBSession
+) -> dict:
     appt = (
         await db.execute(select(Appointment).where(Appointment.id == appt_id))
     ).scalar_one_or_none()
@@ -1881,7 +1949,9 @@ class MarkNotifPayload(BaseModel):
     channel: str = "whatsapp"
 
 
-@router.post("/notifications/{notif_id}/mark-sent", dependencies=[Depends(require_permission("crm:write"))])
+@router.post(
+    "/notifications/{notif_id}/mark-sent", dependencies=[Depends(require_permission("crm:write"))]
+)
 async def mark_notification_sent(
     notif_id: uuid.UUID,
     payload: MarkNotifPayload,
@@ -1909,7 +1979,9 @@ async def mark_notification_sent(
     return {"ok": True, "status": "sent_by_admin", "sent_at": notif.sent_at.isoformat()}
 
 
-@router.post("/notifications/{notif_id}/skip", dependencies=[Depends(require_permission("crm:write"))])
+@router.post(
+    "/notifications/{notif_id}/skip", dependencies=[Depends(require_permission("crm:write"))]
+)
 async def skip_notification(notif_id: uuid.UUID, db: DBSession) -> dict:
     """Omite una notificación pendiente (Diego decidió no enviar este mensaje)."""
     notif = (
