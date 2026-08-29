@@ -76,3 +76,12 @@ docs/MOBILE_COMMUNITY_PROGRESS.md
 
 # Media local — fotos y videos para posts (no subir al repo)
 media/
+*.mp4
+
+# Coverage / build artifacts sueltos
+.coverage
+apps/*/tsconfig.tsbuildinfo
+
+# Contienen secretos hardcodeados en texto plano — nunca deben entrar al repo
+estrategiaredes.md
+secrets.md
