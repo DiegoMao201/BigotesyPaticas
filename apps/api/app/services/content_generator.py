@@ -28,22 +28,24 @@ log = logging.getLogger(__name__)
 
 # ─── URLs válidas para CTA — ÚNICA lista autorizada ───────────────────────────
 # Si el modelo inventa una URL fuera de esta lista, se reemplaza por el fallback.
-_VALID_CTA_URLS: frozenset[str] = frozenset({
-    "https://bigotesypaticas.com/categorias/todos",
-    "https://bigotesypaticas.com/categorias/perros",
-    "https://bigotesypaticas.com/categorias/gatos",
-    "https://bigotesypaticas.com/categorias/snacks",
-    "https://bigotesypaticas.com/categorias/accesorios",
-    "https://bigotesypaticas.com/adopcion",
-    "https://bigotesypaticas.com/jornadas-esterilizacion",
-    "https://bigotesypaticas.com/nutricion-salud-oral",
-    "https://bigotesypaticas.com/planes-nutricionales",
-    "https://bigotesypaticas.com/nosotros",
-    "https://bigotesypaticas.com/blog",
-    "https://bigotesypaticas.com/contacto",
-    "https://mi.bigotesypaticas.com",
-    "https://wa.me/573206876633",
-})
+_VALID_CTA_URLS: frozenset[str] = frozenset(
+    {
+        "https://bigotesypaticas.com/categorias/todos",
+        "https://bigotesypaticas.com/categorias/perros",
+        "https://bigotesypaticas.com/categorias/gatos",
+        "https://bigotesypaticas.com/categorias/snacks",
+        "https://bigotesypaticas.com/categorias/accesorios",
+        "https://bigotesypaticas.com/adopcion",
+        "https://bigotesypaticas.com/jornadas-esterilizacion",
+        "https://bigotesypaticas.com/nutricion-salud-oral",
+        "https://bigotesypaticas.com/planes-nutricionales",
+        "https://bigotesypaticas.com/nosotros",
+        "https://bigotesypaticas.com/blog",
+        "https://bigotesypaticas.com/contacto",
+        "https://mi.bigotesypaticas.com",
+        "https://wa.me/573206876633",
+    }
+)
 _CTA_FALLBACK = "https://bigotesypaticas.com/categorias/todos"
 
 
@@ -58,7 +60,10 @@ def _validated_cta_url(url: str | None, allowed_product_slug: str | None = None)
     if url.startswith("https://wa.me/573206876633"):
         return url
     if url.startswith("https://bigotesypaticas.com/producto/"):
-        if allowed_product_slug and url == f"https://bigotesypaticas.com/producto/{allowed_product_slug}":
+        if (
+            allowed_product_slug
+            and url == f"https://bigotesypaticas.com/producto/{allowed_product_slug}"
+        ):
             return url
         log.warning("CTA URL de producto bloqueada (slug no autorizado): %s → fallback", url)
         return _CTA_FALLBACK

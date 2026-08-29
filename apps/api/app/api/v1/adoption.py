@@ -11,7 +11,7 @@ import asyncio
 import uuid
 from decimal import Decimal
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -75,7 +75,9 @@ async def create_adoption_listing(
     if payload.post_type not in {"offer", "want"}:
         raise HTTPException(status_code=422, detail="post_type debe ser 'offer' o 'want'")
     if payload.post_type == "offer" and (payload.lat is None or payload.lng is None):
-        raise HTTPException(status_code=422, detail="Para dar un animal en adopción necesitamos la ubicación")
+        raise HTTPException(
+            status_code=422, detail="Para dar un animal en adopción necesitamos la ubicación"
+        )
 
     listing = AdoptionListing(
         reporter_customer_id=customer.id,
@@ -118,7 +120,9 @@ async def list_my_and_public_listings(
 
 
 @router.get("/listings/{listing_id}")
-async def get_adoption_listing(listing_id: uuid.UUID, db: DBSession, _customer: Customer = PortalUser) -> dict:
+async def get_adoption_listing(
+    listing_id: uuid.UUID, db: DBSession, _customer: Customer = PortalUser
+) -> dict:
     row = (
         await db.execute(select(AdoptionListing).where(AdoptionListing.id == listing_id))
     ).scalar_one_or_none()
@@ -142,20 +146,28 @@ async def upload_adoption_photos(
     if listing.reporter_customer_id != customer.id:
         raise HTTPException(status_code=403, detail="Solo quien publicó puede agregar fotos")
     if len(files) > MAX_PHOTOS_PER_UPLOAD:
-        raise HTTPException(status_code=422, detail=f"Máximo {MAX_PHOTOS_PER_UPLOAD} fotos por solicitud")
+        raise HTTPException(
+            status_code=422, detail=f"Máximo {MAX_PHOTOS_PER_UPLOAD} fotos por solicitud"
+        )
 
     contents_list: list[bytes] = []
     for f in files:
         if f.content_type not in ALLOWED_CONTENT_TYPES:
-            raise HTTPException(status_code=422, detail=f"{f.filename}: solo se aceptan JPEG, PNG o WebP")
+            raise HTTPException(
+                status_code=422, detail=f"{f.filename}: solo se aceptan JPEG, PNG o WebP"
+            )
         contents = await f.read()
         if len(contents) > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail=f"{f.filename}: la imagen no debe superar 5 MB")
+            raise HTTPException(
+                status_code=413, detail=f"{f.filename}: la imagen no debe superar 5 MB"
+            )
         contents_list.append(contents)
 
     uploaded = await asyncio.gather(
         *[
-            asyncio.to_thread(upload_image_webp, contents, key_prefix=f"bigotesypaticas/adoption/{listing_id}")
+            asyncio.to_thread(
+                upload_image_webp, contents, key_prefix=f"bigotesypaticas/adoption/{listing_id}"
+            )
             for contents in contents_list
         ]
     )

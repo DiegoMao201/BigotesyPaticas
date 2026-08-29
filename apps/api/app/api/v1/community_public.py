@@ -119,10 +119,17 @@ class QuickAdoptionPostIn(BaseModel):
 @router.get("/lost")
 async def public_list_lost(db: DBSession, limit: int = Query(default=100, le=300)) -> list[dict]:
     rows = (
-        await db.execute(
-            select(SOSEvent).where(SOSEvent.status == "active").order_by(SOSEvent.created_at.desc()).limit(limit)
+        (
+            await db.execute(
+                select(SOSEvent)
+                .where(SOSEvent.status == "active")
+                .order_by(SOSEvent.created_at.desc())
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [_lost_out(r) for r in rows]
 
 
@@ -140,10 +147,17 @@ async def public_get_lost(event_id: uuid.UUID, db: DBSession) -> dict:
 @router.get("/found")
 async def public_list_found(db: DBSession, limit: int = Query(default=100, le=300)) -> list[dict]:
     rows = (
-        await db.execute(
-            select(RescueEvent).where(RescueEvent.status == "open").order_by(RescueEvent.found_at.desc()).limit(limit)
+        (
+            await db.execute(
+                select(RescueEvent)
+                .where(RescueEvent.status == "open")
+                .order_by(RescueEvent.found_at.desc())
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     event_ids = [r.id for r in rows]
     animals_by_event: dict[uuid.UUID, list[RescueAnimal]] = {}
     if event_ids:
@@ -165,7 +179,9 @@ async def public_list_found(db: DBSession, limit: int = Query(default=100, le=30
 
 @router.get("/found/{event_id}")
 async def public_get_found(event_id: uuid.UUID, db: DBSession) -> dict:
-    row = (await db.execute(select(RescueEvent).where(RescueEvent.id == event_id))).scalar_one_or_none()
+    row = (
+        await db.execute(select(RescueEvent).where(RescueEvent.id == event_id))
+    ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Evento de rescate no encontrado")
     animals = (
@@ -221,7 +237,8 @@ async def public_quick_adoption_post(payload: QuickAdoptionPostIn, db: DBSession
         raise HTTPException(status_code=422, detail="post_type debe ser 'offer' o 'want'")
     if not payload.accepted_privacy:
         raise HTTPException(
-            status_code=422, detail="Debes aceptar que tu nombre y teléfono sean visibles para publicar"
+            status_code=422,
+            detail="Debes aceptar que tu nombre y teléfono sean visibles para publicar",
         )
 
     phone = payload.contact_phone.strip()
@@ -236,7 +253,9 @@ async def public_quick_adoption_post(payload: QuickAdoptionPostIn, db: DBSession
         )
     ).all()
     if len(recent_count) >= MAX_QUICK_POSTS_PER_PHONE_PER_DAY:
-        raise HTTPException(status_code=429, detail="Ya publicaste varias veces hoy, intenta más tarde")
+        raise HTTPException(
+            status_code=429, detail="Ya publicaste varias veces hoy, intenta más tarde"
+        )
 
     message = payload.message.strip()
     listing = AdoptionListing(

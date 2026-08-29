@@ -127,8 +127,12 @@ class Appointment(UUIDPKMixin, TimestampMixin, Base):
     # Sprint-2 (reagendamiento) -- columnas reales desde la migración 0014,
     # antes no estaban mapeadas en el ORM y los `hasattr()` que las usaban
     # siempre daban False, perdiendo el motivo/puntos del reagendamiento.
-    workflow_status: Mapped[str | None] = mapped_column(String(40), nullable=True, default="requested")
-    rescheduled_from_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    workflow_status: Mapped[str | None] = mapped_column(
+        String(40), nullable=True, default="requested"
+    )
+    rescheduled_from_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     reschedule_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     reschedule_reason_category: Mapped[str | None] = mapped_column(String(80), nullable=True)
     compensation_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

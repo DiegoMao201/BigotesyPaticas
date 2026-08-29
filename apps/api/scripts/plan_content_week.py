@@ -197,9 +197,9 @@ def _build_context(key: str, products: list, reviews: list, pidx: int, ridx: int
         p = products[pidx % len(products)]
         return {
             # SOLO datos reales de la DB — no inventar variantes, precios ni características
-            "product_name": p["name"],           # Nombre EXACTO — no modificar
+            "product_name": p["name"],  # Nombre EXACTO — no modificar
             "product_price": float(p["price"] or 0),  # Precio REAL en COP
-            "slug": p["slug"],                   # Slug real para URL /producto/{slug}
+            "slug": p["slug"],  # Slug real para URL /producto/{slug}
             "category": p.get("category_name", ""),
             "product_image_url": p.get("product_image_url", ""),
             "product_id": p.get("product_id", ""),

@@ -15,7 +15,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy import select, text
 
 from app.deps import DBSession, require_permission
-from app.models.catalog import Brand, Category, Product
+from app.models.catalog import Brand, Category
 
 catalog_export_router = APIRouter(
     prefix="/catalog",
@@ -27,8 +27,8 @@ catalog_export_router = APIRouter(
 _TEAL_DARK = "0D4A45"
 _TEAL_MID = "187F77"
 _TEAL_LIGHT = "E0F2F1"
-_HDR_EDITABLE = "FFF9C4"   # amarillo suave — columna editable
-_HDR_READONLY = "B2DFDB"   # teal claro — columna de solo lectura
+_HDR_EDITABLE = "FFF9C4"  # amarillo suave — columna editable
+_HDR_READONLY = "B2DFDB"  # teal claro — columna de solo lectura
 _ROW_ALT = "F0FDF4"
 _ROW_WHITE = "FFFFFF"
 _LOCK_BG = "FAFAFA"
@@ -38,31 +38,31 @@ _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 
 # Columnas: (header, attr, editable, width)
 _COLS = [
-    ("ID",                  "id",                  False, 38),
-    ("SKU",                 "sku",                 True,  16),
-    ("Nombre",              "name",                True,  40),
-    ("Categoría",           "category_name",       True,  22),
-    ("Marca",               "brand_name",          True,  20),
-    ("Descripción Corta",   "short_description",   True,  45),
-    ("Descripción",         "description",         True,  60),
-    ("Precio Venta",        "price",               True,  16),
-    ("Precio Costo",        "cost",                True,  16),
-    ("Precio Tachado",      "compare_at_price",    True,  16),
-    ("Stock",               "stock",               False, 10),
-    ("Activo",              "is_active_label",     True,  10),
-    ("Publicado",           "is_published_label",  True,  12),
-    ("Destacado",           "is_featured_label",   True,  12),
-    ("Tiene Imagen",        "has_image",           False, 14),
-    ("URL Imagen Principal","primary_image_url",   True,  50),
-    ("Num. Imágenes",       "num_images",          False, 14),
-    ("Tipo Mascota",        "pet_type",            True,  14),
-    ("Etapa de Vida",       "life_stage",          True,  16),
-    ("Tamaño",              "size_range",          True,  14),
-    ("Peso (kg/g)",         "peso",                True,  14),
-    ("Tags",                "tags_csv",            True,  35),
-    ("SEO Título",          "seo_title",           True,  40),
-    ("SEO Descripción",     "seo_description",     True,  55),
-    ("Creado",              "created_at_label",    False, 20),
+    ("ID", "id", False, 38),
+    ("SKU", "sku", True, 16),
+    ("Nombre", "name", True, 40),
+    ("Categoría", "category_name", True, 22),
+    ("Marca", "brand_name", True, 20),
+    ("Descripción Corta", "short_description", True, 45),
+    ("Descripción", "description", True, 60),
+    ("Precio Venta", "price", True, 16),
+    ("Precio Costo", "cost", True, 16),
+    ("Precio Tachado", "compare_at_price", True, 16),
+    ("Stock", "stock", False, 10),
+    ("Activo", "is_active_label", True, 10),
+    ("Publicado", "is_published_label", True, 12),
+    ("Destacado", "is_featured_label", True, 12),
+    ("Tiene Imagen", "has_image", False, 14),
+    ("URL Imagen Principal", "primary_image_url", True, 50),
+    ("Num. Imágenes", "num_images", False, 14),
+    ("Tipo Mascota", "pet_type", True, 14),
+    ("Etapa de Vida", "life_stage", True, 16),
+    ("Tamaño", "size_range", True, 14),
+    ("Peso (kg/g)", "peso", True, 14),
+    ("Tags", "tags_csv", True, 35),
+    ("SEO Título", "seo_title", True, 40),
+    ("SEO Descripción", "seo_description", True, 55),
+    ("Creado", "created_at_label", False, 20),
 ]
 
 
@@ -80,7 +80,8 @@ def _cell_style(ws, row: int, col: int, editable: bool, alt: bool):
 
 
 async def _load_all_products(db: DBSession) -> list[dict]:
-    rows = await db.execute(text("""
+    rows = await db.execute(
+        text("""
         SELECT
             p.id, p.sku, p.name, p.slug,
             p.short_description, p.description,
@@ -104,39 +105,42 @@ async def _load_all_products(db: DBSession) -> list[dict]:
         WHERE p.deleted_at IS NULL
         GROUP BY p.id, c.name, b.name
         ORDER BY c.name NULLS LAST, p.name
-    """))
+    """)
+    )
     products = []
     for r in rows.mappings():
         attrs = r["attributes"] or {}
         peso = attrs.get("peso") or attrs.get("weight") or attrs.get("Peso") or ""
         tags = r["tags"] or []
-        products.append({
-            "id": str(r["id"]),
-            "sku": r["sku"] or "",
-            "name": r["name"] or "",
-            "category_name": r["category_name"] or "",
-            "brand_name": r["brand_name"] or "",
-            "short_description": r["short_description"] or "",
-            "description": r["description"] or "",
-            "price": float(r["price"] or 0),
-            "cost": float(r["cost"] or 0),
-            "compare_at_price": float(r["compare_at_price"]) if r["compare_at_price"] else "",
-            "stock": int(r["stock"] or 0),
-            "is_active_label": "SÍ" if r["is_active"] else "NO",
-            "is_published_label": "SÍ" if r["is_published"] else "NO",
-            "is_featured_label": "SÍ" if r["is_featured"] else "NO",
-            "has_image": "SÍ" if r["primary_image_url"] else "NO",
-            "primary_image_url": r["primary_image_url"] or "",
-            "num_images": r["num_images"],
-            "pet_type": r["pet_type"] or "",
-            "life_stage": r["life_stage"] or "",
-            "size_range": r["size_range"] or "",
-            "peso": str(peso),
-            "tags_csv": ", ".join(tags) if isinstance(tags, list) else "",
-            "seo_title": r["seo_title"] or "",
-            "seo_description": r["seo_description"] or "",
-            "created_at_label": r["created_at"].strftime("%Y-%m-%d") if r["created_at"] else "",
-        })
+        products.append(
+            {
+                "id": str(r["id"]),
+                "sku": r["sku"] or "",
+                "name": r["name"] or "",
+                "category_name": r["category_name"] or "",
+                "brand_name": r["brand_name"] or "",
+                "short_description": r["short_description"] or "",
+                "description": r["description"] or "",
+                "price": float(r["price"] or 0),
+                "cost": float(r["cost"] or 0),
+                "compare_at_price": float(r["compare_at_price"]) if r["compare_at_price"] else "",
+                "stock": int(r["stock"] or 0),
+                "is_active_label": "SÍ" if r["is_active"] else "NO",
+                "is_published_label": "SÍ" if r["is_published"] else "NO",
+                "is_featured_label": "SÍ" if r["is_featured"] else "NO",
+                "has_image": "SÍ" if r["primary_image_url"] else "NO",
+                "primary_image_url": r["primary_image_url"] or "",
+                "num_images": r["num_images"],
+                "pet_type": r["pet_type"] or "",
+                "life_stage": r["life_stage"] or "",
+                "size_range": r["size_range"] or "",
+                "peso": str(peso),
+                "tags_csv": ", ".join(tags) if isinstance(tags, list) else "",
+                "seo_title": r["seo_title"] or "",
+                "seo_description": r["seo_description"] or "",
+                "created_at_label": r["created_at"].strftime("%Y-%m-%d") if r["created_at"] else "",
+            }
+        )
     return products
 
 
@@ -206,14 +210,18 @@ def _build_excel(products: list[dict], categories: list[str], brands: list[str])
 
     # Datos
     for row_i, prod in enumerate(products, start=3):
-        alt = (row_i % 2 == 1)
+        alt = row_i % 2 == 1
         for col_i, (_, attr, editable, _) in enumerate(_COLS, start=1):
             val = prod.get(attr, "")
             cell = _cell_style(ws, row_i, col_i, editable, alt)
             cell.value = val
-            if attr in ("price", "cost") and isinstance(val, (int, float)):
-                cell.number_format = "#,##0"
-            elif attr == "compare_at_price" and isinstance(val, (int, float)) and val:
+            if (
+                attr in ("price", "cost")
+                and isinstance(val, int | float)
+                or attr == "compare_at_price"
+                and isinstance(val, int | float)
+                and val
+            ):
                 cell.number_format = "#,##0"
         ws.row_dimensions[row_i].height = 16
 
@@ -271,8 +279,12 @@ def _build_excel(products: list[dict], categories: list[str], brands: list[str])
 
     # Leyenda de colores debajo de los datos
     legend_row = last_row + 2
-    ws.cell(row=legend_row, column=1, value="Amarillo = editable").font = Font(size=9, italic=True, color="888888")
-    ws.cell(row=legend_row, column=3, value="Gris = solo lectura").font = Font(size=9, italic=True, color="888888")
+    ws.cell(row=legend_row, column=1, value="Amarillo = editable").font = Font(
+        size=9, italic=True, color="888888"
+    )
+    ws.cell(row=legend_row, column=3, value="Gris = solo lectura").font = Font(
+        size=9, italic=True, color="888888"
+    )
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -331,7 +343,9 @@ _COL_MAP = {
 
 
 def _slugify_simple(text_val: str) -> str:
-    import unicodedata, re
+    import re
+    import unicodedata
+
     t = unicodedata.normalize("NFKD", text_val).encode("ascii", "ignore").decode("ascii")
     t = re.sub(r"[^\w\s-]", "", t.lower())
     return re.sub(r"[\s_-]+", "-", t).strip("-") or "item"
@@ -347,15 +361,20 @@ async def _get_or_create_category(db, cat_name: str, cat_map: dict) -> uuid.UUID
     # Crear nueva
     new_id = uuid.uuid4()
     slug = _slugify_simple(cat_name)
-    existing = (await db.execute(
-        text("SELECT COUNT(*) FROM catalog.categories WHERE slug = :s"), {"s": slug}
-    )).scalar()
+    existing = (
+        await db.execute(
+            text("SELECT COUNT(*) FROM catalog.categories WHERE slug = :s"), {"s": slug}
+        )
+    ).scalar()
     if existing:
         slug = f"{slug}-{str(new_id)[:4]}"
-    await db.execute(text("""
+    await db.execute(
+        text("""
         INSERT INTO catalog.categories (id, name, slug, is_active, sort_order, created_at, updated_at)
         VALUES (:id::uuid, :name, :slug, true, 0, NOW(), NOW())
-    """), {"id": str(new_id), "name": cat_name.strip(), "slug": slug})
+    """),
+        {"id": str(new_id), "name": cat_name.strip(), "slug": slug},
+    )
     cat_map[key] = new_id
     return new_id
 
@@ -369,15 +388,18 @@ async def _get_or_create_brand(db, brand_name: str, brand_map: dict) -> uuid.UUI
         return brand_map[key]
     new_id = uuid.uuid4()
     slug = _slugify_simple(brand_name)
-    existing = (await db.execute(
-        text("SELECT COUNT(*) FROM catalog.brands WHERE slug = :s"), {"s": slug}
-    )).scalar()
+    existing = (
+        await db.execute(text("SELECT COUNT(*) FROM catalog.brands WHERE slug = :s"), {"s": slug})
+    ).scalar()
     if existing:
         slug = f"{slug}-{str(new_id)[:4]}"
-    await db.execute(text("""
+    await db.execute(
+        text("""
         INSERT INTO catalog.brands (id, name, slug, is_active, created_at, updated_at)
         VALUES (:id::uuid, :name, :slug, true, NOW(), NOW())
-    """), {"id": str(new_id), "name": brand_name.strip(), "slug": slug})
+    """),
+        {"id": str(new_id), "name": brand_name.strip(), "slug": slug},
+    )
     brand_map[key] = new_id
     return new_id
 
@@ -393,8 +415,8 @@ async def import_products_excel(
     content = await file.read()
     try:
         wb = load_workbook(io.BytesIO(content), data_only=True)
-    except Exception:
-        raise HTTPException(400, "Archivo Excel inválido")
+    except Exception as err:
+        raise HTTPException(400, "Archivo Excel inválido") from err
 
     if "Productos" not in wb.sheetnames:
         raise HTTPException(400, "El archivo no tiene hoja 'Productos'")
@@ -422,9 +444,7 @@ async def import_products_excel(
     brand_map: dict[str, uuid.UUID] = {r.name.strip().lower(): r.id for r in brands_rows.all()}
 
     # SKUs existentes para detectar duplicados al crear
-    sku_rows = await db.execute(
-        text("SELECT sku FROM catalog.products WHERE deleted_at IS NULL")
-    )
+    sku_rows = await db.execute(text("SELECT sku FROM catalog.products WHERE deleted_at IS NULL"))
     existing_skus = {r[0] for r in sku_rows.all()}
 
     updated = created = 0
@@ -450,9 +470,7 @@ async def import_products_excel(
             continue
 
         row_data: dict[str, object] = {
-            field: row[col_i - 1]
-            for col_i, field in headers.items()
-            if col_i <= len(row)
+            field: row[col_i - 1] for col_i, field in headers.items() if col_i <= len(row)
         }
 
         product_id_raw = row_data.get("id")
@@ -460,20 +478,20 @@ async def import_products_excel(
         name_raw = _str(row_data.get("name"))
 
         # ── Resolver categoría y marca (crear si no existen) ──────────────────
-        cat_name_raw  = _str(row_data.get("category_name"))
+        cat_name_raw = _str(row_data.get("category_name"))
         brand_name_raw = _str(row_data.get("brand_name"))
-        cat_id   = await _get_or_create_category(db, cat_name_raw or "", cat_map)
+        cat_id = await _get_or_create_category(db, cat_name_raw or "", cat_map)
         brand_id = await _get_or_create_brand(db, brand_name_raw or "", brand_map)
 
         peso_val = _str(row_data.get("peso"))
         tags_raw = row_data.get("tags_csv")
         tag_list: list[str] = (
             [t.strip() for t in str(tags_raw).split(",") if t.strip()]
-            if tags_raw not in (None, "") else []
+            if tags_raw not in (None, "")
+            else []
         )
 
         # ── CREAR producto nuevo (sin ID o ID no en BD) ───────────────────────
-        is_new = False
         try:
             pid = uuid.UUID(str(product_id_raw).strip()) if product_id_raw else None
         except (ValueError, AttributeError):
@@ -486,18 +504,22 @@ async def import_products_excel(
                 continue
             if not sku_raw:
                 import re as _re
+
                 sku_raw = _re.sub(r"[^\w-]", "-", name_raw.lower())[:64]
             if sku_raw in existing_skus:
                 errors.append(f"SKU duplicado al crear: '{sku_raw}' — omitido")
                 continue
             pid = uuid.uuid4()
             slug_base = _slugify_simple(name_raw)
-            slug_check = (await db.execute(
-                text("SELECT COUNT(*) FROM catalog.products WHERE slug LIKE :s"),
-                {"s": f"{slug_base}%"}
-            )).scalar()
+            slug_check = (
+                await db.execute(
+                    text("SELECT COUNT(*) FROM catalog.products WHERE slug LIKE :s"),
+                    {"s": f"{slug_base}%"},
+                )
+            ).scalar()
             slug = slug_base if not slug_check else f"{slug_base}-{str(pid)[:4]}"
-            await db.execute(text("""
+            await db.execute(
+                text("""
                 INSERT INTO catalog.products
                   (id, sku, name, slug, category_id, brand_id,
                    short_description, description,
@@ -516,27 +538,34 @@ async def import_products_excel(
                    :seo_t, :seo_d,
                    :tags::jsonb, :attrs::jsonb,
                    '[]'::jsonb, NOW(), NOW())
-            """), {
-                "id": str(pid), "sku": sku_raw, "name": name_raw, "slug": slug,
-                "cat_id": str(cat_id) if cat_id else None,
-                "brand_id": str(brand_id) if brand_id else None,
-                "short_desc": _str(row_data.get("short_description")),
-                "desc": _str(row_data.get("description")),
-                "price": _float(row_data.get("price")) or 0,
-                "cost": _float(row_data.get("cost")) or 0,
-                "cap": _float(row_data.get("compare_at_price")),
-                "is_active": _bool(row_data.get("is_active_label"), True),
-                "is_published": _bool(row_data.get("is_published_label"), False),
-                "is_featured": _bool(row_data.get("is_featured_label"), False),
-                "img": _str(row_data.get("primary_image_url")),
-                "pet_type": _str(row_data.get("pet_type")),
-                "life_stage": _str(row_data.get("life_stage")),
-                "size_range": _str(row_data.get("size_range")),
-                "seo_t": _str(row_data.get("seo_title")),
-                "seo_d": _str(row_data.get("seo_description")),
-                "tags": _json.dumps(tag_list, ensure_ascii=False),
-                "attrs": _json.dumps({"peso": peso_val} if peso_val else {}, ensure_ascii=False),
-            })
+            """),
+                {
+                    "id": str(pid),
+                    "sku": sku_raw,
+                    "name": name_raw,
+                    "slug": slug,
+                    "cat_id": str(cat_id) if cat_id else None,
+                    "brand_id": str(brand_id) if brand_id else None,
+                    "short_desc": _str(row_data.get("short_description")),
+                    "desc": _str(row_data.get("description")),
+                    "price": _float(row_data.get("price")) or 0,
+                    "cost": _float(row_data.get("cost")) or 0,
+                    "cap": _float(row_data.get("compare_at_price")),
+                    "is_active": _bool(row_data.get("is_active_label"), True),
+                    "is_published": _bool(row_data.get("is_published_label"), False),
+                    "is_featured": _bool(row_data.get("is_featured_label"), False),
+                    "img": _str(row_data.get("primary_image_url")),
+                    "pet_type": _str(row_data.get("pet_type")),
+                    "life_stage": _str(row_data.get("life_stage")),
+                    "size_range": _str(row_data.get("size_range")),
+                    "seo_t": _str(row_data.get("seo_title")),
+                    "seo_d": _str(row_data.get("seo_description")),
+                    "tags": _json.dumps(tag_list, ensure_ascii=False),
+                    "attrs": _json.dumps(
+                        {"peso": peso_val} if peso_val else {}, ensure_ascii=False
+                    ),
+                },
+            )
             existing_skus.add(sku_raw)
             created += 1
             continue
@@ -552,9 +581,15 @@ async def import_products_excel(
             "price": _float(row_data.get("price")),
             "cost": _float(row_data.get("cost")),
             "cap": _float(row_data.get("compare_at_price")),
-            "is_active": _bool(row_data.get("is_active_label"), True) if row_data.get("is_active_label") is not None else None,
-            "is_published": _bool(row_data.get("is_published_label"), False) if row_data.get("is_published_label") is not None else None,
-            "is_featured": _bool(row_data.get("is_featured_label"), False) if row_data.get("is_featured_label") is not None else None,
+            "is_active": _bool(row_data.get("is_active_label"), True)
+            if row_data.get("is_active_label") is not None
+            else None,
+            "is_published": _bool(row_data.get("is_published_label"), False)
+            if row_data.get("is_published_label") is not None
+            else None,
+            "is_featured": _bool(row_data.get("is_featured_label"), False)
+            if row_data.get("is_featured_label") is not None
+            else None,
             "img": _str(row_data.get("primary_image_url")),
             "pet_type": _str(row_data.get("pet_type")),
             "life_stage": _str(row_data.get("life_stage")),
@@ -566,7 +601,8 @@ async def import_products_excel(
         if sku_raw:
             params["sku"] = sku_raw
 
-        await db.execute(text("""
+        await db.execute(
+            text("""
             UPDATE catalog.products SET
                 name              = COALESCE(:name, name),
                 category_id       = :cat_id::uuid,
@@ -588,15 +624,20 @@ async def import_products_excel(
                 tags              = :tags::jsonb,
                 updated_at        = NOW()
             WHERE id = :pid::uuid AND deleted_at IS NULL
-        """), params)
+        """),
+            params,
+        )
 
         if peso_val:
-            await db.execute(text("""
+            await db.execute(
+                text("""
                 UPDATE catalog.products
                 SET attributes = attributes || jsonb_build_object('peso', :peso::text),
                     updated_at = NOW()
                 WHERE id = :pid::uuid
-            """), {"peso": peso_val, "pid": str(pid)})
+            """),
+                {"peso": peso_val, "pid": str(pid)},
+            )
 
         updated += 1
 
@@ -608,5 +649,5 @@ async def import_products_excel(
         "errors": errors[:50],
         "total_errors": len(errors),
         "message": f"{updated} actualizados, {created} creados"
-                   + (f", {len(errors)} advertencias" if errors else ""),
+        + (f", {len(errors)} advertencias" if errors else ""),
     }

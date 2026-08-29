@@ -59,7 +59,10 @@ class RescueEvent(UUIDPKMixin, TimestampMixin, Base):
     )
 
     reporter_customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("crm.customers.id", ondelete="SET NULL"), nullable=True, index=True
+        UUID(as_uuid=True),
+        ForeignKey("crm.customers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -106,7 +109,10 @@ class AdoptionListing(UUIDPKMixin, TimestampMixin, Base):
     )
 
     reporter_customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("crm.customers.id", ondelete="SET NULL"), nullable=True, index=True
+        UUID(as_uuid=True),
+        ForeignKey("crm.customers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     # Publicaciones del "foro rápido" (sin cuenta, público) guardan aquí el
     # nombre que la persona escribió -- reporter_customer_id queda NULL.

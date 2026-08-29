@@ -37,9 +37,9 @@ engine = create_async_engine(
     settings.database_url,
     pool_size=settings.db_pool_size,
     max_overflow=settings.db_max_overflow,
-    pool_pre_ping=True,        # detecta conexiones muertas antes de usarlas
-    pool_recycle=1800,         # recicla conexiones cada 30 min para evitar stale sockets
-    pool_timeout=30,           # espera máx 30 s para obtener una conexión del pool
+    pool_pre_ping=True,  # detecta conexiones muertas antes de usarlas
+    pool_recycle=1800,  # recicla conexiones cada 30 min para evitar stale sockets
+    pool_timeout=30,  # espera máx 30 s para obtener una conexión del pool
     echo=False,
 )
 
@@ -48,8 +48,12 @@ engine = create_async_engine(
 def _on_connect(dbapi_connection: Any, connection_record: Any) -> None:
     """Registra codecs JSON/JSONB para asyncpg 0.28+ que no los registra automáticamente."""
     raw = dbapi_connection.driver_connection
-    raw.set_type_codec("json", encoder=json.dumps, decoder=json.loads, schema="pg_catalog", format="text")
-    raw.set_type_codec("jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog", format="text")
+    raw.set_type_codec(
+        "json", encoder=json.dumps, decoder=json.loads, schema="pg_catalog", format="text"
+    )
+    raw.set_type_codec(
+        "jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog", format="text"
+    )
 
 
 AsyncSessionLocal = async_sessionmaker(

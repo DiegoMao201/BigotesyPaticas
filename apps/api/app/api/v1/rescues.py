@@ -91,7 +91,9 @@ def _event_out(
     }
 
 
-async def _get_animals(db: DBSession, event_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[RescueAnimal]]:
+async def _get_animals(
+    db: DBSession, event_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[RescueAnimal]]:
     if not event_ids:
         return {}
     rows = (
@@ -122,7 +124,11 @@ async def list_rescue_events(
     lat: float | None = Query(default=None, ge=-90, le=90),
     lng: float | None = Query(default=None, ge=-180, le=180),
 ) -> list[dict]:
-    rows = (await db.execute(select(RescueEvent).where(RescueEvent.status == status_filter))).scalars().all()
+    rows = (
+        (await db.execute(select(RescueEvent).where(RescueEvent.status == status_filter)))
+        .scalars()
+        .all()
+    )
     animals_by_event = await _get_animals(db, [r.id for r in rows])
 
     result = []
@@ -132,7 +138,9 @@ async def list_rescue_events(
             dlat, dlng = math.radians(float(row.lat) - lat), math.radians(float(row.lng) - lng)
             a = (
                 math.sin(dlat / 2) ** 2
-                + math.cos(math.radians(lat)) * math.cos(math.radians(float(row.lat))) * math.sin(dlng / 2) ** 2
+                + math.cos(math.radians(lat))
+                * math.cos(math.radians(float(row.lat)))
+                * math.sin(dlng / 2) ** 2
             )
             distance_km = 6371 * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
         result.append(_event_out(row, animals_by_event.get(row.id), distance_km))
@@ -142,8 +150,12 @@ async def list_rescue_events(
 
 
 @router.get("/{event_id}")
-async def get_rescue_event(event_id: uuid.UUID, db: DBSession, _customer: Customer = PortalUser) -> dict:
-    row = (await db.execute(select(RescueEvent).where(RescueEvent.id == event_id))).scalar_one_or_none()
+async def get_rescue_event(
+    event_id: uuid.UUID, db: DBSession, _customer: Customer = PortalUser
+) -> dict:
+    row = (
+        await db.execute(select(RescueEvent).where(RescueEvent.id == event_id))
+    ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Evento de rescate no encontrado")
     animals_by_event = await _get_animals(db, [event_id])
@@ -192,33 +204,45 @@ async def upload_rescue_animals(
     `descriptions`, si viene, es un JSON array de strings en el mismo orden
     que `files` (índices sin descripción pueden ir como "" o faltar). Solo
     quien reportó el evento puede agregarle fotos."""
-    event = (await db.execute(select(RescueEvent).where(RescueEvent.id == event_id))).scalar_one_or_none()
+    event = (
+        await db.execute(select(RescueEvent).where(RescueEvent.id == event_id))
+    ).scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Evento de rescate no encontrado")
     if event.reporter_customer_id != customer.id:
         raise HTTPException(status_code=403, detail="Solo quien reportó puede agregar fotos")
     if len(files) > MAX_PHOTOS_PER_UPLOAD:
-        raise HTTPException(status_code=422, detail=f"Máximo {MAX_PHOTOS_PER_UPLOAD} fotos por solicitud")
+        raise HTTPException(
+            status_code=422, detail=f"Máximo {MAX_PHOTOS_PER_UPLOAD} fotos por solicitud"
+        )
 
     desc_list: list[str] = []
     if descriptions:
         try:
             desc_list = json.loads(descriptions)
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=422, detail="descriptions debe ser un JSON array de strings")
+        except json.JSONDecodeError as err:
+            raise HTTPException(
+                status_code=422, detail="descriptions debe ser un JSON array de strings"
+            ) from err
 
     contents_list: list[bytes] = []
     for f in files:
         if f.content_type not in ALLOWED_CONTENT_TYPES:
-            raise HTTPException(status_code=422, detail=f"{f.filename}: solo se aceptan JPEG, PNG o WebP")
+            raise HTTPException(
+                status_code=422, detail=f"{f.filename}: solo se aceptan JPEG, PNG o WebP"
+            )
         contents = await f.read()
         if len(contents) > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail=f"{f.filename}: la imagen no debe superar 5 MB")
+            raise HTTPException(
+                status_code=413, detail=f"{f.filename}: la imagen no debe superar 5 MB"
+            )
         contents_list.append(contents)
 
     uploaded = await asyncio.gather(
         *[
-            asyncio.to_thread(upload_image_webp, contents, key_prefix=f"bigotesypaticas/rescues/{event_id}")
+            asyncio.to_thread(
+                upload_image_webp, contents, key_prefix=f"bigotesypaticas/rescues/{event_id}"
+            )
             for contents in contents_list
         ]
     )

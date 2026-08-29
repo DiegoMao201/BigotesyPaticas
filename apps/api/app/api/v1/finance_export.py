@@ -9,7 +9,7 @@ from __future__ import annotations
 import io
 import json
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -19,11 +19,10 @@ from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.deps import CurrentUser, DBSession, require_permission
 from app.models.ops import LegacyIdMap
-from sqlalchemy import select
 
 export_router = APIRouter(prefix="/finance", tags=["finance"])
 
@@ -31,28 +30,37 @@ export_router = APIRouter(prefix="/finance", tags=["finance"])
 #  PALETA & ESTILOS
 # ═══════════════════════════════════════════════════════
 
-_TEAL_DARK  = "0D4A45"
-_TEAL_MID   = "187F77"
+_TEAL_DARK = "0D4A45"
+_TEAL_MID = "187F77"
 _TEAL_LIGHT = "E0F2F1"
-_GREEN_TXT  = "166534"
-_GREEN_BG   = "DCFCE7"
-_RED_TXT    = "991B1B"
-_RED_BG     = "FEE2E2"
-_ALT_ROW    = "F0FDF4"
-_TOTAL_BG   = "D1FAE5"
-_GRAY_BG    = "F8FAFC"
-_WHITE      = "FFFFFF"
-_BLACK      = "111827"
-_PESO       = "#,##0"
-_PESO_DEC   = "#,##0.00"
-_PCT        = '0.0"%"'
+_GREEN_TXT = "166534"
+_GREEN_BG = "DCFCE7"
+_RED_TXT = "991B1B"
+_RED_BG = "FEE2E2"
+_ALT_ROW = "F0FDF4"
+_TOTAL_BG = "D1FAE5"
+_GRAY_BG = "F8FAFC"
+_WHITE = "FFFFFF"
+_BLACK = "111827"
+_PESO = "#,##0"
+_PESO_DEC = "#,##0.00"
+_PCT = '0.0"%"'
 
 _GASTOS_FIJOS = {"Arriendo", "Nómina", "Servicios", "Impuestos"}
 
 _MESES_ES = {
-    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
-    5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
-    9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre",
+    1: "Enero",
+    2: "Febrero",
+    3: "Marzo",
+    4: "Abril",
+    5: "Mayo",
+    6: "Junio",
+    7: "Julio",
+    8: "Agosto",
+    9: "Septiembre",
+    10: "Octubre",
+    11: "Noviembre",
+    12: "Diciembre",
 }
 
 
@@ -76,8 +84,22 @@ def _font(bold: bool = False, size: int = 11, color: str = "111827", italic: boo
     return Font(bold=bold, size=size, color=color, italic=italic, name="Calibri")
 
 
-def _w(ws, row: int, col: int, value, *, bold=False, size=11, fg=_BLACK, bg=None,
-        align="left", wrap=False, fmt=None, border=True, italic=False):
+def _w(
+    ws,
+    row: int,
+    col: int,
+    value,
+    *,
+    bold=False,
+    size=11,
+    fg=_BLACK,
+    bg=None,
+    align="left",
+    wrap=False,
+    fmt=None,
+    border=True,
+    italic=False,
+):
     """Escribe una celda con estilos."""
     cell = ws.cell(row=row, column=col, value=value)
     cell.font = _font(bold=bold, size=size, color=fg, italic=italic)
@@ -210,7 +232,9 @@ async def _fetch_monthly_sales(db: DBSession, months: int) -> list[dict]:
 async def _fetch_all_expenses(db: DBSession, months: int) -> list[dict]:
     """Retorna todos los gastos de los últimos N meses."""
     since = _months_ago_first_day(months)
-    rows = (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "gasto"))).scalars().all()
+    rows = (
+        (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "gasto"))).scalars().all()
+    )
     result = []
     for r in rows:
         e = r.extra or {}
@@ -223,17 +247,19 @@ async def _fetch_all_expenses(db: DBSession, months: int) -> list[dict]:
             continue
         monto = _f(e.get("monto"))
         cat = str(e.get("categoria", "Otros")) or "Otros"
-        result.append({
-            "fecha": raw_date or "",
-            "year_month": raw_date[:7] if raw_date else "",
-            "tipo": str(e.get("tipo", "")),
-            "categoria": cat,
-            "descripcion": str(e.get("descripcion", "")),
-            "metodo_pago": str(e.get("metodo_pago", "")),
-            "banco_origen": str(e.get("banco_origen", "")),
-            "monto": monto,
-            "tipo_gasto": "Fijo" if cat in _GASTOS_FIJOS else "Variable",
-        })
+        result.append(
+            {
+                "fecha": raw_date or "",
+                "year_month": raw_date[:7] if raw_date else "",
+                "tipo": str(e.get("tipo", "")),
+                "categoria": cat,
+                "descripcion": str(e.get("descripcion", "")),
+                "metodo_pago": str(e.get("metodo_pago", "")),
+                "banco_origen": str(e.get("banco_origen", "")),
+                "monto": monto,
+                "tipo_gasto": "Fijo" if cat in _GASTOS_FIJOS else "Variable",
+            }
+        )
     result.sort(key=lambda x: x["fecha"], reverse=True)
     return result
 
@@ -311,18 +337,20 @@ async def _fetch_purchases_detail(db: DBSession, months: int) -> list[dict]:
     result = []
     for r in rows:
         pa = r.purchased_at_col
-        result.append({
-            "folio": str(r.folio or ""),
-            "supplier_name": str(r.supplier_name),
-            "status": str(r.status or ""),
-            "subtotal": _f(r.subtotal),
-            "tax_amount": _f(r.tax_amount),
-            "total": _f(r.total),
-            "payment_method": str(r.payment_method or ""),
-            "fecha": pa.strftime("%Y-%m-%d") if pa else "",
-            "year_month": pa.strftime("%Y-%m") if pa else "",
-            "month_label": f"{_MESES_ES[pa.month]} {pa.year}" if pa else "",
-        })
+        result.append(
+            {
+                "folio": str(r.folio or ""),
+                "supplier_name": str(r.supplier_name),
+                "status": str(r.status or ""),
+                "subtotal": _f(r.subtotal),
+                "tax_amount": _f(r.tax_amount),
+                "total": _f(r.total),
+                "payment_method": str(r.payment_method or ""),
+                "fecha": pa.strftime("%Y-%m-%d") if pa else "",
+                "year_month": pa.strftime("%Y-%m") if pa else "",
+                "month_label": f"{_MESES_ES[pa.month]} {pa.year}" if pa else "",
+            }
+        )
     return result
 
 
@@ -347,7 +375,11 @@ async def _fetch_top_suppliers(db: DBSession, months: int) -> list[dict]:
         )
     ).all()
     return [
-        {"supplier_name": r.supplier_name, "num_compras": int(r.num_compras), "total_spend": _f(r.total_spend)}
+        {
+            "supplier_name": r.supplier_name,
+            "num_compras": int(r.num_compras),
+            "total_spend": _f(r.total_spend),
+        }
         for r in rows
     ]
 
@@ -380,7 +412,10 @@ async def _get_ai_analysis(summary: dict) -> dict:
     key = os.environ.get("OPENROUTER_API_KEY", "")
     fallback = {
         "diagnostico": "Análisis IA no disponible (clave OPENROUTER_API_KEY no configurada).",
-        "fortalezas": ["Datos de ventas registrados correctamente.", "Sistema de inventario activo."],
+        "fortalezas": [
+            "Datos de ventas registrados correctamente.",
+            "Sistema de inventario activo.",
+        ],
         "riesgos": ["Verifique la configuración de la API de IA."],
         "recomendaciones": ["Configure OPENROUTER_API_KEY para habilitar el análisis IA."],
         "proyeccion": "No disponible.",
@@ -483,7 +518,11 @@ def _sheet_summary(
     _row_h(ws, 3, 22)
 
     _merge(ws, 4, 2, 4, 6)
-    c = ws.cell(row=4, column=2, value=f"Período analizado: últimos {months} meses  |  Generado: {generated_at}")
+    c = ws.cell(
+        row=4,
+        column=2,
+        value=f"Período analizado: últimos {months} meses  |  Generado: {generated_at}",
+    )
     c.font = Font(size=9, color="4B5563", italic=True, name="Calibri")
     c.fill = _fill(_TEAL_LIGHT)
     c.alignment = Alignment(horizontal="left", vertical="center")
@@ -508,7 +547,6 @@ def _sheet_summary(
     prev = sorted_months[-2] if len(sorted_months) >= 2 else {}
     cur_rev = cur.get("revenue", 0)
     prev_rev = prev.get("revenue", 0)
-    rev_delta = (cur_rev - prev_rev) / prev_rev * 100 if prev_rev else 0
     cur_exp = monthly_exp.get(cur.get("year_month", ""), 0)
     prev_exp = monthly_exp.get(prev.get("year_month", ""), 0)
     cur_net = (cur_rev - cur.get("cogs", 0)) - cur_exp
@@ -516,21 +554,12 @@ def _sheet_summary(
 
     # ── KPIs principales ──────────────────────────────
     row = 6
-    kpis = [
-        ("Ingresos Totales", total_revenue, _PESO, None),
-        ("Costo de Ventas (COGS)", total_cogs, _PESO, None),
-        ("Utilidad Bruta", total_gross, _PESO, _GREEN_BG if total_gross >= 0 else _RED_BG),
-        ("Margen Bruto", gross_margin, _PCT, None),
-        ("Gastos Operativos", total_expenses, _PESO, None),
-        ("Utilidad Neta", total_net, _PESO, _GREEN_BG if total_net >= 0 else _RED_BG),
-        ("Margen Neto", net_margin, _PCT, None),
-        ("Pedidos Totales", total_orders, "#,##0", None),
-        ("Ticket Promedio", avg_ticket, _PESO_DEC, None),
-        ("Valor Inventario (costo)", inv.get("value_cost", 0), _PESO, None),
-    ]
-
     row = _section_title(ws, row, 2, 5, "📊  KPIs FINANCIEROS DEL PERÍODO")
-    _table_header(ws, row, [(2, "Indicador"), (3, "Valor"), (4, "Mes Actual"), (5, "Mes Anterior"), (6, "Variación")])
+    _table_header(
+        ws,
+        row,
+        [(2, "Indicador"), (3, "Valor"), (4, "Mes Actual"), (5, "Mes Anterior"), (6, "Variación")],
+    )
     _row_h(ws, row, 20)
     row += 1
 
@@ -538,29 +567,99 @@ def _sheet_summary(
     prev_month_label = prev.get("month_label", "")
 
     kpi_rows = [
-        ("Ingresos", total_revenue, cur_rev, prev_rev,
-         (cur_rev - prev_rev) / prev_rev * 100 if prev_rev else 0, _PESO),
-        ("Utilidad Bruta", total_gross, cur_rev - cur.get("cogs", 0),
-         prev_rev - prev.get("cogs", 0),
-         ((cur_rev - cur.get("cogs", 0)) - (prev_rev - prev.get("cogs", 0))) / (prev_rev - prev.get("cogs", 1)) * 100
-         if (prev_rev - prev.get("cogs", 0)) != 0 else 0, _PESO),
-        ("Gastos Operativos", total_expenses, cur_exp, prev_exp,
-         (cur_exp - prev_exp) / prev_exp * 100 if prev_exp else 0, _PESO),
-        ("Utilidad Neta", total_net, cur_net, prev_net,
-         (cur_net - prev_net) / abs(prev_net) * 100 if prev_net != 0 else 0, _PESO),
-        ("Margen Neto %", net_margin,
-         (cur_net / cur_rev * 100) if cur_rev else 0,
-         (prev_net / prev_rev * 100) if prev_rev else 0,
-         0, _PCT),
-        ("Pedidos", total_orders, cur.get("orders", 0), prev.get("orders", 0),
-         (cur.get("orders", 0) - prev.get("orders", 0)) / prev.get("orders", 1) * 100 if prev.get("orders") else 0, "#,##0"),
+        (
+            "Ingresos",
+            total_revenue,
+            cur_rev,
+            prev_rev,
+            (cur_rev - prev_rev) / prev_rev * 100 if prev_rev else 0,
+            _PESO,
+        ),
+        (
+            "Utilidad Bruta",
+            total_gross,
+            cur_rev - cur.get("cogs", 0),
+            prev_rev - prev.get("cogs", 0),
+            ((cur_rev - cur.get("cogs", 0)) - (prev_rev - prev.get("cogs", 0)))
+            / (prev_rev - prev.get("cogs", 1))
+            * 100
+            if (prev_rev - prev.get("cogs", 0)) != 0
+            else 0,
+            _PESO,
+        ),
+        (
+            "Margen Bruto %",
+            gross_margin,
+            ((cur_rev - cur.get("cogs", 0)) / cur_rev * 100) if cur_rev else 0,
+            ((prev_rev - prev.get("cogs", 0)) / prev_rev * 100) if prev_rev else 0,
+            0,
+            _PCT,
+        ),
+        (
+            "Gastos Operativos",
+            total_expenses,
+            cur_exp,
+            prev_exp,
+            (cur_exp - prev_exp) / prev_exp * 100 if prev_exp else 0,
+            _PESO,
+        ),
+        (
+            "Utilidad Neta",
+            total_net,
+            cur_net,
+            prev_net,
+            (cur_net - prev_net) / abs(prev_net) * 100 if prev_net != 0 else 0,
+            _PESO,
+        ),
+        (
+            "Margen Neto %",
+            net_margin,
+            (cur_net / cur_rev * 100) if cur_rev else 0,
+            (prev_net / prev_rev * 100) if prev_rev else 0,
+            0,
+            _PCT,
+        ),
+        (
+            "Pedidos",
+            total_orders,
+            cur.get("orders", 0),
+            prev.get("orders", 0),
+            (cur.get("orders", 0) - prev.get("orders", 0)) / prev.get("orders", 1) * 100
+            if prev.get("orders")
+            else 0,
+            "#,##0",
+        ),
+        (
+            "Ticket Promedio",
+            avg_ticket,
+            (cur_rev / cur.get("orders", 0)) if cur.get("orders") else 0,
+            (prev_rev / prev.get("orders", 0)) if prev.get("orders") else 0,
+            (
+                (cur_rev / cur.get("orders", 1) - prev_rev / prev.get("orders", 1))
+                / (prev_rev / prev.get("orders", 1))
+                * 100
+            )
+            if prev.get("orders") and cur.get("orders") and prev_rev
+            else 0,
+            _PESO_DEC,
+        ),
     ]
 
     for i, (label, total, cur_val, prev_val, delta, fmt) in enumerate(kpi_rows):
         alt = _ALT_ROW if i % 2 == 0 else _WHITE
         _w(ws, row, 2, label, bold=True, size=10, bg=alt)
-        _w(ws, row, 3, total, fmt=fmt, align="right", size=10, bg=alt, bold=True,
-           fg=_GREEN_TXT if total >= 0 else _RED_TXT)
+        _w(
+            ws,
+            row,
+            3,
+            total,
+            fmt=fmt,
+            align="right",
+            size=10,
+            bg=alt,
+            bold=True,
+            fg=_GREEN_TXT if total >= 0 else _RED_TXT,
+        )
         _w(ws, row, 4, cur_val, fmt=fmt, align="right", size=10, bg=alt)
         _w(ws, row, 5, prev_val, fmt=fmt, align="right", size=10, bg=alt)
         delta_txt = f"+{delta:.1f}%" if delta >= 0 else f"{delta:.1f}%"
@@ -573,8 +672,12 @@ def _sheet_summary(
     # Labels de mes en cabecera (sobreescribir con valores reales)
     ws.cell(row=row - len(kpi_rows) - 1, column=4).value = f"Mes Actual\n({cur_month_label})"
     ws.cell(row=row - len(kpi_rows) - 1, column=5).value = f"Mes Anterior\n({prev_month_label})"
-    ws.cell(row=row - len(kpi_rows) - 1, column=4).alignment = Alignment(horizontal="center", wrap_text=True, vertical="center")
-    ws.cell(row=row - len(kpi_rows) - 1, column=5).alignment = Alignment(horizontal="center", wrap_text=True, vertical="center")
+    ws.cell(row=row - len(kpi_rows) - 1, column=4).alignment = Alignment(
+        horizontal="center", wrap_text=True, vertical="center"
+    )
+    ws.cell(row=row - len(kpi_rows) - 1, column=5).alignment = Alignment(
+        horizontal="center", wrap_text=True, vertical="center"
+    )
 
     row += 1
 
@@ -678,8 +781,11 @@ def _sheet_summary(
     # Pie de página
     row += 1
     _merge(ws, row, 2, row, 6)
-    c = ws.cell(row=row, column=2,
-                value="Documento confidencial — Bigotes y Paticas | bigotesypaticas.com | Dosquebradas, Risaralda")
+    c = ws.cell(
+        row=row,
+        column=2,
+        value="Documento confidencial — Bigotes y Paticas | bigotesypaticas.com | Dosquebradas, Risaralda",
+    )
     c.font = Font(size=8, color="9CA3AF", italic=True, name="Calibri")
     c.alignment = Alignment(horizontal="center")
 
@@ -702,7 +808,7 @@ def _sheet_pl_monthly(
     _col_w(ws, 5, 18)
     _col_w(ws, 6, 12)
     _col_w(ws, 7, 18)
-    _col_w(ws, 8, 18)   # Compras Proveedores
+    _col_w(ws, 8, 18)  # Compras Proveedores
     _col_w(ws, 9, 18)
     _col_w(ws, 10, 12)
     _col_w(ws, 11, 13)
@@ -711,7 +817,10 @@ def _sheet_pl_monthly(
     ws.row_dimensions[1].height = 10
     row = 2
     row = _section_title(
-        ws, row, 2, 10,
+        ws,
+        row,
+        2,
+        10,
         "📈  P&L MENSUAL — ESTADO DE RESULTADOS",
         "Gastos Op. = gastos operativos (arriendo, nómina, etc.)  |  "
         "Compras Prov. = inversión en inventario (≠ COGS que es lo que ya se vendió)",
@@ -734,7 +843,9 @@ def _sheet_pl_monthly(
     _row_h(ws, row, 30)
     row += 1
 
-    totals = {k: 0.0 for k in ["revenue", "cogs", "gross", "expenses", "purchases", "net", "orders"]}
+    totals = {
+        k: 0.0 for k in ["revenue", "cogs", "gross", "expenses", "purchases", "net", "orders"]
+    }
     sorted_months = sorted(months_data, key=lambda x: x["year_month"])
 
     for i, m in enumerate(sorted_months):
@@ -744,7 +855,7 @@ def _sheet_pl_monthly(
         gross = revenue - cogs
         expenses = monthly_exp.get(ym, 0.0)
         purchases = purchases_monthly.get(ym, 0.0)
-        net = gross - expenses          # utilidad neta operativa (no incluye compras de inventario)
+        net = gross - expenses  # utilidad neta operativa (no incluye compras de inventario)
         orders = m["orders"]
         ticket = revenue / orders if orders > 0 else 0
         gross_pct = gross / revenue * 100 if revenue > 0 else 0
@@ -766,12 +877,31 @@ def _sheet_pl_monthly(
         _w(ws, row, 2, m.get("month_label", ym), bold=True, size=10, bg=alt)
         _w(ws, row, 3, revenue, fmt=_PESO, align="right", size=10, bg=alt)
         _w(ws, row, 4, cogs, fmt=_PESO, align="right", size=10, bg=alt)
-        _w(ws, row, 5, gross, fmt=_PESO, align="right", size=10, bg=alt,
-           fg=_GREEN_TXT if gross >= 0 else _RED_TXT)
+        _w(
+            ws,
+            row,
+            5,
+            gross,
+            fmt=_PESO,
+            align="right",
+            size=10,
+            bg=alt,
+            fg=_GREEN_TXT if gross >= 0 else _RED_TXT,
+        )
         _w(ws, row, 6, gross_pct, fmt=_PCT, align="center", size=10, bg=alt)
         _w(ws, row, 7, expenses, fmt=_PESO, align="right", size=10, bg=alt)
-        _w(ws, row, 8, purchases, fmt=_PESO, align="right", size=10, bg=buy_bg,
-           fg="92400E" if purchases > 0 else _BLACK, bold=purchases > 0)
+        _w(
+            ws,
+            row,
+            8,
+            purchases,
+            fmt=_PESO,
+            align="right",
+            size=10,
+            bg=buy_bg,
+            fg="92400E" if purchases > 0 else _BLACK,
+            bold=purchases > 0,
+        )
         _w(ws, row, 9, net, fmt=_PESO, align="right", size=10, bg=net_bg, fg=net_fg, bold=True)
         _w(ws, row, 10, net_pct, fmt=_PCT, align="center", size=10, bg=net_bg, fg=net_fg)
         _w(ws, row, 11, orders, fmt="#,##0", align="center", size=10, bg=alt)
@@ -789,16 +919,46 @@ def _sheet_pl_monthly(
     _w(ws, row, 2, "TOTAL / PROMEDIO", bold=True, size=11, bg=_TOTAL_BG, fg=_TEAL_DARK)
     _w(ws, row, 3, total_rev, fmt=_PESO, align="right", bold=True, size=11, bg=_TOTAL_BG)
     _w(ws, row, 4, totals["cogs"], fmt=_PESO, align="right", bold=True, size=11, bg=_TOTAL_BG)
-    _w(ws, row, 5, total_gross, fmt=_PESO, align="right", bold=True, size=11, bg=_TOTAL_BG,
-       fg=_GREEN_TXT if total_gross >= 0 else _RED_TXT)
+    _w(
+        ws,
+        row,
+        5,
+        total_gross,
+        fmt=_PESO,
+        align="right",
+        bold=True,
+        size=11,
+        bg=_TOTAL_BG,
+        fg=_GREEN_TXT if total_gross >= 0 else _RED_TXT,
+    )
     avg_gm = total_gross / total_rev * 100 if total_rev > 0 else 0
     _w(ws, row, 6, avg_gm, fmt=_PCT, align="center", bold=True, size=11, bg=_TOTAL_BG)
     _w(ws, row, 7, totals["expenses"], fmt=_PESO, align="right", bold=True, size=11, bg=_TOTAL_BG)
-    _w(ws, row, 8, totals["purchases"], fmt=_PESO, align="right", bold=True, size=11, bg="FEF3C7",
-       fg="92400E")
+    _w(
+        ws,
+        row,
+        8,
+        totals["purchases"],
+        fmt=_PESO,
+        align="right",
+        bold=True,
+        size=11,
+        bg="FEF3C7",
+        fg="92400E",
+    )
     net_bg = _GREEN_BG if total_net >= 0 else _RED_BG
-    _w(ws, row, 9, total_net, fmt=_PESO, align="right", bold=True, size=11, bg=net_bg,
-       fg=_GREEN_TXT if total_net >= 0 else _RED_TXT)
+    _w(
+        ws,
+        row,
+        9,
+        total_net,
+        fmt=_PESO,
+        align="right",
+        bold=True,
+        size=11,
+        bg=net_bg,
+        fg=_GREEN_TXT if total_net >= 0 else _RED_TXT,
+    )
     avg_nm = total_net / total_rev * 100 if total_rev > 0 else 0
     _w(ws, row, 10, avg_nm, fmt=_PCT, align="center", bold=True, size=11, bg=net_bg)
     _w(ws, row, 11, total_orders, fmt="#,##0", align="center", bold=True, size=11, bg=_TOTAL_BG)
@@ -827,9 +987,17 @@ def _sheet_expenses(ws, all_expenses: list[dict], monthly_exp: dict[str, float])
 
     # ── Resumen por categoría ─────────────────────────
     row = _section_title(ws, row, 2, 6, "💸  GASTOS OPERATIVOS — RESUMEN POR CATEGORÍA")
-    _table_header(ws, row, [
-        (2, "Categoría"), (3, "Tipo"), (4, "Total (COP)"), (5, "% del Total"), (6, "Registros"),
-    ])
+    _table_header(
+        ws,
+        row,
+        [
+            (2, "Categoría"),
+            (3, "Tipo"),
+            (4, "Total (COP)"),
+            (5, "% del Total"),
+            (6, "Registros"),
+        ],
+    )
     _row_h(ws, row, 20)
     row += 1
 
@@ -851,8 +1019,16 @@ def _sheet_expenses(ws, all_expenses: list[dict], monthly_exp: dict[str, float])
         pct = info["total"] / total_gastos * 100 if total_gastos > 0 else 0
         _w(ws, row, 2, cat, bold=True, size=10, bg=alt)
         tipo_bg = _TEAL_LIGHT if info["tipo"] == "Fijo" else "FEF3C7"
-        _w(ws, row, 3, info["tipo"], align="center", size=10, bg=tipo_bg,
-           fg=_TEAL_DARK if info["tipo"] == "Fijo" else "92400E")
+        _w(
+            ws,
+            row,
+            3,
+            info["tipo"],
+            align="center",
+            size=10,
+            bg=tipo_bg,
+            fg=_TEAL_DARK if info["tipo"] == "Fijo" else "92400E",
+        )
         _w(ws, row, 4, info["total"], fmt=_PESO, align="right", size=10, bg=alt, bold=True)
         _w(ws, row, 5, pct, fmt=_PCT, align="center", size=10, bg=alt)
         _w(ws, row, 6, info["count"], fmt="#,##0", align="center", size=10, bg=alt)
@@ -862,7 +1038,18 @@ def _sheet_expenses(ws, all_expenses: list[dict], monthly_exp: dict[str, float])
     # Total
     _w(ws, row, 2, "TOTAL GASTOS", bold=True, size=11, bg=_TOTAL_BG, fg=_TEAL_DARK)
     _w(ws, row, 3, "", bg=_TOTAL_BG)
-    _w(ws, row, 4, total_gastos, fmt=_PESO, align="right", bold=True, size=11, bg=_TOTAL_BG, fg=_RED_TXT)
+    _w(
+        ws,
+        row,
+        4,
+        total_gastos,
+        fmt=_PESO,
+        align="right",
+        bold=True,
+        size=11,
+        bg=_TOTAL_BG,
+        fg=_RED_TXT,
+    )
     _w(ws, row, 5, 100.0, fmt=_PCT, align="center", bold=True, size=11, bg=_TOTAL_BG)
     _w(ws, row, 6, len(all_expenses), fmt="#,##0", align="center", bold=True, size=11, bg=_TOTAL_BG)
     _row_h(ws, row, 22)
@@ -870,12 +1057,14 @@ def _sheet_expenses(ws, all_expenses: list[dict], monthly_exp: dict[str, float])
 
     # ── Fijo vs Variable ─────────────────────────────
     row = _section_title(ws, row, 2, 5, "📊  GASTOS FIJOS vs VARIABLES")
-    _table_header(ws, row, [(2, "Tipo"), (3, "Monto (COP)"), (4, "% Total"), (5, "Categorías incluidas")])
+    _table_header(
+        ws, row, [(2, "Tipo"), (3, "Monto (COP)"), (4, "% Total"), (5, "Categorías incluidas")]
+    )
     _row_h(ws, row, 20)
     row += 1
 
     fijo_cats = ", ".join(sorted(_GASTOS_FIJOS))
-    var_cats = ", ".join(sorted(set(c for c, v in by_cat.items() if v["tipo"] == "Variable")))
+    var_cats = ", ".join(sorted({c for c, v in by_cat.items() if v["tipo"] == "Variable"}))
 
     _w(ws, row, 2, "Gastos Fijos", bold=True, size=10, bg=_TEAL_LIGHT, fg=_TEAL_DARK)
     _w(ws, row, 3, fijo_total, fmt=_PESO, align="right", bold=True, size=10, bg=_TEAL_LIGHT)
@@ -895,10 +1084,19 @@ def _sheet_expenses(ws, all_expenses: list[dict], monthly_exp: dict[str, float])
 
     # ── Lista completa ────────────────────────────────
     row = _section_title(ws, row, 2, 7, "📋  DETALLE COMPLETO DE GASTOS")
-    _table_header(ws, row, [
-        (2, "Fecha"), (3, "Tipo"), (4, "Categoría"), (5, "Descripción"),
-        (6, "Método Pago"), (7, "Fijo/Variable"), (8, "Monto (COP)"),
-    ])
+    _table_header(
+        ws,
+        row,
+        [
+            (2, "Fecha"),
+            (3, "Tipo"),
+            (4, "Categoría"),
+            (5, "Descripción"),
+            (6, "Método Pago"),
+            (7, "Fijo/Variable"),
+            (8, "Monto (COP)"),
+        ],
+    )
     _row_h(ws, row, 20)
     detail_start = row
     row += 1
@@ -913,8 +1111,7 @@ def _sheet_expenses(ws, all_expenses: list[dict], monthly_exp: dict[str, float])
         _w(ws, row, 5, e["descripcion"], size=9, bg=alt, wrap=True)
         _w(ws, row, 6, e["metodo_pago"], size=9, bg=alt, align="center")
         _w(ws, row, 7, e["tipo_gasto"], size=9, bg=tipo_bg, fg=tipo_fg, align="center", bold=True)
-        _w(ws, row, 8, e["monto"], fmt=_PESO, align="right", size=9, bg=alt,
-           fg=_RED_TXT, bold=True)
+        _w(ws, row, 8, e["monto"], fmt=_PESO, align="right", size=9, bg=alt, fg=_RED_TXT, bold=True)
         _row_h(ws, row, 16)
         row += 1
 
@@ -941,9 +1138,16 @@ def _sheet_income(ws, months_data: list[dict], by_method: list[dict]) -> None:
 
     # ── Por método de pago ────────────────────────────
     row = _section_title(ws, row, 2, 5, "💳  INGRESOS POR MÉTODO DE PAGO")
-    _table_header(ws, row, [
-        (2, "Método de Pago"), (3, "Ingresos (COP)"), (4, "% del Total"), (5, "Ranking"),
-    ])
+    _table_header(
+        ws,
+        row,
+        [
+            (2, "Método de Pago"),
+            (3, "Ingresos (COP)"),
+            (4, "% del Total"),
+            (5, "Ranking"),
+        ],
+    )
     _row_h(ws, row, 20)
     row += 1
 
@@ -967,10 +1171,18 @@ def _sheet_income(ws, months_data: list[dict], by_method: list[dict]) -> None:
 
     # ── Tendencia mensual ─────────────────────────────
     row = _section_title(ws, row, 2, 5, "📅  TENDENCIA DE INGRESOS MENSUALES")
-    _table_header(ws, row, [
-        (2, "Mes"), (3, "Ingresos (COP)"), (4, "Pedidos"), (5, "Ticket Prom."),
-        (6, "Var. vs Anterior"), (7, "Tendencia"),
-    ])
+    _table_header(
+        ws,
+        row,
+        [
+            (2, "Mes"),
+            (3, "Ingresos (COP)"),
+            (4, "Pedidos"),
+            (5, "Ticket Prom."),
+            (6, "Var. vs Anterior"),
+            (7, "Tendencia"),
+        ],
+    )
     _col_w(ws, 7, 14)
     _row_h(ws, row, 20)
     row += 1
@@ -991,10 +1203,27 @@ def _sheet_income(ws, months_data: list[dict], by_method: list[dict]) -> None:
         _w(ws, row, 4, orders, fmt="#,##0", align="center", size=10, bg=alt)
         _w(ws, row, 5, ticket, fmt=_PESO, align="right", size=10, bg=alt)
         var_txt = f"+{var_pct:.1f}%" if var_pct >= 0 else f"{var_pct:.1f}%" if i > 0 else "—"
-        _w(ws, row, 6, var_txt, align="center", size=10,
-           bg=tend_bg if i > 0 else alt, fg=tend_fg if i > 0 else _BLACK)
-        _w(ws, row, 7, tendencia if i > 0 else "—", align="center", size=10,
-           bg=tend_bg if i > 0 else alt, fg=tend_fg if i > 0 else _BLACK, bold=True)
+        _w(
+            ws,
+            row,
+            6,
+            var_txt,
+            align="center",
+            size=10,
+            bg=tend_bg if i > 0 else alt,
+            fg=tend_fg if i > 0 else _BLACK,
+        )
+        _w(
+            ws,
+            row,
+            7,
+            tendencia if i > 0 else "—",
+            align="center",
+            size=10,
+            bg=tend_bg if i > 0 else alt,
+            fg=tend_fg if i > 0 else _BLACK,
+            bold=True,
+        )
         _row_h(ws, row, 18)
         row += 1
 
@@ -1013,13 +1242,31 @@ def _sheet_inventory(ws, inv: dict, generated_at: str) -> None:
     ws.row_dimensions[1].height = 10
     row = 2
 
-    row = _section_title(ws, row, 2, 3, "📦  INVENTARIO — SNAPSHOT ACTUAL",
-                         f"Datos al {generated_at} (valor en libros, no incluye ajustes de mercado)")
+    row = _section_title(
+        ws,
+        row,
+        2,
+        3,
+        "📦  INVENTARIO — SNAPSHOT ACTUAL",
+        f"Datos al {generated_at} (valor en libros, no incluye ajustes de mercado)",
+    )
 
     kpis = [
         ("Valor del Inventario a Costo", inv.get("value_cost", 0), _PESO, _TEAL_LIGHT, _TEAL_DARK),
-        ("Valor del Inventario a Precio Venta", inv.get("value_price", 0), _PESO, _GREEN_BG, _GREEN_TXT),
-        ("Margen Potencial Inventario", inv.get("value_price", 0) - inv.get("value_cost", 0), _PESO, "FEF3C7", "92400E"),
+        (
+            "Valor del Inventario a Precio Venta",
+            inv.get("value_price", 0),
+            _PESO,
+            _GREEN_BG,
+            _GREEN_TXT,
+        ),
+        (
+            "Margen Potencial Inventario",
+            inv.get("value_price", 0) - inv.get("value_cost", 0),
+            _PESO,
+            "FEF3C7",
+            "92400E",
+        ),
         ("Total Productos Activos", inv.get("total_products", 0), "#,##0", _GRAY_BG, _BLACK),
         ("Productos Sin Stock", inv.get("out_of_stock", 0), "#,##0", _RED_BG, _RED_TXT),
         ("Productos con Stock Bajo", inv.get("low_stock", 0), "#,##0", "FEF3C7", "92400E"),
@@ -1040,9 +1287,12 @@ def _sheet_inventory(ws, inv: dict, generated_at: str) -> None:
 
     row += 1
     _merge(ws, row, 2, row, 4)
-    c = ws.cell(row=row, column=2,
-                value="⚠️  Nota: El valor del inventario es un cálculo basado en stock actual × costo unitario registrado. "
-                      "No incluye mermas, vencimientos o productos sin costo registrado.")
+    c = ws.cell(
+        row=row,
+        column=2,
+        value="⚠️  Nota: El valor del inventario es un cálculo basado en stock actual × costo unitario registrado. "  # noqa: RUF001
+        "No incluye mermas, vencimientos o productos sin costo registrado.",
+    )
     c.font = Font(size=9, italic=True, color="6B7280", name="Calibri")
     c.fill = _fill("FFFBEB")
     c.alignment = Alignment(wrap_text=True, vertical="top")
@@ -1075,15 +1325,26 @@ def _sheet_purchases(
 
     # ── Resumen mensual ───────────────────────────────
     row = _section_title(
-        ws, row, 2, 6,
+        ws,
+        row,
+        2,
+        6,
         "🛒  COMPRAS A PROVEEDORES — INVERSIÓN EN INVENTARIO",
         "Nota: Las compras aumentan el inventario (activo). El costo de lo vendido (COGS) "
         "aparece en el P&L cuando el producto se vende, no cuando se compra.",
     )
 
-    _table_header(ws, row, [
-        (2, "Mes"), (3, "Compras (COP)"), (4, "Ingresos mes"), (5, "% Compras/Ingr."), (6, "# Órdenes"),
-    ])
+    _table_header(
+        ws,
+        row,
+        [
+            (2, "Mes"),
+            (3, "Compras (COP)"),
+            (4, "Ingresos mes"),
+            (5, "% Compras/Ingr."),
+            (6, "# Órdenes"),
+        ],
+    )
     _row_h(ws, row, 20)
     row += 1
 
@@ -1114,8 +1375,18 @@ def _sheet_purchases(
             label = ym
 
         _w(ws, row, 2, label, bold=True, size=10, bg=alt)
-        _w(ws, row, 3, purch, fmt=_PESO, align="right", size=10, bg="FEF3C7" if purch > 0 else alt,
-           fg="92400E" if purch > 0 else _BLACK, bold=purch > 0)
+        _w(
+            ws,
+            row,
+            3,
+            purch,
+            fmt=_PESO,
+            align="right",
+            size=10,
+            bg="FEF3C7" if purch > 0 else alt,
+            fg="92400E" if purch > 0 else _BLACK,
+            bold=purch > 0,
+        )
         _w(ws, row, 4, rev, fmt=_PESO, align="right", size=10, bg=alt)
         ratio_bg = _RED_BG if ratio > 80 else ("FEF3C7" if ratio > 50 else alt)
         _w(ws, row, 5, ratio, fmt=_PCT, align="center", size=10, bg=ratio_bg)
@@ -1126,18 +1397,46 @@ def _sheet_purchases(
     # Fila totales
     total_ratio = total_purchases / total_revenue_pm * 100 if total_revenue_pm > 0 else 0
     _w(ws, row, 2, "TOTAL PERÍODO", bold=True, size=11, bg=_TOTAL_BG, fg=_TEAL_DARK)
-    _w(ws, row, 3, total_purchases, fmt=_PESO, align="right", bold=True, size=11, bg="FEF3C7", fg="92400E")
+    _w(
+        ws,
+        row,
+        3,
+        total_purchases,
+        fmt=_PESO,
+        align="right",
+        bold=True,
+        size=11,
+        bg="FEF3C7",
+        fg="92400E",
+    )
     _w(ws, row, 4, total_revenue_pm, fmt=_PESO, align="right", bold=True, size=11, bg=_TOTAL_BG)
     _w(ws, row, 5, total_ratio, fmt=_PCT, align="center", bold=True, size=11, bg=_TOTAL_BG)
-    _w(ws, row, 6, len(purchases_detail), fmt="#,##0", align="center", bold=True, size=11, bg=_TOTAL_BG)
+    _w(
+        ws,
+        row,
+        6,
+        len(purchases_detail),
+        fmt="#,##0",
+        align="center",
+        bold=True,
+        size=11,
+        bg=_TOTAL_BG,
+    )
     _row_h(ws, row, 22)
     row += 2
 
     # ── Top proveedores ───────────────────────────────
     row = _section_title(ws, row, 2, 5, "🏭  TOP PROVEEDORES POR GASTO")
-    _table_header(ws, row, [
-        (2, "Proveedor"), (3, "Total Comprado (COP)"), (4, "# Órdenes"), (5, "% del Total"),
-    ])
+    _table_header(
+        ws,
+        row,
+        [
+            (2, "Proveedor"),
+            (3, "Total Comprado (COP)"),
+            (4, "# Órdenes"),
+            (5, "% del Total"),
+        ],
+    )
     _row_h(ws, row, 20)
     row += 1
 
@@ -1155,10 +1454,19 @@ def _sheet_purchases(
 
     # ── Detalle completo ──────────────────────────────
     row = _section_title(ws, row, 2, 7, "📋  DETALLE DE ÓRDENES DE COMPRA")
-    _table_header(ws, row, [
-        (2, "Fecha"), (3, "Folio"), (4, "Proveedor"),
-        (5, "Subtotal"), (6, "IVA"), (7, "Total"), (8, "Método Pago"),
-    ])
+    _table_header(
+        ws,
+        row,
+        [
+            (2, "Fecha"),
+            (3, "Folio"),
+            (4, "Proveedor"),
+            (5, "Subtotal"),
+            (6, "IVA"),
+            (7, "Total"),
+            (8, "Método Pago"),
+        ],
+    )
     _row_h(ws, row, 20)
     detail_start = row
     row += 1
@@ -1170,8 +1478,18 @@ def _sheet_purchases(
         _w(ws, row, 4, p["supplier_name"], bold=True, size=9, bg=alt)
         _w(ws, row, 5, p["subtotal"], fmt=_PESO, align="right", size=9, bg=alt)
         _w(ws, row, 6, p["tax_amount"], fmt=_PESO, align="right", size=9, bg=alt)
-        _w(ws, row, 7, p["total"], fmt=_PESO, align="right", size=9, bg="FEF3C7",
-           fg="92400E", bold=True)
+        _w(
+            ws,
+            row,
+            7,
+            p["total"],
+            fmt=_PESO,
+            align="right",
+            size=9,
+            bg="FEF3C7",
+            fg="92400E",
+            bold=True,
+        )
         _w(ws, row, 8, p["payment_method"], align="center", size=9, bg=alt)
         _row_h(ws, row, 16)
         row += 1
@@ -1264,7 +1582,9 @@ async def export_finance_excel(
         "ticket_promedio_COP": round(total_rev / total_orders, 0) if total_orders else 0,
         "valor_inventario_costo_COP": round(inv.get("value_cost", 0), 0),
         "productos_sin_stock": inv.get("out_of_stock", 0),
-        "gastos_por_categoria_COP": {k: round(v, 0) for k, v in sorted(exp_by_cat.items(), key=lambda x: -x[1])},
+        "gastos_por_categoria_COP": {
+            k: round(v, 0) for k, v in sorted(exp_by_cat.items(), key=lambda x: -x[1])
+        },
         "compras_proveedores_COP": round(sum(purchases_monthly.values()), 0),
         "tendencia_mensual": trend_summary,
         "ingresos_por_metodo": {m["method"]: round(m["total"], 0) for m in by_method},
@@ -1278,7 +1598,9 @@ async def export_finance_excel(
     wb.remove(wb.active)
 
     ws1 = wb.create_sheet("Resumen Ejecutivo")
-    _sheet_summary(ws1, monthly_sales, monthly_exp, inv, by_method, ai_analysis, months, generated_at)
+    _sheet_summary(
+        ws1, monthly_sales, monthly_exp, inv, by_method, ai_analysis, months, generated_at
+    )
 
     ws2 = wb.create_sheet("P&L Mensual")
     _sheet_pl_monthly(ws2, monthly_sales, monthly_exp, purchases_monthly)
