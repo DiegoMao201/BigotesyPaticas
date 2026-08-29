@@ -537,6 +537,8 @@ def _sheet_summary(
     total_expenses = sum(monthly_exp.values())
     total_net = total_gross - total_expenses
     total_orders = sum(m["orders"] for m in months_data)
+    avg_ticket = total_revenue / total_orders if total_orders > 0 else 0
+    gross_margin = total_gross / total_revenue * 100 if total_revenue > 0 else 0
     net_margin = total_net / total_revenue * 100 if total_revenue > 0 else 0
 
     # Mes actual vs mes anterior
@@ -586,6 +588,14 @@ def _sheet_summary(
             _PESO,
         ),
         (
+            "Margen Bruto %",
+            gross_margin,
+            ((cur_rev - cur.get("cogs", 0)) / cur_rev * 100) if cur_rev else 0,
+            ((prev_rev - prev.get("cogs", 0)) / prev_rev * 100) if prev_rev else 0,
+            0,
+            _PCT,
+        ),
+        (
             "Gastos Operativos",
             total_expenses,
             cur_exp,
@@ -618,6 +628,20 @@ def _sheet_summary(
             if prev.get("orders")
             else 0,
             "#,##0",
+        ),
+        (
+            "Ticket Promedio",
+            avg_ticket,
+            (cur_rev / cur.get("orders", 0)) if cur.get("orders") else 0,
+            (prev_rev / prev.get("orders", 0)) if prev.get("orders") else 0,
+            (
+                (cur_rev / cur.get("orders", 1) - prev_rev / prev.get("orders", 1))
+                / (prev_rev / prev.get("orders", 1))
+                * 100
+            )
+            if prev.get("orders") and cur.get("orders") and prev_rev
+            else 0,
+            _PESO_DEC,
         ),
     ]
 
