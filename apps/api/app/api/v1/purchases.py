@@ -152,7 +152,7 @@ async def _apply_stock_and_cost(
                 await db.execute(select(Product).where(Product.id == item.product_id))
             ).scalar_one_or_none()
             if product:
-                cost_con_iva = round(item.unit_cost * (1 + float(item.tax_pct) / 100), 2)
+                cost_con_iva = round(float(item.unit_cost) * (1 + float(item.tax_pct) / 100), 2)
                 product.cost = Decimal(str(cost_con_iva))
 
         # Unidades reales = quantity x factor_pack
