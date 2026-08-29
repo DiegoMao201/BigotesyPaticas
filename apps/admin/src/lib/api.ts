@@ -1750,6 +1750,9 @@ export interface AdoptionListing {
   contact_phone: string;
   photos: string[];
   status: 'open' | 'closed';
+  outcome: 'pending' | 'matched';
+  outcome_note: string | null;
+  outcome_at: string | null;
   created_at: string;
   reporter_name: string | null;
   reporter_phone: string | null;
@@ -1757,10 +1760,12 @@ export interface AdoptionListing {
 
 // Igual que adminRescues: lo publica el cliente desde el portal, el admin modera.
 export const adminAdoption = {
-  list: (status: 'open' | 'closed' | 'all' = 'all') =>
-    api<AdoptionListing[]>(`/v1/admin/portal/adoption-listings?status=${status}`),
+  list: (status: 'open' | 'closed' | 'all' = 'all', q?: string) =>
+    api<AdoptionListing[]>(`/v1/admin/portal/adoption-listings?status=${status}${q ? `&q=${encodeURIComponent(q)}` : ''}`),
   setStatus: (id: string, status: 'open' | 'closed') =>
     api<{ ok: boolean; status: string }>(`/v1/admin/portal/adoption-listings/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  setOutcome: (id: string, outcome: 'pending' | 'matched', outcome_note?: string) =>
+    api<{ ok: boolean; outcome: string }>(`/v1/admin/portal/adoption-listings/${id}/outcome`, { method: 'PATCH', body: JSON.stringify({ outcome, outcome_note }) }),
   remove: (id: string) =>
     api<{ ok: boolean }>(`/v1/admin/portal/adoption-listings/${id}`, { method: 'DELETE' }),
 };

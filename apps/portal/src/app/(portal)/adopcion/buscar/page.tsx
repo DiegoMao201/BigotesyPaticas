@@ -56,6 +56,10 @@ export default function SearchAdoptionPage() {
           🐾 Publica qué tipo de compañero buscas y quien tenga uno disponible te va a contactar.
         </p>
       </div>
+      <p className="text-xs text-muted -mt-2">
+        Bigotes y Paticas conecta a quienes tienen un animal en adopción con quienes desean adoptar — no
+        gestionamos ni somos responsables del proceso de adopción en sí.
+      </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <div>

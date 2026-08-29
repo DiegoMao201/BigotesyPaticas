@@ -431,6 +431,9 @@ def _adoption_admin_out(listing, customer_name: str | None, customer_phone: str 
         "contact_phone": listing.contact_phone,
         "photos": listing.photos or [],
         "status": listing.status,
+        "outcome": listing.outcome,
+        "outcome_note": listing.outcome_note,
+        "outcome_at": listing.outcome_at.isoformat() if listing.outcome_at else None,
         "created_at": listing.created_at.isoformat(),
         "reporter_name": customer_name or listing.reporter_name,
         "reporter_phone": customer_phone or (listing.contact_phone if is_quick_post else None),
@@ -440,8 +443,12 @@ def _adoption_admin_out(listing, customer_name: str | None, customer_phone: str 
 
 @router.get("/adoption-listings")
 async def list_adoption_listings_admin(
-    db: DBSession, status_filter: str = Query(default="all", alias="status")
+    db: DBSession,
+    status_filter: str = Query(default="all", alias="status"),
+    q_search: str | None = Query(default=None, alias="q"),
 ) -> list[dict]:
+    """`q` busca por nombre o teléfono (del que reportó) -- para ubicar
+    rápido la publicación cuando alguien escribe agradeciendo por WhatsApp."""
     from app.models.community import AdoptionListing
 
     q = select(AdoptionListing, Customer.full_name, Customer.phone).join(
@@ -449,6 +456,14 @@ async def list_adoption_listings_admin(
     )
     if status_filter != "all":
         q = q.where(AdoptionListing.status == status_filter)
+    if q_search:
+        term = f"%{q_search.strip()}%"
+        q = q.where(
+            (AdoptionListing.reporter_name.ilike(term))
+            | (AdoptionListing.contact_phone.ilike(term))
+            | (Customer.full_name.ilike(term))
+            | (Customer.phone.ilike(term))
+        )
     rows = (await db.execute(q.order_by(AdoptionListing.created_at.desc()))).all()
     return [_adoption_admin_out(listing, name, phone) for listing, name, phone in rows]
 
@@ -473,6 +488,33 @@ async def update_adoption_listing_admin(
     listing.status = payload.status
     await db.commit()
     return {"ok": True, "status": listing.status}
+
+
+class AdoptionOutcomeUpdate(BaseModel):
+    outcome: str
+    outcome_note: str | None = None
+
+
+@router.patch("/adoption-listings/{listing_id}/outcome", dependencies=[Depends(require_permission("crm:write"))])
+async def update_adoption_outcome_admin(
+    listing_id: uuid.UUID, payload: AdoptionOutcomeUpdate, db: DBSession
+) -> dict:
+    """Marca la publicación como 'matched' (encontró hogar/adoptante) -- se
+    exhibe como historia de éxito en el store antes de cerrarse."""
+    from app.models.community import AdoptionListing
+
+    if payload.outcome not in {"pending", "matched"}:
+        raise HTTPException(status_code=422, detail="outcome debe ser 'pending' o 'matched'")
+    listing = (
+        await db.execute(select(AdoptionListing).where(AdoptionListing.id == listing_id))
+    ).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Publicación no encontrada")
+    listing.outcome = payload.outcome
+    listing.outcome_note = payload.outcome_note
+    listing.outcome_at = datetime.now(UTC) if payload.outcome == "matched" else None
+    await db.commit()
+    return {"ok": True, "outcome": listing.outcome}
 
 
 @router.delete("/adoption-listings/{listing_id}", dependencies=[Depends(require_permission("crm:write"))])

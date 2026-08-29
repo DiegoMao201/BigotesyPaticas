@@ -69,10 +69,11 @@ function timeAgo(iso: string) {
 }
 
 export default async function AdopcionPage() {
-  const [offers, wants, foundEvents] = await Promise.all([
+  const [offers, wants, foundEvents, successStories] = await Promise.all([
     storeApi.adoptionListings('offer'),
     storeApi.adoptionListings('want'),
     storeApi.foundAnimals(),
+    storeApi.adoptionSuccessStories(),
   ]);
   const recentFound = foundEvents.slice(0, 4);
 
@@ -109,6 +110,48 @@ export default async function AdopcionPage() {
           </a>
         </div>
       </div>
+
+      {/* Aviso: somos un puente, no gestionamos la adopción */}
+      <div className="container-wide pt-8">
+        <p className="text-center text-xs text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+          Bigotes y Paticas conecta a quienes tienen un animal en adopción con quienes desean adoptar — no
+          gestionamos ni somos responsables del proceso de adopción en sí. Requisitos, condiciones y seguimiento
+          son un acuerdo directo entre las partes.
+        </p>
+      </div>
+
+      {/* Historias de éxito */}
+      {successStories.length > 0 && (
+        <div className="container-wide pt-10">
+          <div className="flex items-center gap-2 mb-6">
+            <h2 className="text-2xl font-display font-bold text-[#0d4a45]">🎉 Historias de éxito</h2>
+            <span className="text-sm text-muted-foreground">— así de bien funciona el foro</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {successStories.map((l) => (
+              <div key={l.id} className="rounded-3xl border-2 border-emerald-200 bg-emerald-50/40 overflow-hidden">
+                {l.photos[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={l.photos[0]} alt={l.title} loading="lazy" className="w-full h-44 object-cover" />
+                ) : (
+                  <div className="w-full h-44 bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-5xl">
+                    🎉
+                  </div>
+                )}
+                <div className="p-5">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 mb-2">
+                    Adoptado
+                  </span>
+                  <h3 className="font-display font-bold text-lg mb-1">{l.title}</h3>
+                  <p className="text-sm text-emerald-800 leading-relaxed">
+                    {l.outcome_note || '¡Encontró un hogar gracias a la comunidad de Bigotes y Paticas!'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Puente a perdidos / encontrados */}
       <div className="container-wide pt-12">

@@ -59,12 +59,22 @@ export default async function AdoptionListingDetailPage({ params }: { params: { 
           </div>
         )}
 
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <h1 className="text-3xl font-display font-extrabold">{listing.title}</h1>
           <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-800 bg-[#E6F5F1] px-2 py-0.5 rounded-full">
             {listing.post_type === 'offer' ? '🏠 En adopción' : '🔍 Busca adoptar'}
           </span>
+          {listing.outcome === 'matched' && (
+            <span className="text-[10px] font-bold uppercase tracking-wide text-white bg-emerald-500 px-2 py-0.5 rounded-full">
+              🎉 Adoptado
+            </span>
+          )}
         </div>
+        {listing.outcome === 'matched' && (
+          <p className="text-sm text-emerald-700 bg-emerald-50 rounded-xl px-4 py-3 mb-4">
+            {listing.outcome_note || '¡Esta publicación ya encontró un hogar gracias a la comunidad!'}
+          </p>
+        )}
         {(listing.species || listing.breed) && (
           <p className="text-muted-foreground capitalize mb-4">
             {listing.species}{listing.breed ? ` · ${listing.breed}` : ''}
@@ -107,6 +117,12 @@ export default async function AdoptionListingDetailPage({ params }: { params: { 
         >
           <Phone className="h-4 w-4" /> Escribir por WhatsApp
         </a>
+
+        <p className="text-center text-xs text-muted-foreground mt-6 leading-relaxed">
+          Bigotes y Paticas conecta a quienes tienen un animal en adopción con quienes desean adoptar — no
+          gestionamos ni somos responsables del proceso de adopción en sí. Requisitos y seguimiento son un acuerdo
+          directo entre las partes.
+        </p>
       </div>
     </>
   );

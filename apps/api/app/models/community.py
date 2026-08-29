@@ -123,6 +123,12 @@ class AdoptionListing(UUIDPKMixin, TimestampMixin, Base):
     contact_phone: Mapped[str] = mapped_column(String(40), nullable=False)
     photos: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="open", index=True)
+    # 'matched' = encontró hogar/adoptante -- se muestra como historia de éxito
+    # antes de cerrarse (status sigue siendo independiente: puede seguir 'open'
+    # mientras se exhibe como éxito, luego el admin la cierra).
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    outcome_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outcome_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class SOSSighting(UUIDPKMixin, Base):

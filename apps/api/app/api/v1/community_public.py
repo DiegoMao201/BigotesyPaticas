@@ -98,6 +98,9 @@ def _adoption_out(row: AdoptionListing) -> dict:
         "contact_phone": row.contact_phone,
         "photos": row.photos or [],
         "status": row.status,
+        "outcome": row.outcome,
+        "outcome_note": row.outcome_note,
+        "outcome_at": row.outcome_at.isoformat() if row.outcome_at else None,
         "created_at": row.created_at.isoformat(),
     }
 
@@ -184,12 +187,18 @@ async def public_get_found(event_id: uuid.UUID, db: DBSession) -> dict:
 
 @router.get("/adoption")
 async def public_list_adoption(
-    db: DBSession, post_type: str | None = Query(default=None), limit: int = Query(default=100, le=300)
+    db: DBSession,
+    post_type: str | None = Query(default=None),
+    outcome: str | None = Query(default=None),
+    limit: int = Query(default=100, le=300),
 ) -> list[dict]:
     q = select(AdoptionListing).where(AdoptionListing.status == "open")
     if post_type:
         q = q.where(AdoptionListing.post_type == post_type)
-    rows = (await db.execute(q.order_by(AdoptionListing.created_at.desc()).limit(limit))).scalars().all()
+    if outcome:
+        q = q.where(AdoptionListing.outcome == outcome)
+    order_col = AdoptionListing.outcome_at if outcome == "matched" else AdoptionListing.created_at
+    rows = (await db.execute(q.order_by(order_col.desc()).limit(limit))).scalars().all()
     return [_adoption_out(r) for r in rows]
 
 

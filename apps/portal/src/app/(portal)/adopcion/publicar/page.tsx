@@ -105,6 +105,11 @@ export default function PublishAdoptionPage() {
         <h1 className="font-display text-xl font-bold text-foreground">Doy en adopción</h1>
       </div>
 
+      <p className="text-xs text-muted -mt-2">
+        Bigotes y Paticas conecta a quienes tienen un animal en adopción con quienes desean adoptar — no
+        gestionamos ni somos responsables del proceso de adopción en sí.
+      </p>
+
       {!createdId ? (
         <form onSubmit={handleCreate} className="flex flex-col gap-5">
           <div>

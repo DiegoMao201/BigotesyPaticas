@@ -195,6 +195,9 @@ export interface AdoptionListing {
   contact_phone: string;
   photos: string[];
   status: string;
+  outcome: 'pending' | 'matched';
+  outcome_note: string | null;
+  outcome_at: string | null;
   created_at: string;
 }
 
@@ -324,6 +327,9 @@ export const storeApi = {
   adoptionListings: async (postType?: 'offer' | 'want'): Promise<AdoptionListing[]> => {
     const qs = postType ? `?post_type=${postType}` : '';
     try { return await get<AdoptionListing[]>(`/v1/public/community/adoption${qs}`); } catch { return []; }
+  },
+  adoptionSuccessStories: async (): Promise<AdoptionListing[]> => {
+    try { return await get<AdoptionListing[]>('/v1/public/community/adoption?outcome=matched&limit=12'); } catch { return []; }
   },
   adoptionListingById: async (id: string): Promise<AdoptionListing | null> => {
     try { return await get<AdoptionListing>(`/v1/public/community/adoption/${id}`); } catch { return null; }

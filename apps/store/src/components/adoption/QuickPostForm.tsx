@@ -57,8 +57,12 @@ export function QuickPostForm() {
   return (
     <div className="rounded-3xl border-2 border-[#187f77]/20 bg-white p-6 md:p-8 shadow-sm">
       <h2 className="text-2xl font-display font-bold text-[#0d4a45] mb-1">Foro de la comunidad</h2>
-      <p className="text-sm text-muted-foreground mb-6">
+      <p className="text-sm text-muted-foreground mb-1">
         Publica en 10 segundos. Solo necesitamos tu nombre y tu teléfono — nada de cuentas ni contraseñas.
+      </p>
+      <p className="text-xs text-muted-foreground mb-6">
+        Bigotes y Paticas conecta a quienes tienen un animal en adopción con quienes desean adoptar — no
+        gestionamos ni somos responsables del proceso de adopción en sí.
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
