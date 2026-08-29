@@ -274,6 +274,11 @@ async def intelligence_overview(
     urgency_rank = {"vencido": 0, "hoy": 1, "proximo": 2}
     repurchase.sort(key=lambda x: (urgency_rank.get(x.urgency, 9), -x.days_overdue, -x.monetary))
     at_risk.sort(key=lambda x: -x.monetary)
+    # Los counts del summary deben reflejar el universo COMPLETO, no la
+    # pagina de 100 que se envia al frontend (mismo criterio que
+    # dead_stock_full_count mas abajo). Los montos ya se acumulan completos.
+    repurchase_full_count = len(repurchase)
+    at_risk_full_count = len(at_risk)
     repurchase = repurchase[:100]
     at_risk = at_risk[:100]
 
@@ -352,9 +357,9 @@ async def intelligence_overview(
         summary=IntelSummary(
             customers_total=int(customers_total or 0),
             customers_active_90d=active_90,
-            repurchase_due=len(repurchase),
+            repurchase_due=repurchase_full_count,
             repurchase_revenue_opportunity=round(repurchase_opportunity, 2),
-            at_risk_count=len(at_risk),
+            at_risk_count=at_risk_full_count,
             at_risk_value=round(at_risk_value, 2),
             dead_stock_count=dead_stock_full_count,
             trapped_capital=round(trapped_capital, 2),

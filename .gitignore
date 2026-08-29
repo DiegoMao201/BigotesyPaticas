@@ -76,3 +76,6 @@ docs/MOBILE_COMMUNITY_PROGRESS.md
 
 # Media local — fotos y videos para posts (no subir al repo)
 media/
+
+# Secretos locales — nunca deben llegar al repo
+secrets.md
