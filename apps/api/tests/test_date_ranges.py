@@ -11,6 +11,7 @@ from app.api.v1._date_ranges import (
     mtd_ranges,
     previous_window,
     resolve_window,
+    to_bogota_date,
 )
 
 _BOG = ZoneInfo("America/Bogota")
@@ -133,6 +134,21 @@ def test_resolve_window_until_no_supera_ahora() -> None:
 
 
 # ─── previous_window ────────────────────────────────────────────────────
+
+
+def test_to_bogota_date_no_se_adelanta_un_dia() -> None:
+    """Bug real encontrado en producción: formatear un datetime UTC con
+    strftime directo imprime la fecha UTC, que puede ir un día adelantada
+    de la fecha Bogotá cuando el instante cae en la ventana 00:00-05:00 UTC
+    (19:00-00:00 del día anterior en Bogotá)."""
+    # Medianoche del 30-ago en Bogotá = 05:00 UTC del 30-ago
+    medianoche_bogota_30 = _bog(2026, 8, 30).astimezone(UTC)
+    un_segundo_antes = medianoche_bogota_30 - timedelta(seconds=1)
+
+    # En UTC, "un segundo antes de medianoche Bogotá" sigue siendo 29-ago
+    # ~23:59:59 UTC-5 => 04:59:59 UTC del 30-ago (mismo día calendario UTC)
+    assert un_segundo_antes.strftime("%Y-%m-%d") == "2026-08-30"  # el bug
+    assert to_bogota_date(un_segundo_antes) == date(2026, 8, 29)  # el fix
 
 
 def test_previous_window_misma_duracion() -> None:

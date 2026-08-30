@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import func, literal, select, text
 
-from app.api.v1._date_ranges import mtd_ranges, previous_window, resolve_window
+from app.api.v1._date_ranges import mtd_ranges, previous_window, resolve_window, to_bogota_date
 from app.api.v1.intelligence import intelligence_overview
 from app.deps import DBSession, require_permission
 from app.models.catalog import Category, Product
@@ -687,8 +687,8 @@ async def get_bi_full(
     net_profit = gross_profit - expenses_total
 
     return BiFull(
-        period_start=since.strftime("%Y-%m-%d"),
-        period_end=(until - timedelta(seconds=1)).strftime("%Y-%m-%d"),
+        period_start=to_bogota_date(since).isoformat(),
+        period_end=to_bogota_date(until - timedelta(seconds=1)).isoformat(),
         revenue_total=rev_total,
         orders_total=ord_total,
         avg_ticket=avg_ticket,

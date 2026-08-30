@@ -24,6 +24,16 @@ def now_bogota() -> datetime:
     return datetime.now(_TZINFO)
 
 
+def to_bogota_date(dt: datetime) -> date:
+    """Convierte un datetime aware (en cualquier tz, típicamente UTC) a la
+    fecha calendario que corresponde en America/Bogota. Para mostrar/formatear
+    (ej. period_start/period_end de un endpoint), no para límites de query —
+    ahí se usan directamente los datetimes en UTC que devuelve este módulo.
+    Formatear con .strftime() directo sobre un datetime en UTC imprime la
+    fecha UTC, que puede ir un día adelantada de la fecha Bogotá real."""
+    return dt.astimezone(_TZINFO).date()
+
+
 def _bogota_midnight(d: date) -> datetime:
     """Medianoche de `d` en America/Bogota, como datetime aware."""
     return datetime(d.year, d.month, d.day, tzinfo=_TZINFO)
