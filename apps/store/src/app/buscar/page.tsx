@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Search, MessageCircle, ArrowRight } from 'lucide-react';
 import { storeApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
@@ -133,11 +134,12 @@ function SearchResults() {
           >
             <div className="aspect-square bg-white flex items-center justify-center overflow-hidden relative p-3">
               {p.primary_image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={p.primary_image_url}
                   alt={p.name}
-                  className={`w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-sm ${!p.in_stock ? 'grayscale opacity-70' : ''}`}
+                  fill
+                  sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                  className={`object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-sm ${!p.in_stock ? 'grayscale opacity-70' : ''}`}
                 />
               ) : (
                 <span className="text-5xl">🐾</span>

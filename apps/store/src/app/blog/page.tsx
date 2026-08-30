@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { Calendar, Tag } from 'lucide-react';
@@ -84,14 +85,15 @@ export default async function BlogPage() {
                 className="group block rounded-3xl border border-border bg-card overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
               >
                 {post.cover_image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={post.cover_image_url}
-                    alt={post.title}
-                    loading="lazy"
-                    decoding="async"
-                    className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
+                  <div className="relative w-full h-48 overflow-hidden">
+                    <Image
+                      src={post.cover_image_url}
+                      alt={post.title}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
                 ) : (
                   <div className="w-full h-48 bg-gradient-to-br from-teal-600 to-teal-900 flex items-center justify-center text-6xl">
                     🐾

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
+import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { storeApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { AddToCart } from './add-to-cart';
@@ -18,7 +19,9 @@ interface Props { params: { slug: string } }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = await storeApi.bySlug(params.slug);
-  if (!product) return { title: 'Producto no encontrado | Bigotes y Paticas' };
+  if (!product) {
+    return { title: 'Producto no encontrado | Bigotes y Paticas', robots: { index: false, follow: false } };
+  }
 
   const seo = product.enriched_content?.seo;
   const enrichedDesc = product.enriched_content?.descripcion_corta;
@@ -55,11 +58,15 @@ const WA_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP ?? '573206876633';
 export default async function ProductPage({ params }: Props) {
   const product = await storeApi.bySlug(params.slug);
   if (!product) {
+    // Solo redirigimos (301) cuando el slug fue renombrado y hay un mapeo real
+    // a un producto vivo (tabla catalog.slug_redirects). Si no existe ese mapeo,
+    // el producto está oculto/eliminado y debe devolver un 404 real: redirigir
+    // esas URLs muertas a una página de categoría genérica es un "soft redirect"
+    // que Google no indexa ("Página con redirección" en Search Console) — un 404
+    // limpio permite que Google desindexe la URL correctamente.
     const redir = await storeApi.slugRedirect(params.slug);
     if (redir) redirect(`/producto/${redir}`);
-    // Producto oculto o eliminado → redirigir a su categoría (301 implícito en redirect())
-    const categorySlug = await storeApi.productRedirectTarget(params.slug);
-    redirect(`/categorias/${categorySlug}`);
+    notFound();
   }
 
   const related = await storeApi.related(product.id, 4);
@@ -122,13 +129,13 @@ export default async function ProductPage({ params }: Props) {
           <div className="space-y-3">
             <div className="relative aspect-square rounded-3xl overflow-hidden bg-white border border-border shadow-sm">
               {allImages[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={allImages[0]}
                   alt={product.name}
-                  fetchPriority="high"
-                  decoding="async"
-                  className="w-full h-full object-contain p-6"
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 90vw, 45vw"
+                  className="object-contain p-6"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-[9rem] bg-gradient-to-br from-orange-50 to-amber-50">
@@ -157,15 +164,14 @@ export default async function ProductPage({ params }: Props) {
                 {allImages.slice(1, 5).map((img, i) => (
                   <div
                     key={i}
-                    className="aspect-square rounded-2xl overflow-hidden border border-border bg-white"
+                    className="relative aspect-square rounded-2xl overflow-hidden border border-border bg-white"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <Image
                       src={img}
                       alt={`${product.name} ${i + 2}`}
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-contain p-2"
+                      fill
+                      sizes="25vw"
+                      className="object-contain p-2"
                     />
                   </div>
                 ))}
@@ -361,13 +367,12 @@ export default async function ProductPage({ params }: Props) {
                   >
                     <div className="aspect-square bg-white flex items-center justify-center relative p-3">
                       {p.primary_image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
+                        <Image
                           src={p.primary_image_url}
                           alt={p.name}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-full object-contain drop-shadow-sm group-hover:scale-105 transition-transform duration-300"
+                          fill
+                          sizes="(max-width: 768px) 50vw, 25vw"
+                          className="object-contain drop-shadow-sm group-hover:scale-105 transition-transform duration-300"
                         />
                       ) : (
                         <div className="text-5xl group-hover:scale-110 transition-transform duration-300">🐾</div>

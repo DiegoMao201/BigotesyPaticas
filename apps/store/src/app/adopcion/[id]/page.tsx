@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
@@ -51,9 +52,8 @@ export default async function AdoptionListingDetailPage({ params }: { params: { 
         {listing.photos.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
             {listing.photos.map((url, i) => (
-              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-2xl overflow-hidden block">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt={listing.title} className="h-full w-full object-cover" />
+              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative aspect-square rounded-2xl overflow-hidden block">
+                <Image src={url} alt={listing.title} fill sizes="(max-width: 640px) 50vw, 33vw" className="object-cover" />
               </a>
             ))}
           </div>

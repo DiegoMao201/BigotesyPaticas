@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { storeApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
@@ -124,13 +125,12 @@ export default async function LandingPage({ params }: Props) {
                 >
                   <div className="aspect-square bg-white flex items-center justify-center p-3 relative">
                     {p.primary_image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={p.primary_image_url}
                         alt={p.name}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                        fill
+                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                        className="object-contain group-hover:scale-105 transition-transform duration-300"
                       />
                     ) : (
                       <div className="text-5xl">🐾</div>

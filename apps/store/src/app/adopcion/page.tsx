@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Heart, AlertTriangle, PawPrint, ExternalLink, LifeBuoy, HomeIcon, MapPin } from 'lucide-react';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
@@ -131,8 +132,9 @@ export default async function AdopcionPage() {
             {successStories.map((l) => (
               <div key={l.id} className="rounded-3xl border-2 border-emerald-200 bg-emerald-50/40 overflow-hidden">
                 {l.photos[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={l.photos[0]} alt={l.title} loading="lazy" className="w-full h-44 object-cover" />
+                  <div className="relative w-full h-44">
+                    <Image src={l.photos[0]} alt={l.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
+                  </div>
                 ) : (
                   <div className="w-full h-44 bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-5xl">
                     🎉
@@ -202,8 +204,15 @@ export default async function AdopcionPage() {
                 className="group block rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-shadow"
               >
                 {ev.cover_thumb_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={ev.cover_thumb_url} alt={ev.title} loading="lazy" className="w-full h-32 object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div className="relative w-full h-32 overflow-hidden">
+                    <Image
+                      src={ev.cover_thumb_url}
+                      alt={ev.title}
+                      fill
+                      sizes="(max-width: 768px) 50vw, 25vw"
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
                 ) : (
                   <div className="w-full h-32 bg-gradient-to-br from-[#187f77] to-[#085041] flex items-center justify-center">
                     <PawPrint className="h-8 w-8 text-white/70" />
@@ -251,8 +260,15 @@ export default async function AdopcionPage() {
                 className="group block rounded-3xl border border-border bg-card overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
               >
                 {l.photos[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={l.photos[0]} alt={l.title} loading="lazy" className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div className="relative w-full h-48 overflow-hidden">
+                    <Image
+                      src={l.photos[0]}
+                      alt={l.title}
+                      fill
+                      sizes="(max-width: 768px) 50vw, 33vw"
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
                 ) : (
                   <div className="w-full h-48 bg-gradient-to-br from-[#187f77] to-[#085041] flex items-center justify-center text-6xl">
                     <PawPrint className="h-12 w-12 text-white/70" />
