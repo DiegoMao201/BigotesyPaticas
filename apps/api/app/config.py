@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     admin_email: str = "admin@bigotesypaticas.com"
     admin_password: str = "ChangeMe!2026"
 
+    # Datáfono (Bold) — ESTIMADO hasta que se cargue el histórico real de
+    # Bold. El negocio no es responsable de IVA, así que esta tarifa es
+    # costo completo (no se descuenta nada). Tarifa variable con IVA
+    # incluido + cargo fijo por transacción.
+    datafono_tasa_pct: float = 3.4
+    datafono_fijo_por_txn: float = 300
+    datafono_dias_deposito: int = 2  # T+2
+
     # Object storage
     s3_endpoint: str = "http://localhost:9000"
     s3_region: str = "us-east-1"

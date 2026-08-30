@@ -9,7 +9,9 @@ from pydantic import BaseModel
 from sqlalchemy import func, literal, select, text
 
 from app.api.v1._date_ranges import mtd_ranges, previous_window, resolve_window, to_bogota_date
+from app.api.v1.finance import _fetch_datafono_daily, _today_in_business_tz
 from app.api.v1.intelligence import intelligence_overview
+from app.config import get_settings
 from app.deps import DBSession, require_permission
 from app.models.catalog import Category, Product
 from app.models.crm import Customer
@@ -46,6 +48,8 @@ class ActionableKpis(BaseModel):
     new_customers_month: int
     new_customers_prev_month: int
     new_customers_delta_pct: float
+    bold_pending_amount: float
+    bold_pending_days: int
 
 
 class DailySale(BaseModel):
@@ -189,6 +193,18 @@ async def get_dashboard(db: DBSession) -> DashboardOut:
     # parámetros con default Query(...) se pasan explícitos como int.
     intel = await intelligence_overview(db, at_risk_days=60, dead_stock_days=90)
 
+    # "Bold te debe" — ventas de tarjeta de los últimos DIAS_DEPOSITO días,
+    # netas de comisión estimada. Reusa finance.py, no duplica la lógica de
+    # tarifa. NO toca el cierre de caja — es puramente informativo.
+    bold_settings = get_settings()
+    bold_hoy = _today_in_business_tz()
+    bold_daily = await _fetch_datafono_daily(
+        db,
+        bold_hoy - timedelta(days=bold_settings.datafono_dias_deposito - 1),
+        bold_hoy,
+    )
+    bold_pending_amount = round(sum(d["neto_recibido"] for d in bold_daily), 2)
+
     # Stock bajo (< 5 unidades disponibles)
     low_stock = (
         await db.execute(
@@ -314,6 +330,8 @@ async def get_dashboard(db: DBSession) -> DashboardOut:
             new_customers_month=int(new_customers_month or 0),
             new_customers_prev_month=int(new_customers_prev or 0),
             new_customers_delta_pct=_delta(new_customers_month, new_customers_prev),
+            bold_pending_amount=bold_pending_amount,
+            bold_pending_days=bold_settings.datafono_dias_deposito,
         ),
         daily_sales=daily_sales,
         top_products=top_products,
