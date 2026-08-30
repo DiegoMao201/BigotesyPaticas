@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import func, literal, select, text
 
-from app.api.v1._date_ranges import mtd_ranges
+from app.api.v1._date_ranges import mtd_ranges, previous_window, resolve_window
 from app.api.v1.intelligence import intelligence_overview
 from app.deps import DBSession, require_permission
 from app.models.catalog import Category, Product
@@ -448,10 +448,12 @@ class BiFull(BaseModel):
 )
 async def get_bi_full(
     db: DBSession,
-    days: int = Query(90, ge=7, le=730),
+    days: int | None = Query(None, ge=7, le=730),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
 ) -> BiFull:
     now = datetime.now(UTC)
-    since = now - timedelta(days=days)
+    since, until = resolve_window(days, start_date, end_date, default_days=90)
 
     # ── Revenue & orders totals ────────────────────────────────
     rev_total, ord_total = (
@@ -461,6 +463,7 @@ async def get_bi_full(
                 func.count(Order.id),
             )
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
         )
     ).one()
@@ -474,6 +477,7 @@ async def get_bi_full(
             select(func.coalesce(func.sum(OrderItem.unit_cost * OrderItem.quantity), 0))
             .join(Order, Order.id == OrderItem.order_id)
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
         )
     ).scalar_one()
@@ -490,6 +494,7 @@ async def get_bi_full(
                 func.count(Order.id).label("cnt"),
             )
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
             .group_by(Order.channel)
             .order_by(func.sum(Order.grand_total).desc())
@@ -517,6 +522,7 @@ async def get_bi_full(
             )
             .outerjoin(Payment, Payment.order_id == Order.id)
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
             .group_by(text("1"))
             .order_by(func.sum(Order.grand_total).desc())
@@ -572,6 +578,7 @@ async def get_bi_full(
             )
             .outerjoin(Customer, Customer.id == Order.customer_id)
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
             .group_by(Order.customer_id, text("2"))
             .order_by(func.sum(Order.grand_total).desc())
@@ -604,6 +611,7 @@ async def get_bi_full(
             .outerjoin(Product, Product.id == OrderItem.product_id)
             .outerjoin(Category, Category.id == Product.category_id)
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
             .group_by(text("1"))
             .order_by(
@@ -624,15 +632,19 @@ async def get_bi_full(
     ]
 
     # ── Heatmap day x hour ─────────────────────────────────────
-    # Extract weekday (0=Sun PG style) and hour from occurred_at
+    # occurred_at es TIMESTAMPTZ (UTC internamente); EXTRACT sin convertir
+    # usa el timezone de la sesión de Postgres (UTC), corriendo día/hora
+    # ~5h respecto a lo que el negocio ve en Bogotá. Se convierte primero.
+    occurred_at_bogota = func.timezone("America/Bogota", Order.occurred_at)
     hm_rows = (
         await db.execute(
             select(
-                func.extract("dow", Order.occurred_at).label("wd"),
-                func.extract("hour", Order.occurred_at).label("hr"),
+                func.extract("dow", occurred_at_bogota).label("wd"),
+                func.extract("hour", occurred_at_bogota).label("hr"),
                 func.count(Order.id).label("cnt"),
             )
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
             .group_by(text("1, 2"))
             .order_by(text("1, 2"))
@@ -661,7 +673,7 @@ async def get_bi_full(
             fd = datetime.fromisoformat(f[:10]) if f else None
         except Exception:
             fd = None
-        if fd and fd.replace(tzinfo=UTC) >= since:
+        if fd and since <= fd.replace(tzinfo=UTC) < until:
             m = float(e.get("monto") or 0)
             expenses_total += m
             c = str(e.get("categoria", "Otros"))
@@ -676,7 +688,7 @@ async def get_bi_full(
 
     return BiFull(
         period_start=since.strftime("%Y-%m-%d"),
-        period_end=now.strftime("%Y-%m-%d"),
+        period_end=(until - timedelta(seconds=1)).strftime("%Y-%m-%d"),
         revenue_total=rev_total,
         orders_total=ord_total,
         avg_ticket=avg_ticket,
@@ -716,11 +728,12 @@ class SalesPeriodComparison(BaseModel):
 )
 async def sales_comparison(
     db: DBSession,
-    days: int = Query(30, ge=7, le=180),
+    days: int | None = Query(None, ge=7, le=180),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
 ) -> SalesPeriodComparison:
-    now = datetime.now(UTC)
-    since = now - timedelta(days=days)
-    prev_since = since - timedelta(days=days)
+    since, until = resolve_window(days, start_date, end_date, default_days=30)
+    prev_since, prev_until = previous_window(since, until)
 
     def _q(start, end):
         return (
@@ -733,8 +746,8 @@ async def sales_comparison(
             .where(Order.status.notin_(["cancelled", "refunded"]))
         )
 
-    cur_rev, cur_ord = (await db.execute(_q(since, now))).one()
-    prev_rev, prev_ord = (await db.execute(_q(prev_since, since))).one()
+    cur_rev, cur_ord = (await db.execute(_q(since, until))).one()
+    prev_rev, prev_ord = (await db.execute(_q(prev_since, prev_until))).one()
 
     def _delta(c, p):
         return round((float(c) - float(p)) / float(p) * 100, 1) if p else 0.0
@@ -755,8 +768,8 @@ async def sales_comparison(
             .order_by(day_trunc)
         )
 
-    curr_rows = (await db.execute(_daily(since, now))).all()
-    prev_rows = (await db.execute(_daily(prev_since, since))).all()
+    curr_rows = (await db.execute(_daily(since, until))).all()
+    prev_rows = (await db.execute(_daily(prev_since, prev_until))).all()
 
     return SalesPeriodComparison(
         current_revenue=float(cur_rev or 0),
