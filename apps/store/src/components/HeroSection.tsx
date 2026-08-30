@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRef, useState, useEffect } from 'react';
 import { ArrowRight, Star, Truck, VolumeX, Volume2 } from 'lucide-react';
@@ -14,6 +15,8 @@ export function HeroSection() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
   const [rating, setRating] = useState<number | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
+  const [enableVideo, setEnableVideo] = useState(false);
 
   useEffect(() => {
     fetch('/api/v1/public/gbp-reviews?limit=1')
@@ -22,38 +25,66 @@ export function HeroSection() {
       .catch(() => null);
   }, []);
 
+  useEffect(() => {
+    // El video de fondo (~1-2.7 MB) es el LCP más pesado del sitio y en 4G lento
+    // (throttling de Lighthouse mobile) compite por ancho de banda justo en la
+    // ventana crítica de LCP. La imagen del poster ya se sirve optimizada por
+    // next/image y cubre el LCP en todos los dispositivos; el video solo se
+    // monta después, en cliente, en pantallas grandes con buena conexión.
+    const conn = (navigator as unknown as { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (conn?.saveData) return;
+    if (conn?.effectiveType && ['slow-2g', '2g'].includes(conn.effectiveType)) return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    setEnableVideo(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setEnableVideo(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
   return (
     <section className="relative min-h-[88vh] flex items-center overflow-hidden">
-      {/* VIDEO BACKGROUND */}
-      <video
-        ref={videoRef}
-        autoPlay muted loop playsInline
-        preload="metadata"
-        // @ts-expect-error -- fetchPriority no está tipado en JSX.IntrinsicElements para <video> en React 18, pero el atributo es válido en el DOM
-        fetchpriority="high"
-        poster={VIDEO_POSTER}
-        className="absolute inset-0 w-full h-full object-cover"
-      >
-        <source src={VIDEO_WEBM} type="video/webm" />
-        <source src={VIDEO_MP4}  type="video/mp4"  />
-      </video>
+      {/* POSTER — siempre presente, es el elemento de LCP real y optimizado */}
+      <Image
+        src={VIDEO_POSTER}
+        alt=""
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover"
+      />
+
+      {/* VIDEO BACKGROUND — solo desktop/tablet con buena conexión, se desvanece sobre el poster */}
+      {enableVideo && (
+        <video
+          ref={videoRef}
+          autoPlay muted loop playsInline
+          preload="metadata"
+          onCanPlay={() => setVideoReady(true)}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
+        >
+          <source src={VIDEO_WEBM} type="video/webm" />
+          <source src={VIDEO_MP4}  type="video/mp4"  />
+        </video>
+      )}
 
       {/* Gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-r from-teal-950/90 via-teal-900/70 to-teal-900/20" />
       <div className="absolute inset-0 bg-gradient-to-t from-teal-950/50 via-transparent to-transparent" />
 
-      {/* Mute button */}
-      <button
-        onClick={() => {
-          if (!videoRef.current) return;
-          videoRef.current.muted = !muted;
-          setMuted(!muted);
-        }}
-        className="absolute top-5 right-5 z-20 w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/25 transition-colors"
-        aria-label={muted ? 'Activar sonido' : 'Silenciar'}
-      >
-        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-      </button>
+      {/* Mute button — solo tiene sentido si el video está montado y sonando */}
+      {enableVideo && videoReady && (
+        <button
+          onClick={() => {
+            if (!videoRef.current) return;
+            videoRef.current.muted = !muted;
+            setMuted(!muted);
+          }}
+          className="absolute top-5 right-5 z-20 w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/25 transition-colors"
+          aria-label={muted ? 'Activar sonido' : 'Silenciar'}
+        >
+          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </button>
+      )}
 
       {/* CONTENT */}
       <div className="container-wide relative z-10 py-20 md:py-28">
