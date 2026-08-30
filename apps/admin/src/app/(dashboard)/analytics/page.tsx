@@ -10,9 +10,9 @@ import {
 import {
   BarChart3, TrendingUp, ShoppingCart, Users, Package,
   Sparkles, DollarSign, Target, ArrowUp, ArrowDown, RefreshCw,
-  Calendar, Award, Zap, Activity,
+  Calendar, Award, Zap, Activity, CreditCard,
 } from 'lucide-react';
-import { analyticsBI, type BiFull, type SalesPeriodComparison } from '@/lib/api';
+import { analyticsBI, finance, type BiFull, type SalesPeriodComparison } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -139,7 +139,7 @@ export default function AnalyticsPage() {
       {data && tab === 'ventas' && <VentasTab data={data} />}
       {data && tab === 'clientes' && <ClientesTab data={data} />}
       {data && tab === 'productos' && <ProductosTab data={data} />}
-      {data && tab === 'pnl' && <PnlTab data={data} />}
+      {data && tab === 'pnl' && <PnlTab data={data} range={range} />}
     </div>
   );
 }
@@ -538,7 +538,13 @@ function ProductosTab({ data }: { data: BiFull }) {
 
 // ─── P&L ────────────────────────────────────────────────────────────────────
 
-function PnlTab({ data }: { data: BiFull }) {
+function PnlTab({ data, range }: { data: BiFull; range: DateRange }) {
+  const datafono = useQuery({
+    queryKey: ['datafono-impact', range.start, range.end],
+    queryFn: () => finance.datafonoImpact(range),
+    staleTime: 2 * 60_000,
+  });
+
   const margin_gross = data.revenue > 0 ? ((data.gross_profit / data.revenue) * 100).toFixed(1) : '0';
   const margin_net = data.revenue > 0 ? ((data.net_profit / data.revenue) * 100).toFixed(1) : '0';
 
@@ -618,6 +624,66 @@ function PnlTab({ data }: { data: BiFull }) {
           </div>
         </Card>
       )}
+
+      {/* Impacto del datáfono (Bold) — estimado hasta cargar el histórico real */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h2 className="text-base font-bold flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-brand-500" /> Impacto del Datáfono (Bold)
+          </h2>
+          {datafono.data && (
+            <Badge variant="warning">
+              Estimado — tarifa asumida {datafono.data.tasa_pct.toString().replace('.', ',')}% + {formatCurrency(datafono.data.fijo_por_txn)}/txn
+            </Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Calculado sobre ventas de tarjeta ya registradas (sales.payments) — no es el histórico real de Bold todavía.
+        </p>
+
+        {datafono.isLoading ? (
+          <div className="h-40 bg-muted/30 animate-pulse rounded" />
+        ) : datafono.data && datafono.data.ventas_tarjeta_total > 0 ? (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="rounded-lg border bg-white p-4">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Ventas con tarjeta</p>
+                <p className="text-xl font-bold">{formatCurrency(datafono.data.ventas_tarjeta_total)}</p>
+              </div>
+              <div className="rounded-lg border bg-rose-50 border-rose-200 p-4">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Comisión total</p>
+                <p className="text-xl font-bold text-rose-600">{formatCurrency(datafono.data.comision_total)}</p>
+              </div>
+              <div className="rounded-lg border bg-white p-4">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">% efectivo sobre ventas</p>
+                <p className="text-xl font-bold">{datafono.data.comision_pct.toFixed(2)}%</p>
+              </div>
+              <div className="rounded-lg border bg-emerald-50 border-emerald-200 p-4">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Neto recibido</p>
+                <p className="text-xl font-bold text-emerald-700">{formatCurrency(datafono.data.neto_recibido_total)}</p>
+              </div>
+            </div>
+
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={datafono.data.daily}>
+                  <CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" />
+                  <XAxis dataKey="fecha" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                  <Legend />
+                  <Bar dataKey="neto_recibido" name="Neto recibido" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="comision_total" name="Comisión" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ) : (
+          <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
+            Sin ventas con tarjeta en este período
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

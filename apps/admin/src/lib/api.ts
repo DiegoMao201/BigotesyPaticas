@@ -392,6 +392,8 @@ export interface ActionableKpis {
   new_customers_month: number;
   new_customers_prev_month: number;
   new_customers_delta_pct: number;
+  bold_pending_amount: number;
+  bold_pending_days: number;
 }
 
 export interface DailySale {
@@ -736,6 +738,29 @@ export interface FinanceSummary {
   daily_cashflow: { date: string; revenue: number; expenses: number }[];
 }
 
+export interface DatafonoDay {
+  fecha: string;
+  ventas_tarjeta: number;
+  n_transacciones: number;
+  comision_variable: number;
+  comision_fija: number;
+  comision_total: number;
+  comision_pct: number;
+  neto_recibido: number;
+}
+
+export interface DatafonoImpact {
+  period_start: string;
+  period_end: string;
+  tasa_pct: number;
+  fijo_por_txn: number;
+  ventas_tarjeta_total: number;
+  comision_total: number;
+  comision_pct: number;
+  neto_recibido_total: number;
+  daily: DatafonoDay[];
+}
+
 export const finance = {
   summary: (start?: string, end?: string) => {
     const qs = new URLSearchParams();
@@ -743,6 +768,8 @@ export const finance = {
     if (end) qs.set('end', end);
     return api<FinanceSummary>(`/v1/finance/summary?${qs.toString()}`);
   },
+  datafonoImpact: (range: { start: string; end: string }) =>
+    api<DatafonoImpact>(`/v1/finance/datafono-impact?start_date=${range.start}&end_date=${range.end}`),
   exportExcel: async (months = 12): Promise<Blob> => {
     const token = getToken();
     const res = await fetch(`${API_BASE}/v1/finance/export-excel?months=${months}`, {

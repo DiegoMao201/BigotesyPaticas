@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {
   TrendingUp, TrendingDown, DollarSign, Package, ShoppingBag,
   AlertTriangle, ArrowUpRight, Clock, Boxes, Percent,
-  RotateCcw, UserMinus, Archive, UserPlus,
+  RotateCcw, UserMinus, Archive, UserPlus, CreditCard,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,12 +49,12 @@ function Kpi({ label, value, delta, deltaSuffix = '%', icon: Icon, accent = 'fro
   );
 }
 
-// ── Card de la fila de acción (link a Intelligence) ────────────────
-function ActionCard({ label, value, sub, icon: Icon, accent }: {
-  label: string; value: string; sub: string; icon: React.ComponentType<{ className?: string }>; accent: string;
+// ── Card de la fila de acción ───────────────────────────────────────
+function ActionCard({ label, value, sub, icon: Icon, accent, href = '/intelligence' }: {
+  label: string; value: string; sub: string; icon: React.ComponentType<{ className?: string }>; accent: string; href?: string;
 }) {
   return (
-    <Link href="/intelligence">
+    <Link href={href}>
       <Card className="overflow-hidden relative group hover:shadow-elegant transition-shadow cursor-pointer h-full">
         <div className={cn('absolute inset-0 bg-gradient-to-br opacity-60', accent)} />
         <CardHeader className="pb-2 relative">
@@ -213,8 +213,16 @@ export default function DashboardPage() {
         <Kpi label="Ticket promedio" value={formatCurrency(kpis?.avg_ticket ?? 0)} icon={Package} accent="from-violet-500/20 to-violet-500/5" loading={isLoading} />
       </div>
 
-      {/* Fila de acción — oportunidades reales, cada card lleva a Intelligence */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      {/* Fila de acción — oportunidades reales */}
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
+        <ActionCard
+          label="Bold te debe"
+          value={formatCurrency(actionable?.bold_pending_amount ?? 0)}
+          sub={`Últimos ${actionable?.bold_pending_days ?? 2} días · ver detalle`}
+          icon={CreditCard}
+          accent="from-indigo-500/20 to-indigo-500/5"
+          href="/analytics"
+        />
         <ActionCard
           label="Oportunidad de recompra"
           value={String(actionable?.repurchase_due ?? 0)}
