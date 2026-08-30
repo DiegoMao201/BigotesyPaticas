@@ -374,9 +374,24 @@ export interface DashboardKpis {
   orders_prev_month: number;
   orders_delta_pct: number;
   avg_ticket: number;
-  products_active: number;
-  customers_total: number;
   low_stock_count: number;
+}
+
+export interface ActionableKpis {
+  gross_margin_pct: number;
+  gross_margin_prev_pct: number;
+  gross_margin_delta_pts: number;
+  repurchase_due: number;
+  repurchase_revenue_opportunity: number;
+  at_risk_count: number;
+  at_risk_value: number;
+  dead_stock_count: number;
+  trapped_capital: number;
+  below_cost_lines: number;
+  below_cost_loss: number;
+  new_customers_month: number;
+  new_customers_prev_month: number;
+  new_customers_delta_pct: number;
 }
 
 export interface DailySale {
@@ -396,6 +411,7 @@ export interface TopProduct {
 
 export interface DashboardData {
   kpis: DashboardKpis;
+  actionable: ActionableKpis;
   daily_sales: DailySale[];
   top_products: TopProduct[];
   recent_orders: Order[];
@@ -1031,8 +1047,10 @@ export interface SalesPeriodComparison {
 
 // Re-export with extended analytics
 export const analyticsBI = {
-  full: (days = 90) => api<BiFull>(`/v1/analytics/bi?days=${days}`),
-  comparison: (days = 30) => api<SalesPeriodComparison>(`/v1/analytics/sales-comparison?days=${days}`),
+  full: (range: { start: string; end: string }) =>
+    api<BiFull>(`/v1/analytics/bi?start_date=${range.start}&end_date=${range.end}`),
+  comparison: (range: { start: string; end: string }) =>
+    api<SalesPeriodComparison>(`/v1/analytics/sales-comparison?start_date=${range.start}&end_date=${range.end}`),
 };
 
 // ─── Inteligencia (recompra predictiva, retención, capital atrapado) ────────

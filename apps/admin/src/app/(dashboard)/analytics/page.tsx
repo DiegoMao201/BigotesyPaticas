@@ -17,6 +17,7 @@ import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DateRangePicker, defaultDateRange, type DateRange } from '@/components/analytics/DateRangePicker';
 
 const BRAND_COLORS = ['#FF6B35', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
@@ -62,9 +63,17 @@ type Tab = 'resumen' | 'ventas' | 'clientes' | 'productos' | 'pnl';
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('resumen');
-  const [days, setDays] = useState(90);
-  const qc = useQuery({ queryKey: ['bi-full', days], queryFn: () => analyticsBI.full(days), staleTime: 2 * 60_000 });
-  const comparison = useQuery({ queryKey: ['bi-comparison', 30], queryFn: () => analyticsBI.comparison(30), staleTime: 2 * 60_000 });
+  const [range, setRange] = useState<DateRange>(defaultDateRange);
+  const qc = useQuery({
+    queryKey: ['bi-full', range.start, range.end],
+    queryFn: () => analyticsBI.full(range),
+    staleTime: 2 * 60_000,
+  });
+  const comparison = useQuery({
+    queryKey: ['bi-comparison', range.start, range.end],
+    queryFn: () => analyticsBI.comparison(range),
+    staleTime: 2 * 60_000,
+  });
 
   const data = qc.data;
   const isLoading = qc.isLoading;
@@ -79,22 +88,18 @@ export default function AnalyticsPage() {
           <p className="text-sm text-muted-foreground">Panel completo — ventas, margen, clientes, P&amp;L</p>
         </div>
         <div className="flex items-center gap-2">
-          <select
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
-            className="border rounded px-3 py-1.5 text-sm bg-background"
-          >
-            <option value={30}>Últimos 30 días</option>
-            <option value={60}>Últimos 60 días</option>
-            <option value={90}>Últimos 90 días</option>
-            <option value={180}>Últimos 6 meses</option>
-            <option value={365}>Último año</option>
-          </select>
+          <DateRangePicker value={range} onChange={setRange} />
           <Button variant="outline" size="sm" onClick={() => qc.refetch()}>
             <RefreshCw className="w-4 h-4" />
           </Button>
         </div>
       </div>
+
+      {data && (
+        <p className="text-xs text-muted-foreground -mt-3">
+          Mostrando: {range.label} ({data.period_start} → {data.period_end})
+        </p>
+      )}
 
       <div className="flex gap-1 border-b border-border overflow-x-auto">
         {([
@@ -174,9 +179,10 @@ function ResumenTab({ data, comparison }: { data: BiFull; comparison?: SalesPeri
 
       {data.monthly_trend.length > 0 && (
         <Card className="p-6">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-bold flex items-center gap-2">
             <Calendar className="w-5 h-5 text-brand-500" /> Tendencia Mensual — Ingresos
           </h2>
+          <p className="text-xs text-muted-foreground mb-4">Últimos 12 meses, independiente del filtro de fecha de arriba</p>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={data.monthly_trend}>
