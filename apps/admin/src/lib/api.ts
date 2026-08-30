@@ -576,9 +576,11 @@ export const expenses = {
 export interface CashClosing {
   id: string;
   fecha: string;
-  status: 'open' | 'closed';
+  status: 'open' | 'closed' | 'sin_conteo';
   saldo_inicial: number;
   gastos_efectivo: number;
+  consignaciones: number;
+  base_caja: number;
   ventas_por_metodo: Record<string, number>;
   creditos_por_metodo: Record<string, number>;
   total_ventas: number;
@@ -586,11 +588,15 @@ export interface CashClosing {
   ventas_efectivo: number;
   creditos_efectivo: number;
   saldo_final_efectivo: number;
+  consignacion_sugerida: number;
   saldo_contado: number | null;
   diferencia: number | null;
   notas: string | null;
   closed_at: string | null;
   closed_by: string | null;
+  alterado: boolean;
+  desviacion_por_metodo: Record<string, number>;
+  alerta_apertura: string | null;
 }
 
 export const cashClosings = {
@@ -605,9 +611,9 @@ export const cashClosings = {
   get: (id: string) => api<CashClosing>(`/v1/cash-closings/${id}`),
   open: (payload: { fecha?: string; saldo_inicial?: number }) =>
     api<CashClosing>('/v1/cash-closings', { method: 'POST', body: JSON.stringify(payload) }),
-  patch: (id: string, payload: { gastos_efectivo?: number; saldo_inicial?: number; notas?: string }) =>
+  patch: (id: string, payload: { gastos_efectivo?: number; saldo_inicial?: number; base_caja?: number; notas?: string }) =>
     api<CashClosing>(`/v1/cash-closings/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  close: (id: string, payload: { saldo_contado: number; gastos_efectivo?: number; notas?: string }) =>
+  close: (id: string, payload: { saldo_contado: number; gastos_efectivo?: number; consignaciones?: number; notas?: string }) =>
     api<CashClosing>(`/v1/cash-closings/${id}/close`, { method: 'POST', body: JSON.stringify(payload) }),
 };
 

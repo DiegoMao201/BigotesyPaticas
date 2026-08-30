@@ -48,6 +48,7 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
   const [showEdit, setShowEdit] = useState(false);
   const [saldoContado, setSaldoContado] = useState('');
   const [gastos, setGastos] = useState('');
+  const [consignaciones, setConsignaciones] = useState('');
   const [notasClose, setNotasClose] = useState('');
   const [editGastos, setEditGastos] = useState('');
   const [editSaldoInicial, setEditSaldoInicial] = useState('');
@@ -88,7 +89,7 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
   });
 
   const closeMutation = useMutation({
-    mutationFn: (p: { saldo_contado: number; gastos_efectivo?: number; notas?: string }) =>
+    mutationFn: (p: { saldo_contado: number; gastos_efectivo?: number; consignaciones?: number; notas?: string }) =>
       cashClosings.close(today!.id, p),
     onSuccess: () => {
       invalidate();
@@ -138,8 +139,17 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
               <Badge variant="danger" className="gap-1"><AlertCircle className="w-3 h-3" /> Sin abrir</Badge>
             ) : isOpen ? (
               <Badge variant="warning" className="gap-1"><AlertCircle className="w-3 h-3" /> Abierto</Badge>
+            ) : today.status === 'sin_conteo' ? (
+              <Badge variant="neutral" className="gap-1"><AlertCircle className="w-3 h-3" /> Sin conteo</Badge>
             ) : (
               <Badge variant="success" className="gap-1"><CheckCircle2 className="w-3 h-3" /> Cerrado</Badge>
+            )}
+            {today.alterado && (
+              <span title={Object.entries(today.desviacion_por_metodo).map(([m, v]) => `${m}: ${v >= 0 ? '+' : ''}${formatCurrency(v)}`).join(' · ')}>
+                <Badge variant="danger" className="gap-1">
+                  <AlertCircle className="w-3 h-3" /> Alterado
+                </Badge>
+              </span>
             )}
             <button
               onClick={() => refetch()}
@@ -152,6 +162,12 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
         </div>
 
         <div className="p-6 space-y-6">
+          {today.alerta_apertura && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-sm text-amber-800">{today.alerta_apertura}</p>
+            </div>
+          )}
           {isVirtual && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3">
               <p className="text-sm text-amber-800">
@@ -167,7 +183,7 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
             <div className="rounded-lg border bg-white p-4">
               <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Saldo inicial</div>
               <div className="text-xl font-bold">{formatCurrency(today.saldo_inicial)}</div>
-              <div className="text-xs text-muted-foreground mt-1">Carry-over efectivo</div>
+              <div className="text-xs text-muted-foreground mt-1">Fondo fijo: {formatCurrency(today.base_caja)}</div>
             </div>
             <div className="rounded-lg border bg-white p-4">
               <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3 text-emerald-500" /> Ventas efectivo</div>
@@ -184,9 +200,9 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
               )}
             </div>
             <div className={`rounded-lg border p-4 ${today.saldo_final_efectivo >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Saldo final efectivo</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Saldo esperado</div>
               <div className={`text-xl font-bold ${today.saldo_final_efectivo >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatCurrency(today.saldo_final_efectivo)}</div>
-              <div className="text-xs text-muted-foreground mt-1">= inicial + ventas − devol − gastos</div>
+              <div className="text-xs text-muted-foreground mt-1">= inicial + ventas − devol − gastos − consignado</div>
             </div>
           </div>
 
@@ -224,6 +240,13 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
             <span className="text-lg font-bold">{formatCurrency(today.total_ventas)}</span>
           </div>
 
+          {/* Histórico sin conteo (backfill) — nunca se finge un cuadre */}
+          {today.status === 'sin_conteo' && (
+            <div className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+              Este día no tiene conteo de efectivo registrado (dato histórico). Solo se conserva el registro de ventas por método — no hay saldo contado ni diferencia porque nadie contó la caja ese día.
+            </div>
+          )}
+
           {/* Resultado del cierre (solo si está cerrado) */}
           {!isOpen && diff !== null && (
             <div className={`rounded-lg border-2 p-4 flex items-center justify-between ${diffAbs! < 1000 ? 'border-emerald-300 bg-emerald-50' : 'border-red-300 bg-red-50'}`}>
@@ -246,7 +269,7 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
               <Button variant="outline" size="sm" onClick={() => { setEditGastos(String(today.gastos_efectivo)); setEditSaldoInicial(String(today.saldo_inicial)); setEditNotas(today.notas ?? ''); setShowEdit(true); }}>
                 Ajustar gastos / saldo inicial
               </Button>
-              <Button size="sm" onClick={() => { setSaldoContado(''); setGastos(String(today.gastos_efectivo)); setNotasClose(''); setShowClose(true); }} className="bg-brand-600 hover:bg-brand-700 text-white">
+              <Button size="sm" onClick={() => { setSaldoContado(''); setGastos(String(today.gastos_efectivo)); setConsignaciones(String(today.consignacion_sugerida > 0 ? today.consignacion_sugerida : 0)); setNotasClose(''); setShowClose(true); }} className="bg-brand-600 hover:bg-brand-700 text-white">
                 <Lock className="w-4 h-4 mr-1.5" /> Cerrar caja
               </Button>
             </div>
@@ -271,7 +294,6 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
                 value={saldoContado}
                 onChange={(e) => setSaldoContado(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground mt-1">El sistema espera: {formatCurrency(today.saldo_final_efectivo)}</p>
             </div>
             <div>
               <label className="text-sm font-medium block mb-1">Gastos efectivo del día</label>
@@ -285,6 +307,20 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
               />
             </div>
             <div>
+              <label className="text-sm font-medium block mb-1">Consignado a cuenta</label>
+              <Input
+                type="number"
+                min="0"
+                step="100"
+                placeholder="0"
+                value={consignaciones}
+                onChange={(e) => setConsignaciones(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Sugerido (excedente sobre el fondo fijo de {formatCurrency(today.base_caja)}): {formatCurrency(today.consignacion_sugerida)}
+              </p>
+            </div>
+            <div>
               <label className="text-sm font-medium block mb-1">Notas</label>
               <Input
                 placeholder="Observaciones del cierre..."
@@ -293,19 +329,36 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
               />
             </div>
           </div>
-          {saldoContado && (
-            <div className="mt-4 rounded-lg bg-muted/60 p-3">
-              <div className="text-sm font-medium">Vista previa diferencia:</div>
-              <div className={`text-xl font-bold mt-1 ${(Number(saldoContado) - today.saldo_final_efectivo) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {formatCurrency(Number(saldoContado) - today.saldo_final_efectivo)}
+          {(() => {
+            const gastosNum = gastos ? Number(gastos) : today.gastos_efectivo;
+            const consigNum = consignaciones ? Number(consignaciones) : 0;
+            const bruto = today.saldo_inicial + today.ventas_efectivo - today.creditos_efectivo - gastosNum;
+            const saldoEsperado = bruto - consigNum;
+            const quedaExacto = Math.abs(saldoEsperado - today.base_caja) < 1;
+            return (
+              <div className="mt-4 space-y-3">
+                <div className={`rounded-lg p-3 border ${quedaExacto ? 'bg-muted/60 border-transparent' : 'bg-amber-50 border-amber-300'}`}>
+                  <div className="text-sm font-medium flex items-center gap-1.5">
+                    Quedará en caja: <span className={quedaExacto ? '' : 'text-amber-700 font-bold'}>{formatCurrency(saldoEsperado)}</span>
+                    {!quedaExacto && <span className="text-xs text-amber-700">(fondo fijo: {formatCurrency(today.base_caja)})</span>}
+                  </div>
+                </div>
+                {saldoContado && (
+                  <div className="rounded-lg bg-muted/60 p-3">
+                    <div className="text-sm font-medium">Vista previa diferencia:</div>
+                    <div className={`text-xl font-bold mt-1 ${(Number(saldoContado) - saldoEsperado) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {formatCurrency(Number(saldoContado) - saldoEsperado)}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => setShowClose(false)}>Cancelar</Button>
           <Button
-            onClick={() => closeMutation.mutate({ saldo_contado: Number(saldoContado), gastos_efectivo: gastos ? Number(gastos) : undefined, notas: notasClose || undefined })}
+            onClick={() => closeMutation.mutate({ saldo_contado: Number(saldoContado), gastos_efectivo: gastos ? Number(gastos) : undefined, consignaciones: consignaciones ? Number(consignaciones) : undefined, notas: notasClose || undefined })}
             disabled={!saldoContado || closeMutation.isPending}
             className="bg-brand-600 hover:bg-brand-700 text-white"
           >
@@ -392,10 +445,20 @@ function HistoryRow({ c, onSelect }: { c: CashClosing; onSelect: (fecha: string)
           <div className="flex items-center gap-2">
             {isOpen ? (
               <Badge variant="warning" className="gap-1"><AlertCircle className="w-3 h-3" /> Abierto</Badge>
+            ) : c.status === 'sin_conteo' ? (
+              <Badge variant="neutral" className="gap-1"><AlertCircle className="w-3 h-3" /> Sin conteo</Badge>
             ) : diff !== null && Math.abs(diff) < 1000 ? (
               <Badge variant="success" className="gap-1"><CheckCircle2 className="w-3 h-3" /> Cuadrado</Badge>
             ) : (
               <Badge variant="danger" className="gap-1"><AlertCircle className="w-3 h-3" /> Revisar</Badge>
+            )}
+            {c.alterado && (
+              <span
+                title={Object.entries(c.desviacion_por_metodo).map(([m, v]) => `${m}: ${v >= 0 ? '+' : ''}${formatCurrency(v)}`).join(' · ')}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Badge variant="danger" className="gap-1"><AlertCircle className="w-3 h-3" /> Alterado</Badge>
+              </span>
             )}
             <button
               onClick={(e) => { e.stopPropagation(); onSelect(c.fecha); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
