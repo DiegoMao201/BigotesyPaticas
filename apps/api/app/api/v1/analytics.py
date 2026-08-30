@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import func, literal, select, text
 
+from app.api.v1._date_ranges import mtd_ranges, previous_window, resolve_window
+from app.api.v1.intelligence import intelligence_overview
 from app.deps import DBSession, require_permission
 from app.models.catalog import Category, Product
 from app.models.crm import Customer
@@ -26,9 +28,24 @@ class KpiOut(BaseModel):
     orders_prev_month: int
     orders_delta_pct: float
     avg_ticket: float
-    products_active: int
-    customers_total: int
     low_stock_count: int
+
+
+class ActionableKpis(BaseModel):
+    gross_margin_pct: float
+    gross_margin_prev_pct: float
+    gross_margin_delta_pts: float
+    repurchase_due: int
+    repurchase_revenue_opportunity: float
+    at_risk_count: int
+    at_risk_value: float
+    dead_stock_count: int
+    trapped_capital: float
+    below_cost_lines: int
+    below_cost_loss: float
+    new_customers_month: int
+    new_customers_prev_month: int
+    new_customers_delta_pct: float
 
 
 class DailySale(BaseModel):
@@ -48,6 +65,7 @@ class TopProduct(BaseModel):
 
 class DashboardOut(BaseModel):
     kpis: KpiOut
+    actionable: ActionableKpis
     daily_sales: list[DailySale]
     top_products: list[TopProduct]
     recent_orders: list[dict]
@@ -59,21 +77,24 @@ class DashboardOut(BaseModel):
     dependencies=[Depends(require_permission("analytics:read"))],
 )
 async def get_dashboard(db: DBSession) -> DashboardOut:
-    now = datetime.now(UTC)
-    start_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    start_prev = (start_month - timedelta(days=1)).replace(day=1)
-    end_prev = start_month
+    # Límites de mes en America/Bogota (no UTC crudo) — ver _date_ranges.py.
+    # `now`/`start_month` acotan el mes actual (parcial); `end_prev` es el
+    # mismo corte de día pero del mes anterior (MTD-vs-MTD real).
+    start_month, now, start_prev, end_prev = mtd_ranges()
 
-    # Revenue mes actual
+    # Revenue mes actual (MTD): [start_month, now] — "now" es un instante,
+    # no un límite de día, por eso se incluye con <=.
     rev_month = (
         await db.execute(
             select(func.coalesce(func.sum(Order.grand_total), 0))
             .where(Order.occurred_at >= start_month)
+            .where(Order.occurred_at <= now)
             .where(Order.status.notin_(["cancelled", "refunded"]))
         )
     ).scalar_one()
 
-    # Revenue mes anterior
+    # Revenue mismo corte del mes anterior: [start_prev, end_prev) — end_prev
+    # es el inicio del día siguiente al corte, por eso el límite es <.
     rev_prev = (
         await db.execute(
             select(func.coalesce(func.sum(Order.grand_total), 0))
@@ -83,16 +104,17 @@ async def get_dashboard(db: DBSession) -> DashboardOut:
         )
     ).scalar_one()
 
-    # Órdenes mes actual
+    # Órdenes mes actual (MTD)
     ord_month = (
         await db.execute(
             select(func.count(Order.id))
             .where(Order.occurred_at >= start_month)
+            .where(Order.occurred_at <= now)
             .where(Order.status.notin_(["cancelled"]))
         )
     ).scalar_one()
 
-    # Órdenes mes anterior
+    # Órdenes mismo corte del mes anterior
     ord_prev = (
         await db.execute(
             select(func.count(Order.id))
@@ -102,21 +124,70 @@ async def get_dashboard(db: DBSession) -> DashboardOut:
         )
     ).scalar_one()
 
-    # Productos activos
-    prod_active = (
+    # COGS mes actual / mismo corte del mes anterior (mismo patrón que /bi)
+    async def _cogs(start, end, inclusive_end: bool) -> float:
+        q = (
+            select(func.coalesce(func.sum(OrderItem.unit_cost * OrderItem.quantity), 0))
+            .join(Order, Order.id == OrderItem.order_id)
+            .where(Order.occurred_at >= start)
+            .where(Order.status.notin_(["cancelled", "refunded"]))
+        )
+        q = q.where(Order.occurred_at <= end) if inclusive_end else q.where(Order.occurred_at < end)
+        return float((await db.execute(q)).scalar_one())
+
+    cogs_month = await _cogs(start_month, now, inclusive_end=True)
+    cogs_prev = await _cogs(start_prev, end_prev, inclusive_end=False)
+    margin_month = (
+        round((float(rev_month) - cogs_month) / float(rev_month) * 100, 1) if rev_month else 0.0
+    )
+    margin_prev = (
+        round((float(rev_prev) - cogs_prev) / float(rev_prev) * 100, 1) if rev_prev else 0.0
+    )
+
+    # Ventas por debajo del costo, mes actual (líneas con margen negativo real)
+    below_cost_lines, below_cost_loss = (
         await db.execute(
-            select(func.count(Product.id))
-            .where(Product.is_active == True)  # noqa: E712
-            .where(Product.deleted_at == None)  # noqa: E711
+            select(
+                func.count(OrderItem.id),
+                func.coalesce(
+                    func.sum((OrderItem.unit_cost - OrderItem.unit_price) * OrderItem.quantity), 0
+                ),
+            )
+            .join(Order, Order.id == OrderItem.order_id)
+            .where(Order.occurred_at >= start_month)
+            .where(Order.occurred_at <= now)
+            .where(Order.status.notin_(["cancelled", "refunded"]))
+            .where(OrderItem.unit_price < OrderItem.unit_cost)
+        )
+    ).one()
+
+    # Clientes nuevos MTD vs mismo corte del mes anterior (primera orden histórica)
+    first_order_sub = (
+        select(Order.customer_id, func.min(Order.occurred_at).label("first_at"))
+        .where(Order.customer_id.isnot(None))
+        .where(Order.status.notin_(["cancelled", "refunded"]))
+        .group_by(Order.customer_id)
+        .subquery()
+    )
+    new_customers_month = (
+        await db.execute(
+            select(func.count())
+            .select_from(first_order_sub)
+            .where(first_order_sub.c.first_at >= start_month, first_order_sub.c.first_at <= now)
+        )
+    ).scalar_one()
+    new_customers_prev = (
+        await db.execute(
+            select(func.count())
+            .select_from(first_order_sub)
+            .where(first_order_sub.c.first_at >= start_prev, first_order_sub.c.first_at < end_prev)
         )
     ).scalar_one()
 
-    # Clientes total
-    cust_total = (
-        await db.execute(
-            select(func.count(Customer.id)).where(Customer.deleted_at == None)  # noqa: E711
-        )
-    ).scalar_one()
+    # Recompra / riesgo de fuga / capital atrapado — reusa intelligence.py,
+    # no se duplica la lógica. Se llama directo (no vía HTTP), por eso los
+    # parámetros con default Query(...) se pasan explícitos como int.
+    intel = await intelligence_overview(db, at_risk_days=60, dead_stock_days=90)
 
     # Stock bajo (< 5 unidades disponibles)
     low_stock = (
@@ -226,9 +297,23 @@ async def get_dashboard(db: DBSession) -> DashboardOut:
             orders_prev_month=int(ord_prev),
             orders_delta_pct=_delta(ord_month, ord_prev),
             avg_ticket=avg_ticket,
-            products_active=int(prod_active),
-            customers_total=int(cust_total),
             low_stock_count=int(low_stock),
+        ),
+        actionable=ActionableKpis(
+            gross_margin_pct=margin_month,
+            gross_margin_prev_pct=margin_prev,
+            gross_margin_delta_pts=round(margin_month - margin_prev, 1),
+            repurchase_due=intel.summary.repurchase_due,
+            repurchase_revenue_opportunity=intel.summary.repurchase_revenue_opportunity,
+            at_risk_count=intel.summary.at_risk_count,
+            at_risk_value=intel.summary.at_risk_value,
+            dead_stock_count=intel.summary.dead_stock_count,
+            trapped_capital=intel.summary.trapped_capital,
+            below_cost_lines=int(below_cost_lines or 0),
+            below_cost_loss=float(below_cost_loss or 0),
+            new_customers_month=int(new_customers_month or 0),
+            new_customers_prev_month=int(new_customers_prev or 0),
+            new_customers_delta_pct=_delta(new_customers_month, new_customers_prev),
         ),
         daily_sales=daily_sales,
         top_products=top_products,
@@ -363,10 +448,12 @@ class BiFull(BaseModel):
 )
 async def get_bi_full(
     db: DBSession,
-    days: int = Query(90, ge=7, le=730),
+    days: int | None = Query(None, ge=7, le=730),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
 ) -> BiFull:
     now = datetime.now(UTC)
-    since = now - timedelta(days=days)
+    since, until = resolve_window(days, start_date, end_date, default_days=90)
 
     # ── Revenue & orders totals ────────────────────────────────
     rev_total, ord_total = (
@@ -376,6 +463,7 @@ async def get_bi_full(
                 func.count(Order.id),
             )
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
         )
     ).one()
@@ -389,6 +477,7 @@ async def get_bi_full(
             select(func.coalesce(func.sum(OrderItem.unit_cost * OrderItem.quantity), 0))
             .join(Order, Order.id == OrderItem.order_id)
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
         )
     ).scalar_one()
@@ -405,6 +494,7 @@ async def get_bi_full(
                 func.count(Order.id).label("cnt"),
             )
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
             .group_by(Order.channel)
             .order_by(func.sum(Order.grand_total).desc())
@@ -432,6 +522,7 @@ async def get_bi_full(
             )
             .outerjoin(Payment, Payment.order_id == Order.id)
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
             .group_by(text("1"))
             .order_by(func.sum(Order.grand_total).desc())
@@ -487,6 +578,7 @@ async def get_bi_full(
             )
             .outerjoin(Customer, Customer.id == Order.customer_id)
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
             .group_by(Order.customer_id, text("2"))
             .order_by(func.sum(Order.grand_total).desc())
@@ -519,6 +611,7 @@ async def get_bi_full(
             .outerjoin(Product, Product.id == OrderItem.product_id)
             .outerjoin(Category, Category.id == Product.category_id)
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
             .group_by(text("1"))
             .order_by(
@@ -539,15 +632,19 @@ async def get_bi_full(
     ]
 
     # ── Heatmap day x hour ─────────────────────────────────────
-    # Extract weekday (0=Sun PG style) and hour from occurred_at
+    # occurred_at es TIMESTAMPTZ (UTC internamente); EXTRACT sin convertir
+    # usa el timezone de la sesión de Postgres (UTC), corriendo día/hora
+    # ~5h respecto a lo que el negocio ve en Bogotá. Se convierte primero.
+    occurred_at_bogota = func.timezone("America/Bogota", Order.occurred_at)
     hm_rows = (
         await db.execute(
             select(
-                func.extract("dow", Order.occurred_at).label("wd"),
-                func.extract("hour", Order.occurred_at).label("hr"),
+                func.extract("dow", occurred_at_bogota).label("wd"),
+                func.extract("hour", occurred_at_bogota).label("hr"),
                 func.count(Order.id).label("cnt"),
             )
             .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
             .group_by(text("1, 2"))
             .order_by(text("1, 2"))
@@ -576,7 +673,7 @@ async def get_bi_full(
             fd = datetime.fromisoformat(f[:10]) if f else None
         except Exception:
             fd = None
-        if fd and fd.replace(tzinfo=UTC) >= since:
+        if fd and since <= fd.replace(tzinfo=UTC) < until:
             m = float(e.get("monto") or 0)
             expenses_total += m
             c = str(e.get("categoria", "Otros"))
@@ -591,7 +688,7 @@ async def get_bi_full(
 
     return BiFull(
         period_start=since.strftime("%Y-%m-%d"),
-        period_end=now.strftime("%Y-%m-%d"),
+        period_end=(until - timedelta(seconds=1)).strftime("%Y-%m-%d"),
         revenue_total=rev_total,
         orders_total=ord_total,
         avg_ticket=avg_ticket,
@@ -631,11 +728,12 @@ class SalesPeriodComparison(BaseModel):
 )
 async def sales_comparison(
     db: DBSession,
-    days: int = Query(30, ge=7, le=180),
+    days: int | None = Query(None, ge=7, le=180),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
 ) -> SalesPeriodComparison:
-    now = datetime.now(UTC)
-    since = now - timedelta(days=days)
-    prev_since = since - timedelta(days=days)
+    since, until = resolve_window(days, start_date, end_date, default_days=30)
+    prev_since, prev_until = previous_window(since, until)
 
     def _q(start, end):
         return (
@@ -648,8 +746,8 @@ async def sales_comparison(
             .where(Order.status.notin_(["cancelled", "refunded"]))
         )
 
-    cur_rev, cur_ord = (await db.execute(_q(since, now))).one()
-    prev_rev, prev_ord = (await db.execute(_q(prev_since, since))).one()
+    cur_rev, cur_ord = (await db.execute(_q(since, until))).one()
+    prev_rev, prev_ord = (await db.execute(_q(prev_since, prev_until))).one()
 
     def _delta(c, p):
         return round((float(c) - float(p)) / float(p) * 100, 1) if p else 0.0
@@ -670,8 +768,8 @@ async def sales_comparison(
             .order_by(day_trunc)
         )
 
-    curr_rows = (await db.execute(_daily(since, now))).all()
-    prev_rows = (await db.execute(_daily(prev_since, since))).all()
+    curr_rows = (await db.execute(_daily(since, until))).all()
+    prev_rows = (await db.execute(_daily(prev_since, prev_until))).all()
 
     return SalesPeriodComparison(
         current_revenue=float(cur_rev or 0),

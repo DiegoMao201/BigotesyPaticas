@@ -1,8 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import {
   TrendingUp, TrendingDown, DollarSign, Package, ShoppingBag,
-  Users, AlertTriangle, ArrowUpRight, Clock, Boxes,
+  AlertTriangle, ArrowUpRight, Clock, Boxes, Percent,
+  RotateCcw, UserMinus, Archive, UserPlus,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,11 +16,12 @@ interface KpiProps {
   label: string;
   value: string;
   delta?: number;
+  deltaSuffix?: string;
   icon: React.ComponentType<{ className?: string }>;
   accent?: string;
   loading?: boolean;
 }
-function Kpi({ label, value, delta, icon: Icon, accent = 'from-brand/20 to-brand/5', loading }: KpiProps) {
+function Kpi({ label, value, delta, deltaSuffix = '%', icon: Icon, accent = 'from-brand/20 to-brand/5', loading }: KpiProps) {
   const positive = (delta ?? 0) >= 0;
   return (
     <Card className="overflow-hidden relative group hover:shadow-elegant transition-shadow">
@@ -38,11 +41,36 @@ function Kpi({ label, value, delta, icon: Icon, accent = 'from-brand/20 to-brand
         {!loading && delta !== undefined && (
           <div className={cn('flex items-center gap-1 text-xs mt-2 font-medium', positive ? 'text-emerald-600' : 'text-rose-600')}>
             {positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {Math.abs(delta).toFixed(1)}% vs mes anterior
+            {positive ? '+' : ''}{delta!.toFixed(1)}{deltaSuffix} vs mismo período mes anterior
           </div>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ── Card de la fila de acción (link a Intelligence) ────────────────
+function ActionCard({ label, value, sub, icon: Icon, accent }: {
+  label: string; value: string; sub: string; icon: React.ComponentType<{ className?: string }>; accent: string;
+}) {
+  return (
+    <Link href="/intelligence">
+      <Card className="overflow-hidden relative group hover:shadow-elegant transition-shadow cursor-pointer h-full">
+        <div className={cn('absolute inset-0 bg-gradient-to-br opacity-60', accent)} />
+        <CardHeader className="pb-2 relative">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+            <Icon className="h-4 w-4 text-muted-foreground" />
+          </div>
+        </CardHeader>
+        <CardContent className="relative">
+          <div className="text-2xl font-display font-bold tracking-tight">{value}</div>
+          <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1 group-hover:text-brand-600 transition-colors">
+            {sub} <ArrowUpRight className="h-3 w-3" />
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 
@@ -137,6 +165,7 @@ export default function DashboardPage() {
   });
 
   const kpis = data?.kpis;
+  const actionable = data?.actionable;
 
   return (
     <div className="space-y-8">
@@ -146,12 +175,6 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-display font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground mt-1 text-sm">Vista ejecutiva — {new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })}</p>
         </div>
-        {kpis?.low_stock_count ? (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium">
-            <AlertTriangle className="h-4 w-4" />
-            {kpis.low_stock_count} productos con stock bajo
-          </div>
-        ) : null}
       </div>
 
       {/* Error banner */}
@@ -164,36 +187,64 @@ export default function DashboardPage() {
       {/* Meta diaria */}
       <DailyGoalBanner />
 
-      {/* KPIs */}
+      {/* Banners de alerta */}
+      {(!!kpis?.low_stock_count || !!actionable?.below_cost_lines) && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {!!kpis?.low_stock_count && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {kpis.low_stock_count} productos con stock bajo
+            </div>
+          )}
+          {!!actionable?.below_cost_lines && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm font-medium">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {actionable.below_cost_lines} venta{actionable.below_cost_lines !== 1 ? 's' : ''} por debajo del costo este mes — {formatCurrency(Math.abs(actionable.below_cost_loss))} perdidos
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* KPIs principales — MTD vs mismo corte del mes anterior */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Ingresos del mes" value={formatCurrency(kpis?.revenue_month ?? 0)} delta={kpis?.revenue_delta_pct} icon={DollarSign} accent="from-emerald-500/20 to-emerald-500/5" loading={isLoading} />
-        <Kpi label="Pedidos" value={String(kpis?.orders_month ?? 0)} delta={kpis?.orders_delta_pct} icon={ShoppingBag} accent="from-blue-500/20 to-blue-500/5" loading={isLoading} />
-        <Kpi label="Productos activos" value={String(kpis?.products_active ?? 0)} icon={Package} accent="from-brand/20 to-brand/5" loading={isLoading} />
-        <Kpi label="Clientes" value={String(kpis?.customers_total ?? 0)} icon={Users} accent="from-violet-500/20 to-violet-500/5" loading={isLoading} />
+        <Kpi label="Ingresos MTD" value={formatCurrency(kpis?.revenue_month ?? 0)} delta={kpis?.revenue_delta_pct} icon={DollarSign} accent="from-emerald-500/20 to-emerald-500/5" loading={isLoading} />
+        <Kpi label="Margen bruto MTD" value={`${(actionable?.gross_margin_pct ?? 0).toFixed(1)}%`} delta={actionable?.gross_margin_delta_pts} deltaSuffix=" pts" icon={Percent} accent="from-teal-500/20 to-teal-500/5" loading={isLoading} />
+        <Kpi label="Pedidos MTD" value={String(kpis?.orders_month ?? 0)} delta={kpis?.orders_delta_pct} icon={ShoppingBag} accent="from-blue-500/20 to-blue-500/5" loading={isLoading} />
+        <Kpi label="Ticket promedio" value={formatCurrency(kpis?.avg_ticket ?? 0)} icon={Package} accent="from-violet-500/20 to-violet-500/5" loading={isLoading} />
       </div>
 
-      {/* Row 2: stats secundarias */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
-        <Card className="glass-brand">
-          <CardContent className="p-5">
-            <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">Ticket promedio</div>
-            {isLoading ? <div className="h-7 w-24 bg-muted/50 animate-pulse rounded" /> : <div className="text-2xl font-display font-bold">{formatCurrency(kpis?.avg_ticket ?? 0)}</div>}
-          </CardContent>
-        </Card>
-        <Card className="glass-brand">
-          <CardContent className="p-5">
-            <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">Rev. mes anterior</div>
-            {isLoading ? <div className="h-7 w-24 bg-muted/50 animate-pulse rounded" /> : <div className="text-2xl font-display font-bold">{formatCurrency(kpis?.revenue_prev_month ?? 0)}</div>}
-          </CardContent>
-        </Card>
-        <Card className="glass-brand">
-          <CardContent className="p-5">
-            <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">Stock bajo</div>
-            <div className={cn('text-2xl font-display font-bold', (kpis?.low_stock_count ?? 0) > 0 ? 'text-amber-600' : 'text-emerald-600')}>
-              {isLoading ? <div className="h-7 w-12 bg-muted/50 animate-pulse rounded" /> : `${kpis?.low_stock_count ?? 0} SKUs`}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Fila de acción — oportunidades reales, cada card lleva a Intelligence */}
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <ActionCard
+          label="Oportunidad de recompra"
+          value={String(actionable?.repurchase_due ?? 0)}
+          sub={`${formatCurrency(actionable?.repurchase_revenue_opportunity ?? 0)} en juego`}
+          icon={RotateCcw}
+          accent="from-blue-500/20 to-blue-500/5"
+        />
+        <ActionCard
+          label="Clientes en riesgo"
+          value={String(actionable?.at_risk_count ?? 0)}
+          sub={`${formatCurrency(actionable?.at_risk_value ?? 0)} en riesgo`}
+          icon={UserMinus}
+          accent="from-rose-500/20 to-rose-500/5"
+        />
+        <ActionCard
+          label="Capital atrapado"
+          value={formatCurrency(actionable?.trapped_capital ?? 0)}
+          sub={`${actionable?.dead_stock_count ?? 0} SKUs sin rotar`}
+          icon={Archive}
+          accent="from-amber-500/20 to-amber-500/5"
+        />
+        <ActionCard
+          label="Clientes nuevos"
+          value={String(actionable?.new_customers_month ?? 0)}
+          sub={actionable && actionable.new_customers_delta_pct !== 0
+            ? `${actionable.new_customers_delta_pct > 0 ? '+' : ''}${actionable.new_customers_delta_pct.toFixed(1)}% vs mes anterior`
+            : 'Ver detalle'}
+          icon={UserPlus}
+          accent="from-emerald-500/20 to-emerald-500/5"
+        />
       </div>
 
       {/* Row 3: sparkline + top productos */}
