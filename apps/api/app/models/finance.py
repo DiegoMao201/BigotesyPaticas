@@ -18,7 +18,7 @@ class CashClosing(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "cash_closings"
     __table_args__ = (
         UniqueConstraint("fecha", name="uq_cash_closings_fecha"),
-        CheckConstraint("status IN ('open','closed')", name="ck_cash_closings_status"),
+        CheckConstraint("status IN ('open','closed','sin_conteo')", name="ck_cash_closings_status"),
         {"schema": "finance"},
     )
 
@@ -30,6 +30,13 @@ class CashClosing(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
 
     # Gastos en efectivo ingresados manualmente
     gastos_efectivo: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+
+    # Excedente de efectivo consignado al banco al cerrar
+    consignaciones: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+
+    # Fondo fijo que aplicaba ESE día (columna por cierre, no constante global —
+    # si la base cambia en el futuro, el histórico conserva la que aplicó ese día)
+    base_caja: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=300000)
 
     # Snapshot de ventas por método (guardado al cerrar — mientras open se computa live)
     snap_ventas_por_metodo: Mapped[dict] = mapped_column(
