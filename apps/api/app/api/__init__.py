@@ -95,8 +95,13 @@ api_router.include_router(portal_service_status.router, prefix="/v1")
 api_router.include_router(portal_location.router, prefix="/v1")
 api_router.include_router(admin_portal.router, prefix="/v1")
 # Fase 1 comunidad: SOS mascotas perdidas
-api_router.include_router(sos.router, prefix="/v1")
+# rescues.router (prefix /sos/rescues) DEBE registrarse antes que sos.router:
+# sos.router define GET /sos/{sos_id} (path param genérico de un segmento),
+# que si se registra primero intercepta GET /sos/rescues completo (Starlette
+# matchea por orden de registro) — "rescues" se intenta parsear como UUID y
+# revienta 422 en TODO el listado de animalitos encontrados.
 api_router.include_router(rescues.router, prefix="/v1")
+api_router.include_router(sos.router, prefix="/v1")
 api_router.include_router(adoption.router, prefix="/v1")
 api_router.include_router(community_public.router, prefix="/v1")
 # Fase 3 comunidad: directorio de aliados/servicios + agenda real + panel de aliados
