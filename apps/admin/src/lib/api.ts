@@ -1084,7 +1084,33 @@ export const analyticsBI = {
     api<BiFull>(`/v1/analytics/bi?start_date=${range.start}&end_date=${range.end}`),
   comparison: (range: { start: string; end: string }) =>
     api<SalesPeriodComparison>(`/v1/analytics/sales-comparison?start_date=${range.start}&end_date=${range.end}`),
+  belowCost: (range: { start: string; end: string }) =>
+    api<BelowCostOut>(`/v1/analytics/below-cost?start_date=${range.start}&end_date=${range.end}`),
 };
+
+export interface BelowCostLine {
+  order_item_id: string;
+  order_number: string;
+  fecha: string;
+  product_id: string | null;
+  sku: string;
+  nombre: string;
+  cantidad: number;
+  unit_cost: number;
+  unit_price: number;
+  precio_lista_actual: number;
+  costo_actual: number;
+  perdida: number;
+  causa: 'precio_lista_malo' | 'descuento_puntual' | 'costo_sospechoso';
+}
+
+export interface BelowCostOut {
+  period_start: string;
+  period_end: string;
+  total_lines: number;
+  total_loss: number;
+  lines: BelowCostLine[];
+}
 
 // ─── Inteligencia (recompra predictiva, retención, capital atrapado) ────────
 

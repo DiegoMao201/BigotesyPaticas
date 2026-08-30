@@ -197,10 +197,16 @@ export default function DashboardPage() {
             </div>
           )}
           {!!actionable?.below_cost_lines && (
-            <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm font-medium">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              {actionable.below_cost_lines} venta{actionable.below_cost_lines !== 1 ? 's' : ''} por debajo del costo este mes — {formatCurrency(Math.abs(actionable.below_cost_loss))} perdidos
-            </div>
+            <Link
+              href="/below-cost"
+              className="flex items-center justify-between gap-2 px-4 py-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm font-medium hover:bg-rose-100 transition-colors group"
+            >
+              <span className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {actionable.below_cost_lines} venta{actionable.below_cost_lines !== 1 ? 's' : ''} por debajo del costo este mes — {formatCurrency(Math.abs(actionable.below_cost_loss))} perdidos
+              </span>
+              <ArrowUpRight className="h-4 w-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </Link>
           )}
         </div>
       )}
