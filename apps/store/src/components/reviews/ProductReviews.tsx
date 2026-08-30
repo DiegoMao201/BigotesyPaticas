@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Star, ThumbsUp } from 'lucide-react';
 import { trackEvent } from '@/lib/analytics';
 
@@ -174,9 +175,8 @@ export function ProductReviews({
                 {rev.photo_urls.length > 0 && (
                   <div className="flex gap-2">
                     {rev.photo_urls.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt="" loading="lazy" decoding="async" className="w-16 h-16 rounded-xl object-cover border border-border" />
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative w-16 h-16 shrink-0">
+                        <Image src={url} alt="" fill sizes="64px" className="rounded-xl object-cover border border-border" />
                       </a>
                     ))}
                   </div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/lib/cart-store';
 import { formatCurrency } from '@/lib/utils';
@@ -180,10 +181,9 @@ export default function CheckoutPage() {
             <div className="flex flex-col gap-3">
               {items.map((item) => (
                 <div key={item.productId} className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden shrink-0">
+                  <div className="relative h-12 w-12 rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden shrink-0">
                     {item.image
-                      // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={item.image} alt={item.name} className="h-full w-full object-contain p-1" />
+                      ? <Image src={item.image} alt={item.name} fill sizes="48px" className="object-contain p-1" />
                       : <Package className="h-5 w-5 text-gray-300" />
                     }
                   </div>

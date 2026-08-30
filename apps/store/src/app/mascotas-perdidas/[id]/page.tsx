@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
@@ -50,8 +51,9 @@ export default async function LostPetDetailPage({ params }: { params: { id: stri
 
         <div className="rounded-3xl overflow-hidden border border-border bg-card">
           {pet.photos[0] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={pet.photos[0]} alt={pet.pet_name} className="w-full h-80 object-cover" />
+            <div className="relative w-full h-80">
+              <Image src={pet.photos[0]} alt={pet.pet_name} fill priority sizes="(max-width: 768px) 100vw, 768px" className="object-cover" />
+            </div>
           ) : (
             <div className="w-full h-80 bg-gradient-to-br from-[#e8433a] to-[#c62f28] flex items-center justify-center text-8xl">🐾</div>
           )}

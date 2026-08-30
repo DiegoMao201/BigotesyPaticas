@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { Star, ExternalLink } from 'lucide-react';
 import { trackEvent } from '@/lib/analytics';
 
@@ -54,12 +55,11 @@ function ReviewCard({ review }: { review: GBPReview }) {
       )}
       <div className="flex items-center gap-3 pt-2 border-t border-border">
         {review.reviewer_photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={review.reviewer_photo}
             alt={review.reviewer_name}
-            loading="lazy"
-            decoding="async"
+            width={36}
+            height={36}
             className="w-9 h-9 rounded-full object-cover"
           />
         ) : (

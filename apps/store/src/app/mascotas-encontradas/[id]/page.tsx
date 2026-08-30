@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
@@ -54,8 +55,13 @@ export default async function FoundEventDetailPage({ params }: { params: { id: s
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
           {ev.animals.map((a) => (
             <a key={a.id} href={a.photo_url} target="_blank" rel="noopener noreferrer" className="relative aspect-square rounded-2xl overflow-hidden block">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={a.thumb_url ?? a.photo_url} alt={a.description ?? ev.title} className="h-full w-full object-cover" />
+              <Image
+                src={a.thumb_url ?? a.photo_url}
+                alt={a.description ?? ev.title}
+                fill
+                sizes="(max-width: 640px) 50vw, 33vw"
+                className="object-cover"
+              />
               {a.status === 'reunited' && (
                 <span className="absolute inset-0 bg-black/50 flex items-center justify-center">
                   <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-emerald-700">

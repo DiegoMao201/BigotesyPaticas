@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
 import { Gift } from 'lucide-react';
@@ -91,13 +92,15 @@ export default async function MascotasPerdidasPage() {
                 className="group block rounded-3xl border border-border bg-card overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
               >
                 {pet.photos[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={pet.photos[0]}
-                    alt={pet.pet_name}
-                    loading="lazy"
-                    className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
+                  <div className="relative w-full h-48 overflow-hidden">
+                    <Image
+                      src={pet.photos[0]}
+                      alt={pet.pet_name}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
                 ) : (
                   <div className="w-full h-48 bg-gradient-to-br from-[#e8433a] to-[#c62f28] flex items-center justify-center text-6xl">
                     🐾

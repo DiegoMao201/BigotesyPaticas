@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ChevronDown, Heart, MessageCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import type { Product } from '@/lib/api';
@@ -247,13 +248,12 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
                   {/* Imagen */}
                   <div className="relative aspect-square bg-[#F8F9FA] overflow-hidden">
                     {p.primary_image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={p.primary_image_url}
                         alt={p.name}
-                        loading="lazy"
-                        decoding="async"
-                        className={`w-full h-full object-contain p-2.5
+                        fill
+                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
+                        className={`object-contain p-2.5
                                    group-hover:scale-105 transition-transform duration-300
                                    ${!p.in_stock ? 'grayscale opacity-70' : ''}`}
                       />

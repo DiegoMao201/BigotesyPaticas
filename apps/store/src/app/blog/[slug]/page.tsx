@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { storeApi } from '@/lib/api';
 import { ArticleSchema, BreadcrumbSchema } from '@/components/seo/JsonLd';
@@ -103,14 +104,16 @@ export default async function BlogPostPage({ params }: Props) {
 
         {/* Cover */}
         {post.cover_image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={post.cover_image_url}
-            alt={post.title}
-            fetchPriority="high"
-            decoding="async"
-            className="w-full rounded-3xl aspect-video object-cover mb-10 shadow-sm"
-          />
+          <div className="relative w-full aspect-video rounded-3xl overflow-hidden mb-10 shadow-sm">
+            <Image
+              src={post.cover_image_url}
+              alt={post.title}
+              fill
+              priority
+              sizes="(max-width: 768px) 100vw, 768px"
+              className="object-cover"
+            />
+          </div>
         )}
 
         {/* Content */}

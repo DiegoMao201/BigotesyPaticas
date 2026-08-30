@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Trash2, ShoppingBag, Star } from 'lucide-react';
 import { useCart } from '@/lib/cart-store';
 import { useQuery } from '@tanstack/react-query';
@@ -74,10 +75,9 @@ export default function CartPage() {
               key={i.productId}
               className="flex gap-4 items-center p-4 rounded-2xl border border-border bg-card"
             >
-              <div className="w-20 h-20 rounded-xl bg-secondary overflow-hidden flex items-center justify-center text-3xl shrink-0">
+              <div className="relative w-20 h-20 rounded-xl bg-secondary overflow-hidden flex items-center justify-center text-3xl shrink-0">
                 {i.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={i.image} alt={i.name} className="w-full h-full object-cover" />
+                  <Image src={i.image} alt={i.name} fill sizes="80px" className="object-cover" />
                 ) : (
                   '🐾'
                 )}
@@ -144,10 +144,9 @@ export default function CartPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {suggested.map((p) => (
               <div key={p.id} className="rounded-2xl border border-border bg-card p-3 flex flex-col gap-2">
-                <div className="aspect-square rounded-xl bg-secondary overflow-hidden flex items-center justify-center">
+                <div className="relative aspect-square rounded-xl bg-secondary overflow-hidden flex items-center justify-center">
                   {p.primary_image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.primary_image_url} alt={p.name} className="w-full h-full object-cover" />
+                    <Image src={p.primary_image_url} alt={p.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover" />
                   ) : (
                     <span className="text-4xl">🐾</span>
                   )}

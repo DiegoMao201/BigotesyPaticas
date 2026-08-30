@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
 import { PawPrint } from 'lucide-react';
@@ -92,13 +93,15 @@ export default async function MascotasEncontradasPage() {
                 className="group block rounded-3xl border border-border bg-card overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
               >
                 {ev.cover_thumb_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={ev.cover_thumb_url}
-                    alt={ev.title}
-                    loading="lazy"
-                    className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
+                  <div className="relative w-full h-48 overflow-hidden">
+                    <Image
+                      src={ev.cover_thumb_url}
+                      alt={ev.title}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
                 ) : (
                   <div className="w-full h-48 bg-gradient-to-br from-[#187f77] to-[#085041] flex items-center justify-center text-6xl">
                     <PawPrint className="h-12 w-12 text-white/70" />

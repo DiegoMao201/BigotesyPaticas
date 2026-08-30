@@ -29,6 +29,8 @@ export function HeroSection() {
         ref={videoRef}
         autoPlay muted loop playsInline
         preload="metadata"
+        // @ts-expect-error -- fetchPriority no está tipado en JSX.IntrinsicElements para <video> en React 18, pero el atributo es válido en el DOM
+        fetchpriority="high"
         poster={VIDEO_POSTER}
         className="absolute inset-0 w-full h-full object-cover"
       >

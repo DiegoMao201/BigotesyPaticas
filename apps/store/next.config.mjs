@@ -10,7 +10,20 @@ const nextConfig = {
       { protocol: 'https', hostname: '**.digitaloceanspaces.com' },
       { protocol: 'https', hostname: 'catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: '**.googleusercontent.com' },
     ],
+  },
+  async headers() {
+    return [
+      {
+        // Iconos, manifest y demás estáticos servidos desde /public no cambian
+        // de contenido sin un rename/redeploy — cache larga es segura.
+        source: '/:path(icon-.*\\.png|apple-touch-icon\\.png|favicon\\.ico|icon\\.svg|site\\.webmanifest|opengraph-image\\.png)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+    ];
   },
   async redirects() {
     return [

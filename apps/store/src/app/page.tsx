@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, Truck, ShieldCheck, Heart, Sparkles, MapPin } from 'lucide-react';
 
 export const revalidate = 600; // 10 min
@@ -87,13 +88,12 @@ export default async function HomePage() {
               >
                 <div className="aspect-square bg-white flex items-center justify-center overflow-hidden relative p-3">
                   {p.primary_image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={p.primary_image_url}
                       alt={p.name}
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110 drop-shadow-sm"
+                      fill
+                      sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                      className="object-contain transition-transform duration-500 group-hover:scale-110 drop-shadow-sm"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-orange-50 to-amber-50">🐾</div>
