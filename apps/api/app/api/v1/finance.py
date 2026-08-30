@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 
+from app.config import get_settings
 from app.deps import CurrentUser, DBSession, require_permission
 from app.models.finance import CashClosing as CashClosingModel
 from app.models.ops import LegacyIdMap
@@ -799,6 +800,130 @@ async def close_cash_closing(
     await db.commit()
     await db.refresh(closing)
     return _build_closing_out(closing, live)
+
+
+# ────────────────── Impacto del datáfono (Bold) ──────────────────────
+# NO se carga el histórico real de Bold todavía — se calcula sobre las
+# ventas de tarjeta que ya están en sales.payments (method='Tarjeta'),
+# aplicando una tarifa plana configurable (app/config.py, override por env).
+# Son ESTIMADOS hasta que se cargue el histórico real. El negocio no es
+# responsable de IVA, así que la tarifa es costo completo, sin descontar.
+# IMPORTANTE: esto NO toca el cierre de caja — el cuadre solo cuenta
+# efectivo, esto es puramente informativo.
+
+
+class DatafonoDayOut(BaseModel):
+    fecha: str
+    ventas_tarjeta: float
+    n_transacciones: int
+    comision_variable: float
+    comision_fija: float
+    comision_total: float
+    comision_pct: float
+    neto_recibido: float
+
+
+class DatafonoImpactOut(BaseModel):
+    period_start: str
+    period_end: str
+    tasa_pct: float
+    fijo_por_txn: float
+    ventas_tarjeta_total: float
+    comision_total: float
+    comision_pct: float
+    neto_recibido_total: float
+    daily: list[DatafonoDayOut]
+
+
+def _resolve_date_range(
+    start_date: date | None, end_date: date | None, default_days: int
+) -> tuple[date, date]:
+    """Rango de fechas simple (nivel día, no datetime) en America/Bogota.
+    El frontend siempre manda start_date/end_date explícitos; default_days
+    es solo un respaldo si se llama sin parámetros."""
+    end = end_date or _today_in_business_tz()
+    start = start_date or (end - timedelta(days=default_days - 1))
+    if start > end:
+        start, end = end, start
+    return start, end
+
+
+async def _fetch_datafono_daily(db: DBSession, start: date, end: date) -> list[dict[str, Any]]:
+    """Ventas de tarjeta por día (America/Bogota) en [start, end] inclusive,
+    con la comisión estimada aplicada. Usa Order.occurred_at (no
+    Payment.received_at) para ser consistente con el resto del sistema
+    (_compute_live_totals usa el mismo campo como "fecha de negocio")."""
+    rows = (
+        await db.execute(
+            text("""
+            SELECT DATE(o.occurred_at AT TIME ZONE 'America/Bogota') AS fecha,
+                   COALESCE(SUM(p.amount), 0) AS ventas_tarjeta,
+                   COUNT(*) AS n_transacciones
+            FROM sales.payments p
+            JOIN sales.orders o ON o.id = p.order_id
+            WHERE p.method = 'Tarjeta'
+              AND o.status NOT IN ('cancelled')
+              AND DATE(o.occurred_at AT TIME ZONE 'America/Bogota') BETWEEN :start AND :end
+            GROUP BY 1
+            ORDER BY 1
+        """),
+            {"start": start, "end": end},
+        )
+    ).all()
+
+    settings = get_settings()
+    tasa = settings.datafono_tasa_pct
+    fijo = settings.datafono_fijo_por_txn
+
+    out = []
+    for r in rows:
+        ventas = float(r.ventas_tarjeta or 0)
+        n = int(r.n_transacciones or 0)
+        comision_variable = ventas * tasa / 100
+        comision_fija = n * fijo
+        comision_total = comision_variable + comision_fija
+        out.append(
+            {
+                "fecha": r.fecha.isoformat(),
+                "ventas_tarjeta": round(ventas, 2),
+                "n_transacciones": n,
+                "comision_variable": round(comision_variable, 2),
+                "comision_fija": round(comision_fija, 2),
+                "comision_total": round(comision_total, 2),
+                "comision_pct": round(comision_total / ventas * 100, 2) if ventas else 0.0,
+                "neto_recibido": round(ventas - comision_total, 2),
+            }
+        )
+    return out
+
+
+@router.get(
+    "/datafono-impact",
+    response_model=DatafonoImpactOut,
+    dependencies=[Depends(require_permission("finance:read"))],
+)
+async def datafono_impact(
+    db: DBSession,
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+) -> DatafonoImpactOut:
+    start, end = _resolve_date_range(start_date, end_date, default_days=30)
+    daily = await _fetch_datafono_daily(db, start, end)
+
+    ventas_total = sum(d["ventas_tarjeta"] for d in daily)
+    comision_total = sum(d["comision_total"] for d in daily)
+
+    return DatafonoImpactOut(
+        period_start=start.isoformat(),
+        period_end=end.isoformat(),
+        tasa_pct=get_settings().datafono_tasa_pct,
+        fijo_por_txn=get_settings().datafono_fijo_por_txn,
+        ventas_tarjeta_total=round(ventas_total, 2),
+        comision_total=round(comision_total, 2),
+        comision_pct=round(comision_total / ventas_total * 100, 2) if ventas_total else 0.0,
+        neto_recibido_total=round(ventas_total - comision_total, 2),
+        daily=[DatafonoDayOut(**d) for d in daily],
+    )
 
 
 # ────────────────── Suppliers ──────────────────────
