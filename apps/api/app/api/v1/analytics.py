@@ -339,6 +339,133 @@ async def get_dashboard(db: DBSession) -> DashboardOut:
     )
 
 
+# ── Drill-down de ventas por debajo del costo ──────────────────────
+
+
+class BelowCostLine(BaseModel):
+    order_item_id: str
+    order_number: str
+    fecha: str
+    product_id: str | None
+    sku: str
+    nombre: str
+    cantidad: int
+    unit_cost: float
+    unit_price: float
+    precio_lista_actual: float
+    costo_actual: float
+    perdida: float
+    causa: str  # 'precio_lista_malo' | 'descuento_puntual' | 'costo_sospechoso'
+
+
+class BelowCostOut(BaseModel):
+    period_start: str
+    period_end: str
+    total_lines: int
+    total_loss: float
+    lines: list[BelowCostLine]
+
+
+def _clasificar_causa(
+    unit_cost: float, unit_price: float, costo_actual: float, precio_lista_actual: float
+) -> str:
+    """Clasifica por qué una línea se vendió bajo costo.
+
+    Orden de prioridad (no son mutuamente excluyentes en los datos crudos,
+    pero cada línea necesita UNA causa accionable):
+    1. precio_lista_malo — el problema es HOY: el precio de lista actual ya
+       está en o por debajo del costo actual. Se va a repetir en cada venta
+       hasta que se corrija el precio.
+    2. costo_sospechoso — el costo histórico de esta línea difiere >30% del
+       costo actual del producto. Antes de asumir que fue un descuento,
+       vale la pena verificar si el costo se cargó mal en esa compra.
+    3. descuento_puntual — el precio de lista está bien y el costo no luce
+       raro, así que la venta bajo costo fue una rebaja puntual en el POS.
+    """
+    if precio_lista_actual <= costo_actual:
+        return "precio_lista_malo"
+    if costo_actual > 0 and abs(unit_cost - costo_actual) / costo_actual > 0.30:
+        return "costo_sospechoso"
+    return "descuento_puntual"
+
+
+@router.get(
+    "/below-cost",
+    response_model=BelowCostOut,
+    dependencies=[Depends(require_permission("analytics:read"))],
+)
+async def below_cost(
+    db: DBSession,
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+) -> BelowCostOut:
+    since, until = resolve_window(None, start_date, end_date, default_days=30)
+
+    rows = (
+        await db.execute(
+            select(
+                OrderItem.id,
+                Order.order_number,
+                Order.occurred_at,
+                OrderItem.product_id,
+                OrderItem.sku_snapshot,
+                OrderItem.name_snapshot,
+                OrderItem.quantity,
+                OrderItem.unit_cost,
+                OrderItem.unit_price,
+                Product.price.label("precio_lista_actual"),
+                Product.cost.label("costo_actual"),
+            )
+            .join(Order, Order.id == OrderItem.order_id)
+            .outerjoin(Product, Product.id == OrderItem.product_id)
+            .where(Order.occurred_at >= since)
+            .where(Order.occurred_at < until)
+            .where(Order.status.notin_(["cancelled", "refunded"]))
+            .where(OrderItem.unit_price < OrderItem.unit_cost)
+            .order_by(Order.occurred_at.desc())
+        )
+    ).all()
+
+    lines: list[BelowCostLine] = []
+    total_loss = 0.0
+    for r in rows:
+        unit_cost = float(r.unit_cost)
+        unit_price = float(r.unit_price)
+        # Si el producto fue borrado, no hay precio/costo actual con qué
+        # comparar — se usa el histórico de la línea como mejor estimado.
+        costo_actual = float(r.costo_actual) if r.costo_actual is not None else unit_cost
+        precio_lista_actual = (
+            float(r.precio_lista_actual) if r.precio_lista_actual is not None else unit_price
+        )
+        perdida = round((unit_cost - unit_price) * r.quantity, 2)
+        total_loss += perdida
+        lines.append(
+            BelowCostLine(
+                order_item_id=str(r.id),
+                order_number=r.order_number,
+                fecha=to_bogota_date(r.occurred_at).isoformat(),
+                product_id=str(r.product_id) if r.product_id else None,
+                sku=r.sku_snapshot,
+                nombre=r.name_snapshot,
+                cantidad=int(r.quantity),
+                unit_cost=unit_cost,
+                unit_price=unit_price,
+                precio_lista_actual=precio_lista_actual,
+                costo_actual=costo_actual,
+                perdida=perdida,
+                causa=_clasificar_causa(unit_cost, unit_price, costo_actual, precio_lista_actual),
+            )
+        )
+
+    return BelowCostOut(
+        period_start=to_bogota_date(since).isoformat(),
+        period_end=to_bogota_date(until - timedelta(seconds=1)).isoformat(),
+        total_lines=len(lines),
+        total_loss=round(total_loss, 2),
+        lines=lines,
+    )
+
+
 class StockAlertOut(BaseModel):
     product_id: str
     sku: str
