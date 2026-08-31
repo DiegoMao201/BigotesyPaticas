@@ -589,6 +589,7 @@ export interface CashClosing {
   order_count: number;
   ventas_efectivo: number;
   creditos_efectivo: number;
+  compras_efectivo: number;
   saldo_final_efectivo: number;
   consignacion_sugerida: number;
   saldo_contado: number | null;
@@ -926,6 +927,16 @@ export interface PurchaseItemOut {
   total_cost: number;
 }
 
+export type PurchasePaymentMethod = 'efectivo' | 'transferencia' | 'credito_15' | 'credito_30';
+export type PurchasePaymentStatus = 'pagada' | 'pendiente';
+
+export const PURCHASE_PAYMENT_METHOD_LABELS: Record<PurchasePaymentMethod, string> = {
+  efectivo: 'Efectivo',
+  transferencia: 'Transferencia',
+  credito_15: 'Crédito 15 días',
+  credito_30: 'Crédito 30 días',
+};
+
 export interface PurchaseOut {
   id: string;
   folio: string | null;
@@ -935,8 +946,11 @@ export interface PurchaseOut {
   subtotal: number;
   tax_amount: number;
   total: number;
-  payment_method: string;
+  payment_method: PurchasePaymentMethod;
   payment_reference: string | null;
+  payment_status: PurchasePaymentStatus;
+  due_date: string | null;
+  paid_at: string | null;
   notes: string | null;
   purchased_at: string;
   created_at: string;
@@ -950,7 +964,9 @@ export interface PurchaseSummary {
   status: string;
   total: number;
   items_count: number;
-  payment_method: string;
+  payment_method: PurchasePaymentMethod;
+  payment_status: PurchasePaymentStatus;
+  due_date: string | null;
   purchased_at: string;
   created_at: string;
 }
@@ -967,7 +983,7 @@ export interface PurchaseCreate {
   folio?: string;
   supplier_name: string;
   supplier_id?: string;
-  payment_method?: string;
+  payment_method?: PurchasePaymentMethod;
   payment_reference?: string;
   notes?: string;
   purchased_at?: string;
@@ -975,8 +991,27 @@ export interface PurchaseCreate {
   receive_now?: boolean;
 }
 
+export interface CarteraItem {
+  id: string;
+  folio: string | null;
+  supplier_name: string;
+  supplier_id: string | null;
+  total: number;
+  payment_method: PurchasePaymentMethod;
+  purchased_at: string;
+  due_date: string;
+  dias_para_vencer: number;
+}
+
+export interface CarteraResponse {
+  items: CarteraItem[];
+  total_pendiente: number;
+  total_vencido: number;
+  por_proveedor: { supplier_name: string; supplier_id: string | null; total: number; count: number }[];
+}
+
 export const purchases = {
-  list: (params: { q?: string; status?: string; page?: number; page_size?: number } = {}) => {
+  list: (params: { q?: string; status?: string; payment_status?: PurchasePaymentStatus; page?: number; page_size?: number } = {}) => {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => v && qs.set(k, String(v)));
     return api<PurchaseListResponse>(`/v1/purchases?${qs.toString()}`);
@@ -988,6 +1023,8 @@ export const purchases = {
     api<PurchaseOut>(`/v1/purchases/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   delete: (id: string) => api(`/v1/purchases/${id}`, { method: 'DELETE' }),
   receive: (id: string) => api<PurchaseOut>(`/v1/purchases/${id}/receive`, { method: 'POST' }),
+  markPaid: (id: string) => api<PurchaseOut>(`/v1/purchases/${id}/mark-paid`, { method: 'POST', body: JSON.stringify({}) }),
+  cartera: () => api<CarteraResponse>('/v1/purchases/cartera/pendiente'),
   stats: () => api<{ total_spend_month: number; total_count_month: number; top_suppliers: { supplier_name: string; total: number; count: number }[] }>('/v1/purchases/stats/summary'),
   parseXml: async (file: File): Promise<ParsedInvoice> => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('bp_admin_token') : null;

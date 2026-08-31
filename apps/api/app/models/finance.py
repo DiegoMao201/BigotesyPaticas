@@ -48,6 +48,11 @@ class CashClosing(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
     )
     # Total ventas snapshot
     snap_total_ventas: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    # Snapshot de compras a proveedor pagadas en efectivo ese día — ese
+    # dinero sale físicamente de caja y se resta del saldo esperado.
+    snap_compras_efectivo: Mapped[Decimal] = mapped_column(
+        Numeric(14, 2), nullable=False, default=0
+    )
 
     # Valores al cierre
     saldo_final_efectivo: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)

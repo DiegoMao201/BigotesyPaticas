@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Loader2, Send, Home, Search } from 'lucide-react';
+import { Loader2, Send, Home, Search, Camera, X } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const ALLOWED_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
 export function QuickPostForm() {
   const router = useRouter();
@@ -16,6 +18,30 @@ export function QuickPostForm() {
   const [message, setMessage] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => { if (photoPreview) URL.revokeObjectURL(photoPreview); };
+  }, [photoPreview]);
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!ALLOWED_PHOTO_TYPES.has(file.type)) return toast.error('La foto debe ser JPEG, PNG o WebP');
+    if (file.size > MAX_PHOTO_BYTES) return toast.error('La foto no debe superar 5 MB');
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhoto(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  }
+
+  function removePhoto() {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhoto(null);
+    setPhotoPreview(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,16 +52,17 @@ export function QuickPostForm() {
 
     setSubmitting(true);
     try {
+      const form = new FormData();
+      form.set('post_type', postType);
+      form.set('reporter_name', name.trim());
+      form.set('contact_phone', phone.trim());
+      form.set('message', message.trim());
+      form.set('accepted_privacy', String(accepted));
+      if (photo) form.set('photo', photo);
+
       const res = await fetch(`${API_BASE}/v1/public/community/adoption/quick-post`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          post_type: postType,
-          reporter_name: name.trim(),
-          contact_phone: phone.trim(),
-          message: message.trim(),
-          accepted_privacy: accepted,
-        }),
+        body: form,
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ detail: 'Error al publicar' }));
@@ -46,6 +73,7 @@ export function QuickPostForm() {
       setPhone('');
       setMessage('');
       setAccepted(false);
+      removePhoto();
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo publicar');
@@ -116,6 +144,36 @@ export function QuickPostForm() {
           onChange={(e) => setMessage(e.target.value)}
           maxLength={1000}
         />
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handlePhotoChange}
+          className="sr-only"
+        />
+        {photoPreview ? (
+          <div className="relative w-28 h-28 rounded-xl overflow-hidden border-2 border-[#187f77]/20">
+            {/* eslint-disable-next-line @next/next/no-img-element -- vista previa local (object URL), nunca pasa por next/image */}
+            <img src={photoPreview} alt="Vista previa" className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={removePhoto}
+              aria-label="Quitar foto"
+              className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold border-2 border-dashed border-[#187f77]/30 text-[#187f77] hover:bg-[#E6F5F1] transition-colors"
+          >
+            <Camera className="h-4 w-4" /> Agregar foto del animalito (opcional)
+          </button>
+        )}
 
         <label className="flex items-start gap-2.5 text-xs text-gray-500 leading-relaxed">
           <input

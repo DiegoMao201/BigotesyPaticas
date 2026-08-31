@@ -62,6 +62,7 @@ class CashClosingOut(BaseModel):
     order_count: int
     ventas_efectivo: float
     creditos_efectivo: float
+    compras_efectivo: float
     saldo_final_efectivo: float
     consignacion_sugerida: float
     saldo_contado: float | None
@@ -268,6 +269,7 @@ _EMPTY_LIVE: dict[str, Any] = {
     "creditos_por_metodo": {},
     "total_ventas": 0.0,
     "order_count": 0,
+    "compras_efectivo": 0.0,
 }
 
 # Fondo fijo de caja por defecto para días nuevos sin cierre previo del que
@@ -365,6 +367,25 @@ async def _compute_live_totals_bulk(
         )
     ).all()
 
+    # Compras a proveedor pagadas en EFECTIVO: ese dinero sale físicamente de
+    # caja el mismo día de la compra, hay que restarlo del cuadre.
+    # Transferencia es informativo (ya salió de banco) y crédito no toca caja
+    # hasta que se pague — por eso solo se suma payment_method='efectivo'.
+    compras_rows = (
+        await db.execute(
+            text("""
+            SELECT DATE(purchased_at AT TIME ZONE 'America/Bogota') AS fecha,
+                   COALESCE(SUM(total), 0) AS total
+            FROM purchasing.purchases
+            WHERE DATE(purchased_at AT TIME ZONE 'America/Bogota') BETWEEN :ini AND :fin
+              AND payment_method = 'efectivo'
+              AND status != 'cancelled'
+            GROUP BY fecha
+        """),
+            {"ini": fecha_ini, "fin": fecha_fin},
+        )
+    ).all()
+
     result: dict[date, dict[str, Any]] = {}
 
     def _bucket(fecha: date) -> dict[str, Any]:
@@ -375,6 +396,7 @@ async def _compute_live_totals_bulk(
                 "creditos_por_metodo": {},
                 "total_ventas": 0.0,
                 "order_count": 0,
+                "compras_efectivo": 0.0,
             },
         )
 
@@ -384,6 +406,8 @@ async def _compute_live_totals_bulk(
         _bucket(r.fecha)["creditos_por_metodo"][r.method] = float(r.total)
     for r in order_count_rows:
         _bucket(r.fecha)["order_count"] = int(r.cnt or 0)
+    for r in compras_rows:
+        _bucket(r.fecha)["compras_efectivo"] = float(r.total)
     for bucket in result.values():
         bucket["total_ventas"] = sum(bucket["ventas_por_metodo"].values())
 
@@ -401,6 +425,8 @@ def _check_alteration(
     snap_creditos: dict[str, float],
     live_ventas: dict[str, float],
     live_creditos: dict[str, float],
+    snap_compras_efectivo: float = 0.0,
+    live_compras_efectivo: float = 0.0,
 ) -> tuple[bool, dict[str, float]]:
     """Compara el snapshot guardado al cerrar contra un recálculo en vivo de
     esa misma fecha. Si alguien edita una factura de un día ya cerrado (ej.
@@ -409,6 +435,8 @@ def _check_alteration(
 
     Compara el NETO (ventas - créditos) por método, no solo ventas, porque un
     cambio en devoluciones desalinea el cuadre igual que un cambio en ventas.
+    También compara las compras en efectivo, por si una compra de ese día se
+    edita/cancela después de cerrado (ej. cambia de efectivo a transferencia).
     """
     metodos = set(snap_ventas) | set(live_ventas) | set(snap_creditos) | set(live_creditos)
     desviacion: dict[str, float] = {}
@@ -418,6 +446,9 @@ def _check_alteration(
         delta = round(live_net - snap_net, 2)
         if abs(delta) >= 0.01:
             desviacion[m] = delta
+    compras_delta = round(live_compras_efectivo - snap_compras_efectivo, 2)
+    if abs(compras_delta) >= 0.01:
+        desviacion["Compras (efectivo)"] = compras_delta
     return (bool(desviacion), desviacion)
 
 
@@ -433,12 +464,15 @@ async def _snapshot_with_alteration(
         "creditos_por_metodo": closing.snap_creditos_por_metodo or {},
         "total_ventas": float(closing.snap_total_ventas or 0),
         "order_count": 0,
+        "compras_efectivo": float(closing.snap_compras_efectivo or 0),
     }
     alterado, desviacion = _check_alteration(
         snapshot["ventas_por_metodo"],
         snapshot["creditos_por_metodo"],
         live_now["ventas_por_metodo"],
         live_now["creditos_por_metodo"],
+        snapshot["compras_efectivo"],
+        live_now["compras_efectivo"],
     )
     return snapshot, alterado, desviacion
 
@@ -488,14 +522,16 @@ def _build_closing_out(
     creditos_pm = live["creditos_por_metodo"]
     ventas_efectivo = ventas_pm.get("Efectivo", 0.0)
     creditos_efectivo = creditos_pm.get("Efectivo", 0.0)
+    compras_efectivo = live.get("compras_efectivo", 0.0)
 
     # saldo_esperado = saldo_inicial + ventas_ef - devoluciones_ef - gastos_ef
-    #                  - consignaciones
+    #                  - compras_ef (a proveedor, en efectivo) - consignaciones
     bruto_antes_consignacion = (
         float(closing.saldo_inicial)
         + ventas_efectivo
         - creditos_efectivo
         - float(closing.gastos_efectivo)
+        - compras_efectivo
     )
     saldo_esperado = bruto_antes_consignacion - float(closing.consignaciones)
     # Lo que sobraría de caja si se consignara TODO el excedente sobre el
@@ -516,6 +552,7 @@ def _build_closing_out(
         order_count=live["order_count"],
         ventas_efectivo=ventas_efectivo,
         creditos_efectivo=creditos_efectivo,
+        compras_efectivo=compras_efectivo,
         saldo_final_efectivo=saldo_esperado,
         consignacion_sugerida=round(consignacion_sugerida, 2),
         saldo_contado=float(closing.saldo_contado) if closing.saldo_contado is not None else None,
@@ -759,7 +796,7 @@ async def close_cash_closing(
     snapshot de ventas.
 
     saldo_esperado = saldo_inicial + ventas_ef - devoluciones_ef - gastos_ef
-                     - consignaciones
+                     - compras_ef (a proveedor, en efectivo) - consignaciones
     diferencia     = saldo_contado - saldo_esperado
     """
     result = await db.execute(select(CashClosingModel).where(CashClosingModel.id == closing_id))
@@ -777,17 +814,20 @@ async def close_cash_closing(
 
     ventas_efectivo = live["ventas_por_metodo"].get("Efectivo", 0.0)
     creditos_efectivo = live["creditos_por_metodo"].get("Efectivo", 0.0)
+    compras_efectivo = live.get("compras_efectivo", 0.0)
     bruto_antes_consignacion = (
         float(closing.saldo_inicial)
         + ventas_efectivo
         - creditos_efectivo
         - float(closing.gastos_efectivo)
+        - compras_efectivo
     )
     saldo_esperado = bruto_antes_consignacion - float(closing.consignaciones)
 
     closing.snap_ventas_por_metodo = live["ventas_por_metodo"]
     closing.snap_creditos_por_metodo = live["creditos_por_metodo"]
     closing.snap_total_ventas = Decimal(str(live["total_ventas"]))
+    closing.snap_compras_efectivo = Decimal(str(compras_efectivo))
     closing.saldo_final_efectivo = Decimal(str(saldo_esperado))
     closing.saldo_contado = Decimal(str(payload.saldo_contado))
     closing.diferencia = Decimal(str(payload.saldo_contado)) - Decimal(str(saldo_esperado))
