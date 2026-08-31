@@ -4,13 +4,13 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Upload, FileText, Plus, Trash2, Search, Save, Eye, Truck, Sparkles,
-  AlertTriangle, CheckCircle2, Package, X, FileUp, Edit2, RefreshCw,
+  AlertTriangle, CheckCircle2, Package, X, FileUp, Edit2, RefreshCw, Wallet, CalendarClock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   purchases, suppliers as suppliersApi, products as productsApi, adminEtl,
   type ParsedInvoice, type ParsedItem, type Supplier, type SupplierIn,
-  type PurchaseSummary,
+  type PurchaseSummary, type PurchasePaymentMethod, PURCHASE_PAYMENT_METHOD_LABELS,
 } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
@@ -20,8 +20,34 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { Pagination } from '@/components/ui/pagination';
 
-type Tab = 'historial' | 'nueva-xml' | 'nueva-manual';
+type Tab = 'historial' | 'cartera' | 'nueva-xml' | 'nueva-manual';
 type Step = 1 | 2 | 3;
+
+function PaymentMethodSelect({
+  value, onChange,
+}: { value: PurchasePaymentMethod; onChange: (v: PurchasePaymentMethod) => void }) {
+  return (
+    <select
+      className="w-full border rounded px-3 py-2"
+      value={value}
+      onChange={(e) => onChange(e.target.value as PurchasePaymentMethod)}
+    >
+      {(Object.keys(PURCHASE_PAYMENT_METHOD_LABELS) as PurchasePaymentMethod[]).map((m) => (
+        <option key={m} value={m}>{PURCHASE_PAYMENT_METHOD_LABELS[m]}</option>
+      ))}
+    </select>
+  );
+}
+
+function PaymentStatusBadge({ status, dueDate }: { status: string; dueDate: string | null }) {
+  if (status !== 'pendiente') return <Badge className="bg-green-100 text-green-700">Pagada</Badge>;
+  const vencida = dueDate ? new Date(dueDate + 'T23:59:59') < new Date() : false;
+  return (
+    <Badge className={vencida ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}>
+      {vencida ? 'Vencida' : 'Pendiente'}{dueDate ? ` · ${new Date(dueDate + 'T00:00:00').toLocaleDateString('es-CO')}` : ''}
+    </Badge>
+  );
+}
 
 interface EditableItem extends ParsedItem {
   _id: string;
@@ -68,6 +94,7 @@ export default function PurchasesPage() {
       <div className="flex gap-2 border-b">
         {[
           { id: 'historial', label: 'Historial', icon: FileText },
+          { id: 'cartera', label: 'Cartera con proveedores', icon: Wallet },
           { id: 'nueva-xml', label: 'Nueva con XML DIAN', icon: FileUp },
           { id: 'nueva-manual', label: 'Nueva manual', icon: Edit2 },
         ].map((t) => (
@@ -84,6 +111,7 @@ export default function PurchasesPage() {
       </div>
 
       {tab === 'historial' && <HistorialTab />}
+      {tab === 'cartera' && <CarteraTab />}
       {tab === 'nueva-xml' && <NuevaXmlTab onDone={() => setTab('historial')} />}
       {tab === 'nueva-manual' && <NuevaManualTab onDone={() => setTab('historial')} />}
     </div>
@@ -96,12 +124,23 @@ function HistorialTab() {
   const [page, setPage] = useState(1);
   const [viewing, setViewing] = useState<string | null>(null);
 
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['purchases', search, page],
     queryFn: () => purchases.list({ q: search || undefined, page, page_size: 20 }),
   });
 
   const stats = useQuery({ queryKey: ['purchases-stats'], queryFn: () => purchases.stats() });
+
+  const markPaidMut = useMutation({
+    mutationFn: (id: string) => purchases.markPaid(id),
+    onSuccess: () => {
+      toast.success('Compra marcada como pagada');
+      qc.invalidateQueries({ queryKey: ['purchases'] });
+      qc.invalidateQueries({ queryKey: ['purchases-cartera'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   return (
     <div className="space-y-4">
@@ -148,6 +187,7 @@ function HistorialTab() {
                   <th className="text-right p-3">Items</th>
                   <th className="text-right p-3">Total</th>
                   <th className="text-center p-3">Estado</th>
+                  <th className="text-center p-3">Pago</th>
                   <th className="text-center p-3"></th>
                 </tr>
               </thead>
@@ -165,6 +205,23 @@ function HistorialTab() {
                         p.status === 'draft' ? 'bg-yellow-100 text-yellow-700' :
                         'bg-gray-100 text-gray-700'
                       }>{p.status}</Badge>
+                    </td>
+                    <td className="p-3 text-center">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-xs text-gray-500">{PURCHASE_PAYMENT_METHOD_LABELS[p.payment_method]}</span>
+                        <PaymentStatusBadge status={p.payment_status} dueDate={p.due_date} />
+                        {p.payment_status === 'pendiente' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-green-700 border-green-300 hover:bg-green-50 h-6 px-2 text-xs"
+                            disabled={markPaidMut.isPending}
+                            onClick={() => markPaidMut.mutate(p.id)}
+                          >
+                            Marcar pagada
+                          </Button>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3 text-center">
                       <Button size="sm" variant="outline" onClick={() => setViewing(p.id)}>
@@ -189,7 +246,18 @@ function HistorialTab() {
 }
 
 function PurchaseDetailDialog({ id, onClose }: { id: string; onClose: () => void }) {
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['purchase', id], queryFn: () => purchases.get(id) });
+  const markPaidMut = useMutation({
+    mutationFn: () => purchases.markPaid(id),
+    onSuccess: () => {
+      toast.success('Compra marcada como pagada');
+      qc.invalidateQueries({ queryKey: ['purchase', id] });
+      qc.invalidateQueries({ queryKey: ['purchases'] });
+      qc.invalidateQueries({ queryKey: ['purchases-cartera'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   return (
     <Dialog open onClose={onClose} title={data ? `Compra ${data.folio || data.id.slice(0, 8)}` : 'Compra'} size="lg">
       <DialogBody>
@@ -201,7 +269,19 @@ function PurchaseDetailDialog({ id, onClose }: { id: string; onClose: () => void
               <div><span className="text-gray-500">Proveedor:</span> <strong>{data.supplier_name}</strong></div>
               <div><span className="text-gray-500">Fecha:</span> {new Date(data.purchased_at).toLocaleDateString('es-CO')}</div>
               <div><span className="text-gray-500">Estado:</span> {data.status}</div>
-              <div><span className="text-gray-500">Pago:</span> {data.payment_method}</div>
+              <div><span className="text-gray-500">Pago:</span> {PURCHASE_PAYMENT_METHOD_LABELS[data.payment_method]}</div>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500">Cartera:</span>
+                <PaymentStatusBadge status={data.payment_status} dueDate={data.due_date} />
+                {data.payment_status === 'pendiente' && (
+                  <Button size="sm" variant="outline" className="text-green-700 border-green-300 hover:bg-green-50" disabled={markPaidMut.isPending} onClick={() => markPaidMut.mutate()}>
+                    Marcar pagada
+                  </Button>
+                )}
+              </div>
+              {data.paid_at && (
+                <div><span className="text-gray-500">Pagada el:</span> {new Date(data.paid_at).toLocaleDateString('es-CO')}</div>
+              )}
             </div>
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
@@ -239,6 +319,109 @@ function PurchaseDetailDialog({ id, onClose }: { id: string; onClose: () => void
   );
 }
 
+// ─── CARTERA CON PROVEEDORES ──────────────────────────────────────
+function CarteraTab() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ['purchases-cartera'], queryFn: () => purchases.cartera() });
+
+  const markPaidMut = useMutation({
+    mutationFn: (id: string) => purchases.markPaid(id),
+    onSuccess: () => {
+      toast.success('Compra marcada como pagada');
+      qc.invalidateQueries({ queryKey: ['purchases-cartera'] });
+      qc.invalidateQueries({ queryKey: ['purchases'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (isLoading) return <div className="p-12 text-center text-gray-500">Cargando cartera...</div>;
+  if (!data) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="p-4">
+          <p className="text-sm text-gray-500 flex items-center gap-1"><Wallet className="h-4 w-4" />Total por pagar</p>
+          <p className="text-2xl font-bold">{formatCurrency(data.total_pendiente)}</p>
+        </Card>
+        <Card className="p-4 border-red-200">
+          <p className="text-sm text-gray-500 flex items-center gap-1"><CalendarClock className="h-4 w-4 text-red-500" />Vencido</p>
+          <p className="text-2xl font-bold text-red-600">{formatCurrency(data.total_vencido)}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm text-gray-500">Compras a crédito pendientes</p>
+          <p className="text-2xl font-bold">{data.items.length}</p>
+        </Card>
+      </div>
+
+      {data.por_proveedor.length > 0 && (
+        <Card className="p-4">
+          <h3 className="font-bold mb-3">Por proveedor</h3>
+          <div className="flex flex-wrap gap-2">
+            {data.por_proveedor.map((p) => (
+              <Badge key={p.supplier_name} className="bg-gray-100 text-gray-800 py-1.5 px-3">
+                {p.supplier_name}: {formatCurrency(p.total)} ({p.count})
+              </Badge>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <Card>
+        {data.items.length === 0 ? (
+          <div className="p-12 text-center text-gray-500">No hay compras a crédito pendientes de pago 🎉</div>
+        ) : (
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left p-3">Proveedor</th>
+                  <th className="text-left p-3">Folio</th>
+                  <th className="text-left p-3">Comprada</th>
+                  <th className="text-left p-3">Vence</th>
+                  <th className="text-right p-3">Total</th>
+                  <th className="text-center p-3">Plazo</th>
+                  <th className="text-center p-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.items.map((it) => (
+                  <tr key={it.id} className={`border-t hover:bg-gray-50 ${it.dias_para_vencer < 0 ? 'bg-red-50' : ''}`}>
+                    <td className="p-3 font-medium">{it.supplier_name}</td>
+                    <td className="p-3 font-mono text-xs">{it.folio || '—'}</td>
+                    <td className="p-3">{new Date(it.purchased_at).toLocaleDateString('es-CO')}</td>
+                    <td className="p-3">
+                      {new Date(it.due_date + 'T00:00:00').toLocaleDateString('es-CO')}{' '}
+                      <span className={it.dias_para_vencer < 0 ? 'text-red-600 font-bold' : 'text-gray-500'}>
+                        ({it.dias_para_vencer < 0 ? `vencida hace ${Math.abs(it.dias_para_vencer)}d` : `en ${it.dias_para_vencer}d`})
+                      </span>
+                    </td>
+                    <td className="p-3 text-right font-bold">{formatCurrency(it.total)}</td>
+                    <td className="p-3 text-center">
+                      <Badge className="bg-blue-100 text-blue-700">{PURCHASE_PAYMENT_METHOD_LABELS[it.payment_method]}</Badge>
+                    </td>
+                    <td className="p-3 text-center">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-green-700 border-green-300 hover:bg-green-50"
+                        disabled={markPaidMut.isPending}
+                        onClick={() => markPaidMut.mutate(it.id)}
+                      >
+                        Marcar pagada
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 // ─── NUEVA CON XML ────────────────────────────────────────────────
 function NuevaXmlTab({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
@@ -251,6 +434,7 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
   const [newSupplier, setNewSupplier] = useState<SupplierIn>({ nit: '', name: '' });
   const [folio, setFolio] = useState('');
   const [transportCost, setTransportCost] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState<PurchasePaymentMethod>('efectivo');
   const parseMut = useMutation({
     mutationFn: (file: File) => purchases.parseXml(file),
     onSuccess: (data) => {
@@ -307,6 +491,7 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
         folio: folio || undefined,
         supplier_id: finalSupplierId || undefined,
         supplier_name: effectiveName,
+        payment_method: paymentMethod,
         items: matchedItems
           .map((it) => ({
             product_id: it.suggested_product_id!,
@@ -415,7 +600,7 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
               </div>
             ) : null}
 
-            <div className="grid grid-cols-3 gap-3 mt-3">
+            <div className="grid grid-cols-4 gap-3 mt-3">
               <div>
                 <label className="text-sm">Folio factura</label>
                 <Input value={folio} onChange={(e) => setFolio(e.target.value)} />
@@ -423,6 +608,10 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
               <div>
                 <label className="text-sm">Costo de transporte</label>
                 <Input type="number" value={transportCost} onChange={(e) => setTransportCost(Number(e.target.value))} />
+              </div>
+              <div>
+                <label className="text-sm">Medio de pago</label>
+                <PaymentMethodSelect value={paymentMethod} onChange={setPaymentMethod} />
               </div>
               <div className="text-sm">
                 <p className="text-gray-500">Subtotal: {formatCurrency(totals.subtotal)}</p>
@@ -619,6 +808,7 @@ function NuevaManualTab({ onDone }: { onDone: () => void }) {
   const [folio, setFolio] = useState('');
   const [items, setItems] = useState<EditableItem[]>([]);
   const [picking, setPicking] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PurchasePaymentMethod>('efectivo');
 
   const supList = useQuery({ queryKey: ['suppliers-all'], queryFn: () => suppliersApi.list({ is_active: true, page_size: 200 }) });
 
@@ -627,6 +817,7 @@ function NuevaManualTab({ onDone }: { onDone: () => void }) {
       folio: folio || undefined,
       supplier_id: supplierId || undefined,
       supplier_name: supplierName,
+      payment_method: paymentMethod,
       items: items.map((it) => ({
         product_id: it.suggested_product_id!,
         product_name: it.suggested_product_name!,
@@ -649,7 +840,7 @@ function NuevaManualTab({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-4">
-      <Card className="p-4 grid grid-cols-3 gap-3">
+      <Card className="p-4 grid grid-cols-4 gap-3">
         <div>
           <label className="text-sm">Proveedor</label>
           <select
@@ -670,6 +861,10 @@ function NuevaManualTab({ onDone }: { onDone: () => void }) {
         <div>
           <label className="text-sm">Folio</label>
           <Input value={folio} onChange={(e) => setFolio(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-sm">Medio de pago</label>
+          <PaymentMethodSelect value={paymentMethod} onChange={setPaymentMethod} />
         </div>
         <div className="flex items-end">
           <Button onClick={() => setPicking(true)} className="bg-orange-500 hover:bg-orange-600 w-full">

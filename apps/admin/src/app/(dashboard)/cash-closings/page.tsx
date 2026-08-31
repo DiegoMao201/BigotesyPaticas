@@ -179,7 +179,7 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
             </div>
           )}
           {/* KPI Efectivo row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="rounded-lg border bg-white p-4">
               <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Saldo inicial</div>
               <div className="text-xl font-bold">{formatCurrency(today.saldo_inicial)}</div>
@@ -199,10 +199,15 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
                 <button onClick={() => { setEditGastos(String(today.gastos_efectivo)); setShowEdit(true); }} className="text-xs text-brand-600 hover:underline mt-1">editar</button>
               )}
             </div>
+            <div className="rounded-lg border bg-white p-4">
+              <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1"><TrendingDown className="w-3 h-3 text-red-500" /> Compras a proveedor (efectivo)</div>
+              <div className="text-xl font-bold text-red-600">{formatCurrency(today.compras_efectivo)}</div>
+              <div className="text-xs text-muted-foreground mt-1">Automático — desde el módulo de Compras</div>
+            </div>
             <div className={`rounded-lg border p-4 ${today.saldo_final_efectivo >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
               <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Saldo esperado</div>
               <div className={`text-xl font-bold ${today.saldo_final_efectivo >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>{formatCurrency(today.saldo_final_efectivo)}</div>
-              <div className="text-xs text-muted-foreground mt-1">= inicial + ventas − devol − gastos − consignado</div>
+              <div className="text-xs text-muted-foreground mt-1">= inicial + ventas − devol − gastos − compras − consignado</div>
             </div>
           </div>
 
@@ -332,7 +337,7 @@ function DayPanel({ fecha, isToday }: { fecha: string; isToday: boolean }) {
           {(() => {
             const gastosNum = gastos ? Number(gastos) : today.gastos_efectivo;
             const consigNum = consignaciones ? Number(consignaciones) : 0;
-            const bruto = today.saldo_inicial + today.ventas_efectivo - today.creditos_efectivo - gastosNum;
+            const bruto = today.saldo_inicial + today.ventas_efectivo - today.creditos_efectivo - gastosNum - today.compras_efectivo;
             const saldoEsperado = bruto - consigNum;
             const quedaExacto = Math.abs(saldoEsperado - today.base_caja) < 1;
             return (
@@ -437,6 +442,7 @@ function HistoryRow({ c, onSelect }: { c: CashClosing; onSelect: (fecha: string)
         <td className="px-4 py-3 text-right text-emerald-600 font-medium">{formatCurrency(c.ventas_efectivo)}</td>
         <td className="px-4 py-3 text-right font-bold">{formatCurrency(c.total_ventas)}</td>
         <td className="px-4 py-3 text-right text-red-600">{formatCurrency(c.gastos_efectivo)}</td>
+        <td className="px-4 py-3 text-right text-red-600">{formatCurrency(c.compras_efectivo)}</td>
         <td className="px-4 py-3 text-right font-bold">{formatCurrency(c.saldo_final_efectivo)}</td>
         <td className={`px-4 py-3 text-right font-bold ${diff !== null ? (diff >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-muted-foreground'}`}>
           {diff !== null ? formatCurrency(diff) : '—'}
@@ -472,7 +478,7 @@ function HistoryRow({ c, onSelect }: { c: CashClosing; onSelect: (fecha: string)
       </tr>
       {expanded && (
         <tr className="border-t border-border bg-muted/20">
-          <td colSpan={8} className="px-6 py-4">
+          <td colSpan={9} className="px-6 py-4">
             <div className="flex flex-wrap gap-3">
               {totalMethods.map(([method, total]) => (
                 <div key={method} className={`rounded-lg border px-3 py-2 text-sm flex items-center gap-2 ${getMethodStyle(method)}`}>
@@ -597,6 +603,7 @@ export default function CashClosingsPage() {
                 <th className="text-right px-4 py-3">Efectivo ventas</th>
                 <th className="text-right px-4 py-3">Total ventas</th>
                 <th className="text-right px-4 py-3">Gastos</th>
+                <th className="text-right px-4 py-3">Compras</th>
                 <th className="text-right px-4 py-3">Saldo final</th>
                 <th className="text-right px-4 py-3">Diferencia</th>
                 <th className="text-left px-4 py-3">Estado</th>
@@ -604,9 +611,9 @@ export default function CashClosingsPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Cargando…</td></tr>
+                <tr><td colSpan={9} className="text-center py-8 text-muted-foreground">Cargando…</td></tr>
               ) : data?.items.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Sin cierres registrados</td></tr>
+                <tr><td colSpan={9} className="text-center py-8 text-muted-foreground">Sin cierres registrados</td></tr>
               ) : (
                 data?.items.map((c) => <HistoryRow key={c.id} c={c} onSelect={setSelectedDate} />)
               )}

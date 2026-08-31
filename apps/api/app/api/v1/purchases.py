@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
@@ -17,6 +17,22 @@ from app.models.inventory import Stock, StockLocation, StockMovement
 from app.models.purchasing import Purchase, PurchaseItem, SupplierSkuMap
 
 router = APIRouter(prefix="/purchases", tags=["purchases"])
+
+PaymentMethod = Literal["efectivo", "transferencia", "credito_15", "credito_30"]
+
+# Plazo en días implícito en cada método de crédito — usado para calcular
+# due_date automáticamente a partir de purchased_at.
+_CREDIT_DAYS: dict[str, int] = {"credito_15": 15, "credito_30": 30}
+
+
+def _resolve_payment_fields(payment_method: str, purchased_at: datetime) -> tuple[date | None, str]:
+    """Efectivo/transferencia se consideran pagados de inmediato (payment_status
+    'pagada', sin due_date). Crédito nace 'pendiente' con due_date = fecha de
+    compra + 15/30 días, hasta que se marque pagada explícitamente."""
+    dias = _CREDIT_DAYS.get(payment_method)
+    if dias is None:
+        return None, "pagada"
+    return purchased_at.date() + timedelta(days=dias), "pendiente"
 
 
 # ─── Schemas ──────────────────────────────────────────────────────
@@ -53,7 +69,7 @@ class PurchaseCreate(BaseModel):
     folio: str | None = None
     supplier_name: str
     supplier_id: uuid.UUID | None = None
-    payment_method: str = "efectivo"
+    payment_method: PaymentMethod = "efectivo"
     payment_reference: str | None = None
     notes: str | None = None
     purchased_at: datetime | None = None
@@ -65,11 +81,15 @@ class PurchaseCreate(BaseModel):
 class PurchaseUpdate(BaseModel):
     folio: str | None = None
     supplier_name: str | None = None
-    payment_method: str | None = None
+    payment_method: PaymentMethod | None = None
     payment_reference: str | None = None
     notes: str | None = None
     purchased_at: datetime | None = None
     status: Literal["draft", "confirmed", "received", "cancelled"] | None = None
+
+
+class PurchaseMarkPaid(BaseModel):
+    paid_at: datetime | None = None
 
 
 class PurchaseOut(BaseModel):
@@ -83,6 +103,9 @@ class PurchaseOut(BaseModel):
     total: float
     payment_method: str
     payment_reference: str | None
+    payment_status: str
+    due_date: date | None
+    paid_at: datetime | None
     notes: str | None
     purchased_at: datetime
     created_at: datetime
@@ -100,6 +123,8 @@ class PurchaseSummary(BaseModel):
     total: float
     items_count: int
     payment_method: str
+    payment_status: str
+    due_date: date | None
     purchased_at: datetime
     created_at: datetime
 
@@ -113,6 +138,28 @@ class PurchaseListResponse(BaseModel):
     page: int
     page_size: int
     total_spend: float
+
+
+class CarteraItem(BaseModel):
+    id: uuid.UUID
+    folio: str | None
+    supplier_name: str
+    supplier_id: uuid.UUID | None
+    total: float
+    payment_method: str
+    purchased_at: datetime
+    due_date: date
+    dias_para_vencer: int  # negativo = vencida hace N días
+
+    class Config:
+        from_attributes = True
+
+
+class CarteraResponse(BaseModel):
+    items: list[CarteraItem]
+    total_pendiente: float
+    total_vencido: float
+    por_proveedor: list[dict]
 
 
 # ─── Helpers ──────────────────────────────────────────────────────
@@ -263,6 +310,7 @@ async def list_purchases(
     db: DBSession,
     q: str | None = Query(None, description="Buscar por folio o proveedor"),
     status: str | None = Query(None),
+    payment_status: Literal["pagada", "pendiente"] | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
@@ -277,6 +325,8 @@ async def list_purchases(
         )
     if status:
         stmt = stmt.where(Purchase.status == status)
+    if payment_status:
+        stmt = stmt.where(Purchase.payment_status == payment_status)
 
     total_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await db.execute(total_stmt)).scalar_one()
@@ -299,6 +349,8 @@ async def list_purchases(
             total=float(r.total),
             items_count=len(r.items),
             payment_method=r.payment_method,
+            payment_status=r.payment_status,
+            due_date=r.due_date,
             purchased_at=r.purchased_at,
             created_at=r.created_at,
         )
@@ -336,6 +388,9 @@ async def get_purchase(purchase_id: uuid.UUID, db: DBSession):
         total=float(purchase.total),
         payment_method=purchase.payment_method,
         payment_reference=purchase.payment_reference,
+        payment_status=purchase.payment_status,
+        due_date=purchase.due_date,
+        paid_at=purchase.paid_at,
         notes=purchase.notes,
         purchased_at=purchase.purchased_at,
         created_at=purchase.created_at,
@@ -399,6 +454,7 @@ async def create_purchase(
 
     total = round(subtotal + tax_amount, 2)
     status = "received" if payload.receive_now else "confirmed"
+    due_date, payment_status = _resolve_payment_fields(payload.payment_method, purchased_at)
 
     purchase = Purchase(
         folio=payload.folio,
@@ -410,6 +466,8 @@ async def create_purchase(
         total=Decimal(str(total)),
         payment_method=payload.payment_method,
         payment_reference=payload.payment_reference,
+        payment_status=payment_status,
+        due_date=due_date,
         notes=payload.notes,
         purchased_at=purchased_at,
         created_by=user.email,
@@ -450,8 +508,6 @@ async def update_purchase(
         purchase.folio = payload.folio
     if payload.supplier_name is not None:
         purchase.supplier_name = payload.supplier_name
-    if payload.payment_method is not None:
-        purchase.payment_method = payload.payment_method
     if payload.payment_reference is not None:
         purchase.payment_reference = payload.payment_reference
     if payload.notes is not None:
@@ -461,9 +517,128 @@ async def update_purchase(
     if payload.status is not None:
         purchase.status = payload.status
 
+    # Si cambia el método de pago (o la fecha, en una compra a crédito ya
+    # vigente) hay que recalcular due_date/payment_status. Una compra que ya
+    # fue marcada 'pagada' manualmente no se reabre solo por editar la fecha.
+    if payload.payment_method is not None:
+        purchase.payment_method = payload.payment_method
+        due_date, payment_status = _resolve_payment_fields(
+            payload.payment_method, purchase.purchased_at
+        )
+        purchase.due_date = due_date
+        purchase.payment_status = payment_status
+        purchase.paid_at = None
+    elif payload.purchased_at is not None and purchase.payment_status == "pendiente":
+        due_date, _ = _resolve_payment_fields(purchase.payment_method, purchase.purchased_at)
+        purchase.due_date = due_date
+
     purchase.updated_by = user.email
     await db.commit()
     return await get_purchase(purchase_id, db)
+
+
+@router.post(
+    "/{purchase_id}/mark-paid",
+    response_model=PurchaseOut,
+    dependencies=[Depends(require_permission("purchasing:write"))],
+)
+async def mark_purchase_paid(
+    purchase_id: uuid.UUID,
+    payload: PurchaseMarkPaid,
+    db: DBSession,
+    user: CurrentUser,
+):
+    """Marca una compra a crédito como pagada — sale de la cartera pendiente.
+
+    No afecta el cierre de caja del día en que se paga: el efectivo que salió
+    de caja por compras solo se calcula sobre payment_method='efectivo' en la
+    fecha de la compra (purchased_at), nunca sobre créditos saldados después.
+    Si el pago del crédito también salió de caja física, regístralo aparte
+    como gasto en efectivo del cierre de ese día.
+    """
+    purchase = (
+        await db.execute(select(Purchase).where(Purchase.id == purchase_id))
+    ).scalar_one_or_none()
+    if purchase is None:
+        raise HTTPException(status_code=404, detail="Compra no encontrada")
+    if purchase.payment_status == "pagada":
+        raise HTTPException(status_code=409, detail="Esta compra ya está marcada como pagada")
+
+    purchase.payment_status = "pagada"
+    purchase.paid_at = payload.paid_at or datetime.now(UTC)
+    purchase.updated_by = user.email
+    await db.commit()
+    return await get_purchase(purchase_id, db)
+
+
+@router.get(
+    "/cartera/pendiente",
+    response_model=CarteraResponse,
+    dependencies=[Depends(require_permission("purchasing:read"))],
+)
+async def cartera_proveedores(db: DBSession):
+    """Cartera con proveedores: compras a crédito (15/30 días) aún sin pagar,
+    con días para vencer (negativo = vencida) y totales por proveedor, para
+    decidir qué pagar primero."""
+    today = datetime.now(UTC).date()
+    rows = (
+        (
+            await db.execute(
+                select(Purchase)
+                .where(Purchase.payment_status == "pendiente")
+                .order_by(Purchase.due_date.asc().nulls_last())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    items = [
+        CarteraItem(
+            id=r.id,
+            folio=r.folio,
+            supplier_name=r.supplier_name,
+            supplier_id=r.supplier_id,
+            total=float(r.total),
+            payment_method=r.payment_method,
+            purchased_at=r.purchased_at,
+            due_date=r.due_date,
+            dias_para_vencer=(r.due_date - today).days if r.due_date else 0,
+        )
+        for r in rows
+        if r.due_date is not None
+    ]
+
+    total_pendiente = round(sum(i.total for i in items), 2)
+    total_vencido = round(sum(i.total for i in items if i.dias_para_vencer < 0), 2)
+
+    por_proveedor_map: dict[str, dict] = {}
+    for i in items:
+        key = i.supplier_name
+        bucket = por_proveedor_map.setdefault(
+            key, {"supplier_name": key, "supplier_id": i.supplier_id, "total": 0.0, "count": 0}
+        )
+        bucket["total"] += i.total
+        bucket["count"] += 1
+    por_proveedor = sorted(
+        (
+            {
+                **b,
+                "total": round(b["total"], 2),
+                "supplier_id": str(b["supplier_id"]) if b["supplier_id"] else None,
+            }
+            for b in por_proveedor_map.values()
+        ),
+        key=lambda b: b["total"],
+        reverse=True,
+    )
+
+    return CarteraResponse(
+        items=items,
+        total_pendiente=total_pendiente,
+        total_vencido=total_vencido,
+        por_proveedor=por_proveedor,
+    )
 
 
 @router.delete(

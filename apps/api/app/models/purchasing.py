@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
+    CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -29,7 +31,12 @@ class Purchase(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
     """Orden / factura de compra a proveedor."""
 
     __tablename__ = "purchases"
-    __table_args__ = ({"schema": "purchasing"},)
+    __table_args__ = (
+        CheckConstraint(
+            "payment_status IN ('pagada','pendiente')", name="ck_purchases_payment_status"
+        ),
+        {"schema": "purchasing"},
+    )
 
     # Número de referencia / folio (ej: número de factura DIAN)
     folio: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
@@ -48,9 +55,17 @@ class Purchase(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
     tax_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     total: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
 
-    # Pago
+    # Pago: efectivo | transferencia | credito_15 | credito_30 (validado en el
+    # schema Pydantic de la API, ver PurchaseCreate).
     payment_method: Mapped[str] = mapped_column(String(40), nullable=False, default="efectivo")
     payment_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    # Cartera con proveedores: 'pagada' (efectivo/transferencia, o crédito ya
+    # saldado) | 'pendiente' (crédito por pagar). due_date se calcula al crear
+    # la compra a partir de purchased_at + 15/30 días según payment_method.
+    payment_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pagada")
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Notas / observaciones
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
