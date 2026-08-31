@@ -14,12 +14,12 @@ from __future__ import annotations
 import asyncio
 import uuid
 
-from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 
 from app.deps import DBSession
 from app.models.community import AdoptionListing, RescueAnimal, RescueEvent, SOSEvent
+from app.services.media_upload import ALLOWED_CONTENT_TYPES, MAX_UPLOAD_BYTES, upload_image_webp
 from app.services.seo_notifications import notify_indexnow
 
 router = APIRouter(prefix="/public/community", tags=["community-public"])
@@ -103,14 +103,6 @@ def _adoption_out(row: AdoptionListing) -> dict:
         "outcome_at": row.outcome_at.isoformat() if row.outcome_at else None,
         "created_at": row.created_at.isoformat(),
     }
-
-
-class QuickAdoptionPostIn(BaseModel):
-    post_type: str
-    reporter_name: str = Field(min_length=2, max_length=150)
-    contact_phone: str = Field(min_length=7, max_length=40)
-    message: str = Field(min_length=5, max_length=1000)
-    accepted_privacy: bool
 
 
 # ── mascotas perdidas ─────────────────────────────────────────────────
@@ -229,19 +221,40 @@ async def public_get_adoption(listing_id: uuid.UUID, db: DBSession) -> dict:
 
 
 @router.post("/adoption/quick-post", status_code=status.HTTP_201_CREATED)
-async def public_quick_adoption_post(payload: QuickAdoptionPostIn, db: DBSession) -> dict:
+async def public_quick_adoption_post(
+    db: DBSession,
+    post_type: str = Form(...),
+    reporter_name: str = Form(..., min_length=2, max_length=150),
+    contact_phone: str = Form(..., min_length=7, max_length=40),
+    message: str = Form(..., min_length=5, max_length=1000),
+    accepted_privacy: bool = Form(...),
+    photo: UploadFile | None = File(None),
+) -> dict:
     """Foro rápido del store: cualquiera publica con solo nombre + teléfono,
     sin necesidad de cuenta en el portal. Se muestra de inmediato (sin
-    revisión previa) -- el admin puede borrarla después si hace falta."""
-    if payload.post_type not in {"offer", "want"}:
+    revisión previa) -- el admin puede borrarla después si hace falta.
+
+    Acepta opcionalmente UNA foto (multipart/form-data) -- mismo mecanismo de
+    subida que el flujo autenticado del portal (upload_image_webp), pero sin
+    exigir cuenta ni verificar dueño, dado que el listing se crea aquí mismo.
+    """
+    if post_type not in {"offer", "want"}:
         raise HTTPException(status_code=422, detail="post_type debe ser 'offer' o 'want'")
-    if not payload.accepted_privacy:
+    if not accepted_privacy:
         raise HTTPException(
             status_code=422,
             detail="Debes aceptar que tu nombre y teléfono sean visibles para publicar",
         )
 
-    phone = payload.contact_phone.strip()
+    photo_bytes: bytes | None = None
+    if photo is not None:
+        if photo.content_type not in ALLOWED_CONTENT_TYPES:
+            raise HTTPException(status_code=422, detail="La foto debe ser JPEG, PNG o WebP")
+        photo_bytes = await photo.read()
+        if len(photo_bytes) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="La foto no debe superar 5 MB")
+
+    phone = contact_phone.strip()
     from datetime import UTC, datetime, timedelta
 
     recent_count = (
@@ -257,18 +270,26 @@ async def public_quick_adoption_post(payload: QuickAdoptionPostIn, db: DBSession
             status_code=429, detail="Ya publicaste varias veces hoy, intenta más tarde"
         )
 
-    message = payload.message.strip()
+    message_clean = message.strip()
     listing = AdoptionListing(
         reporter_customer_id=None,
-        reporter_name=payload.reporter_name.strip(),
-        post_type=payload.post_type,
-        title=message[:80],
-        description=message,
+        reporter_name=reporter_name.strip(),
+        post_type=post_type,
+        title=message_clean[:80],
+        description=message_clean,
         contact_phone=phone,
         photos=[],
         status="open",
     )
     db.add(listing)
+    await db.flush()  # necesitamos listing.id para el key_prefix de la foto
+
+    if photo_bytes is not None:
+        uploaded = await asyncio.to_thread(
+            upload_image_webp, photo_bytes, key_prefix=f"bigotesypaticas/adoption/{listing.id}"
+        )
+        listing.photos = [uploaded["url"]]
+
     await db.commit()
     await db.refresh(listing)
 
