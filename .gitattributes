@@ -1,0 +1,10 @@
+# La tarjeta lleva las imágenes incrustadas en base64: son 3,9 MB de un solo
+# archivo que hacían que GitHub etiquetara TODO el repositorio como "HTML 52.9%"
+# cuando en realidad son 172 archivos TypeScript y 179 Python. Marcarlo como
+# generado lo saca del cálculo de lenguajes sin borrarlo.
+apps/store/public/tarjeta.html linguist-generated=true
+
+# Plantillas de impresión: son fuente, pero no representan el lenguaje del proyecto.
+apps/api/app/templates/*.html linguist-documentation=true
+apps/api/templates/*.html     linguist-documentation=true
+factura.html                  linguist-documentation=true
