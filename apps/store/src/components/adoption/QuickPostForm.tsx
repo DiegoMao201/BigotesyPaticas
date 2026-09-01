@@ -46,7 +46,10 @@ export function QuickPostForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || name.trim().length < 2) return toast.error('Escribe tu nombre');
-    if (!phone.trim() || phone.replace(/\D/g, '').length < 7) return toast.error('Escribe un teléfono válido');
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (!phone.trim() || phoneDigits.length < 10 || phoneDigits.length > 12) {
+      return toast.error('Escribe UN SOLO número de WhatsApp (10 dígitos, ej: 3001234567) — si tienes otro número, ponlo en el mensaje, no aquí');
+    }
     if (!message.trim() || message.trim().length < 5) return toast.error('Cuéntanos un poco más en el mensaje');
     if (!accepted) return toast.error('Debes aceptar que tu nombre y teléfono sean visibles para publicar');
 
@@ -55,7 +58,7 @@ export function QuickPostForm() {
       const form = new FormData();
       form.set('post_type', postType);
       form.set('reporter_name', name.trim());
-      form.set('contact_phone', phone.trim());
+      form.set('contact_phone', phoneDigits);
       form.set('message', message.trim());
       form.set('accepted_privacy', String(accepted));
       if (photo) form.set('photo', photo);

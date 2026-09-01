@@ -12,6 +12,7 @@ explícitamente para que la comunidad lo contacte.
 from __future__ import annotations
 
 import asyncio
+import re
 import uuid
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
@@ -254,7 +255,19 @@ async def public_quick_adoption_post(
         if len(photo_bytes) > MAX_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail="La foto no debe superar 5 MB")
 
-    phone = contact_phone.strip()
+    # Un reportante escribió "3132907597 o 3042325646" en el campo de
+    # teléfono (sin más validación que "al menos 7 dígitos") y el botón de
+    # WhatsApp de esa publicación quedó apuntando a los dígitos de AMBOS
+    # números concatenados -- un número inválido que da 404 en WhatsApp.
+    # Se guarda solo el teléfono en dígitos, y se exige que sea UNO solo
+    # (celular colombiano: 10 dígitos, o 12 con el 57 de país).
+    phone = re.sub(r"\D", "", contact_phone)
+    if not (10 <= len(phone) <= 12):
+        raise HTTPException(
+            status_code=422,
+            detail="El teléfono debe ser un solo número de WhatsApp válido (10 dígitos)",
+        )
+
     from datetime import UTC, datetime, timedelta
 
     recent_count = (

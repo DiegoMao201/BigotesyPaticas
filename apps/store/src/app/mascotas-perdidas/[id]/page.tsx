@@ -9,7 +9,11 @@ import { MapPin, Phone, Gift, ChevronLeft } from 'lucide-react';
 export const revalidate = 300;
 
 function waLink(phone: string, petName: string) {
-  const digits = phone.replace(/\D/g, '');
+  // Defensa ante datos viejos/mal ingresados (ej. dos números en un solo
+  // campo) que generarían un número inválido de más de 12 dígitos y un
+  // enlace de WhatsApp roto (404) -- se recorta a un celular colombiano
+  // válido en vez de concatenar dígitos de más.
+  const digits = phone.replace(/\D/g, '').slice(0, 12);
   const withCountry = digits.startsWith('57') ? digits : `57${digits}`;
   const text = encodeURIComponent(`Hola! Vi el reporte de ${petName} en bigotesypaticas.com y quiero ayudar.`);
   return `https://wa.me/${withCountry}?text=${text}`;
