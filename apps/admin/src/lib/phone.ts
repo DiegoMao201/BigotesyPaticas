@@ -21,24 +21,76 @@ export interface PhoneCountry {
   flag: string;
 }
 
-// Colombia primero (default). El resto son los países que el dueño del
-// negocio reportó que ya le escriben clientes reales, más algunos vecinos
-// frecuentes de Latinoamérica.
+// Colombia primero (default, es el negocio). El resto: toda Latinoamérica +
+// Europa + Norteamérica + los países de Asia/Oceanía/África más comunes en
+// clientes internacionales de e-commerce, ordenados alfabéticamente para
+// que sea fácil de encontrar uno en el <select>.
 export const PHONE_COUNTRIES: PhoneCountry[] = [
   { name: 'Colombia', dial: '57', flag: '🇨🇴' },
-  { name: 'España', dial: '34', flag: '🇪🇸' },
-  { name: 'Chile', dial: '56', flag: '🇨🇱' },
-  { name: 'Ecuador', dial: '593', flag: '🇪🇨' },
-  { name: 'Venezuela', dial: '58', flag: '🇻🇪' },
-  { name: 'Estados Unidos', dial: '1', flag: '🇺🇸' },
-  { name: 'México', dial: '52', flag: '🇲🇽' },
-  { name: 'Perú', dial: '51', flag: '🇵🇪' },
+
+  // Latinoamérica y el Caribe
   { name: 'Argentina', dial: '54', flag: '🇦🇷' },
-  { name: 'Panamá', dial: '507', flag: '🇵🇦' },
-  { name: 'Costa Rica', dial: '506', flag: '🇨🇷' },
-  { name: 'República Dominicana', dial: '1', flag: '🇩🇴' },
-  { name: 'Canadá', dial: '1', flag: '🇨🇦' },
+  { name: 'Bolivia', dial: '591', flag: '🇧🇴' },
   { name: 'Brasil', dial: '55', flag: '🇧🇷' },
+  { name: 'Chile', dial: '56', flag: '🇨🇱' },
+  { name: 'Costa Rica', dial: '506', flag: '🇨🇷' },
+  { name: 'Cuba', dial: '53', flag: '🇨🇺' },
+  { name: 'Ecuador', dial: '593', flag: '🇪🇨' },
+  { name: 'El Salvador', dial: '503', flag: '🇸🇻' },
+  { name: 'Guatemala', dial: '502', flag: '🇬🇹' },
+  { name: 'Honduras', dial: '504', flag: '🇭🇳' },
+  { name: 'México', dial: '52', flag: '🇲🇽' },
+  { name: 'Nicaragua', dial: '505', flag: '🇳🇮' },
+  { name: 'Panamá', dial: '507', flag: '🇵🇦' },
+  { name: 'Paraguay', dial: '595', flag: '🇵🇾' },
+  { name: 'Perú', dial: '51', flag: '🇵🇪' },
+  { name: 'Puerto Rico', dial: '1', flag: '🇵🇷' },
+  { name: 'República Dominicana', dial: '1', flag: '🇩🇴' },
+  { name: 'Uruguay', dial: '598', flag: '🇺🇾' },
+  { name: 'Venezuela', dial: '58', flag: '🇻🇪' },
+
+  // Norteamérica
+  { name: 'Canadá', dial: '1', flag: '🇨🇦' },
+  { name: 'Estados Unidos', dial: '1', flag: '🇺🇸' },
+
+  // Europa
+  { name: 'Alemania', dial: '49', flag: '🇩🇪' },
+  { name: 'Austria', dial: '43', flag: '🇦🇹' },
+  { name: 'Bélgica', dial: '32', flag: '🇧🇪' },
+  { name: 'Dinamarca', dial: '45', flag: '🇩🇰' },
+  { name: 'España', dial: '34', flag: '🇪🇸' },
+  { name: 'Finlandia', dial: '358', flag: '🇫🇮' },
+  { name: 'Francia', dial: '33', flag: '🇫🇷' },
+  { name: 'Grecia', dial: '30', flag: '🇬🇷' },
+  { name: 'Irlanda', dial: '353', flag: '🇮🇪' },
+  { name: 'Italia', dial: '39', flag: '🇮🇹' },
+  { name: 'Noruega', dial: '47', flag: '🇳🇴' },
+  { name: 'Países Bajos', dial: '31', flag: '🇳🇱' },
+  { name: 'Polonia', dial: '48', flag: '🇵🇱' },
+  { name: 'Portugal', dial: '351', flag: '🇵🇹' },
+  { name: 'Reino Unido', dial: '44', flag: '🇬🇧' },
+  { name: 'Rusia', dial: '7', flag: '🇷🇺' },
+  { name: 'Suecia', dial: '46', flag: '🇸🇪' },
+  { name: 'Suiza', dial: '41', flag: '🇨🇭' },
+
+  // Asia, Oceanía y otros
+  { name: 'Australia', dial: '61', flag: '🇦🇺' },
+  { name: 'China', dial: '86', flag: '🇨🇳' },
+  { name: 'Corea del Sur', dial: '82', flag: '🇰🇷' },
+  { name: 'Emiratos Árabes Unidos', dial: '971', flag: '🇦🇪' },
+  { name: 'Filipinas', dial: '63', flag: '🇵🇭' },
+  { name: 'India', dial: '91', flag: '🇮🇳' },
+  { name: 'Indonesia', dial: '62', flag: '🇮🇩' },
+  { name: 'Israel', dial: '972', flag: '🇮🇱' },
+  { name: 'Japón', dial: '81', flag: '🇯🇵' },
+  { name: 'Malasia', dial: '60', flag: '🇲🇾' },
+  { name: 'Marruecos', dial: '212', flag: '🇲🇦' },
+  { name: 'Nueva Zelanda', dial: '64', flag: '🇳🇿' },
+  { name: 'Singapur', dial: '65', flag: '🇸🇬' },
+  { name: 'Sudáfrica', dial: '27', flag: '🇿🇦' },
+  { name: 'Tailandia', dial: '66', flag: '🇹🇭' },
+  { name: 'Turquía', dial: '90', flag: '🇹🇷' },
+  { name: 'Vietnam', dial: '84', flag: '🇻🇳' },
 ];
 
 // Códigos únicos, del más largo al más corto, para no confundir "593" con
