@@ -132,8 +132,8 @@ export default async function AdopcionPage() {
             {successStories.map((l) => (
               <div key={l.id} className="rounded-3xl border-2 border-emerald-200 bg-emerald-50/40 overflow-hidden">
                 {l.photos[0] ? (
-                  <div className="relative w-full h-44">
-                    <Image src={l.photos[0]} alt={l.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
+                  <div className="relative w-full h-44 bg-[#F8F9FA]">
+                    <Image src={l.photos[0]} alt={l.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-contain" />
                   </div>
                 ) : (
                   <div className="w-full h-44 bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-5xl">
@@ -204,13 +204,13 @@ export default async function AdopcionPage() {
                 className="group block rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-shadow"
               >
                 {ev.cover_thumb_url ? (
-                  <div className="relative w-full h-32 overflow-hidden">
+                  <div className="relative w-full h-32 overflow-hidden bg-[#F8F9FA]">
                     <Image
                       src={ev.cover_thumb_url}
                       alt={ev.title}
                       fill
                       sizes="(max-width: 768px) 50vw, 25vw"
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="object-contain group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
                 ) : (
@@ -260,13 +260,13 @@ export default async function AdopcionPage() {
                 className="group block rounded-3xl border border-border bg-card overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
               >
                 {l.photos[0] ? (
-                  <div className="relative w-full h-48 overflow-hidden">
+                  <div className="relative w-full h-48 overflow-hidden bg-[#F8F9FA]">
                     <Image
                       src={l.photos[0]}
                       alt={l.title}
                       fill
                       sizes="(max-width: 768px) 50vw, 33vw"
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="object-contain group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
                 ) : (

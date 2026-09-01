@@ -56,8 +56,8 @@ export default async function AdoptionListingDetailPage({ params }: { params: { 
         {listing.photos.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
             {listing.photos.map((url, i) => (
-              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative aspect-square rounded-2xl overflow-hidden block">
-                <Image src={url} alt={listing.title} fill sizes="(max-width: 640px) 50vw, 33vw" className="object-cover" />
+              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative aspect-square rounded-2xl overflow-hidden block bg-[#F8F9FA]">
+                <Image src={url} alt={listing.title} fill sizes="(max-width: 640px) 50vw, 33vw" className="object-contain" />
               </a>
             ))}
           </div>
