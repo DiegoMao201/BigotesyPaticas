@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { X, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { type Customer } from '@/lib/api';
+import { buildWhatsAppUrl } from '@/lib/phone';
 
 const GOOGLE_REVIEW_URL = 'https://g.page/r/CfL67OgLB-10EBM/review';
 
@@ -31,12 +32,7 @@ export function InviteToPortalModal({ customer, open, onClose }: Props) {
   if (!open) return null;
 
   function openWhatsApp() {
-    const phone = customer.phone?.replace(/\D/g, '') ?? '';
-    const encoded = encodeURIComponent(message);
-    const url = phone
-      ? `https://wa.me/${phone.startsWith('57') ? phone : `57${phone}`}?text=${encoded}`
-      : `https://wa.me/?text=${encoded}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    window.open(buildWhatsAppUrl(customer.phone, message), '_blank', 'noopener,noreferrer');
   }
 
   return (

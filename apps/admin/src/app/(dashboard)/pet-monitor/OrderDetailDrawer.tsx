@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { adminPortal, ApiError, type PortalOrderDetail, type ActivityLogEntry, type PendingNotification, type Product } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { buildWhatsAppUrl } from '@/lib/phone';
 import { ProductPickerModal } from '@/components/ProductPickerModal';
 
 function stockShortageMessage(err: unknown): string | null {
@@ -203,14 +204,10 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
   const canEditItems = !['delivered', 'cancelled', 'returned'].includes(ws);
 
   const whatsappMsg = () => {
-    const phone = order.customer_phone?.replace(/\D/g, '') ?? '';
     const items = order.items.map((i) => `• ${i.name} x${i.quantity} — $${(i.subtotal || 0).toLocaleString('es-CO')}`).join('\n');
     const discount = order.discount_amount > 0 ? `\nDescuento: -$${order.discount_amount.toLocaleString('es-CO')}` : '';
     const msg = `Hola ${order.customer_name?.split(' ')[0] ?? ''}! Revisamos tu pedido 🐾\n\n${items}${discount}\n\nEnvío: $${order.shipping.toLocaleString('es-CO')}\n*Total: $${order.total.toLocaleString('es-CO')}*\n\n${order.customer_facing_notes ? order.customer_facing_notes + '\n\n' : ''}¿Confirmas el pedido?`;
-    const url = phone
-      ? `https://wa.me/${phone.startsWith('57') ? phone : `57${phone}`}?text=${encodeURIComponent(msg)}`
-      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
-    return url;
+    return buildWhatsAppUrl(order.customer_phone, msg);
   };
 
   return (

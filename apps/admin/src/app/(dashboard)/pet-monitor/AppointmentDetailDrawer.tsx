@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { adminPortal } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { buildWhatsAppUrl } from '@/lib/phone';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: 'Pendiente', color: 'bg-blue-100 text-blue-700' },
@@ -123,13 +124,11 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
 
   const waLink = (() => {
     if (!appt.customer_phone) return null;
-    const digits = appt.customer_phone.replace(/\D/g, '');
-    const withCountry = digits.startsWith('57') ? digits : `57${digits}`;
     const firstName = (appt.customer_name || '').split(' ')[0] || '';
     const fecha = dt.toLocaleDateString('es-CO', { day: 'numeric', month: 'long' });
     const hora = dt.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
     const msg = `¡Hola${firstName ? ' ' + firstName : ''}! Te escribo de Bigotes y Paticas para confirmar tu cita de ${appt.service_type} el ${fecha} a las ${hora}. ¿Nos confirmas que te queda bien ese horario?`;
-    return `https://wa.me/${withCountry}?text=${encodeURIComponent(msg)}`;
+    return buildWhatsAppUrl(appt.customer_phone, msg);
   })();
 
   return (

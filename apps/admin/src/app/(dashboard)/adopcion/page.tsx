@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MapPin, Heart, User, Lock, Unlock, Trash2, CalendarDays, Search, MessageCircle, PartyPopper } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminAdoption, type AdoptionListing } from '@/lib/api';
+import { buildWhatsAppUrl } from '@/lib/phone';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,15 +22,13 @@ function formatAgo(iso: string): string {
 
 function whatsappWelcomeLink(l: AdoptionListing): string | null {
   if (!l.reporter_phone) return null;
-  const digits = l.reporter_phone.replace(/\D/g, '');
-  const withCountry = digits.startsWith('57') ? digits : `57${digits}`;
   const firstName = (l.reporter_name || '').split(' ')[0] || '';
   const saludo = firstName ? `¡Hola ${firstName}!` : '¡Hola!';
   const msg =
     l.post_type === 'want'
       ? `${saludo} Soy Angela, de Bigotes y Paticas 🐾 Vi tu mensaje de que estás buscando adoptar. Quiero que sepas que desde acá vamos a hacer lo posible para que un peludito encuentre un hogar, y sé que tú lo vas a hacer muy feliz. Cualquier cosa que necesites, contá con nosotros 💛`
       : `${saludo} Soy Angela, de Bigotes y Paticas 🐾 Vi que quieres dar a tu peludito en adopción. Gracias por confiar en que le ayudemos a encontrar un buen hogar — vamos a hacer lo posible para conectarlo con la familia correcta 💛`;
-  return `https://wa.me/${withCountry}?text=${encodeURIComponent(msg)}`;
+  return buildWhatsAppUrl(l.reporter_phone, msg);
 }
 
 export default function AdoptionModerationPage() {

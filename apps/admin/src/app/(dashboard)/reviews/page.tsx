@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Star, CheckCircle, XCircle, MessageSquare, Package, User, RefreshCw, Search, Award } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, customers as customersApi } from '@/lib/api';
+import { buildWhatsAppUrl } from '@/lib/phone';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
@@ -319,7 +320,7 @@ function ReviewCard({ review, onModerate }: {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold">{review.customer_name}</p>
             {review.customer_phone && (
-              <a href={`https://wa.me/57${review.customer_phone}`} className="text-xs text-brand-600 flex items-center gap-1 hover:underline">
+              <a href={buildWhatsAppUrl(review.customer_phone)} className="text-xs text-brand-600 flex items-center gap-1 hover:underline">
                 WhatsApp {review.customer_phone}
               </a>
             )}

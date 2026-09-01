@@ -15,6 +15,7 @@ import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { products, customers, pos, sales, intelligence, API_BASE, type Product, type Customer, type Order } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
+import { buildWhatsAppUrl } from '@/lib/phone';
 import { toast } from 'sonner';
 
 // ─── Types ────────────────────────────────────────────────────────
@@ -46,7 +47,7 @@ function buildWhatsAppMsg(order: Order, customerName?: string): string {
   ).join('\n');
   const change = Number(order.paid_amount) - Number(order.grand_total);
   const changeStr = change > 0 ? `\n💵 *Cambio:* ${formatCurrency(change)}` : '';
-  return encodeURIComponent(
+  return (
     `🐾 *¡Gracias por visitarnos, ${name}!* 🐾\n\n` +
     `Tu compra en *Bigotes y Paticas* fue registrada exitosamente 🎉\n\n` +
     `📋 *Orden:* ${order.order_number}\n` +
@@ -337,7 +338,7 @@ function OrderDetailModal({ order, onClose, onCancel }: { order: Order; onClose:
 
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={openInvoice}><FileText className="w-4 h-4 mr-1" /> Comprobante</Button>
-          <a href={`https://wa.me/?text=${waMsg}`} target="_blank" rel="noopener noreferrer">
+          <a href={`https://wa.me/?text=${encodeURIComponent(waMsg)}`} target="_blank" rel="noopener noreferrer">
             <Button variant="outline" size="sm" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50">
               <MessageCircle className="w-4 h-4 mr-1" /> WhatsApp
             </Button>
@@ -495,11 +496,8 @@ function SuccessScreen({ order, customer, onNew }: { order: Order; customer: Cus
   }
 
   const customerName = customer?.full_name;
-  const customerPhone = customer?.phone?.replace(/\D/g, '');
   const waText = buildWhatsAppMsg(order, customerName ?? undefined);
-  const waUrl = customerPhone
-    ? `https://wa.me/57${customerPhone}?text=${waText}`
-    : `https://wa.me/?text=${waText}`;
+  const waUrl = buildWhatsAppUrl(customer?.phone, waText);
 
   const change = Number(order.paid_amount) - Number(order.grand_total);
 

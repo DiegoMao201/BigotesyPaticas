@@ -11,6 +11,7 @@ import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { cn, formatCurrency } from '@/lib/utils';
 import { customers, type Customer } from '@/lib/api';
 import { InviteToPortalModal } from '@/components/InviteToPortalModal';
+import { PHONE_COUNTRIES, parsePhoneForForm, composePhone } from '@/lib/phone';
 
 const RFM_BADGE: Record<string, { label: string; cls: string }> = {
   champion: { label: 'Campeón', cls: 'bg-emerald-100 text-emerald-800' },
@@ -70,6 +71,15 @@ function CustomerForm({
   });
   const set = (k: keyof CustomerFormData, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+  const parsedInitialPhone = parsePhoneForForm(initial?.phone);
+  const [phoneDial, setPhoneDial] = useState(parsedInitialPhone.dial);
+  const [phoneLocal, setPhoneLocal] = useState(parsedInitialPhone.local);
+  function updatePhone(dial: string, local: string) {
+    setPhoneDial(dial);
+    setPhoneLocal(local);
+    set('phone', composePhone(dial, local));
+  }
+
   return (
     <form
       onSubmit={(e) => {
@@ -88,8 +98,25 @@ function CustomerForm({
             <Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="email@ejemplo.com" />
           </div>
           <div>
-            <label className="text-xs font-medium mb-1 block">Teléfono</label>
-            <Input value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="300 000 0000" />
+            <label className="text-xs font-medium mb-1 block">Teléfono (WhatsApp)</label>
+            <div className="flex gap-1.5">
+              <select
+                className="w-[88px] shrink-0 rounded-md border border-input bg-background px-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                value={phoneDial}
+                onChange={(e) => updatePhone(e.target.value, phoneLocal)}
+                aria-label="Código de país"
+              >
+                {PHONE_COUNTRIES.map((c) => (
+                  <option key={`${c.dial}-${c.name}`} value={c.dial}>{c.flag} +{c.dial}</option>
+                ))}
+              </select>
+              <Input
+                value={phoneLocal}
+                onChange={(e) => updatePhone(phoneDial, e.target.value)}
+                placeholder={phoneDial === '57' ? '300 000 0000' : 'Número local'}
+                className="flex-1"
+              />
+            </div>
           </div>
           <div>
             <label className="text-xs font-medium mb-1 block">Ciudad</label>
