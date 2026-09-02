@@ -211,7 +211,7 @@ export function ProductTabs({ product }: { product: Product }) {
               <div>
                 <p className="font-semibold text-teal-800">Envío a domicilio</p>
                 <p className="text-sm text-teal-700 mt-1 leading-relaxed">
-                  Entregas en 24 a 72 horas en Pereira y Dosquebradas, Risaralda.
+                  Entregas el mismo día en Pereira y Dosquebradas, Risaralda.
                 </p>
               </div>
             </div>

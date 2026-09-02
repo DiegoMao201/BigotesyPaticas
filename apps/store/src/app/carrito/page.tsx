@@ -206,7 +206,7 @@ export default function CartPage() {
       <div className="py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
-            { icon: '🚚', title: 'Envío GRATIS desde $30.000', desc: 'Entrega en 24-72h en Pereira y Dosquebradas' },
+            { icon: '🚚', title: 'Envío GRATIS desde $30.000', desc: 'Entrega el mismo día en Pereira y Dosquebradas' },
             { icon: '🛡️', title: 'Pago seguro', desc: 'Datos protegidos · Transacciones encriptadas' },
             { icon: '↩️', title: 'Devoluciones gratis', desc: '30 días sin complicaciones' },
           ].map((item) => (

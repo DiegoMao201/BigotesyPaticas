@@ -5,7 +5,7 @@ import { LocalBusinessSchema, BreadcrumbSchema } from '@/components/seo/JsonLd';
 export const metadata: Metadata = {
   title: 'Pet Shop y Tienda de Mascotas Pereira y Dosquebradas — Bigotes y Paticas',
   description:
-    'Pet shop con domicilio en Pereira y Dosquebradas. Concentrado, accesorios, medicamentos veterinarios. Envío gratis desde $30.000 en 24-72h. El petshop más completo de Risaralda.',
+    'Pet shop con domicilio en Pereira y Dosquebradas. Concentrado, accesorios, medicamentos veterinarios. Envío gratis desde $30.000, entrega el mismo día. El petshop más completo de Risaralda.',
   keywords: [
     'pet shop Pereira', 'petshop Pereira', 'pet shop Dosquebradas',
     'domicilio pet shop Pereira', 'pet shop domicilio Risaralda',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Tienda de mascotas en Pereira y Dosquebradas | Bigotes y Paticas',
     description:
-      'Envíos en 24-72h en toda la zona urbana. Concentrados premium, accesorios y medicamentos para perros y gatos.',
+      'Entrega el mismo día en toda la zona urbana. Concentrados premium, accesorios y medicamentos para perros y gatos.',
     url: 'https://bigotesypaticas.com/pereira-dosquebradas-mascotas',
   },
 };
@@ -69,7 +69,7 @@ export default function PereiraPage() {
             todo lo que tu perro o gato necesita: concentrado premium, accesorios, medicamentos veterinarios y más.
           </p>
           <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-            Nuestro petshop tiene servicio de domicilio en <strong>24 a 72 horas</strong> en toda
+            Nuestro petshop tiene servicio de domicilio <strong>el mismo día</strong> en toda
             la zona urbana de Pereira y Dosquebradas, Risaralda. Más de 500 productos disponibles.
           </p>
           <div className="flex flex-wrap gap-3">
@@ -119,7 +119,7 @@ export default function PereiraPage() {
               {
                 icon: '🚚',
                 title: 'Envío rápido a domicilio',
-                desc: 'Recibe tu pedido en 24 a 72 horas en cualquier barrio de Pereira y Dosquebradas. Envío gratis desde $30.000.',
+                desc: 'Recibe tu pedido el mismo día en cualquier barrio de Pereira y Dosquebradas. Envío gratis desde $30.000.',
               },
               {
                 icon: '⭐',
@@ -215,7 +215,7 @@ export default function PereiraPage() {
             {[
               {
                 q: '¿Cuánto demora el envío a domicilio en Pereira?',
-                a: 'El tiempo de entrega es de 24 a 72 horas hábiles para toda la zona urbana de Pereira. Los pedidos realizados antes del mediodía generalmente se entregan al día siguiente.',
+                a: 'Entregamos el mismo día en toda la zona urbana de Pereira. Escríbenos por WhatsApp y coordinamos tu pedido para enviarlo de inmediato.',
               },
               {
                 q: '¿Entregan en todos los barrios de Dosquebradas?',

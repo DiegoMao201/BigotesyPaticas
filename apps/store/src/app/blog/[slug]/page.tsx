@@ -143,7 +143,7 @@ export default async function BlogPostPage({ params }: Props) {
             En Bigotes y Paticas tenemos lo que necesitas
           </h3>
           <p className="text-teal-200 mb-6">
-            Productos premium para tu mascota con entrega en 24-72h en Pereira y Dosquebradas.
+            Productos premium para tu mascota con entrega el mismo día en Pereira y Dosquebradas.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link

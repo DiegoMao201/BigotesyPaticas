@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description:
       seo?.meta_description ||
       enrichedDesc ||
-      `Compra ${product.name} en Pereira y Dosquebradas. ${product.in_stock ? 'Disponible' : 'Próximamente'}. Envío 24-72h.`,
+      `Compra ${product.name} en Pereira y Dosquebradas. ${product.in_stock ? 'Disponible' : 'Próximamente'}. Entrega el mismo día.`,
     keywords: seo?.keywords || [
       product.name,
       product.brand?.name || '',
@@ -307,7 +307,7 @@ export default async function ProductPage({ params }: Props) {
                 <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center">
                   <Truck className="h-5 w-5 text-teal-600" />
                 </div>
-                <span className="text-xs text-muted-foreground leading-tight">Envío 24-72h</span>
+                <span className="text-xs text-muted-foreground leading-tight">Entrega el mismo día</span>
               </div>
               <div className="flex flex-col items-center text-center gap-2">
                 <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center">

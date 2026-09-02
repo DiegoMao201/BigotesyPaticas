@@ -152,7 +152,7 @@ export default function PlanesNutricionalesPage() {
             ¿No sabes qué alimento es el correcto para tu mascota?
           </h2>
           <p className="text-white/75 mb-8">
-            Te ayudamos a elegir según el peso, la edad, la raza y el nivel de actividad. Tenemos concentrados premium con envío en 24-72h en Pereira y Dosquebradas.
+            Te ayudamos a elegir según el peso, la edad, la raza y el nivel de actividad. Tenemos concentrados premium con entrega el mismo día en Pereira y Dosquebradas.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link href="/categorias/perros?sub_cat=concentrado" className="px-6 py-3 bg-white text-[#0d4a45] rounded-xl font-semibold text-sm hover:bg-white/90 transition-colors">

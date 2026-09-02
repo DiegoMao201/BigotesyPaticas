@@ -103,7 +103,7 @@ export default function ContactoPage() {
                   </div>
                   <div>
                     <p className="font-medium">Lun–Sáb · 10:00 am – 7:00 pm</p>
-                    <p className="text-xs opacity-70 mt-0.5">Domicilios 24-72h hábiles</p>
+                    <p className="text-xs opacity-70 mt-0.5">Domicilios el mismo día</p>
                   </div>
                 </li>
               </ul>

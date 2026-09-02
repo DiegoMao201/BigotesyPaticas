@@ -61,7 +61,7 @@ export default async function LandingPage({ params }: Props) {
           </h1>
           {landing.geographic_focus && (
             <p className="text-muted-foreground text-lg">
-              Entrega a domicilio en {landing.geographic_focus} en 24-72 horas
+              Entrega a domicilio en {landing.geographic_focus} el mismo día
             </p>
           )}
         </div>
@@ -91,7 +91,7 @@ export default async function LandingPage({ params }: Props) {
         <div className="flex flex-wrap gap-3 justify-center text-sm">
           {[
             '✓ Más de 500 productos',
-            '✓ Envío 24-72h',
+            '✓ Entrega el mismo día',
             '✓ Marcas premium: Hills, Royal Canin, Pro Plan',
             '✓ Pago contra entrega disponible',
           ].map((b) => (
@@ -181,7 +181,7 @@ export default async function LandingPage({ params }: Props) {
             {landing.cta_text ?? '¿Listo para pedir?'}
           </h2>
           <p className="text-teal-200 text-lg mb-8 max-w-xl mx-auto">
-            Entrega a domicilio en 24-72h en Pereira y Dosquebradas. Pago contra entrega disponible.
+            Entrega a domicilio el mismo día en Pereira y Dosquebradas. Pago contra entrega disponible.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link

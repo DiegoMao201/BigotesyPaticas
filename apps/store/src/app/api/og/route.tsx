@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
             gap: 24,
           }}
         >
-          <span>📦 Envío 24-72h</span>
+          <span>📦 Entrega el mismo día</span>
           <span>·</span>
           <span>📍 Pereira y Dosquebradas</span>
           <span>·</span>

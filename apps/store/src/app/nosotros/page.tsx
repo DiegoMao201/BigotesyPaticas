@@ -46,7 +46,7 @@ export default function NosotrosPage() {
           </div>
           <div className="rounded-2xl border border-border bg-card p-5 flex flex-col gap-2">
             <div className="text-3xl">🚚</div>
-            <div className="font-display font-bold text-lg">24 - 72 horas</div>
+            <div className="font-display font-bold text-lg">Mismo día</div>
             <p className="text-sm text-muted-foreground">Entrega rápida en tu zona</p>
           </div>
         </div>

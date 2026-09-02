@@ -123,7 +123,7 @@ export default function CheckoutPage() {
             <div>
               <p className="font-semibold text-blue-900 text-sm">Cobertura actual</p>
               <p className="text-blue-700 text-xs mt-0.5">
-                Pereira y Dosquebradas zona urbana en 24-72 horas.
+                Pereira y Dosquebradas zona urbana, entrega el mismo día.
               </p>
               <p className="text-blue-600 text-xs mt-1">
                 ¿Estás fuera de esta zona?{' '}

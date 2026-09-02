@@ -192,7 +192,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-1 ml-12">
-          <span className="font-semibold text-foreground">{data.total}</span> productos · Envío 24-72h en Pereira y Dosquebradas
+          <span className="font-semibold text-foreground">{data.total}</span> productos · Entrega el mismo día en Pereira y Dosquebradas
         </p>
       </header>
 

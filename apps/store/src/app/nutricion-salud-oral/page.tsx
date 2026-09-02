@@ -125,7 +125,7 @@ export default function NutricionSaludOralPage() {
             Empieza hoy — tenemos lo que necesitas
           </h2>
           <p className="text-white/75 mb-8">
-            Concentrados con acción dental, snacks especializados y productos de higiene oral disponibles con envío en 24-72h en Pereira y Dosquebradas.
+            Concentrados con acción dental, snacks especializados y productos de higiene oral disponibles con entrega el mismo día en Pereira y Dosquebradas.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link href="/categorias/higiene" className="px-6 py-3 bg-white text-[#0d4a45] rounded-xl font-semibold text-sm hover:bg-white/90 transition-colors">

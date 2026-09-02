@@ -26,7 +26,7 @@ const CATEGORIES = [
 ];
 
 const VALUES = [
-  { icon: Truck,       title: 'Envío rápido',      desc: 'Entregas en 24-72h en Pereira y Dosquebradas', color: 'from-teal-500 to-teal-600'      },
+  { icon: Truck,       title: 'Envío rápido',      desc: 'Entregas el mismo día en Pereira y Dosquebradas', color: 'from-teal-500 to-teal-600'      },
   { icon: ShieldCheck, title: 'Compra segura',      desc: 'Pagos protegidos y garantía de calidad',       color: 'from-emerald-500 to-emerald-600' },
   { icon: Heart,       title: 'Curado con cariño', desc: 'Marcas seleccionadas por veterinarios',         color: 'from-rose-500 to-rose-600'       },
   { icon: Sparkles,    title: 'Premium siempre',   desc: 'Solo productos de la mejor calidad',            color: 'from-amber-500 to-orange-500'    },
@@ -37,7 +37,7 @@ const MARQUEE_ITEMS = [
   '🐾 Envío gratis desde $30.000',
   '⭐ 4.9 en satisfacción',
   '🐕 +500 productos',
-  '🚚 Entrega 24-72h',
+  '🚚 Entrega el mismo día',
   '🎁 10% en tu primera compra',
   '💉 Carnet digital gratis',
   '📦 Pereira y Dosquebradas',
@@ -261,7 +261,7 @@ export default async function HomePage() {
                 </li>
                 <li className="flex items-center gap-3">
                   <span className="text-xl shrink-0">🛵</span>
-                  <p>Domicilios en 24-72h · Gratis desde $30.000</p>
+                  <p>Domicilios el mismo día · Gratis desde $30.000</p>
                 </li>
                 <li className="flex items-center gap-3">
                   <span className="text-xl shrink-0">⭐</span>

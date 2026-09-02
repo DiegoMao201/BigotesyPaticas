@@ -60,7 +60,7 @@ const SCENARIOS: Scenario[] = [
       '*Opción 2 — Por el portal (recomendado):*\n' +
       '1. Registrate gratis en https://mi.bigotesypaticas.com\n' +
       '2. Pedís desde el portal y acumulás Puntos Bigotes\n\n' +
-      '🚚 *Envío:* 24-72h en Pereira y Dosquebradas\n' +
+      '🚚 *Envío:* el mismo día en Pereira y Dosquebradas\n' +
       '💰 *Envío gratis* en pedidos desde $30.000\n' +
       '💵 Pago contra entrega (efectivo, tarjeta, Nequi, Daviplata)\n\n' +
       '📍 Mall Zamara Plaza, Local 2 · 320 687 6633',
@@ -77,7 +77,7 @@ const SCENARIOS: Scenario[] = [
       '🕐 *Horario:* Lunes a Sábado, 10am a 7pm\n\n' +
       '🗺️ Ver en Google Maps:\n' +
       'https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Mall+Zamara+Plaza+Dosquebradas\n\n' +
-      '🚚 También hacemos *domicilio en 24-72h* a Pereira y Dosquebradas.\n' +
+      '🚚 También hacemos *domicilio el mismo día* a Pereira y Dosquebradas.\n' +
       'Pedí por el portal: https://mi.bigotesypaticas.com\n\n' +
       '💬 320 687 6633 · 📸 @bigotesypaticas',
   },
@@ -93,7 +93,7 @@ const SCENARIOS: Scenario[] = [
       '🎀 Accesorios: https://bigotesypaticas.com/categorias/accesorios\n' +
       '🍖 Snacks: https://bigotesypaticas.com/categorias/snacks\n\n' +
       '🔍 Buscar todos los productos: https://bigotesypaticas.com/categorias/todos\n\n' +
-      '🚚 Envío gratis desde $30.000 · Entrega 24-72h\n' +
+      '🚚 Envío gratis desde $30.000 · Entrega el mismo día\n' +
       '📱 Portal de puntos: https://mi.bigotesypaticas.com · 📸 @bigotesypaticas',
   },
 ];

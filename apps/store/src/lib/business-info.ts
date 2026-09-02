@@ -10,7 +10,7 @@ export const BUSINESS_INFO = {
     "Petshop Dosquebradas",
   ],
   description:
-    "Pet shop y tienda de mascotas en Pereira y Dosquebradas. Concentrados, accesorios, medicamentos veterinarios con domicilio en 24-72h. El mejor pet shop con domicilio en Risaralda.",
+    "Pet shop y tienda de mascotas en Pereira y Dosquebradas. Concentrados, accesorios, medicamentos veterinarios con domicilio el mismo día. El mejor pet shop con domicilio en Risaralda.",
   url: "https://bigotesypaticas.com",
   logo: "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png",
 

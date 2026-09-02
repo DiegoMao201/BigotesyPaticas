@@ -102,7 +102,7 @@ export function HeroSection() {
 
           <p className="text-lg md:text-xl text-white/85 max-w-lg leading-relaxed">
             Alimentos premium, accesorios y cuidado para perros y gatos.
-            Entregamos en Pereira y Dosquebradas en 24-72 horas.
+            Entregamos el mismo día en Pereira y Dosquebradas.
           </p>
 
           {/* CTAs */}
@@ -132,7 +132,7 @@ export function HeroSection() {
             <div className="text-white/75 text-sm">+500 productos disponibles</div>
             <div className="flex items-center gap-1.5 text-white/75 text-sm">
               <Truck className="h-4 w-4 text-teal-300" />
-              Entrega 24-72h
+              Entrega el mismo día
             </div>
           </div>
         </div>

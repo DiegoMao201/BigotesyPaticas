@@ -24,11 +24,11 @@ const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', displ
 export const metadata: Metadata = {
   metadataBase: new URL('https://bigotesypaticas.com'),
   title: {
-    default: 'Pet Shop Pereira y Dosquebradas — Bigotes y Paticas | Domicilio 24-72h',
+    default: 'Pet Shop Pereira y Dosquebradas — Bigotes y Paticas | Domicilio el mismo día',
     template: '%s | Bigotes y Paticas Pet Shop',
   },
   description:
-    'Pet shop con domicilio en Pereira y Dosquebradas. Concentrados, accesorios y medicamentos veterinarios. Envío gratis desde $30.000 en 24-72h. El mejor petshop de Risaralda.',
+    'Pet shop con domicilio en Pereira y Dosquebradas. Concentrados, accesorios y medicamentos veterinarios. Envío gratis desde $30.000, entrega el mismo día. El mejor petshop de Risaralda.',
   keywords: [
     'pet shop Pereira', 'pet shop Dosquebradas', 'petshop Pereira', 'petshop Dosquebradas',
     'domicilio pet shop Pereira', 'pet shop domicilio', 'petshop domicilio Risaralda',
@@ -71,7 +71,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Bigotes y Paticas — Pet Shop Pereira y Dosquebradas',
-    description: 'Pet shop con domicilio en Pereira y Dosquebradas. Más de 500 productos. Envío 24-72h.',
+    description: 'Pet shop con domicilio en Pereira y Dosquebradas. Más de 500 productos. Entrega el mismo día.',
     images: ['https://bigotesypaticas.com/opengraph-image.png'],
   },
   robots: {

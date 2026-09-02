@@ -185,7 +185,7 @@ export function DeliveryZoneChecker() {
                 ✅ ¡Sí llegamos! — {distanceText} · {durationText} desde la tienda
               </p>
               <p className="text-emerald-700 text-xs mt-0.5">
-                Entrega 24-72h hábiles · Gratis desde $30.000 COP
+                Entrega el mismo día · Gratis desde $30.000 COP
               </p>
             </div>
           </div>
