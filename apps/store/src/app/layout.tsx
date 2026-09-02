@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     template: '%s | Bigotes y Paticas Pet Shop',
   },
   description:
-    'Pet shop con domicilio en Pereira y Dosquebradas. Concentrados, accesorios y medicamentos veterinarios. Envío gratis desde $30.000, entrega el mismo día. El mejor petshop de Risaralda.',
+    'Pet shop con domicilio en Pereira y Dosquebradas. Concentrados, accesorios y medicamentos veterinarios. Envío gratis desde $30.000, entrega el mismo día lo más rápido posible. El mejor petshop de Risaralda.',
   keywords: [
     'pet shop Pereira', 'pet shop Dosquebradas', 'petshop Pereira', 'petshop Dosquebradas',
     'domicilio pet shop Pereira', 'pet shop domicilio', 'petshop domicilio Risaralda',

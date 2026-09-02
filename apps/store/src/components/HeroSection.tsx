@@ -102,7 +102,7 @@ export function HeroSection() {
 
           <p className="text-lg md:text-xl text-white/85 max-w-lg leading-relaxed">
             Alimentos premium, accesorios y cuidado para perros y gatos.
-            Entregamos el mismo día en Pereira y Dosquebradas.
+            Entregamos el mismo día en Pereira y Dosquebradas, lo más rápido posible.
           </p>
 
           {/* CTAs */}

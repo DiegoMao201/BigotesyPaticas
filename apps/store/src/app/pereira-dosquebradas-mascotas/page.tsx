@@ -5,7 +5,7 @@ import { LocalBusinessSchema, BreadcrumbSchema } from '@/components/seo/JsonLd';
 export const metadata: Metadata = {
   title: 'Pet Shop y Tienda de Mascotas Pereira y Dosquebradas — Bigotes y Paticas',
   description:
-    'Pet shop con domicilio en Pereira y Dosquebradas. Concentrado, accesorios, medicamentos veterinarios. Envío gratis desde $30.000, entrega el mismo día. El petshop más completo de Risaralda.',
+    'Pet shop con domicilio en Pereira y Dosquebradas. Concentrado, accesorios, medicamentos veterinarios. Envío gratis desde $30.000, entrega el mismo día lo más rápido posible. El petshop más completo de Risaralda.',
   keywords: [
     'pet shop Pereira', 'petshop Pereira', 'pet shop Dosquebradas',
     'domicilio pet shop Pereira', 'pet shop domicilio Risaralda',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Tienda de mascotas en Pereira y Dosquebradas | Bigotes y Paticas',
     description:
-      'Entrega el mismo día en toda la zona urbana. Concentrados premium, accesorios y medicamentos para perros y gatos.',
+      'Entrega el mismo día, lo más rápido posible, en toda la zona urbana. Concentrados premium, accesorios y medicamentos para perros y gatos.',
     url: 'https://bigotesypaticas.com/pereira-dosquebradas-mascotas',
   },
 };
@@ -69,8 +69,9 @@ export default function PereiraPage() {
             todo lo que tu perro o gato necesita: concentrado premium, accesorios, medicamentos veterinarios y más.
           </p>
           <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-            Nuestro petshop tiene servicio de domicilio <strong>el mismo día</strong> en toda
-            la zona urbana de Pereira y Dosquebradas, Risaralda. Más de 500 productos disponibles.
+            Nuestro petshop tiene servicio de domicilio <strong>el mismo día</strong>, lo más rápido
+            posible para que tu peludito no sienta la espera, en toda la zona urbana de Pereira y
+            Dosquebradas, Risaralda. Más de 500 productos disponibles.
           </p>
           <div className="flex flex-wrap gap-3">
             <Link
