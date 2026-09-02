@@ -98,6 +98,21 @@ export function OrganizationSchema() {
           },
         ],
         ...(BUSINESS_INFO.sameAs.length > 0 && { sameAs: [...BUSINESS_INFO.sameAs] }),
+        // El fundador, declarado con el @id de su ficha en su propio sitio.
+        // Sin esto, este negocio y la persona que lo construyo eran dos
+        // entidades sin relacion para un buscador o un asistente: la tienda
+        // existia y estaba verificada, pero no corroboraba a nadie.
+        founder: {
+          '@type': 'Person',
+          '@id': 'https://www.datovatenexuspro.com/#diego',
+          name: 'Diego Mauricio García R.',
+          url: 'https://www.datovatenexuspro.com/diego',
+          sameAs: [
+            'https://www.datovatenexuspro.com',
+            'https://github.com/DiegoMao201',
+            'https://www.linkedin.com/in/diegomauriciogarcia',
+          ],
+        },
       }}
     />
   );
