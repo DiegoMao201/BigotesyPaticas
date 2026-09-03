@@ -61,8 +61,17 @@ def get_config(cur) -> dict:
 
 
 def get_pending_stories(cur) -> list[dict]:
+    """Stories aprobadas cuya hora ya llegó. Antes esto exigía scheduled_at
+    dentro de la última hora -- si el dueño del negocio tardaba más de 1h en
+    aprobar (normal con un calendario de varias piezas por día), la pieza
+    quedaba fuera de la ventana para siempre y nunca se publicaba, sin
+    avisar nada (pasó con la primera pieza del manifiesto de septiembre).
+    Ahora solo exige que ya haya llegado la hora -- se aprobó, se publica,
+    sin importar cuánto tiempo pasó -- con un tope de seguridad de 30 días
+    para no disparar por accidente algo aprobado hace meses.
+    """
     now = datetime.now(_BOGOTA).replace(tzinfo=None)
-    window_start = now - timedelta(hours=1)
+    safety_floor = now - timedelta(days=30)
     cur.execute(
         """
         SELECT * FROM content.story_posts
@@ -72,7 +81,7 @@ def get_pending_stories(cur) -> list[dict]:
         ORDER BY scheduled_at ASC
         LIMIT 10
     """,
-        (now, window_start),
+        (now, safety_floor),
     )
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, row, strict=False)) for row in cur.fetchall()]
