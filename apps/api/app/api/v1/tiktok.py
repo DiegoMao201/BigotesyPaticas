@@ -40,8 +40,9 @@ REDIRECT_URI = "https://api.bigotesypaticas.com/v1/tiktok/oauth/callback"
 # video.upload. Sin video.publish no se puede usar /post/publish/video/init/
 # con PULL_FROM_URL para publicar directo; una vez TikTok habilite ese scope
 # (probablemente junto con la auditoría), se agrega de vuelta aquí.
-SCOPES = "user.info.basic,video.upload"
+SCOPES = "user.info.basic,user.info.profile,user.info.stats,video.list,video.upload"
 PUBLISH_SCOPE = "video.publish"
+LIST_SCOPE = "video.list"
 ADMIN_TIKTOK_PAGE = "https://admin.bigotesypaticas.com/content/tiktok"
 
 _STATE_TTL = timedelta(minutes=10)
@@ -428,3 +429,86 @@ async def tiktok_publish_status(
     if r.status_code != 200:
         raise HTTPException(502, f"status/fetch falló: {body!s}"[:500])
     return body.get("data", {})
+
+
+# ── Inventario de la cuenta (solo lectura) ──────────────────────────
+#
+# La API pública de TikTok NO permite borrar ni editar videos ni el perfil:
+# el Display API es de solo lectura. Lo que sí podemos es listar todos los
+# videos públicos con sus métricas para decidir qué limpiar a mano en la app.
+
+_USER_FIELDS = (
+    "open_id,display_name,username,avatar_url,bio_description,profile_deep_link,"
+    "is_verified,follower_count,following_count,likes_count,video_count"
+)
+_VIDEO_FIELDS = (
+    "id,title,video_description,create_time,cover_image_url,share_url,duration,"
+    "view_count,like_count,comment_count,share_count"
+)
+
+
+def _require_scope(scope: str, needed: str) -> None:
+    if needed not in scope.split(","):
+        raise HTTPException(
+            409,
+            f"La cuenta conectada no tiene el permiso {needed}. "
+            "Usa 'Reconectar' para volver a autorizar con los permisos nuevos.",
+        )
+
+
+@router.get("/v1/admin/tiktok/account")
+async def tiktok_account(db: DBSession, _admin=Depends(get_current_admin_user)):
+    """Perfil y estadísticas de la cuenta conectada."""
+    access_token, scope = await _get_valid_token(db)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get(
+            f"{TIKTOK_API_BASE}/user/info/",
+            params={"fields": _USER_FIELDS},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    body = r.json()
+    if r.status_code != 200 or body.get("error", {}).get("code") != "ok":
+        log.error("user/info falló body=%r", body)
+        raise HTTPException(502, f"user/info falló: {body!s}"[:500])
+    return {"scope": scope, "user": body.get("data", {}).get("user", {})}
+
+
+@router.get("/v1/admin/tiktok/videos")
+async def tiktok_videos(db: DBSession, _admin=Depends(get_current_admin_user)):
+    """Todos los videos públicos de la cuenta (pagina internamente de a 20,
+    máximo que permite TikTok), más recientes primero."""
+    access_token, scope = await _get_valid_token(db)
+    _require_scope(scope, LIST_SCOPE)
+
+    videos: list[dict] = []
+    cursor: int | None = None
+    async with httpx.AsyncClient(timeout=30) as client:
+        for _ in range(100):  # tope de seguridad: 2000 videos
+            payload: dict = {"max_count": 20}
+            if cursor is not None:
+                payload["cursor"] = cursor
+            r = await client.post(
+                f"{TIKTOK_API_BASE}/video/list/",
+                params={"fields": _VIDEO_FIELDS},
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            body = r.json()
+            if r.status_code != 200 or body.get("error", {}).get("code") != "ok":
+                log.error("video/list falló body=%r", body)
+                raise HTTPException(502, f"video/list falló: {body!s}"[:500])
+            data = body.get("data", {})
+            videos.extend(data.get("videos", []))
+            if not data.get("has_more"):
+                break
+            cursor = data.get("cursor")
+
+    for v in videos:
+        ct = v.get("create_time")
+        v["created_at"] = (
+            datetime.fromtimestamp(int(ct), tz=UTC).isoformat() if ct is not None else None
+        )
+    return {"count": len(videos), "videos": videos}

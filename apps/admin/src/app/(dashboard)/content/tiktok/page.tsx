@@ -167,6 +167,140 @@ function TikTokPageInner() {
           )}
         </Card>
       )}
+
+      {status?.connected && <AccountInventory onReconnect={() => connectMut.mutate()} />}
     </div>
+  );
+}
+
+const nf = new Intl.NumberFormat('es-CO');
+
+function AccountInventory({ onReconnect }: { onReconnect: () => void }) {
+  const account = useQuery({ queryKey: ['tiktok-account'], queryFn: () => tiktok.account(), retry: false });
+  const videos = useQuery({ queryKey: ['tiktok-videos'], queryFn: () => tiktok.videos(), retry: false });
+  const needsReconnect = (e: unknown) => e instanceof Error && /video\.list|Reconectar/i.test(e.message);
+  const u = account.data?.user;
+
+  return (
+    <Card className="p-5 space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-display font-semibold text-lg">Inventario de la cuenta</h2>
+          <p className="text-xs text-muted-foreground max-w-2xl">
+            Solo lectura: la API de TikTok no permite borrar ni editar videos ni el perfil. Aquí ves todo lo publicado con
+            sus métricas para decidir qué limpiar; el botón <strong>Abrir en TikTok</strong> te lleva al video para borrarlo
+            desde la app.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => { account.refetch(); videos.refetch(); }}>
+          <RefreshCw className="h-4 w-4 mr-1" /> Actualizar
+        </Button>
+      </div>
+
+      {account.isError && needsReconnect(account.error) && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm flex items-center justify-between gap-3 flex-wrap">
+          <span>La cuenta se conectó con permisos viejos. Reconecta para autorizar el inventario (perfil y lista de videos).</span>
+          <Button size="sm" onClick={onReconnect}>Reconectar ahora</Button>
+        </div>
+      )}
+      {account.isError && !needsReconnect(account.error) && (
+        <p className="text-sm text-destructive">{(account.error as Error).message}</p>
+      )}
+
+      {u && (
+        <div className="flex items-center gap-4 flex-wrap">
+          {u.avatar_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={u.avatar_url} alt="" className="h-14 w-14 rounded-full object-cover border border-border" />
+          )}
+          <div className="min-w-0">
+            <p className="font-semibold">
+              {u.display_name}{u.username ? <span className="text-muted-foreground font-normal"> · @{u.username}</span> : null}
+            </p>
+            {u.bio_description && <p className="text-xs text-muted-foreground whitespace-pre-line">{u.bio_description}</p>}
+            {u.profile_deep_link && (
+              <a href={u.profile_deep_link} target="_blank" rel="noreferrer" className="text-xs text-brand-700 underline">
+                Abrir perfil en TikTok
+              </a>
+            )}
+          </div>
+          <div className="ml-auto grid grid-cols-4 gap-4 text-center">
+            {[
+              ['Videos', u.video_count],
+              ['Seguidores', u.follower_count],
+              ['Siguiendo', u.following_count],
+              ['Me gusta', u.likes_count],
+            ].map(([label, val]) => (
+              <div key={String(label)}>
+                <div className="text-lg font-bold tabular-nums">{typeof val === 'number' ? nf.format(val) : '—'}</div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {videos.isLoading && <p className="text-sm text-muted-foreground">Cargando videos…</p>}
+      {videos.isError && !needsReconnect(videos.error) && (
+        <p className="text-sm text-destructive">{(videos.error as Error).message}</p>
+      )}
+      {videos.data && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{videos.data.count} videos públicos (más recientes primero)</p>
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="text-left p-2">Video</th>
+                  <th className="text-left p-2">Fecha</th>
+                  <th className="text-right p-2">Vistas</th>
+                  <th className="text-right p-2">Me gusta</th>
+                  <th className="text-right p-2">Coment.</th>
+                  <th className="text-right p-2">Compart.</th>
+                  <th className="p-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {videos.data.videos.map((v) => (
+                  <tr key={v.id} className="border-t border-border align-top">
+                    <td className="p-2">
+                      <div className="flex gap-3">
+                        {v.cover_image_url && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={v.cover_image_url} alt="" className="h-20 w-[45px] rounded object-cover bg-muted shrink-0" />
+                        )}
+                        <div className="min-w-0 max-w-md">
+                          <p className="font-medium line-clamp-2">{v.title || v.video_description || '(sin título)'}</p>
+                          {v.title && v.video_description && v.video_description !== v.title && (
+                            <p className="text-xs text-muted-foreground line-clamp-2">{v.video_description}</p>
+                          )}
+                          {typeof v.duration === 'number' && (
+                            <p className="text-[11px] text-muted-foreground">{v.duration}s</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-2 whitespace-nowrap text-muted-foreground">
+                      {v.created_at ? new Date(v.created_at).toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
+                    </td>
+                    <td className="p-2 text-right tabular-nums">{nf.format(v.view_count ?? 0)}</td>
+                    <td className="p-2 text-right tabular-nums">{nf.format(v.like_count ?? 0)}</td>
+                    <td className="p-2 text-right tabular-nums">{nf.format(v.comment_count ?? 0)}</td>
+                    <td className="p-2 text-right tabular-nums">{nf.format(v.share_count ?? 0)}</td>
+                    <td className="p-2 whitespace-nowrap">
+                      {v.share_url && (
+                        <a href={v.share_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-700 underline">
+                          <ExternalLink className="h-3 w-3" /> Abrir en TikTok
+                        </a>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }

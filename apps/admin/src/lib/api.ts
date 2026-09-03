@@ -1834,7 +1834,38 @@ export const tiktok = {
     ),
   publishStatus: (publishId: string) =>
     api<Record<string, unknown>>(`/v1/admin/tiktok/publish-status/${publishId}`),
+  account: () => api<{ scope: string; user: TikTokUser }>('/v1/admin/tiktok/account'),
+  videos: () => api<{ count: number; videos: TikTokVideo[] }>('/v1/admin/tiktok/videos'),
 };
+
+export interface TikTokUser {
+  open_id?: string;
+  display_name?: string;
+  username?: string;
+  avatar_url?: string;
+  bio_description?: string;
+  profile_deep_link?: string;
+  is_verified?: boolean;
+  follower_count?: number;
+  following_count?: number;
+  likes_count?: number;
+  video_count?: number;
+}
+
+export interface TikTokVideo {
+  id: string;
+  title?: string;
+  video_description?: string;
+  create_time?: number;
+  created_at?: string | null;
+  cover_image_url?: string;
+  share_url?: string;
+  duration?: number;
+  view_count?: number;
+  like_count?: number;
+  comment_count?: number;
+  share_count?: number;
+}
 
 // ── Aliados (Fase 3 comunidad) ───────────────────────────────────────────────
 
