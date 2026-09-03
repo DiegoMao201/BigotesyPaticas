@@ -1807,6 +1807,29 @@ export const stories = {
     }),
 };
 
+// ── TikTok Content Posting API ────────────────────────────────────────────────
+
+export interface TikTokStatus {
+  connected: boolean;
+  open_id?: string;
+  username?: string | null;
+  access_token_expires_at?: string;
+  refresh_token_expires_at?: string | null;
+  updated_at?: string;
+}
+
+export const tiktok = {
+  status: () => api<TikTokStatus>('/v1/admin/tiktok/status'),
+  authorize: () => api<{ authorize_url: string }>('/v1/admin/tiktok/authorize'),
+  testPublish: (video_url: string, caption: string) =>
+    api<{ publish_id: string; privacy_level_used: string; creator_username: string | null }>(
+      '/v1/admin/tiktok/test-publish',
+      { method: 'POST', body: JSON.stringify({ video_url, caption }) }
+    ),
+  publishStatus: (publishId: string) =>
+    api<Record<string, unknown>>(`/v1/admin/tiktok/publish-status/${publishId}`),
+};
+
 // ── Aliados (Fase 3 comunidad) ───────────────────────────────────────────────
 
 export interface AdminPartner {

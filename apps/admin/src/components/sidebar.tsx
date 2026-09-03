@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Boxes, Users, BarChart3,
   Settings, LogOut, AlertTriangle, TrendingUp, CreditCard, Tag,
   Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain, PawPrint, Star, CalendarDays, Film, Share2,
-  Handshake, LifeBuoy, Heart,
+  Handshake, LifeBuoy, Heart, Music2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
@@ -68,6 +68,7 @@ const NAV_GROUPS = [
     items: [
       { href: '/content/calendar', label: 'Contenido IA', icon: CalendarDays, highlight: true },
       { href: '/content/stories', label: 'Stories IA', icon: Film, highlight: true },
+      { href: '/content/tiktok', label: 'TikTok', icon: Music2 },
     ],
   },
   {
