@@ -34,7 +34,12 @@ TIKTOK_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/"
 TIKTOK_TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
 TIKTOK_API_BASE = "https://open.tiktokapis.com/v2"
 REDIRECT_URI = "https://api.bigotesypaticas.com/v1/tiktok/oauth/callback"
-SCOPES = "user.info.basic,video.publish,video.upload"
+# video.publish (Direct Post) no está habilitado todavía en el app -- solo
+# aparece en el panel de scopes user.info.basic/profile/stats, video.list y
+# video.upload. Sin video.publish no se puede usar /post/publish/video/init/
+# con PULL_FROM_URL para publicar directo; una vez TikTok habilite ese scope
+# (probablemente junto con la auditoría), se agrega de vuelta aquí.
+SCOPES = "user.info.basic,video.upload"
 ADMIN_TIKTOK_PAGE = "https://admin.bigotesypaticas.com/content/tiktok"
 
 _STATE_TTL = timedelta(minutes=10)
