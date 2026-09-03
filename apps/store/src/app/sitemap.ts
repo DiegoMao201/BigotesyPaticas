@@ -40,6 +40,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/adopcion`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
     { url: `${BASE}/mascotas-perdidas`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
     { url: `${BASE}/mascotas-encontradas`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
+    { url: `${BASE}/finales-felices`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
   ];
 
   // Todos los productos publicados
@@ -135,6 +136,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     );
   }
 
+  // Finales felices (resueltas, visibles 30 días): la API ya las excluye
+  // pasada su ventana, así que aquí nunca se publica una URL que dé 404.
+  const successPages: MetadataRoute.Sitemap = [];
+  const successData = await fetchJson<{ path: string; resolved_at?: string }[]>('/v1/public/community/success?limit=200');
+  if (successData) {
+    successPages.push(
+      ...successData.map((s) => ({
+        url: `${BASE}${s.path}`,
+        lastModified: s.resolved_at ? new Date(s.resolved_at) : now,
+        changeFrequency: 'weekly' as const,
+        priority: 0.7,
+      })),
+    );
+  }
+
   return [
     ...staticPages,
     ...productPages,
@@ -143,5 +159,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...lostPages,
     ...foundPages,
     ...adoptionPages,
+    ...successPages,
   ];
 }

@@ -333,8 +333,10 @@ async def mark_found(sos_id: uuid.UUID, db: DBSession, customer: Customer = Port
     if event.reporter_customer_id != customer.id:
         raise HTTPException(status_code=403, detail="Solo quien reportó puede cerrar este caso")
 
+    from app.services import community_lifecycle as lc
+
     event.status = "found"
-    event.found_at = datetime.now(UTC)
+    event.found_at, event.public_until = lc.public_window()
 
     if event.pet_id:
         from app.models.portal import Pet
@@ -352,6 +354,7 @@ async def mark_found(sos_id: uuid.UUID, db: DBSession, customer: Customer = Port
     )
 
     await db.commit()
+    _ping_indexnow(lc.resolved_urls("lost", event.id))
     return {"ok": True, "status": "found"}
 
 

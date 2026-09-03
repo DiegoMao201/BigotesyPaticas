@@ -139,7 +139,38 @@ export interface ProductsPage {
 
 // ── Comunidad (perdidos / encontrados / adopción) — datos reales del portal ──
 
-export interface LostPet {
+// Final feliz (compartido por perdidos, encontrados y adopción): cuando
+// `resolved` es true la publicación se exhibe como historia de éxito hasta
+// `public_until` y después la API la deja de devolver (404 en detalle).
+export interface SuccessFields {
+  resolved: boolean;
+  resolved_at: string | null;
+  public_until: string | null;
+  success_headline: string | null;
+  resolution_note: string | null;
+}
+
+export interface SuccessStory {
+  type: 'lost' | 'found' | 'adoption_offer' | 'adoption_want';
+  id: string;
+  path: string;
+  title: string;
+  subtitle: string | null;
+  photo: string | null;
+  headline: string;
+  note: string;
+  resolved_at: string;
+  public_until: string;
+}
+
+export interface CommunityComment {
+  id: string;
+  author_name: string;
+  body: string;
+  created_at: string;
+}
+
+export interface LostPet extends SuccessFields {
   id: string;
   pet_name: string;
   species: string;
@@ -164,7 +195,7 @@ export interface FoundAnimal {
   status: string;
 }
 
-export interface FoundEvent {
+export interface FoundEvent extends SuccessFields {
   id: string;
   title: string;
   description: string | null;
@@ -180,7 +211,7 @@ export interface FoundEvent {
   animals: FoundAnimal[];
 }
 
-export interface AdoptionListing {
+export interface AdoptionListing extends SuccessFields {
   id: string;
   post_type: 'offer' | 'want';
   reporter_name: string | null;
@@ -333,5 +364,19 @@ export const storeApi = {
   },
   adoptionListingById: async (id: string): Promise<AdoptionListing | null> => {
     try { return await get<AdoptionListing>(`/v1/public/community/adoption/${id}`); } catch { return null; }
+  },
+
+  // Finales felices (ya en casa / reunidos / adoptados), visibles 30 días
+  lostPetsFound: async (): Promise<LostPet[]> => {
+    try { return await get<LostPet[]>('/v1/public/community/lost?outcome=found&limit=24'); } catch { return []; }
+  },
+  foundReunited: async (): Promise<FoundEvent[]> => {
+    try { return await get<FoundEvent[]>('/v1/public/community/found?outcome=reunited&limit=24'); } catch { return []; }
+  },
+  successStories: async (limit = 60): Promise<SuccessStory[]> => {
+    try { return await get<SuccessStory[]>(`/v1/public/community/success?limit=${limit}`); } catch { return []; }
+  },
+  comments: async (entityType: 'adoption' | 'lost' | 'found', id: string): Promise<CommunityComment[]> => {
+    try { return await get<CommunityComment[]>(`/v1/public/community/comments/${entityType}/${id}`); } catch { return []; }
   },
 };

@@ -47,6 +47,11 @@ class SOSEvent(UUIDPKMixin, TimestampMixin, Base):
     radius_km: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     notified_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     found_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Final feliz: nota que se muestra en el store ("¡Tito ya está en casa!
+    # Gracias a todos...") y hasta cuándo se exhibe públicamente (30 días
+    # después de found_at; luego se oculta sola por filtro de fecha).
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    public_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class RescueEvent(UUIDPKMixin, TimestampMixin, Base):
@@ -73,6 +78,12 @@ class RescueEvent(UUIDPKMixin, TimestampMixin, Base):
     contact_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="open", index=True)
     created_by_admin: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Final feliz a nivel evento ('reunited' = volvieron con su familia), con
+    # nota y fecha; public_until = resolved_at + 30 días.
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    public_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class RescueAnimal(UUIDPKMixin, TimestampMixin, Base):
@@ -135,6 +146,33 @@ class AdoptionListing(UUIDPKMixin, TimestampMixin, Base):
     outcome: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
     outcome_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     outcome_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Hasta cuándo se exhibe como historia de éxito (outcome_at + 30 días).
+    public_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class CommunityComment(UUIDPKMixin, Base):
+    """Comentario público (sin cuenta) en una publicación de la comunidad:
+    adopción, mascota perdida o animal encontrado. Se modera desde el admin
+    (status 'hidden' lo oculta sin borrarlo)."""
+
+    __tablename__ = "comments"
+    __table_args__ = (
+        CheckConstraint(
+            "entity_type IN ('adoption','lost','found')", name="ck_community_comments_entity_type"
+        ),
+        CheckConstraint("status IN ('visible','hidden')", name="ck_community_comments_status"),
+        {"schema": "community"},
+    )
+
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    author_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="visible")
+    ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class SOSSighting(UUIDPKMixin, Base):

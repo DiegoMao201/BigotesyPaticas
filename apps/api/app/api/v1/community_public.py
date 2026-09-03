@@ -1,12 +1,17 @@
 """Lectura pública (sin auth) de la comunidad -- para que el store (sitio
 público indexado por Google) muestre mascotas perdidas, animales encontrados
 y el foro de adopción. Publicar sigue siendo siempre del portal (sos.py,
-rescues.py, adoption.py, todos detrás de PortalUser) -- este router es
-100% de solo lectura, pensado para SSR/generateMetadata/sitemap.
+rescues.py, adoption.py, todos detrás de PortalUser) -- este router es de
+solo lectura, salvo el foro rápido de adopción y los comentarios públicos.
 
 No se expone el nombre de quien reportó (privacidad en una página pública
 indexada); el teléfono de contacto sí, porque quien publicó lo hizo
 explícitamente para que la comunidad lo contacte.
+
+Ciclo de vida (ver services/community_lifecycle.py): una publicación
+resuelta (mascota en casa / reunidos / adoptado) se exhibe como historia
+de éxito mientras `public_until > now()` y después desaparece de listas,
+sitemap y detalle (404) sin necesidad de cron.
 """
 
 from __future__ import annotations
@@ -14,12 +19,21 @@ from __future__ import annotations
 import asyncio
 import re
 import uuid
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
-from sqlalchemy import select
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile, status
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 
 from app.deps import DBSession
-from app.models.community import AdoptionListing, RescueAnimal, RescueEvent, SOSEvent
+from app.models.community import (
+    AdoptionListing,
+    CommunityComment,
+    RescueAnimal,
+    RescueEvent,
+    SOSEvent,
+)
+from app.services import community_lifecycle as lc
 from app.services.media_upload import ALLOWED_CONTENT_TYPES, MAX_UPLOAD_BYTES, upload_image_webp
 from app.services.seo_notifications import notify_indexnow
 
@@ -36,7 +50,12 @@ def _ping_indexnow(urls: list[str]) -> None:
     task.add_done_callback(_background_tasks.discard)
 
 
+def _iso(dt: datetime | None) -> str | None:
+    return dt.isoformat() if dt else None
+
+
 def _lost_out(row: SOSEvent) -> dict:
+    resolved = row.status == "found"
     return {
         "id": str(row.id),
         "pet_name": row.pet_name,
@@ -51,6 +70,14 @@ def _lost_out(row: SOSEvent) -> dict:
         "reward": float(row.reward) if row.reward is not None else None,
         "status": row.status,
         "created_at": row.created_at.isoformat(),
+        # final feliz
+        "resolved": resolved,
+        "resolved_at": _iso(row.found_at) if resolved else None,
+        "public_until": _iso(row.public_until) if resolved else None,
+        "success_headline": lc.lost_headline(row.pet_name) if resolved else None,
+        "resolution_note": (row.resolution_note or lc.lost_default_note(row.pet_name))
+        if resolved
+        else None,
     }
 
 
@@ -66,6 +93,7 @@ def _animal_out(a: RescueAnimal) -> dict:
 
 
 def _found_out(row: RescueEvent, animals: list[RescueAnimal]) -> dict:
+    resolved = row.outcome == "reunited"
     return {
         "id": str(row.id),
         "title": row.title,
@@ -80,10 +108,19 @@ def _found_out(row: RescueEvent, animals: list[RescueAnimal]) -> dict:
         "animal_count": len(animals),
         "cover_thumb_url": (animals[0].thumb_url or animals[0].photo_url) if animals else None,
         "animals": [_animal_out(a) for a in animals],
+        # final feliz
+        "resolved": resolved,
+        "resolved_at": _iso(row.resolved_at) if resolved else None,
+        "public_until": _iso(row.public_until) if resolved else None,
+        "success_headline": lc.found_headline() if resolved else None,
+        "resolution_note": (row.resolution_note or lc.found_default_note(row.title))
+        if resolved
+        else None,
     }
 
 
 def _adoption_out(row: AdoptionListing) -> dict:
+    resolved = row.outcome == "matched"
     return {
         "id": str(row.id),
         "post_type": row.post_type,
@@ -101,73 +138,108 @@ def _adoption_out(row: AdoptionListing) -> dict:
         "status": row.status,
         "outcome": row.outcome,
         "outcome_note": row.outcome_note,
-        "outcome_at": row.outcome_at.isoformat() if row.outcome_at else None,
+        "outcome_at": _iso(row.outcome_at),
         "created_at": row.created_at.isoformat(),
+        # final feliz (mismos nombres que lost/found para el store)
+        "resolved": resolved,
+        "resolved_at": _iso(row.outcome_at) if resolved else None,
+        "public_until": _iso(row.public_until) if resolved else None,
+        "success_headline": lc.adoption_headline(row.post_type) if resolved else None,
+        "resolution_note": (row.outcome_note or lc.adoption_default_note(row.post_type))
+        if resolved
+        else None,
     }
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
 
 
 # ── mascotas perdidas ─────────────────────────────────────────────────
 
 
 @router.get("/lost")
-async def public_list_lost(db: DBSession, limit: int = Query(default=100, le=300)) -> list[dict]:
-    rows = (
-        (
-            await db.execute(
-                select(SOSEvent)
-                .where(SOSEvent.status == "active")
-                .order_by(SOSEvent.created_at.desc())
-                .limit(limit)
-            )
+async def public_list_lost(
+    db: DBSession,
+    outcome: str = Query(default="active", pattern="^(active|found)$"),
+    limit: int = Query(default=100, le=300),
+) -> list[dict]:
+    """`outcome=active`: reportes vigentes. `outcome=found`: historias de
+    éxito (ya en casa) todavía dentro de su ventana pública."""
+    q = select(SOSEvent)
+    if outcome == "found":
+        q = q.where(SOSEvent.status == "found", SOSEvent.public_until > _now()).order_by(
+            SOSEvent.found_at.desc()
         )
-        .scalars()
-        .all()
-    )
+    else:
+        q = q.where(SOSEvent.status == "active").order_by(SOSEvent.created_at.desc())
+    rows = (await db.execute(q.limit(limit))).scalars().all()
     return [_lost_out(r) for r in rows]
 
 
 @router.get("/lost/{event_id}")
 async def public_get_lost(event_id: uuid.UUID, db: DBSession) -> dict:
     row = (await db.execute(select(SOSEvent).where(SOSEvent.id == event_id))).scalar_one_or_none()
-    if not row:
+    if not row or not _lost_is_public(row):
         raise HTTPException(status_code=404, detail="Reporte no encontrado")
     return _lost_out(row)
+
+
+def _lost_is_public(row: SOSEvent) -> bool:
+    if row.status == "active":
+        return True
+    return row.status == "found" and lc.is_publicly_visible(row.public_until)
 
 
 # ── animales encontrados/rescatados ──────────────────────────────────
 
 
-@router.get("/found")
-async def public_list_found(db: DBSession, limit: int = Query(default=100, le=300)) -> list[dict]:
+async def _animals_by_event(db: DBSession, event_ids: list[uuid.UUID]) -> dict:
+    out: dict[uuid.UUID, list[RescueAnimal]] = {}
+    if not event_ids:
+        return out
     rows = (
         (
             await db.execute(
-                select(RescueEvent)
-                .where(RescueEvent.status == "open")
-                .order_by(RescueEvent.found_at.desc())
-                .limit(limit)
+                select(RescueAnimal)
+                .where(RescueAnimal.rescue_event_id.in_(event_ids))
+                .order_by(RescueAnimal.sort_order, RescueAnimal.created_at)
             )
         )
         .scalars()
         .all()
     )
-    event_ids = [r.id for r in rows]
-    animals_by_event: dict[uuid.UUID, list[RescueAnimal]] = {}
-    if event_ids:
-        animal_rows = (
-            (
-                await db.execute(
-                    select(RescueAnimal)
-                    .where(RescueAnimal.rescue_event_id.in_(event_ids))
-                    .order_by(RescueAnimal.sort_order, RescueAnimal.created_at)
-                )
-            )
-            .scalars()
-            .all()
+    for a in rows:
+        out.setdefault(a.rescue_event_id, []).append(a)
+    return out
+
+
+@router.get("/found")
+async def public_list_found(
+    db: DBSession,
+    outcome: str = Query(default="pending", pattern="^(pending|reunited)$"),
+    limit: int = Query(default=100, le=300),
+) -> list[dict]:
+    """`outcome=pending`: animales esperando a su familia. `outcome=reunited`:
+    historias de éxito dentro de su ventana pública."""
+    q = select(RescueEvent)
+    if outcome == "reunited":
+        q = q.where(RescueEvent.outcome == "reunited", RescueEvent.public_until > _now()).order_by(
+            RescueEvent.resolved_at.desc()
         )
-        for a in animal_rows:
-            animals_by_event.setdefault(a.rescue_event_id, []).append(a)
-    return [_found_out(r, animals_by_event.get(r.id, [])) for r in rows]
+    else:
+        q = q.where(RescueEvent.status == "open", RescueEvent.outcome == "pending").order_by(
+            RescueEvent.found_at.desc()
+        )
+    rows = (await db.execute(q.limit(limit))).scalars().all()
+    animals = await _animals_by_event(db, [r.id for r in rows])
+    return [_found_out(r, animals.get(r.id, [])) for r in rows]
+
+
+def _found_is_public(row: RescueEvent) -> bool:
+    if row.outcome == "reunited":
+        return lc.is_publicly_visible(row.public_until)
+    return row.status == "open"
 
 
 @router.get("/found/{event_id}")
@@ -175,20 +247,10 @@ async def public_get_found(event_id: uuid.UUID, db: DBSession) -> dict:
     row = (
         await db.execute(select(RescueEvent).where(RescueEvent.id == event_id))
     ).scalar_one_or_none()
-    if not row:
+    if not row or not _found_is_public(row):
         raise HTTPException(status_code=404, detail="Evento de rescate no encontrado")
-    animals = (
-        (
-            await db.execute(
-                select(RescueAnimal)
-                .where(RescueAnimal.rescue_event_id == event_id)
-                .order_by(RescueAnimal.sort_order, RescueAnimal.created_at)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    return _found_out(row, animals)
+    animals = await _animals_by_event(db, [row.id])
+    return _found_out(row, animals.get(row.id, []))
 
 
 # ── foro de adopción ──────────────────────────────────────────────────
@@ -198,17 +260,30 @@ async def public_get_found(event_id: uuid.UUID, db: DBSession) -> dict:
 async def public_list_adoption(
     db: DBSession,
     post_type: str | None = Query(default=None),
-    outcome: str | None = Query(default=None),
+    outcome: str = Query(default="pending", pattern="^(pending|matched)$"),
     limit: int = Query(default=100, le=300),
 ) -> list[dict]:
-    q = select(AdoptionListing).where(AdoptionListing.status == "open")
+    """`outcome=pending` (default): publicaciones abiertas. `outcome=matched`:
+    historias de éxito dentro de su ventana pública."""
+    q = select(AdoptionListing)
     if post_type:
         q = q.where(AdoptionListing.post_type == post_type)
-    if outcome:
-        q = q.where(AdoptionListing.outcome == outcome)
-    order_col = AdoptionListing.outcome_at if outcome == "matched" else AdoptionListing.created_at
-    rows = (await db.execute(q.order_by(order_col.desc()).limit(limit))).scalars().all()
+    if outcome == "matched":
+        q = q.where(
+            AdoptionListing.outcome == "matched", AdoptionListing.public_until > _now()
+        ).order_by(AdoptionListing.outcome_at.desc())
+    else:
+        q = q.where(
+            AdoptionListing.status == "open", AdoptionListing.outcome == "pending"
+        ).order_by(AdoptionListing.created_at.desc())
+    rows = (await db.execute(q.limit(limit))).scalars().all()
     return [_adoption_out(r) for r in rows]
+
+
+def _adoption_is_public(row: AdoptionListing) -> bool:
+    if row.outcome == "matched":
+        return lc.is_publicly_visible(row.public_until)
+    return row.status == "open"
 
 
 @router.get("/adoption/{listing_id}")
@@ -216,7 +291,7 @@ async def public_get_adoption(listing_id: uuid.UUID, db: DBSession) -> dict:
     row = (
         await db.execute(select(AdoptionListing).where(AdoptionListing.id == listing_id))
     ).scalar_one_or_none()
-    if not row:
+    if not row or not _adoption_is_public(row):
         raise HTTPException(status_code=404, detail="Publicación no encontrada")
     return _adoption_out(row)
 
@@ -268,13 +343,11 @@ async def public_quick_adoption_post(
             detail="El teléfono debe ser un solo número de WhatsApp válido (10 dígitos)",
         )
 
-    from datetime import UTC, datetime, timedelta
-
     recent_count = (
         await db.execute(
             select(AdoptionListing).where(
                 AdoptionListing.contact_phone == phone,
-                AdoptionListing.created_at >= datetime.now(UTC) - timedelta(hours=24),
+                AdoptionListing.created_at >= _now() - timedelta(hours=24),
             )
         )
     ).all()
@@ -314,3 +387,229 @@ async def public_quick_adoption_post(
         ]
     )
     return _adoption_out(listing)
+
+
+# ── finales felices (feed unificado) ─────────────────────────────────
+
+
+@router.get("/success")
+async def public_success_stories(
+    db: DBSession, limit: int = Query(default=60, le=200)
+) -> list[dict]:
+    """Historias de éxito de los cuatro casos, más recientes primero, solo las
+    que siguen dentro de su ventana pública. Alimenta /finales-felices y las
+    secciones de cada página."""
+    now = _now()
+    lost = (
+        (
+            await db.execute(
+                select(SOSEvent)
+                .where(SOSEvent.status == "found", SOSEvent.public_until > now)
+                .order_by(SOSEvent.found_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    found = (
+        (
+            await db.execute(
+                select(RescueEvent)
+                .where(RescueEvent.outcome == "reunited", RescueEvent.public_until > now)
+                .order_by(RescueEvent.resolved_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    animals = await _animals_by_event(db, [r.id for r in found])
+    adoption = (
+        (
+            await db.execute(
+                select(AdoptionListing)
+                .where(AdoptionListing.outcome == "matched", AdoptionListing.public_until > now)
+                .order_by(AdoptionListing.outcome_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    items: list[dict] = []
+    for r in lost:
+        d = _lost_out(r)
+        items.append(
+            {
+                "type": "lost",
+                "id": d["id"],
+                "path": f"/mascotas-perdidas/{d['id']}",
+                "title": r.pet_name,
+                "subtitle": f"{r.species}{' · ' + r.breed if r.breed else ''}",
+                "photo": (r.photos or [None])[0],
+                "headline": d["success_headline"],
+                "note": d["resolution_note"],
+                "resolved_at": d["resolved_at"],
+                "public_until": d["public_until"],
+            }
+        )
+    for r in found:
+        d = _found_out(r, animals.get(r.id, []))
+        items.append(
+            {
+                "type": "found",
+                "id": d["id"],
+                "path": f"/mascotas-encontradas/{d['id']}",
+                "title": r.title,
+                "subtitle": r.address,
+                "photo": d["cover_thumb_url"],
+                "headline": d["success_headline"],
+                "note": d["resolution_note"],
+                "resolved_at": d["resolved_at"],
+                "public_until": d["public_until"],
+            }
+        )
+    for r in adoption:
+        d = _adoption_out(r)
+        items.append(
+            {
+                "type": "adoption_want" if r.post_type == "want" else "adoption_offer",
+                "id": d["id"],
+                "path": f"/adopcion/{d['id']}",
+                "title": r.title,
+                "subtitle": f"{r.species or ''}{' · ' + r.breed if r.breed else ''}".strip(" ·"),
+                "photo": (r.photos or [None])[0],
+                "headline": d["success_headline"],
+                "note": d["resolution_note"],
+                "resolved_at": d["resolved_at"],
+                "public_until": d["public_until"],
+            }
+        )
+    items.sort(key=lambda x: x["resolved_at"] or "", reverse=True)
+    return items[:limit]
+
+
+# ── comentarios públicos ──────────────────────────────────────────────
+
+_ENTITY_MODELS = {"adoption": AdoptionListing, "lost": SOSEvent, "found": RescueEvent}
+_ENTITY_PUBLIC = {
+    "adoption": _adoption_is_public,
+    "lost": _lost_is_public,
+    "found": _found_is_public,
+}
+
+
+def _comment_out(c: CommunityComment) -> dict:
+    return {
+        "id": str(c.id),
+        "author_name": c.author_name,
+        "body": c.body,
+        "created_at": c.created_at.isoformat(),
+    }
+
+
+async def _public_entity_or_404(db: DBSession, entity_type: str, entity_id: uuid.UUID):
+    model = _ENTITY_MODELS.get(entity_type)
+    if model is None:
+        raise HTTPException(status_code=404, detail="Tipo de publicación no válido")
+    row = (await db.execute(select(model).where(model.id == entity_id))).scalar_one_or_none()
+    if not row or not _ENTITY_PUBLIC[entity_type](row):
+        raise HTTPException(status_code=404, detail="Publicación no encontrada")
+    return row
+
+
+@router.get("/comments/{entity_type}/{entity_id}")
+async def public_list_comments(
+    entity_type: str, entity_id: uuid.UUID, db: DBSession, limit: int = Query(default=200, le=500)
+) -> list[dict]:
+    await _public_entity_or_404(db, entity_type, entity_id)
+    rows = (
+        (
+            await db.execute(
+                select(CommunityComment)
+                .where(
+                    CommunityComment.entity_type == entity_type,
+                    CommunityComment.entity_id == entity_id,
+                    CommunityComment.status == "visible",
+                )
+                .order_by(CommunityComment.created_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [_comment_out(c) for c in rows]
+
+
+class CommentIn(BaseModel):
+    author_name: str = Field(min_length=1, max_length=120)
+    body: str = Field(min_length=1, max_length=2000)
+
+
+def _client_ip(request: Request) -> str | None:
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
+@router.post("/comments/{entity_type}/{entity_id}", status_code=status.HTTP_201_CREATED)
+async def public_create_comment(
+    entity_type: str,
+    entity_id: uuid.UUID,
+    payload: CommentIn,
+    request: Request,
+    db: DBSession,
+) -> dict:
+    """Comentario público sin cuenta ("¡Qué bien que encontraron a Tito!").
+    Se publica de inmediato; el admin puede ocultarlo o borrarlo."""
+    await _public_entity_or_404(db, entity_type, entity_id)
+
+    name, text_body, err = lc.clean_comment(payload.author_name, payload.body)
+    if err:
+        raise HTTPException(status_code=422, detail=err)
+
+    ip_hash = lc.hash_ip(_client_ip(request))
+    if ip_hash:
+        since = _now() - timedelta(hours=24)
+        per_entity = (
+            await db.execute(
+                select(func.count())
+                .select_from(CommunityComment)
+                .where(
+                    CommunityComment.ip_hash == ip_hash,
+                    CommunityComment.entity_id == entity_id,
+                    CommunityComment.created_at >= since,
+                )
+            )
+        ).scalar_one()
+        per_ip = (
+            await db.execute(
+                select(func.count())
+                .select_from(CommunityComment)
+                .where(CommunityComment.ip_hash == ip_hash, CommunityComment.created_at >= since)
+            )
+        ).scalar_one()
+        if (
+            per_entity >= lc.COMMENTS_PER_IP_PER_ENTITY_PER_DAY
+            or per_ip >= lc.COMMENTS_PER_IP_PER_DAY
+        ):
+            raise HTTPException(
+                status_code=429, detail="Ya comentaste varias veces hoy, intenta más tarde"
+            )
+
+    comment = CommunityComment(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        author_name=name,
+        body=text_body,
+        status="visible",
+        ip_hash=ip_hash,
+    )
+    db.add(comment)
+    await db.commit()
+    await db.refresh(comment)
+    return _comment_out(comment)

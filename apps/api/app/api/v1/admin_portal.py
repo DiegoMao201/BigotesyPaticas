@@ -281,6 +281,10 @@ def _rescue_admin_out(
         "found_at": event.found_at.isoformat(),
         "contact_phone": event.contact_phone,
         "status": event.status,
+        "outcome": event.outcome,
+        "resolution_note": event.resolution_note,
+        "resolved_at": event.resolved_at.isoformat() if event.resolved_at else None,
+        "public_until": event.public_until.isoformat() if event.public_until else None,
         "created_at": event.created_at.isoformat(),
         "reporter_name": reporter_name,
         "reporter_phone": reporter_phone,
@@ -466,6 +470,7 @@ def _adoption_admin_out(listing, customer_name: str | None, customer_phone: str 
         "outcome": listing.outcome,
         "outcome_note": listing.outcome_note,
         "outcome_at": listing.outcome_at.isoformat() if listing.outcome_at else None,
+        "public_until": listing.public_until.isoformat() if listing.public_until else None,
         "created_at": listing.created_at.isoformat(),
         "reporter_name": customer_name or listing.reporter_name,
         "reporter_phone": customer_phone or (listing.contact_phone if is_quick_post else None),
@@ -547,11 +552,18 @@ async def update_adoption_outcome_admin(
     ).scalar_one_or_none()
     if not listing:
         raise HTTPException(status_code=404, detail="Publicación no encontrada")
+    from app.services import community_lifecycle as lc
+
     listing.outcome = payload.outcome
-    listing.outcome_note = payload.outcome_note
-    listing.outcome_at = datetime.now(UTC) if payload.outcome == "matched" else None
+    listing.outcome_note = (payload.outcome_note or "").strip() or None
+    if payload.outcome == "matched":
+        listing.outcome_at, listing.public_until = lc.public_window()
+    else:
+        listing.outcome_at = None
+        listing.public_until = None
     await db.commit()
-    return {"ok": True, "outcome": listing.outcome}
+    _ping_indexnow(lc.resolved_urls("adoption", listing.id))
+    return {"ok": True, "outcome": listing.outcome, "public_until": listing.public_until}
 
 
 @router.delete(
@@ -1993,3 +2005,328 @@ async def skip_notification(notif_id: uuid.UUID, db: DBSession) -> dict:
     notif.status = "skipped"
     await db.commit()
     return {"ok": True, "status": "skipped"}
+
+
+# ── Mascotas perdidas (SOS): moderación + "ya está en casa" ──────────────
+# El dueño puede cerrar su caso desde el portal (sos.py); aquí el admin
+# puede hacerlo por él (la mayoría avisa por WhatsApp y no vuelve al portal)
+# y dejar la historia de éxito visible 30 días en el store.
+
+_bg_tasks: set = set()
+
+
+def _ping_indexnow(urls: list[str]) -> None:
+    import asyncio
+
+    from app.services.seo_notifications import notify_indexnow
+
+    task = asyncio.create_task(notify_indexnow(urls))
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
+
+
+def _lost_admin_out(event, reporter_name: str | None, reporter_phone: str | None) -> dict:
+    return {
+        "id": str(event.id),
+        "pet_name": event.pet_name,
+        "species": event.species,
+        "breed": event.breed,
+        "color": event.color,
+        "photos": event.photos or [],
+        "last_seen_lat": float(event.last_seen_lat),
+        "last_seen_lng": float(event.last_seen_lng),
+        "last_seen_at": event.last_seen_at.isoformat(),
+        "contact_phone": event.contact_phone,
+        "reward": float(event.reward) if event.reward is not None else None,
+        "status": event.status,
+        "found_at": event.found_at.isoformat() if event.found_at else None,
+        "resolution_note": event.resolution_note,
+        "public_until": event.public_until.isoformat() if event.public_until else None,
+        "notified_count": event.notified_count,
+        "created_at": event.created_at.isoformat(),
+        "reporter_name": reporter_name,
+        "reporter_phone": reporter_phone or event.contact_phone,
+    }
+
+
+@router.get("/lost")
+async def list_lost_admin(
+    db: DBSession,
+    status_filter: str = Query(default="all", alias="status"),
+    q_search: str | None = Query(default=None, alias="q"),
+) -> list[dict]:
+    from app.models.community import SOSEvent
+
+    q = select(SOSEvent, Customer.full_name, Customer.phone).join(
+        Customer, Customer.id == SOSEvent.reporter_customer_id, isouter=True
+    )
+    if status_filter != "all":
+        q = q.where(SOSEvent.status == status_filter)
+    if q_search:
+        term = f"%{q_search.strip()}%"
+        q = q.where(
+            (SOSEvent.pet_name.ilike(term))
+            | (SOSEvent.contact_phone.ilike(term))
+            | (Customer.full_name.ilike(term))
+            | (Customer.phone.ilike(term))
+        )
+    rows = (await db.execute(q.order_by(SOSEvent.created_at.desc()))).all()
+    return [_lost_admin_out(e, name, phone) for e, name, phone in rows]
+
+
+class LostStatusUpdate(BaseModel):
+    status: str  # 'active' | 'closed'
+
+
+@router.patch("/lost/{event_id}", dependencies=[Depends(require_permission("crm:write"))])
+async def update_lost_status_admin(
+    event_id: uuid.UUID, payload: LostStatusUpdate, db: DBSession
+) -> dict:
+    """Cerrar (ocultar sin final feliz) o reabrir un reporte."""
+    from app.models.community import SOSEvent
+
+    if payload.status not in {"active", "closed"}:
+        raise HTTPException(status_code=422, detail="status debe ser 'active' o 'closed'")
+    event = (await db.execute(select(SOSEvent).where(SOSEvent.id == event_id))).scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    event.status = payload.status
+    if payload.status == "active":
+        event.found_at = None
+        event.public_until = None
+    await db.commit()
+    return {"ok": True, "status": event.status}
+
+
+class LostOutcomeUpdate(BaseModel):
+    outcome: str  # 'found' | 'active'
+    resolution_note: str | None = None
+
+
+@router.patch("/lost/{event_id}/outcome", dependencies=[Depends(require_permission("crm:write"))])
+async def update_lost_outcome_admin(
+    event_id: uuid.UUID, payload: LostOutcomeUpdate, db: DBSession
+) -> dict:
+    """'found': ¡ya está en casa! -- se exhibe 30 días como historia de éxito,
+    se avisa a los vecinos que estaban pendientes y se marca la mascota del
+    portal como no perdida. 'active': deshacer (vuelve a estar perdida)."""
+    from app.api.v1.sos import _notify_nearby_customers
+    from app.models.community import SOSEvent
+    from app.services import community_lifecycle as lc
+
+    if payload.outcome not in {"found", "active"}:
+        raise HTTPException(status_code=422, detail="outcome debe ser 'found' o 'active'")
+    event = (await db.execute(select(SOSEvent).where(SOSEvent.id == event_id))).scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+
+    if payload.outcome == "found":
+        first_time = event.status != "found"
+        event.status = "found"
+        event.resolution_note = (payload.resolution_note or "").strip() or None
+        if first_time or not event.found_at:
+            event.found_at, event.public_until = lc.public_window()
+        if event.pet_id:
+            from app.models.portal import Pet
+
+            pet = (await db.execute(select(Pet).where(Pet.id == event.pet_id))).scalar_one_or_none()
+            if pet:
+                pet.is_lost = False
+        if first_time:
+            await _notify_nearby_customers(
+                db,
+                event,
+                notif_type="sos_found",
+                title=f"🎉 {event.pet_name} fue encontrado(a)",
+                body=f"Buenas noticias: {event.pet_name} ya apareció. ¡Gracias por estar pendiente!",
+            )
+    else:
+        event.status = "active"
+        event.found_at = None
+        event.public_until = None
+        event.resolution_note = None
+        if event.pet_id:
+            from app.models.portal import Pet
+
+            pet = (await db.execute(select(Pet).where(Pet.id == event.pet_id))).scalar_one_or_none()
+            if pet:
+                pet.is_lost = True
+
+    await db.commit()
+    _ping_indexnow(lc.resolved_urls("lost", event.id))
+    return {
+        "ok": True,
+        "status": event.status,
+        "public_until": event.public_until.isoformat() if event.public_until else None,
+    }
+
+
+@router.delete("/lost/{event_id}", dependencies=[Depends(require_permission("crm:write"))])
+async def delete_lost_admin(event_id: uuid.UUID, db: DBSession) -> dict:
+    from app.models.community import SOSEvent
+
+    event = (await db.execute(select(SOSEvent).where(SOSEvent.id == event_id))).scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    await db.delete(event)
+    await db.commit()
+    return {"ok": True}
+
+
+# ── Rescates: final feliz a nivel evento ────────────────────────────────
+
+
+class RescueOutcomeUpdate(BaseModel):
+    outcome: str  # 'reunited' | 'pending'
+    resolution_note: str | None = None
+
+
+@router.patch(
+    "/rescues/{event_id}/outcome", dependencies=[Depends(require_permission("crm:write"))]
+)
+async def update_rescue_outcome_admin(
+    event_id: uuid.UUID, payload: RescueOutcomeUpdate, db: DBSession
+) -> dict:
+    """'reunited': todos los animalitos del evento volvieron con su familia --
+    se exhibe 30 días como historia de éxito (y marca cada ficha como
+    reunida). 'pending': deshacer."""
+    from app.models.community import RescueAnimal, RescueEvent
+    from app.services import community_lifecycle as lc
+
+    if payload.outcome not in {"reunited", "pending"}:
+        raise HTTPException(status_code=422, detail="outcome debe ser 'reunited' o 'pending'")
+    event = (
+        await db.execute(select(RescueEvent).where(RescueEvent.id == event_id))
+    ).scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento de rescate no encontrado")
+
+    event.outcome = payload.outcome
+    if payload.outcome == "reunited":
+        event.resolution_note = (payload.resolution_note or "").strip() or None
+        event.resolved_at, event.public_until = lc.public_window()
+        await db.execute(
+            sa_update(RescueAnimal)
+            .where(RescueAnimal.rescue_event_id == event_id)
+            .values(status="reunited")
+        )
+    else:
+        event.resolution_note = None
+        event.resolved_at = None
+        event.public_until = None
+    await db.commit()
+    _ping_indexnow(lc.resolved_urls("found", event.id))
+    return {
+        "ok": True,
+        "outcome": event.outcome,
+        "public_until": event.public_until.isoformat() if event.public_until else None,
+    }
+
+
+# ── Comentarios públicos: moderación ────────────────────────────────────
+
+
+@router.get("/comments")
+async def list_comments_admin(
+    db: DBSession,
+    status_filter: str = Query(default="all", alias="status"),
+    limit: int = Query(default=100, le=500),
+) -> list[dict]:
+    """Últimos comentarios de la comunidad con el título de la publicación
+    a la que pertenecen, para moderar rápido."""
+    from app.models.community import AdoptionListing, CommunityComment, RescueEvent, SOSEvent
+
+    q = select(CommunityComment)
+    if status_filter != "all":
+        q = q.where(CommunityComment.status == status_filter)
+    rows = (
+        (await db.execute(q.order_by(CommunityComment.created_at.desc()).limit(limit)))
+        .scalars()
+        .all()
+    )
+
+    ids_by_type: dict[str, set] = {"adoption": set(), "lost": set(), "found": set()}
+    for c in rows:
+        ids_by_type.setdefault(c.entity_type, set()).add(c.entity_id)
+    titles: dict[tuple[str, uuid.UUID], str] = {}
+    if ids_by_type["adoption"]:
+        for r in (
+            await db.execute(
+                select(AdoptionListing.id, AdoptionListing.title).where(
+                    AdoptionListing.id.in_(ids_by_type["adoption"])
+                )
+            )
+        ).all():
+            titles[("adoption", r.id)] = r.title
+    if ids_by_type["lost"]:
+        for r in (
+            await db.execute(
+                select(SOSEvent.id, SOSEvent.pet_name).where(SOSEvent.id.in_(ids_by_type["lost"]))
+            )
+        ).all():
+            titles[("lost", r.id)] = r.pet_name
+    if ids_by_type["found"]:
+        for r in (
+            await db.execute(
+                select(RescueEvent.id, RescueEvent.title).where(
+                    RescueEvent.id.in_(ids_by_type["found"])
+                )
+            )
+        ).all():
+            titles[("found", r.id)] = r.title
+
+    paths = {
+        "adoption": "/adopcion",
+        "lost": "/mascotas-perdidas",
+        "found": "/mascotas-encontradas",
+    }
+    return [
+        {
+            "id": str(c.id),
+            "entity_type": c.entity_type,
+            "entity_id": str(c.entity_id),
+            "entity_title": titles.get((c.entity_type, c.entity_id)),
+            "entity_url": f"https://bigotesypaticas.com{paths[c.entity_type]}/{c.entity_id}",
+            "author_name": c.author_name,
+            "body": c.body,
+            "status": c.status,
+            "created_at": c.created_at.isoformat(),
+        }
+        for c in rows
+    ]
+
+
+class CommentStatusUpdate(BaseModel):
+    status: str  # 'visible' | 'hidden'
+
+
+@router.patch("/comments/{comment_id}", dependencies=[Depends(require_permission("crm:write"))])
+async def update_comment_admin(
+    comment_id: uuid.UUID, payload: CommentStatusUpdate, db: DBSession
+) -> dict:
+    from app.models.community import CommunityComment
+
+    if payload.status not in {"visible", "hidden"}:
+        raise HTTPException(status_code=422, detail="status debe ser 'visible' o 'hidden'")
+    c = (
+        await db.execute(select(CommunityComment).where(CommunityComment.id == comment_id))
+    ).scalar_one_or_none()
+    if not c:
+        raise HTTPException(status_code=404, detail="Comentario no encontrado")
+    c.status = payload.status
+    await db.commit()
+    return {"ok": True, "status": c.status}
+
+
+@router.delete("/comments/{comment_id}", dependencies=[Depends(require_permission("crm:write"))])
+async def delete_comment_admin(comment_id: uuid.UUID, db: DBSession) -> dict:
+    from app.models.community import CommunityComment
+
+    c = (
+        await db.execute(select(CommunityComment).where(CommunityComment.id == comment_id))
+    ).scalar_one_or_none()
+    if not c:
+        raise HTTPException(status_code=404, detail="Comentario no encontrado")
+    await db.delete(c)
+    await db.commit()
+    return {"ok": True}

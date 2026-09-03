@@ -393,3 +393,64 @@ export function ArticleSchema({ post }: { post: ArticleData }) {
     />
   );
 }
+
+// ─── SuccessStorySchema ──────────────────────────────────────────────────────
+// Final feliz de la comunidad (mascota en casa / reunidos / adoptado): se
+// marca como NewsArticle con fecha de publicación = fecha de resolución y
+// expires = fin de la ventana pública, para que Google entienda que es una
+// noticia local con vigencia.
+
+export function SuccessStorySchema({
+  url,
+  headline,
+  description,
+  image,
+  datePublished,
+  expires,
+}: {
+  url: string;
+  headline: string;
+  description: string;
+  image?: string | null;
+  datePublished: string;
+  expires?: string | null;
+}) {
+  return (
+    <JsonLd
+      data={{
+        '@context': 'https://schema.org',
+        '@type': 'NewsArticle',
+        headline,
+        description,
+        ...(image && { image: [image] }),
+        datePublished,
+        ...(expires && { expires }),
+        inLanguage: 'es-CO',
+        author: { '@type': 'Organization', '@id': `${BUSINESS_INFO.url}/#organization`, name: BUSINESS_INFO.name },
+        publisher: {
+          '@type': 'Organization',
+          '@id': `${BUSINESS_INFO.url}/#organization`,
+          name: BUSINESS_INFO.name,
+          logo: { '@type': 'ImageObject', url: BUSINESS_INFO.logo },
+        },
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+      }}
+    />
+  );
+}
+
+export function ItemListSchema({ name, url, items }: { name: string; url: string; items: { name: string; url: string }[] }) {
+  if (items.length === 0) return null;
+  return (
+    <JsonLd
+      data={{
+        '@context': 'https://schema.org',
+        '@type': 'ItemList',
+        name,
+        url,
+        numberOfItems: items.length,
+        itemListElement: items.map((it, idx) => ({ '@type': 'ListItem', position: idx + 1, name: it.name, url: it.url })),
+      }}
+    />
+  );
+}

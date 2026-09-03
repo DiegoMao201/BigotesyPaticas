@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { PetPhoto } from '@/components/ui/PetPhoto';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
+import { SuccessStoryCard } from '@/components/community/SuccessStoryCard';
 import { PawPrint } from 'lucide-react';
 
 export const revalidate = 300;
@@ -47,7 +48,7 @@ function timeAgo(iso: string) {
 }
 
 export default async function MascotasEncontradasPage() {
-  const events = await storeApi.foundAnimals();
+  const [events, reunited] = await Promise.all([storeApi.foundAnimals(), storeApi.foundReunited()]);
 
   return (
     <>
@@ -121,6 +122,33 @@ export default async function MascotasEncontradasPage() {
           </div>
         )}
       </div>
+
+      {reunited.length > 0 && (
+        <div className="container-wide pb-14">
+          <div className="flex items-end justify-between gap-3 flex-wrap mb-6">
+            <div>
+              <h2 className="text-2xl font-display font-bold text-[#0d4a45]">🎉 Reunidos con su familia</h2>
+              <p className="text-sm text-muted-foreground">Sus familias los reconocieron gracias a estas publicaciones.</p>
+            </div>
+            <Link href="/finales-felices" className="text-sm font-semibold text-[#187f77] hover:underline">Ver todos los finales felices →</Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {reunited.map((ev) => (
+              <SuccessStoryCard
+                key={ev.id}
+                href={`/mascotas-encontradas/${ev.id}`}
+                photo={ev.cover_thumb_url}
+                title={ev.title}
+                subtitle={ev.address}
+                headline={ev.success_headline ?? '¡Reunidos con su familia! 🎉'}
+                note={ev.resolution_note ?? ''}
+                badge="Reunidos"
+                date={ev.resolved_at}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-[#f5f0e8] py-14 px-4">
         <div className="max-w-2xl mx-auto">

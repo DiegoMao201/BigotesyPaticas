@@ -5,6 +5,7 @@ import { Heart, AlertTriangle, PawPrint, ExternalLink, LifeBuoy, HomeIcon, MapPi
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
 import { QuickPostForm } from '@/components/adoption/QuickPostForm';
+import { SuccessStoryCard } from '@/components/community/SuccessStoryCard';
 
 export const revalidate = 300;
 
@@ -124,32 +125,26 @@ export default async function AdopcionPage() {
       {/* Historias de éxito */}
       {successStories.length > 0 && (
         <div className="container-wide pt-10">
-          <div className="flex items-center gap-2 mb-6">
-            <h2 className="text-2xl font-display font-bold text-[#0d4a45]">🎉 Historias de éxito</h2>
-            <span className="text-sm text-muted-foreground">— así de bien funciona el foro</span>
+          <div className="flex items-end justify-between gap-3 flex-wrap mb-6">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-2xl font-display font-bold text-[#0d4a45]">🎉 Historias de éxito</h2>
+              <span className="text-sm text-muted-foreground">— así de bien funciona el foro</span>
+            </div>
+            <Link href="/finales-felices" className="text-sm font-semibold text-[#187f77] hover:underline">Ver todos los finales felices →</Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {successStories.map((l) => (
-              <div key={l.id} className="rounded-3xl border-2 border-emerald-200 bg-emerald-50/40 overflow-hidden">
-                {l.photos[0] ? (
-                  <div className="relative w-full h-44 bg-[#F8F9FA]">
-                    <PetPhoto src={l.photos[0]} alt={l.title} sizes="(max-width: 768px) 100vw, 33vw" />
-                  </div>
-                ) : (
-                  <div className="w-full h-44 bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-5xl">
-                    🎉
-                  </div>
-                )}
-                <div className="p-5">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 mb-2">
-                    Adoptado
-                  </span>
-                  <h3 className="font-display font-bold text-lg mb-1">{l.title}</h3>
-                  <p className="text-sm text-emerald-800 leading-relaxed">
-                    {l.outcome_note || '¡Encontró un hogar gracias a la comunidad de Bigotes y Paticas!'}
-                  </p>
-                </div>
-              </div>
+              <SuccessStoryCard
+                key={l.id}
+                href={`/adopcion/${l.id}`}
+                photo={l.photos[0]}
+                title={l.title}
+                subtitle={l.species ? `${l.species}${l.breed ? ` · ${l.breed}` : ''}` : null}
+                headline={l.success_headline ?? (l.post_type === 'want' ? '¡Ya adoptó! 🎉' : '¡Encontró un hogar! 🎉')}
+                note={l.resolution_note ?? l.outcome_note ?? ''}
+                badge={l.post_type === 'want' ? 'Ya adoptó' : 'Adoptado'}
+                date={l.resolved_at}
+              />
             ))}
           </div>
         </div>

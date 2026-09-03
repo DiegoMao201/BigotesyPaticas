@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Boxes, Users, BarChart3,
   Settings, LogOut, AlertTriangle, TrendingUp, CreditCard, Tag,
   Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain, PawPrint, Star, CalendarDays, Film, Share2,
-  Handshake, LifeBuoy, Heart, Music2,
+  Handshake, LifeBuoy, Heart, Music2, Search, MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
@@ -26,8 +26,10 @@ const NAV_GROUPS = [
       { href: '/analytics', label: 'Analítica', icon: BarChart3 },
       { href: '/intelligence', label: 'Inteligencia', icon: Brain, highlight: true },
       { href: '/pet-monitor', label: 'Portal Monitor', icon: PawPrint, highlight: true },
+      { href: '/perdidos', label: 'Mascotas Perdidas', icon: Search, highlight: true },
       { href: '/rescates', label: 'Rescates SOS', icon: LifeBuoy, highlight: true },
       { href: '/adopcion', label: 'Foro de Adopción', icon: Heart, highlight: true },
+      { href: '/comentarios', label: 'Comentarios', icon: MessageSquare },
     ],
   },
   {

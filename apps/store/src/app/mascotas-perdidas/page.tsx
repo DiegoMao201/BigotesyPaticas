@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { PetPhoto } from '@/components/ui/PetPhoto';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
+import { SuccessStoryCard } from '@/components/community/SuccessStoryCard';
 import { Gift } from 'lucide-react';
 
 export const revalidate = 300; // 5 min -- son reportes urgentes, se refrescan seguido
@@ -46,7 +47,7 @@ function timeAgo(iso: string) {
 }
 
 export default async function MascotasPerdidasPage() {
-  const pets = await storeApi.lostPets();
+  const [pets, backHome] = await Promise.all([storeApi.lostPets(), storeApi.lostPetsFound()]);
 
   return (
     <>
@@ -129,6 +130,33 @@ export default async function MascotasPerdidasPage() {
           </div>
         )}
       </div>
+
+      {backHome.length > 0 && (
+        <div className="container-wide pb-14">
+          <div className="flex items-end justify-between gap-3 flex-wrap mb-6">
+            <div>
+              <h2 className="text-2xl font-display font-bold text-[#0d4a45]">🎉 Ya están en casa</h2>
+              <p className="text-sm text-muted-foreground">Gracias a la comunidad que compartió y estuvo pendiente.</p>
+            </div>
+            <Link href="/finales-felices" className="text-sm font-semibold text-[#187f77] hover:underline">Ver todos los finales felices →</Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {backHome.map((pet) => (
+              <SuccessStoryCard
+                key={pet.id}
+                href={`/mascotas-perdidas/${pet.id}`}
+                photo={pet.photos[0]}
+                title={pet.pet_name}
+                subtitle={`${pet.species}${pet.breed ? ` · ${pet.breed}` : ''}`}
+                headline={pet.success_headline ?? `¡${pet.pet_name} ya está en casa! 🎉`}
+                note={pet.resolution_note ?? ''}
+                badge="Ya en casa"
+                date={pet.resolved_at}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-[#f5f0e8] py-14 px-4">
         <div className="max-w-2xl mx-auto">

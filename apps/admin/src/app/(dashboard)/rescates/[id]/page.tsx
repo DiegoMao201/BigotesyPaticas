@@ -1,18 +1,22 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, CheckCircle2, Trash2, MapPin, Lock, Unlock, User, Phone } from 'lucide-react';
+import { ChevronLeft, CheckCircle2, Trash2, MapPin, Lock, Unlock, User, Phone, PartyPopper } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminRescues } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 
 export default function RescueEventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const [outcomeOpen, setOutcomeOpen] = useState(false);
+  const [note, setNote] = useState('');
 
   const { data: event, isLoading } = useQuery({
     queryKey: ['admin-rescue-detail', id],
@@ -46,6 +50,17 @@ export default function RescueEventDetailPage() {
       toast.success('Estado actualizado');
       invalidate();
     },
+  });
+
+  const { mutate: setOutcome, isPending: savingOutcome } = useMutation({
+    mutationFn: ({ outcome, resolution_note }: { outcome: 'reunited' | 'pending'; resolution_note?: string }) =>
+      adminRescues.setOutcome(id, outcome, resolution_note),
+    onSuccess: (_, v) => {
+      toast.success(v.outcome === 'reunited' ? '🎉 Final feliz: se muestra 30 días en el sitio' : 'Se quitó el final feliz');
+      setOutcomeOpen(false);
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   if (isLoading || !event) {
@@ -95,11 +110,42 @@ export default function RescueEventDetailPage() {
             )}
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => toggleEventStatus()} className="gap-1.5 shrink-0">
-          {event.status === 'open' ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
-          {event.status === 'open' ? 'Cerrar evento' : 'Reabrir evento'}
-        </Button>
+        <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+          <Button size="sm" onClick={() => (event.outcome === 'reunited' ? setOutcome({ outcome: 'pending' }) : setOutcomeOpen(true))}
+            className={`gap-1.5 ${event.outcome === 'reunited' ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}>
+            <PartyPopper className="h-3.5 w-3.5" /> {event.outcome === 'reunited' ? 'Quitar final feliz' : '¡Reunidos con su familia!'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => toggleEventStatus()} className="gap-1.5">
+            {event.status === 'open' ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+            {event.status === 'open' ? 'Cerrar evento' : 'Reabrir evento'}
+          </Button>
+        </div>
       </div>
+
+      {event.outcome === 'reunited' && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          🎉 <strong>Historia de éxito publicada</strong>
+          {event.public_until ? ` hasta el ${new Date(event.public_until).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}` : ''}.
+          {event.resolution_note ? ` "${event.resolution_note}"` : ''}
+          {' '}<a href={`https://bigotesypaticas.com/mascotas-encontradas/${id}`} target="_blank" rel="noopener noreferrer" className="underline">Ver en la web</a>
+        </div>
+      )}
+
+      <Dialog open={outcomeOpen} onClose={() => setOutcomeOpen(false)} title="🎉 ¡Reunidos con su familia!"
+        description="Todos los animalitos de este evento vuelven con su familia. Se publica como historia de éxito 30 días y luego se oculta sola.">
+        <DialogBody>
+          <label className="text-xs font-medium text-gray-600">Mensaje para la comunidad (opcional, se muestra en el sitio)</label>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3}
+            placeholder='Ej: "Su familia los reconoció por las fotos y ya están de vuelta en casa. ¡Gracias a todos!"'
+            className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOutcomeOpen(false)}>Cancelar</Button>
+          <Button onClick={() => setOutcome({ outcome: 'reunited', resolution_note: note })} disabled={savingOutcome} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+            {savingOutcome ? 'Guardando…' : 'Confirmar final feliz'}
+          </Button>
+        </DialogFooter>
+      </Dialog>
 
       <div>
         <h2 className="text-sm font-semibold text-gray-900 mb-3">

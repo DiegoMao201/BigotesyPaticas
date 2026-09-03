@@ -1934,6 +1934,10 @@ export interface RescueEvent {
   found_at: string;
   contact_phone: string | null;
   status: 'open' | 'closed';
+  outcome: 'pending' | 'reunited';
+  resolution_note: string | null;
+  resolved_at: string | null;
+  public_until: string | null;
   created_at: string;
   reporter_name: string | null;
   reporter_phone: string | null;
@@ -1954,6 +1958,72 @@ export const adminRescues = {
     api<{ ok: boolean; status: string }>(`/v1/admin/portal/rescues/${eventId}/animals/${animalId}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   deleteAnimal: (eventId: string, animalId: string) =>
     api<{ ok: boolean }>(`/v1/admin/portal/rescues/${eventId}/animals/${animalId}`, { method: 'DELETE' }),
+  setOutcome: (id: string, outcome: 'pending' | 'reunited', resolution_note?: string) =>
+    api<{ ok: boolean; outcome: string; public_until: string | null }>(`/v1/admin/portal/rescues/${id}/outcome`, {
+      method: 'PATCH',
+      body: JSON.stringify({ outcome, resolution_note }),
+    }),
+};
+
+// ─── Mascotas perdidas (SOS) ──────────────────────────────────────────
+// Reportado por el dueño desde el portal (sos.py); el admin puede marcar
+// "ya está en casa" por él, cerrar, reabrir o borrar.
+
+export interface LostPetAdmin {
+  id: string;
+  pet_name: string;
+  species: string;
+  breed: string | null;
+  color: string;
+  photos: string[];
+  last_seen_lat: number;
+  last_seen_lng: number;
+  last_seen_at: string;
+  contact_phone: string;
+  reward: number | null;
+  status: 'active' | 'found' | 'closed' | 'expired';
+  found_at: string | null;
+  resolution_note: string | null;
+  public_until: string | null;
+  notified_count: number;
+  created_at: string;
+  reporter_name: string | null;
+  reporter_phone: string | null;
+}
+
+export const adminLost = {
+  list: (status: 'active' | 'found' | 'closed' | 'all' = 'all', q?: string) =>
+    api<LostPetAdmin[]>(`/v1/admin/portal/lost?status=${status}${q ? `&q=${encodeURIComponent(q)}` : ''}`),
+  setStatus: (id: string, status: 'active' | 'closed') =>
+    api<{ ok: boolean; status: string }>(`/v1/admin/portal/lost/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  setOutcome: (id: string, outcome: 'found' | 'active', resolution_note?: string) =>
+    api<{ ok: boolean; status: string; public_until: string | null }>(`/v1/admin/portal/lost/${id}/outcome`, {
+      method: 'PATCH',
+      body: JSON.stringify({ outcome, resolution_note }),
+    }),
+  remove: (id: string) => api<{ ok: boolean }>(`/v1/admin/portal/lost/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Comentarios públicos de la comunidad (moderación) ────────────────
+
+export interface CommunityCommentAdmin {
+  id: string;
+  entity_type: 'adoption' | 'lost' | 'found';
+  entity_id: string;
+  entity_title: string | null;
+  entity_url: string;
+  author_name: string;
+  body: string;
+  status: 'visible' | 'hidden';
+  created_at: string;
+}
+
+export const adminComments = {
+  list: (status: 'visible' | 'hidden' | 'all' = 'all') =>
+    api<CommunityCommentAdmin[]>(`/v1/admin/portal/comments?status=${status}`),
+  setStatus: (id: string, status: 'visible' | 'hidden') =>
+    api<{ ok: boolean; status: string }>(`/v1/admin/portal/comments/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  remove: (id: string) => api<{ ok: boolean }>(`/v1/admin/portal/comments/${id}`, { method: 'DELETE' }),
 };
 
 // ─── Foro de adopción ──────────────────────────────────────────────────
@@ -1975,6 +2045,7 @@ export interface AdoptionListing {
   outcome: 'pending' | 'matched';
   outcome_note: string | null;
   outcome_at: string | null;
+  public_until: string | null;
   created_at: string;
   reporter_name: string | null;
   reporter_phone: string | null;

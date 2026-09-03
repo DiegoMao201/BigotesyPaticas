@@ -3,8 +3,9 @@ import Link from 'next/link';
 import { PetPhoto } from '@/components/ui/PetPhoto';
 import { notFound } from 'next/navigation';
 import { storeApi } from '@/lib/api';
-import { BreadcrumbSchema } from '@/components/seo/JsonLd';
-import { MapPin, Phone, ChevronLeft, CheckCircle2 } from 'lucide-react';
+import { BreadcrumbSchema, SuccessStorySchema } from '@/components/seo/JsonLd';
+import { CommentsSection } from '@/components/community/CommentsSection';
+import { MapPin, Phone, ChevronLeft, CheckCircle2, PartyPopper } from 'lucide-react';
 
 export const revalidate = 300;
 
@@ -22,21 +23,24 @@ function waLink(phone: string, title: string) {
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const ev = await storeApi.foundEventById(params.id);
   if (!ev) return { title: 'Evento no encontrado — Bigotes y Paticas' };
+  const url = `https://bigotesypaticas.com/mascotas-encontradas/${ev.id}`;
+  if (ev.resolved) {
+    const title = `¡Reunidos con su familia! ${ev.title} — Pereira/Dosquebradas`;
+    const description = ev.resolution_note ?? `${ev.title}: ya están de vuelta con su familia gracias a la comunidad de Bigotes y Paticas.`;
+    return { title, description, alternates: { canonical: url }, openGraph: { title, description, url, images: ev.cover_thumb_url ? [ev.cover_thumb_url] : undefined } };
+  }
   const title = `${ev.title} — Animales encontrados en Pereira/Dosquebradas`;
   const description = ev.description ?? `${ev.animal_count} animalito(s) encontrados en ${ev.address ?? 'Pereira/Dosquebradas'}, esperando a su familia.`;
-  return {
-    title,
-    description,
-    alternates: { canonical: `https://bigotesypaticas.com/mascotas-encontradas/${ev.id}` },
-    openGraph: { title, description, url: `https://bigotesypaticas.com/mascotas-encontradas/${ev.id}`, images: ev.cover_thumb_url ? [ev.cover_thumb_url] : undefined },
-  };
+  return { title, description, alternates: { canonical: url }, openGraph: { title, description, url, images: ev.cover_thumb_url ? [ev.cover_thumb_url] : undefined } };
 }
 
 export default async function FoundEventDetailPage({ params }: { params: { id: string } }) {
   const ev = await storeApi.foundEventById(params.id);
   if (!ev) notFound();
 
+  const url = `https://bigotesypaticas.com/mascotas-encontradas/${ev.id}`;
   const mapsLink = `https://www.google.com/maps?q=${ev.lat},${ev.lng}`;
+  const resolved = ev.resolved;
 
   return (
     <>
@@ -44,16 +48,51 @@ export default async function FoundEventDetailPage({ params }: { params: { id: s
         items={[
           { name: 'Inicio', url: 'https://bigotesypaticas.com' },
           { name: 'Animales Encontrados', url: 'https://bigotesypaticas.com/mascotas-encontradas' },
-          { name: ev.title, url: `https://bigotesypaticas.com/mascotas-encontradas/${ev.id}` },
+          { name: ev.title, url },
         ]}
       />
+      {resolved && ev.resolved_at && (
+        <SuccessStorySchema
+          url={url}
+          headline={`${ev.success_headline ?? '¡Reunidos con su familia!'} ${ev.title}`}
+          description={ev.resolution_note ?? ''}
+          image={ev.cover_thumb_url}
+          datePublished={ev.resolved_at}
+          expires={ev.public_until}
+        />
+      )}
 
       <div className="container-wide py-10 max-w-3xl">
         <Link href="/mascotas-encontradas" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-6 hover:text-foreground">
           <ChevronLeft className="h-4 w-4" /> Volver a animales encontrados
         </Link>
 
-        <h1 className="text-3xl font-display font-extrabold mb-2">{ev.title}</h1>
+        {resolved && (
+          <div className="rounded-3xl bg-gradient-to-br from-emerald-600 to-emerald-500 text-white p-6 md:p-8 mb-6 shadow-lg">
+            <div className="flex items-start gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                <PartyPopper className="h-6 w-6" />
+              </div>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-display font-extrabold leading-tight mb-2">
+                  {ev.success_headline ?? '¡Reunidos con su familia! 🎉'}
+                </h1>
+                <p className="text-white/95 leading-relaxed">{ev.resolution_note}</p>
+                {ev.resolved_at && (
+                  <p className="text-white/70 text-xs mt-3">
+                    {new Date(ev.resolved_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {resolved ? (
+          <h2 className="text-3xl font-display font-extrabold mb-2">{ev.title}</h2>
+        ) : (
+          <h1 className="text-3xl font-display font-extrabold mb-2">{ev.title}</h1>
+        )}
         {ev.description && <p className="text-muted-foreground mb-6 leading-relaxed">{ev.description}</p>}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
@@ -65,7 +104,7 @@ export default async function FoundEventDetailPage({ params }: { params: { id: s
                 sizes="(max-width: 640px) 50vw, 33vw"
               />
               {a.status === 'reunited' && (
-                <span className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                <span className="absolute inset-0 bg-black/40 flex items-center justify-center">
                   <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-emerald-700">
                     <CheckCircle2 className="h-3 w-3" /> Reunido
                   </span>
@@ -75,7 +114,7 @@ export default async function FoundEventDetailPage({ params }: { params: { id: s
           ))}
         </div>
 
-        {ev.address && (
+        {!resolved && ev.address && (
           <a
             href={mapsLink}
             target="_blank"
@@ -92,7 +131,7 @@ export default async function FoundEventDetailPage({ params }: { params: { id: s
           </a>
         )}
 
-        {ev.contact_phone && (
+        {!resolved && ev.contact_phone && (
           <a
             href={waLink(ev.contact_phone, ev.title)}
             target="_blank"
@@ -103,13 +142,20 @@ export default async function FoundEventDetailPage({ params }: { params: { id: s
           </a>
         )}
 
+        <CommentsSection
+          entityType="found"
+          entityId={ev.id}
+          accent={resolved ? '#059669' : '#187f77'}
+          placeholder={resolved ? '¡Qué alegría este reencuentro! Deja tu mensaje…' : '¿Reconoces a alguno? ¿Quieres ayudar a difundir? Escribe aquí…'}
+        />
+
         <div className="mt-8 rounded-2xl bg-[#f5f0e8] p-6 text-center">
           <p className="text-sm text-gray-600">
-            ¿Se te perdió tu mascota?{' '}
-            <Link href="/mascotas-perdidas" className="font-semibold text-[#c62f28]">
-              Repórtala aquí
-            </Link>
-            .
+            {resolved ? (
+              <>Mira más <Link href="/finales-felices" className="font-semibold text-[#187f77]">finales felices de la comunidad</Link>.</>
+            ) : (
+              <>¿Se te perdió tu mascota?{' '}<Link href="/mascotas-perdidas" className="font-semibold text-[#c62f28]">Repórtala aquí</Link>.</>
+            )}
           </p>
         </div>
       </div>

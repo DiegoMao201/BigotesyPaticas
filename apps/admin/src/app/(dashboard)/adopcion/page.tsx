@@ -157,7 +157,10 @@ export default function AdoptionModerationPage() {
                     {l.post_type === 'offer' ? '🏠 En adopción' : '🔍 Busca adoptar'}
                   </Badge>
                   {l.outcome === 'matched' && (
-                    <Badge className="absolute top-2 right-2 bg-emerald-500 text-white">🎉 Adoptado</Badge>
+                    <Badge className="absolute top-2 right-2 bg-emerald-500 text-white">
+                      🎉 {l.post_type === 'want' ? 'Ya adoptó' : 'Adoptado'}
+                      {l.public_until ? ` · ${Math.max(0, Math.ceil((new Date(l.public_until).getTime() - Date.now()) / 86_400_000))}d` : ''}
+                    </Badge>
                   )}
                 </div>
                 <div className="p-3 flex-1 flex flex-col gap-1.5">
@@ -195,7 +198,7 @@ export default function AdoptionModerationPage() {
                       }
                     >
                       <PartyPopper className="h-3.5 w-3.5" />
-                      {l.outcome === 'matched' ? 'Quitar éxito' : 'Encontró hogar'}
+                      {l.outcome === 'matched' ? 'Quitar éxito' : l.post_type === 'want' ? '¡Ya adoptó!' : '¡Encontró hogar!'}
                     </Button>
                   </div>
 
@@ -248,7 +251,7 @@ function OutcomeDialog({
       open={!!listing}
       onClose={onClose}
       title="🎉 Marcar como historia de éxito"
-      description={listing ? `"${listing.title}" se mostrará como éxito en la página pública antes de cerrarse.` : undefined}
+      description={listing ? `"${listing.title}" se mostrará como historia de éxito en bigotesypaticas.com durante 30 días y luego se oculta sola.` : undefined}
     >
       <DialogBody>
         <label className="text-xs font-medium text-gray-600">¿Cómo fue? (opcional, se muestra en el sitio)</label>
