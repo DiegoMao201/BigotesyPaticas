@@ -332,13 +332,8 @@ async def _upload_chunks(upload_url: str, data: bytes) -> None:
                 )
 
 
-@router.post("/v1/admin/tiktok/test-publish")
-async def tiktok_test_publish(
-    payload: TikTokTestPublish,
-    db: DBSession,
-    _admin=Depends(get_current_admin_user),
-):
-    """Sube un video a TikTok.
+async def send_video_to_tiktok(db: DBSession, video_url: str, caption: str) -> dict:
+    """Sube un video a TikTok y devuelve {publish_id, mode, ...}.
 
     - Con scope `video.publish` (Direct Post): queda publicado; sin auditoría
       TikTok fuerza privacy_level=SELF_ONLY (solo lo ve la cuenta dueña).
@@ -350,7 +345,7 @@ async def tiktok_test_publish(
     auth = {"Authorization": f"Bearer {access_token}"}
     json_hdr = {**auth, "Content-Type": "application/json; charset=UTF-8"}
 
-    data = await _download_video(payload.video_url)
+    data = await _download_video(video_url)
     chunk_size, count = _chunk_plan(len(data))
     source_info = {
         "source": "FILE_UPLOAD",
@@ -377,7 +372,7 @@ async def tiktok_test_publish(
                 headers=json_hdr,
                 json={
                     "post_info": {
-                        "title": payload.caption[:2200],
+                        "title": caption[:2200],
                         "privacy_level": privacy_level,
                         "disable_duet": False,
                         "disable_comment": False,
@@ -407,6 +402,105 @@ async def tiktok_test_publish(
         "privacy_level_used": privacy_level,
         "creator_username": creator_username,
     }
+
+
+async def _fetch_publish_status(db: DBSession, publish_id: str) -> dict:
+    access_token, _scope = await _get_valid_token(db)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            f"{TIKTOK_API_BASE}/post/publish/status/fetch/",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json; charset=UTF-8",
+            },
+            json={"publish_id": publish_id},
+        )
+    body = r.json()
+    if r.status_code != 200:
+        raise HTTPException(502, f"status/fetch falló: {body!s}"[:500])
+    return body.get("data", {})
+
+
+@router.post("/v1/admin/tiktok/test-publish")
+async def tiktok_test_publish(
+    payload: TikTokTestPublish,
+    db: DBSession,
+    _admin=Depends(get_current_admin_user),
+):
+    return await send_video_to_tiktok(db, payload.video_url, payload.caption)
+
+
+# ── Stories IA → TikTok (botón "Enviar a TikTok" en cada tarjeta) ────
+
+
+@router.post("/v1/admin/tiktok/stories/{story_id}/send")
+async def tiktok_send_story(
+    story_id: str,
+    db: DBSession,
+    _admin=Depends(get_current_admin_user),
+):
+    """Sube el video de una story (ya aprobada o publicada en Meta) a la
+    bandeja de TikTok. Guarda el publish_id en la story para seguir su estado."""
+    row = (
+        await db.execute(
+            text("""
+                SELECT id, video_url, caption, status, tiktok_publish_id, tiktok_status
+                FROM content.story_posts WHERE id = :id
+            """),
+            {"id": story_id},
+        )
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "Story no encontrada")
+    if not row.video_url:
+        raise HTTPException(400, "Esta pieza no tiene video (solo imagen); TikTok requiere video")
+    if row.status not in ("approved", "published"):
+        raise HTTPException(400, "Aprueba la pieza antes de enviarla a TikTok")
+    if row.tiktok_publish_id and row.tiktok_status not in ("FAILED", None):
+        raise HTTPException(409, "Esta pieza ya fue enviada a TikTok")
+
+    result = await send_video_to_tiktok(db, row.video_url, row.caption or "")
+    await db.execute(
+        text("""
+            UPDATE content.story_posts
+            SET tiktok_publish_id = :pid, tiktok_status = :st, tiktok_sent_at = :now
+            WHERE id = :id
+        """),
+        {
+            "pid": result["publish_id"],
+            "st": "PROCESSING_UPLOAD",
+            "now": datetime.now(UTC),
+            "id": story_id,
+        },
+    )
+    await db.commit()
+    return {"story_id": story_id, **result}
+
+
+@router.get("/v1/admin/tiktok/stories/{story_id}/status")
+async def tiktok_story_status(
+    story_id: str,
+    db: DBSession,
+    _admin=Depends(get_current_admin_user),
+):
+    """Consulta a TikTok el estado del envío de una story y lo persiste."""
+    row = (
+        await db.execute(
+            text("SELECT tiktok_publish_id FROM content.story_posts WHERE id = :id"),
+            {"id": story_id},
+        )
+    ).fetchone()
+    if not row or not row.tiktok_publish_id:
+        raise HTTPException(404, "Esta pieza no se ha enviado a TikTok")
+    data = await _fetch_publish_status(db, row.tiktok_publish_id)
+    status = data.get("status")
+    if status:
+        await db.execute(
+            text("UPDATE content.story_posts SET tiktok_status = :st WHERE id = :id"),
+            {"st": status, "id": story_id},
+        )
+        await db.commit()
+    return {"story_id": story_id, "publish_id": row.tiktok_publish_id, **data}
 
 
 @router.get("/v1/admin/tiktok/publish-status/{publish_id}")

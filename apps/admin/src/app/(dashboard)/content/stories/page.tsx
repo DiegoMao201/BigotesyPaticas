@@ -5,10 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Film, CheckCircle2, XCircle, RefreshCw, Play, Clock,
   Instagram, AlertTriangle, Wand2, ToggleLeft, ToggleRight,
-  Calendar, Image, Newspaper, Facebook, X, Maximize2,
+  Calendar, Image, Newspaper, Facebook, X, Maximize2, Music2, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { stories, type StoryItem } from '@/lib/api';
+import { stories, tiktok, type StoryItem } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
@@ -186,8 +186,73 @@ function StoryCard({ story, onApprove, onReject, loading }: {
             </div>
           </div>
         )}
+        {story.video_url && (story.status === 'approved' || story.status === 'published') && (
+          <TikTokSendRow story={story} />
+        )}
       </div>
     </Card>
+  );
+}
+
+// ── TikTok (manual mientras TikTok no apruebe video.publish) ─────────────────
+
+const TIKTOK_STATUS_LABEL: Record<string, string> = {
+  PROCESSING_UPLOAD: 'Subiendo a TikTok…',
+  PROCESSING_DOWNLOAD: 'TikTok procesando…',
+  SEND_TO_USER_INBOX: 'En tu bandeja de TikTok — publícalo desde el celular',
+  PUBLISH_COMPLETE: 'Publicado en TikTok',
+  FAILED: 'Falló en TikTok',
+};
+
+function TikTokSendRow({ story }: { story: StoryItem }) {
+  const qc = useQueryClient();
+  const sendMut = useMutation({
+    mutationFn: () => tiktok.sendStory(story.id),
+    onSuccess: (d) => {
+      toast.success(
+        d.mode === 'inbox'
+          ? 'Enviado a la bandeja de TikTok. Ábrelo en la app del celular para publicarlo.'
+          : 'Publicado en TikTok.'
+      );
+      qc.invalidateQueries({ queryKey: ['stories'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const refreshMut = useMutation({
+    mutationFn: () => tiktok.storyStatus(story.id),
+    onSuccess: (d) => {
+      toast.message(TIKTOK_STATUS_LABEL[d.status ?? ''] ?? `Estado TikTok: ${d.status ?? '?'}`);
+      qc.invalidateQueries({ queryKey: ['stories'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const st = story.tiktok_status;
+  const sent = !!story.tiktok_publish_id && st !== 'FAILED';
+  const done = st === 'PUBLISH_COMPLETE';
+
+  if (!sent) {
+    return (
+      <Button size="sm" variant="outline" className="w-full h-8 text-xs mt-1"
+        onClick={() => sendMut.mutate()} disabled={sendMut.isPending}>
+        {sendMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Music2 className="h-3.5 w-3.5 mr-1" />}
+        {sendMut.isPending ? 'Subiendo a TikTok…' : st === 'FAILED' ? 'Reintentar en TikTok' : 'Enviar a TikTok'}
+      </Button>
+    );
+  }
+  return (
+    <div className={`flex items-center justify-between gap-2 text-[10px] pt-1 ${done ? 'text-green-600' : 'text-purple-700'}`}>
+      <span className="flex items-center gap-1.5 min-w-0">
+        <Music2 className="h-3 w-3 shrink-0" />
+        <span className="truncate">{TIKTOK_STATUS_LABEL[st ?? ''] ?? `TikTok: ${st}`}</span>
+      </span>
+      {!done && (
+        <button onClick={() => refreshMut.mutate()} disabled={refreshMut.isPending}
+          className="shrink-0 text-muted-foreground hover:text-foreground" aria-label="Actualizar estado en TikTok">
+          <RefreshCw className={`h-3 w-3 ${refreshMut.isPending ? 'animate-spin' : ''}`} />
+        </button>
+      )}
+    </div>
   );
 }
 

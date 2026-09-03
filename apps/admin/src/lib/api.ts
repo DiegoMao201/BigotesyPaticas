@@ -1769,6 +1769,9 @@ export interface StoryItem {
   instagram_reel_id: string | null;
   facebook_reel_id: string | null;
   facebook_feed_id: string | null;
+  tiktok_publish_id: string | null;
+  tiktok_status: string | null;
+  tiktok_sent_at: string | null;
   dry_run: boolean;
   image_cost_usd: number | null;
   video_duration_sec: number | null;
@@ -1834,6 +1837,15 @@ export const tiktok = {
     ),
   publishStatus: (publishId: string) =>
     api<Record<string, unknown>>(`/v1/admin/tiktok/publish-status/${publishId}`),
+  sendStory: (storyId: string) =>
+    api<{ story_id: string; publish_id: string; mode: 'direct' | 'inbox'; video_bytes: number }>(
+      `/v1/admin/tiktok/stories/${storyId}/send`,
+      { method: 'POST' }
+    ),
+  storyStatus: (storyId: string) =>
+    api<{ story_id: string; publish_id: string; status?: string; fail_reason?: string }>(
+      `/v1/admin/tiktok/stories/${storyId}/status`
+    ),
   account: () => api<{ scope: string; user: TikTokUser }>('/v1/admin/tiktok/account'),
   videos: () => api<{ count: number; videos: TikTokVideo[] }>('/v1/admin/tiktok/videos'),
 };

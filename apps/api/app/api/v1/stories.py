@@ -55,6 +55,7 @@ async def list_stories(
                sp.scheduled_at, sp.published_at, sp.expires_at,
                sp.instagram_story_id, sp.facebook_story_id,
                sp.instagram_reel_id, sp.facebook_reel_id, sp.facebook_feed_id,
+               sp.tiktok_publish_id, sp.tiktok_status, sp.tiktok_sent_at,
                sp.dry_run, sp.image_cost_usd, sp.video_duration_sec,
                sp.video_size_bytes, sp.error_message,
                sp.created_at, sp.updated_at,
