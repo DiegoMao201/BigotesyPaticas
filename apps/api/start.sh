@@ -17,7 +17,7 @@ exec gunicorn app.main:app \
   -w 4 \
   -k uvicorn.workers.UvicornWorker \
   -b 0.0.0.0:8000 \
-  --timeout 60 \
+  --timeout 180 \
   --graceful-timeout 30 \
   --keep-alive 5 \
   --access-logfile - \
