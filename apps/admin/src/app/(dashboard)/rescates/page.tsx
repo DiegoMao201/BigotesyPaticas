@@ -67,7 +67,7 @@ export default function RescatesPage() {
                 <div className="aspect-video bg-teal-50 relative overflow-hidden">
                   {ev.animals[0]?.thumb_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={ev.animals[0].thumb_url ?? ev.animals[0].photo_url} alt={ev.title} className="h-full w-full object-cover" />
+                    <img src={ev.animals[0].thumb_url ?? ev.animals[0].photo_url} alt={ev.title} className="h-full w-full object-contain bg-muted" />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center text-teal-300">
                       <PawPrint className="h-8 w-8" />

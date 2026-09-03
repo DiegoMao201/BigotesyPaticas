@@ -47,9 +47,13 @@ def upload_image_webp(
     thumb_size: tuple[int, int] = (400, 400),
 ) -> dict[str, str]:
     """Convierte a WebP (imagen + thumbnail) y sube ambas al Space. Devuelve URLs públicas."""
-    from PIL import Image
+    from PIL import Image, ImageOps
 
-    img = Image.open(io.BytesIO(contents)).convert("RGB")
+    # Las fotos de celular traen la rotación en EXIF; sin exif_transpose la
+    # imagen se guarda acostada y así se ve en toda la web.
+    img = Image.open(io.BytesIO(contents))
+    img = ImageOps.exif_transpose(img) or img
+    img = img.convert("RGB")
 
     main = img.copy()
     main.thumbnail(max_size, Image.LANCZOS)

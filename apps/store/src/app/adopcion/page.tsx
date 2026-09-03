@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Image from 'next/image';
+import { PetPhoto } from '@/components/ui/PetPhoto';
 import { Heart, AlertTriangle, PawPrint, ExternalLink, LifeBuoy, HomeIcon, MapPin } from 'lucide-react';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
@@ -133,7 +133,7 @@ export default async function AdopcionPage() {
               <div key={l.id} className="rounded-3xl border-2 border-emerald-200 bg-emerald-50/40 overflow-hidden">
                 {l.photos[0] ? (
                   <div className="relative w-full h-44 bg-[#F8F9FA]">
-                    <Image src={l.photos[0]} alt={l.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-contain" />
+                    <PetPhoto src={l.photos[0]} alt={l.title} sizes="(max-width: 768px) 100vw, 33vw" />
                   </div>
                 ) : (
                   <div className="w-full h-44 bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-5xl">
@@ -205,12 +205,11 @@ export default async function AdopcionPage() {
               >
                 {ev.cover_thumb_url ? (
                   <div className="relative w-full h-32 overflow-hidden bg-[#F8F9FA]">
-                    <Image
+                    <PetPhoto
                       src={ev.cover_thumb_url}
                       alt={ev.title}
-                      fill
                       sizes="(max-width: 768px) 50vw, 25vw"
-                      className="object-contain group-hover:scale-105 transition-transform duration-300"
+                      className="group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
                 ) : (
@@ -261,12 +260,11 @@ export default async function AdopcionPage() {
               >
                 {l.photos[0] ? (
                   <div className="relative w-full h-48 overflow-hidden bg-[#F8F9FA]">
-                    <Image
+                    <PetPhoto
                       src={l.photos[0]}
                       alt={l.title}
-                      fill
                       sizes="(max-width: 768px) 50vw, 33vw"
-                      className="object-contain group-hover:scale-105 transition-transform duration-300"
+                      className="group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
                 ) : (

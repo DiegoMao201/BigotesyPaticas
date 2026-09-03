@@ -224,7 +224,7 @@ export default function ReportRescuePage() {
                     <X className="h-3 w-3" />
                   </button>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={d.preview} alt="" className="aspect-square w-full object-cover rounded-xl" />
+                  <img src={d.preview} alt="" className="aspect-square w-full object-contain bg-muted rounded-xl" />
                   <input
                     value={d.description}
                     onChange={(e) =>

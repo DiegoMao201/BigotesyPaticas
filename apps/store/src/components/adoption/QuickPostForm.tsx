@@ -158,7 +158,7 @@ export function QuickPostForm() {
         {photoPreview ? (
           <div className="relative w-28 h-28 rounded-xl overflow-hidden border-2 border-[#187f77]/20">
             {/* eslint-disable-next-line @next/next/no-img-element -- vista previa local (object URL), nunca pasa por next/image */}
-            <img src={photoPreview} alt="Vista previa" className="w-full h-full object-cover" />
+            <img src={photoPreview} alt="Vista previa" className="w-full h-full object-contain bg-muted" />
             <button
               type="button"
               onClick={removePhoto}

@@ -147,7 +147,7 @@ export default function AdoptionModerationPage() {
                 <div className="aspect-video bg-teal-50 relative overflow-hidden">
                   {l.photos[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={l.photos[0]} alt={l.title} className="h-full w-full object-cover" />
+                    <img src={l.photos[0]} alt={l.title} className="h-full w-full object-contain bg-muted" />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center text-teal-300">
                       <Heart className="h-8 w-8" />

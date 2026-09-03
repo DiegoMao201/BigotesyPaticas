@@ -112,7 +112,7 @@ export default function ReportSOSPage() {
             {photoPreview ? (
               <div className="relative h-28 w-28 rounded-2xl overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photoPreview} alt="Foto de la mascota" className="h-full w-full object-cover" />
+                <img src={photoPreview} alt="Foto de la mascota" className="h-full w-full object-contain bg-muted" />
               </div>
             ) : (
               <div className="flex flex-col items-center gap-1.5">

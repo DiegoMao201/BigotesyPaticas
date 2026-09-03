@@ -76,7 +76,7 @@ export default function RescueEventDetailPage() {
                 className="aspect-square rounded-xl overflow-hidden relative bg-[#E6F5F1]"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={a.thumb_url ?? a.photo_url} alt={a.description ?? 'Animal rescatado'} className="h-full w-full object-cover" />
+                <img src={a.thumb_url ?? a.photo_url} alt={a.description ?? 'Animal rescatado'} className="h-full w-full object-contain bg-muted" />
                 {a.status === 'reunited' && (
                   <span className="absolute inset-0 bg-black/50 flex items-center justify-center">
                     <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-emerald-700">

@@ -110,7 +110,7 @@ export default function RescueEventDetailPage() {
             <Card key={a.id} className="p-0 overflow-hidden">
               <div className="aspect-square relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={a.thumb_url ?? a.photo_url} alt="" className="h-full w-full object-cover" />
+                <img src={a.thumb_url ?? a.photo_url} alt="" className="h-full w-full object-contain bg-muted" />
                 <button
                   onClick={() => deleteAnimal(a.id)}
                   className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/50 text-white flex items-center justify-center"

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import Image from 'next/image';
+import { PetPhoto } from '@/components/ui/PetPhoto';
 import { notFound } from 'next/navigation';
 import { storeApi } from '@/lib/api';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
@@ -57,7 +57,7 @@ export default async function AdoptionListingDetailPage({ params }: { params: { 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
             {listing.photos.map((url, i) => (
               <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative aspect-square rounded-2xl overflow-hidden block bg-[#F8F9FA]">
-                <Image src={url} alt={listing.title} fill sizes="(max-width: 640px) 50vw, 33vw" className="object-contain" />
+                <PetPhoto src={url} alt={listing.title} sizes="(max-width: 640px) 50vw, 33vw" />
               </a>
             ))}
           </div>

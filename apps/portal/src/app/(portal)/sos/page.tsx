@@ -130,7 +130,7 @@ export default function SOSListPage() {
                 <div className="h-16 w-16 rounded-2xl shrink-0 overflow-hidden bg-[#FDEEE9] flex items-center justify-center text-3xl">
                   {ev.photos[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={ev.photos[0]} alt={ev.pet_name} className="h-full w-full object-cover" />
+                    <img src={ev.photos[0]} alt={ev.pet_name} className="h-full w-full object-contain bg-muted" />
                   ) : (
                     getSpeciesEmoji(ev.species)
                   )}

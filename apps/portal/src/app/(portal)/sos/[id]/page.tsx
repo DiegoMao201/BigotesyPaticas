@@ -98,7 +98,7 @@ export default function SOSDetailPage() {
             <div className="h-20 w-20 rounded-2xl shrink-0 overflow-hidden bg-[#FDEEE9] flex items-center justify-center text-4xl">
               {event.photos[0] ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={event.photos[0]} alt={event.pet_name} className="h-full w-full object-cover" />
+                <img src={event.photos[0]} alt={event.pet_name} className="h-full w-full object-contain bg-muted" />
               ) : (
                 getSpeciesEmoji(event.species)
               )}
@@ -129,7 +129,7 @@ export default function SOSDetailPage() {
             <div className="flex gap-2 overflow-x-auto scrollbar-hide">
               {event.photos.slice(1).map((url) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={url} src={url} alt={event.pet_name} className="h-16 w-16 rounded-xl object-cover shrink-0" />
+                <img key={url} src={url} alt={event.pet_name} className="h-16 w-16 rounded-xl object-contain bg-muted shrink-0" />
               ))}
               {isReporter && isActive && (
                 <button

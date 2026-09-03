@@ -83,7 +83,7 @@ export default function RescuedAnimalsPage() {
                 <div className="aspect-square bg-[#E6F5F1] relative overflow-hidden">
                   {ev.cover_thumb_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={ev.cover_thumb_url} alt={ev.title} className="h-full w-full object-cover" />
+                    <img src={ev.cover_thumb_url} alt={ev.title} className="h-full w-full object-contain bg-muted" />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center text-emerald-700/40">
                       <ImageOff className="h-8 w-8" />
