@@ -1766,6 +1766,9 @@ export interface StoryItem {
   published_at: string | null;
   instagram_story_id: string | null;
   facebook_story_id: string | null;
+  instagram_reel_id: string | null;
+  facebook_reel_id: string | null;
+  facebook_feed_id: string | null;
   dry_run: boolean;
   image_cost_usd: number | null;
   video_duration_sec: number | null;

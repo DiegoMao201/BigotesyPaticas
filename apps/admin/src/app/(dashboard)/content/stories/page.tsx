@@ -168,12 +168,38 @@ function StoryCard({ story, onApprove, onReject, loading }: {
           </div>
         )}
         {story.status === 'published' && (
-          <div className="flex items-center gap-1.5 text-[10px] text-green-600 pt-1">
-            <CheckCircle2 className="h-3 w-3" /> Publicado {story.published_at ? fmtDate(story.published_at) : ''}
+          <div className="space-y-1 pt-1">
+            <div className="flex items-center gap-1.5 text-[10px] text-green-600">
+              <CheckCircle2 className="h-3 w-3" /> Publicado {story.published_at ? fmtDate(story.published_at) : ''}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {story.instagram_story_id && <DestBadge label="IG Story" ok />}
+              {story.instagram_reel_id && <DestBadge label="IG Reel+Feed" ok />}
+              {story.facebook_story_id && <DestBadge label="FB Story" ok />}
+              {story.facebook_reel_id && <DestBadge label="FB Reel" ok />}
+              {story.facebook_feed_id && <DestBadge label="FB Feed" ok />}
+              {!story.instagram_story_id && <DestBadge label="IG Story" ok={false} />}
+              {!story.instagram_reel_id && <DestBadge label="IG Reel+Feed" ok={false} />}
+              {!story.facebook_story_id && <DestBadge label="FB Story" ok={false} />}
+              {!story.facebook_reel_id && <DestBadge label="FB Reel" ok={false} />}
+              {!story.facebook_feed_id && <DestBadge label="FB Feed" ok={false} />}
+            </div>
           </div>
         )}
       </div>
     </Card>
+  );
+}
+
+function DestBadge({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <span
+      className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+        ok ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400 line-through'
+      }`}
+    >
+      {label}
+    </span>
   );
 }
 

@@ -54,6 +54,7 @@ async def list_stories(
                sp.video_url, sp.base_image_url, sp.caption, sp.swipe_up_url,
                sp.scheduled_at, sp.published_at, sp.expires_at,
                sp.instagram_story_id, sp.facebook_story_id,
+               sp.instagram_reel_id, sp.facebook_reel_id, sp.facebook_feed_id,
                sp.dry_run, sp.image_cost_usd, sp.video_duration_sec,
                sp.video_size_bytes, sp.error_message,
                sp.created_at, sp.updated_at,
