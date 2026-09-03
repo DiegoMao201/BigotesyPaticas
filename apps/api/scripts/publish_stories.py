@@ -210,23 +210,29 @@ def publish_fb_story_image(image_url: str) -> str:
     return story_id
 
 
-def publish_ig_reel(video_url: str, caption: str) -> str:
+def publish_ig_reel(video_url: str, caption: str, cover_url: str | None = None) -> str:
     """Publica Reel en Instagram con share_to_feed=true (queda en Reels Y en
-    el feed principal con esta única llamada). Retorna ig_reel_id."""
+    el feed principal con esta única llamada). Si se pasa cover_url, ese es
+    el fotograma de portada; si no, Instagram elige uno automático del
+    video. Retorna ig_reel_id."""
     ig_id = os.environ.get("META_INSTAGRAM_BUSINESS_ID", "")
     token = _token()
     if not ig_id:
         raise RuntimeError("META_INSTAGRAM_BUSINESS_ID no configurado")
 
+    params = {
+        "media_type": "REELS",
+        "video_url": video_url,
+        "caption": caption[:2200],
+        "share_to_feed": "true",
+        "access_token": token,
+    }
+    if cover_url:
+        params["cover_url"] = cover_url
+
     r = requests.post(
         f"{META_BASE}/{ig_id}/media",
-        params={
-            "media_type": "REELS",
-            "video_url": video_url,
-            "caption": caption[:2200],
-            "share_to_feed": "true",
-            "access_token": token,
-        },
+        params=params,
         timeout=60,
     )
     r.raise_for_status()
@@ -374,10 +380,13 @@ async def publish_story(story: dict, dry_run: bool, cur, conn) -> bool:
                 errors.append(f"FB story: {e}"[:300])
 
             # Reel (IG+FB) y feed de video (FB) -- solo video, Instagram no
-            # admite Reels de imagen.
+            # admite Reels de imagen. base_image_url, para contenido de
+            # video, se reutiliza como portada 9:16 (no es la imagen
+            # principal como en un post de imagen) -- ver cover_url del Reel.
             if not is_image:
+                cover_url = story.get("base_image_url") or None
                 try:
-                    ig_reel_id = publish_ig_reel(media_url, caption)
+                    ig_reel_id = publish_ig_reel(media_url, caption, cover_url=cover_url)
                 except Exception as e:
                     log.warning("IG reel falló: %s", e)
                     errors.append(f"IG reel: {e}"[:300])
