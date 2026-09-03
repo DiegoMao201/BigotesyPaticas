@@ -15,6 +15,7 @@ ningún header de autenticación nuestro -- la protección contra CSRF es el
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -40,9 +41,21 @@ REDIRECT_URI = "https://api.bigotesypaticas.com/v1/tiktok/oauth/callback"
 # con PULL_FROM_URL para publicar directo; una vez TikTok habilite ese scope
 # (probablemente junto con la auditoría), se agrega de vuelta aquí.
 SCOPES = "user.info.basic,video.upload"
+PUBLISH_SCOPE = "video.publish"
 ADMIN_TIKTOK_PAGE = "https://admin.bigotesypaticas.com/content/tiktok"
 
 _STATE_TTL = timedelta(minutes=10)
+
+# FILE_UPLOAD: los videos viven en el CDN de DigitalOcean (dominio que no
+# podemos verificar en el portal de TikTok), así que PULL_FROM_URL fallaría
+# con url_ownership_unverified. En su lugar descargamos el mp4 y lo subimos
+# nosotros. TikTok exige chunks de 5-64 MB (el último puede ser mayor, hasta
+# 128 MB); un video de <= 64 MB va en un solo chunk.
+_CHUNK_SIZE = 50 * 1024 * 1024
+_SINGLE_CHUNK_MAX = 64 * 1024 * 1024
+_MAX_VIDEO_BYTES = 500 * 1024 * 1024
+
+log = logging.getLogger("tiktok")
 
 
 def _client_key() -> str:
@@ -128,6 +141,7 @@ async def tiktok_oauth_callback(
         )
     body = r.json()
     if r.status_code != 200 or "access_token" not in body:
+        log.error("token_exchange_failed body=%r", body)
         return RedirectResponse(
             f"{ADMIN_TIKTOK_PAGE}?error=token_exchange_failed&detail={body!s}"[:500]
         )
@@ -160,6 +174,26 @@ async def tiktok_oauth_callback(
         },
     )
     await db.commit()
+
+    # Nombre visible de la cuenta (user.info.basic). Best-effort: si falla,
+    # la conexión igual queda hecha -- solo se pierde el nombre en el admin.
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            u = await client.get(
+                f"{TIKTOK_API_BASE}/user/info/",
+                params={"fields": "open_id,display_name"},
+                headers={"Authorization": f"Bearer {body['access_token']}"},
+            )
+        display_name = (u.json().get("data", {}).get("user", {}) or {}).get("display_name")
+        if display_name:
+            await db.execute(
+                text("UPDATE content.tiktok_auth SET username=:u WHERE open_id=:o"),
+                {"u": display_name, "o": open_id},
+            )
+            await db.commit()
+    except Exception:
+        log.warning("user/info falló tras conectar", exc_info=True)
+
     return RedirectResponse(f"{ADMIN_TIKTOK_PAGE}?connected=1")
 
 
@@ -196,12 +230,13 @@ class TikTokTestPublish(BaseModel):
     caption: str = ""
 
 
-async def _get_valid_access_token(db: DBSession) -> str:
-    """Devuelve un access_token vigente, refrescándolo si ya venció."""
+async def _get_valid_token(db: DBSession) -> tuple[str, str]:
+    """Devuelve (access_token vigente, scope concedido), refrescando el
+    token si ya venció."""
     row = (
         await db.execute(
             text("""
-                SELECT id, access_token, refresh_token, expires_at
+                SELECT id, access_token, refresh_token, scope, expires_at
                 FROM content.tiktok_auth ORDER BY updated_at DESC LIMIT 1
             """)
         )
@@ -209,8 +244,9 @@ async def _get_valid_access_token(db: DBSession) -> str:
     if not row:
         raise HTTPException(400, "No hay ninguna cuenta de TikTok conectada todavía")
 
+    scope = row.scope or ""
     if row.expires_at > datetime.now(UTC) + timedelta(minutes=2):
-        return row.access_token
+        return row.access_token, scope
 
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
@@ -225,6 +261,7 @@ async def _get_valid_access_token(db: DBSession) -> str:
         )
     body = r.json()
     if r.status_code != 200 or "access_token" not in body:
+        log.error("refresh_token falló body=%r", body)
         raise HTTPException(502, f"No se pudo refrescar el token de TikTok: {body!s}"[:500])
 
     now = datetime.now(UTC)
@@ -247,7 +284,51 @@ async def _get_valid_access_token(db: DBSession) -> str:
         },
     )
     await db.commit()
-    return body["access_token"]
+    return body["access_token"], scope
+
+
+async def _download_video(video_url: str) -> bytes:
+    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+        r = await client.get(video_url)
+    if r.status_code != 200:
+        raise HTTPException(400, f"No se pudo descargar el video ({r.status_code}): {video_url}")
+    data = r.content
+    if not data:
+        raise HTTPException(400, "El video descargado está vacío")
+    if len(data) > _MAX_VIDEO_BYTES:
+        raise HTTPException(400, f"Video demasiado grande ({len(data) // (1024 * 1024)} MB)")
+    return data
+
+
+def _chunk_plan(size: int) -> tuple[int, int]:
+    """(chunk_size, total_chunk_count) según las reglas de TikTok."""
+    if size <= _SINGLE_CHUNK_MAX:
+        return size, 1
+    return _CHUNK_SIZE, size // _CHUNK_SIZE
+
+
+async def _upload_chunks(upload_url: str, data: bytes) -> None:
+    """PUT de los chunks a la URL que devolvió TikTok en el init. El último
+    chunk absorbe el sobrante para no violar el mínimo de 5 MB."""
+    size = len(data)
+    chunk_size, count = _chunk_plan(size)
+    async with httpx.AsyncClient(timeout=300) as client:
+        for i in range(count):
+            start = i * chunk_size
+            end = size if i == count - 1 else start + chunk_size
+            r = await client.put(
+                upload_url,
+                content=data[start:end],
+                headers={
+                    "Content-Type": "video/mp4",
+                    "Content-Length": str(end - start),
+                    "Content-Range": f"bytes {start}-{end - 1}/{size}",
+                },
+            )
+            if r.status_code not in (200, 201, 206):
+                raise HTTPException(
+                    502, f"Subida del chunk {i + 1}/{count} falló ({r.status_code}): {r.text[:300]}"
+                )
 
 
 @router.post("/v1/admin/tiktok/test-publish")
@@ -256,50 +337,74 @@ async def tiktok_test_publish(
     db: DBSession,
     _admin=Depends(get_current_admin_user),
 ):
-    """Publica un video de prueba a TikTok. Mientras la app no esté
-    auditada, TikTok fuerza privacy_level=SELF_ONLY (solo lo ve el dueño
-    de la cuenta) sin importar lo que mandemos aquí."""
-    access_token = await _get_valid_access_token(db)
+    """Sube un video a TikTok.
 
+    - Con scope `video.publish` (Direct Post): queda publicado; sin auditoría
+      TikTok fuerza privacy_level=SELF_ONLY (solo lo ve la cuenta dueña).
+    - Solo con `video.upload` (lo que tenemos hoy): va a la bandeja de
+      borradores de la app de TikTok y el dueño lo publica con un toque.
+    """
+    access_token, scope = await _get_valid_token(db)
+    direct = PUBLISH_SCOPE in scope.split(",")
+    auth = {"Authorization": f"Bearer {access_token}"}
+    json_hdr = {**auth, "Content-Type": "application/json; charset=UTF-8"}
+
+    data = await _download_video(payload.video_url)
+    chunk_size, count = _chunk_plan(len(data))
+    source_info = {
+        "source": "FILE_UPLOAD",
+        "video_size": len(data),
+        "chunk_size": chunk_size,
+        "total_chunk_count": count,
+    }
+
+    privacy_level: str | None = None
+    creator_username: str | None = None
     async with httpx.AsyncClient(timeout=30) as client:
-        creator_r = await client.post(
-            f"{TIKTOK_API_BASE}/post/publish/creator_info/query/",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        creator = creator_r.json()
-        if creator_r.status_code != 200 or creator.get("error", {}).get("code") != "ok":
-            raise HTTPException(502, f"creator_info/query falló: {creator!s}"[:500])
-        privacy_options = creator["data"].get("privacy_level_options", [])
-        privacy_level = "SELF_ONLY" if "SELF_ONLY" in privacy_options else privacy_options[0]
+        if direct:
+            creator_r = await client.post(
+                f"{TIKTOK_API_BASE}/post/publish/creator_info/query/", headers=auth
+            )
+            creator = creator_r.json()
+            if creator_r.status_code != 200 or creator.get("error", {}).get("code") != "ok":
+                raise HTTPException(502, f"creator_info/query falló: {creator!s}"[:500])
+            options = creator["data"].get("privacy_level_options") or ["SELF_ONLY"]
+            privacy_level = "SELF_ONLY" if "SELF_ONLY" in options else options[0]
+            creator_username = creator["data"].get("creator_username")
+            init_r = await client.post(
+                f"{TIKTOK_API_BASE}/post/publish/video/init/",
+                headers=json_hdr,
+                json={
+                    "post_info": {
+                        "title": payload.caption[:2200],
+                        "privacy_level": privacy_level,
+                        "disable_duet": False,
+                        "disable_comment": False,
+                        "disable_stitch": False,
+                    },
+                    "source_info": source_info,
+                },
+            )
+        else:
+            init_r = await client.post(
+                f"{TIKTOK_API_BASE}/post/publish/inbox/video/init/",
+                headers=json_hdr,
+                json={"source_info": source_info},
+            )
 
-        init_r = await client.post(
-            f"{TIKTOK_API_BASE}/post/publish/video/init/",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json; charset=UTF-8",
-            },
-            json={
-                "post_info": {
-                    "title": payload.caption[:2200],
-                    "privacy_level": privacy_level,
-                    "disable_duet": False,
-                    "disable_comment": False,
-                    "disable_stitch": False,
-                },
-                "source_info": {
-                    "source": "PULL_FROM_URL",
-                    "video_url": payload.video_url,
-                },
-            },
-        )
     init_body = init_r.json()
     if init_r.status_code != 200 or init_body.get("error", {}).get("code") != "ok":
+        log.error("video/init falló body=%r", init_body)
         raise HTTPException(502, f"video/init falló: {init_body!s}"[:500])
+
+    await _upload_chunks(init_body["data"]["upload_url"], data)
 
     return {
         "publish_id": init_body["data"]["publish_id"],
+        "mode": "direct" if direct else "inbox",
+        "video_bytes": len(data),
         "privacy_level_used": privacy_level,
-        "creator_username": creator["data"].get("creator_username"),
+        "creator_username": creator_username,
     }
 
 
@@ -309,7 +414,7 @@ async def tiktok_publish_status(
     db: DBSession,
     _admin=Depends(get_current_admin_user),
 ):
-    access_token = await _get_valid_access_token(db)
+    access_token, _scope = await _get_valid_token(db)
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
             f"{TIKTOK_API_BASE}/post/publish/status/fetch/",

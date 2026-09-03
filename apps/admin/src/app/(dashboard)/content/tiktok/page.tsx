@@ -57,7 +57,12 @@ function TikTokPageInner() {
   const publishMut = useMutation({
     mutationFn: () => tiktok.testPublish(videoUrl, caption),
     onSuccess: (data) => {
-      toast.success(`Enviado a TikTok (privacidad: ${data.privacy_level_used}). Revisa el estado abajo.`);
+      const mb = (data.video_bytes / (1024 * 1024)).toFixed(1);
+      if (data.mode === 'inbox') {
+        toast.success(`Video (${mb} MB) enviado a la bandeja de TikTok. Ábrelo en la app para publicarlo.`);
+      } else {
+        toast.success(`Video (${mb} MB) publicado en TikTok (privacidad: ${data.privacy_level_used}).`);
+      }
       setLastPublishId(data.publish_id);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -67,8 +72,19 @@ function TikTokPageInner() {
     queryKey: ['tiktok-publish-status', lastPublishId],
     queryFn: () => tiktok.publishStatus(lastPublishId!),
     enabled: !!lastPublishId,
-    refetchInterval: (query) => (query.state.data?.status === 'PUBLISH_COMPLETE' ? false : 4000),
+    refetchInterval: (query) => {
+      const s = String(query.state.data?.status ?? '');
+      return s === 'PUBLISH_COMPLETE' || s === 'SEND_TO_USER_INBOX' || s === 'FAILED' ? false : 4000;
+    },
   });
+
+  const STATUS_LABEL: Record<string, string> = {
+    PROCESSING_UPLOAD: 'Subiendo a TikTok…',
+    PROCESSING_DOWNLOAD: 'TikTok está procesando el video…',
+    SEND_TO_USER_INBOX: 'En tu bandeja de TikTok: ábrelo en la app para publicarlo',
+    PUBLISH_COMPLETE: 'Publicado',
+    FAILED: 'Falló',
+  };
 
   return (
     <div className="space-y-6">
@@ -117,8 +133,9 @@ function TikTokPageInner() {
         <Card className="p-5 space-y-4">
           <h2 className="font-display font-semibold text-lg">Publicación de prueba (Sandbox)</h2>
           <p className="text-xs text-muted-foreground">
-            Mientras la app esté en Sandbox/sin auditar, esto publica en privado (solo lo ves tú en la app de TikTok) —
-            es para confirmar que la integración funciona antes de pedir la auditoría.
+            Con los permisos actuales (<code>video.upload</code>) el video llega a la <strong>bandeja de borradores</strong> de
+            la app de TikTok de la cuenta conectada y lo publicas con un toque. Cuando TikTok apruebe <code>video.publish</code>,
+            este mismo botón publicará directo.
           </p>
           <div className="space-y-3">
             <div>
@@ -139,7 +156,9 @@ function TikTokPageInner() {
             <div className="rounded-xl border border-border p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">Estado de la publicación</p>
-                <Badge className="bg-blue-100 text-blue-700">{String(statusQuery.data?.status ?? '...')}</Badge>
+                <Badge className="bg-blue-100 text-blue-700">
+                  {STATUS_LABEL[String(statusQuery.data?.status ?? '')] ?? String(statusQuery.data?.status ?? '...')}
+                </Badge>
               </div>
               <pre className="text-xs bg-muted/40 rounded-lg p-3 overflow-auto">
                 {JSON.stringify(statusQuery.data ?? {}, null, 2)}

@@ -1822,7 +1822,13 @@ export const tiktok = {
   status: () => api<TikTokStatus>('/v1/admin/tiktok/status'),
   authorize: () => api<{ authorize_url: string }>('/v1/admin/tiktok/authorize'),
   testPublish: (video_url: string, caption: string) =>
-    api<{ publish_id: string; privacy_level_used: string; creator_username: string | null }>(
+    api<{
+      publish_id: string;
+      mode: 'direct' | 'inbox';
+      video_bytes: number;
+      privacy_level_used: string | null;
+      creator_username: string | null;
+    }>(
       '/v1/admin/tiktok/test-publish',
       { method: 'POST', body: JSON.stringify({ video_url, caption }) }
     ),
