@@ -15,6 +15,7 @@ ningún header de autenticación nuestro -- la protección contra CSRF es el
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import secrets
@@ -332,13 +333,111 @@ async def _upload_chunks(upload_url: str, data: bytes) -> None:
                 )
 
 
-async def send_video_to_tiktok(db: DBSession, video_url: str, caption: str) -> dict:
+def _prepend_cover(video: bytes, cover: bytes) -> bytes:
+    """Devuelve una copia del mp4 con la portada como primeros 2 fotogramas
+    (~66 ms, imperceptible al reproducir) para que TikTok la tome como
+    portada por defecto: TikTok no acepta una imagen de portada aparte por
+    API (solo `video_cover_timestamp_ms` en Direct Post, y nada en modo
+    bandeja). El original del CDN -- el que usan Instagram/Facebook -- no se
+    toca: esto vive en un directorio temporal y se borra al terminar."""
+    import json
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory(prefix="tiktok_cover_") as tmp:
+        d = Path(tmp)
+        (d / "in.mp4").write_bytes(video)
+        (d / "cover.img").write_bytes(cover)
+
+        probe = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-print_format",
+                "json",
+                "-show_streams",
+                str(d / "in.mp4"),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
+        )
+        streams = json.loads(probe.stdout).get("streams", [])
+        v = next(s for s in streams if s.get("codec_type") == "video")
+        has_audio = any(s.get("codec_type") == "audio" for s in streams)
+        w, h = int(v["width"]), int(v["height"])
+        num, den = (v.get("r_frame_rate") or "30/1").split("/")
+        fps = max(1.0, float(num) / float(den or 1))
+        cover_dur = 2 / fps  # 2 fotogramas
+
+        vf = (
+            f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+            f"setsar=1,fps={fps},format=yuv420p[c];[1:v]fps={fps},format=yuv420p[m];"
+            f"[c][m]concat=n=2:v=1:a=0[v]"
+        )
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-loop",
+            "1",
+            "-framerate",
+            f"{fps}",
+            "-t",
+            f"{cover_dur:.4f}",
+            "-i",
+            str(d / "cover.img"),
+            "-i",
+            str(d / "in.mp4"),
+        ]
+        if has_audio:
+            delay_ms = int(round(cover_dur * 1000))
+            cmd += [
+                "-filter_complex",
+                vf + f";[1:a]adelay={delay_ms}|{delay_ms}[a]",
+                "-map",
+                "[v]",
+                "-map",
+                "[a]",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "160k",
+            ]
+        else:
+            cmd += ["-filter_complex", vf, "-map", "[v]"]
+        cmd += [
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "19",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(d / "out.mp4"),
+        ]
+        subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=True)
+        return (d / "out.mp4").read_bytes()
+
+
+async def send_video_to_tiktok(
+    db: DBSession, video_url: str, caption: str, cover_url: str | None = None
+) -> dict:
     """Sube un video a TikTok y devuelve {publish_id, mode, ...}.
 
     - Con scope `video.publish` (Direct Post): queda publicado; sin auditoría
       TikTok fuerza privacy_level=SELF_ONLY (solo lo ve la cuenta dueña).
     - Solo con `video.upload` (lo que tenemos hoy): va a la bandeja de
       borradores de la app de TikTok y el dueño lo publica con un toque.
+    - `cover_url`: si viene, se sube una copia con la portada al frente
+      (ver _prepend_cover); el video original no cambia.
     """
     access_token, scope = await _get_valid_token(db)
     direct = PUBLISH_SCOPE in scope.split(",")
@@ -346,6 +445,16 @@ async def send_video_to_tiktok(db: DBSession, video_url: str, caption: str) -> d
     json_hdr = {**auth, "Content-Type": "application/json; charset=UTF-8"}
 
     data = await _download_video(video_url)
+    cover_applied = False
+    if cover_url:
+        try:
+            async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+                cr = await client.get(cover_url)
+            if cr.status_code == 200 and cr.content:
+                data = await asyncio.to_thread(_prepend_cover, data, cr.content)
+                cover_applied = True
+        except Exception:  # la portada es un extra: si falla, se sube el video tal cual
+            log.warning("No se pudo anteponer la portada; se sube el video original", exc_info=True)
     chunk_size, count = _chunk_plan(len(data))
     source_info = {
         "source": "FILE_UPLOAD",
@@ -377,6 +486,8 @@ async def send_video_to_tiktok(db: DBSession, video_url: str, caption: str) -> d
                         "disable_duet": False,
                         "disable_comment": False,
                         "disable_stitch": False,
+                        # la portada va en los primeros fotogramas (ver _prepend_cover)
+                        "video_cover_timestamp_ms": 0,
                     },
                     "source_info": source_info,
                 },
@@ -399,6 +510,7 @@ async def send_video_to_tiktok(db: DBSession, video_url: str, caption: str) -> d
         "publish_id": init_body["data"]["publish_id"],
         "mode": "direct" if direct else "inbox",
         "video_bytes": len(data),
+        "cover_applied": cover_applied,
         "privacy_level_used": privacy_level,
         "creator_username": creator_username,
     }
@@ -444,7 +556,8 @@ async def tiktok_send_story(
     row = (
         await db.execute(
             text("""
-                SELECT id, video_url, caption, status, tiktok_publish_id, tiktok_status
+                SELECT id, video_url, base_image_url, caption, status,
+                       tiktok_publish_id, tiktok_status
                 FROM content.story_posts WHERE id = :id
             """),
             {"id": story_id},
@@ -459,7 +572,11 @@ async def tiktok_send_story(
     if row.tiktok_publish_id and row.tiktok_status not in ("FAILED", None):
         raise HTTPException(409, "Esta pieza ya fue enviada a TikTok")
 
-    result = await send_video_to_tiktok(db, row.video_url, row.caption or "")
+    # base_image_url es la portada 9:16 de la pieza (la misma que usan los
+    # Reels de Instagram); para TikTok va como primeros fotogramas del video.
+    result = await send_video_to_tiktok(
+        db, row.video_url, row.caption or "", cover_url=row.base_image_url
+    )
     await db.execute(
         text("""
             UPDATE content.story_posts
