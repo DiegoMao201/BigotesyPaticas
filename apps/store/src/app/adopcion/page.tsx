@@ -150,9 +150,20 @@ export default async function AdopcionPage() {
         </div>
       )}
 
-      {/* Puente a perdidos / encontrados */}
+      {/* Puente a perdidos / encontrados / finales felices */}
       <div className="container-wide pt-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <Link
+            href="/finales-felices"
+            className="group flex items-center gap-4 rounded-3xl p-6 text-white transition-transform hover:-translate-y-1 md:order-last"
+            style={{ background: 'linear-gradient(135deg, #34d399, #047857)' }}
+          >
+            <div className="h-14 w-14 rounded-2xl bg-white/15 flex items-center justify-center shrink-0 text-3xl">🎉</div>
+            <div>
+              <p className="font-display font-bold text-lg">Finales felices</p>
+              <p className="text-sm text-white/85">Mascotas que volvieron a casa y encontraron hogar →</p>
+            </div>
+          </Link>
           <Link
             href="/mascotas-perdidas"
             className="group flex items-center gap-4 rounded-3xl p-6 text-white transition-transform hover:-translate-y-1"

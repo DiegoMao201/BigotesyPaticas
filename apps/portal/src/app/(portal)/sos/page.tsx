@@ -58,6 +58,14 @@ export default function SOSListPage() {
           >
             🏠 Ver animalitos encontrados
           </Link>
+          <a
+            href="https://bigotesypaticas.com/finales-felices"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl bg-white/15 backdrop-blur px-5 py-3 text-sm font-bold text-white active:scale-95 transition-transform"
+          >
+            🎉 Finales felices
+          </a>
         </div>
       </div>
 

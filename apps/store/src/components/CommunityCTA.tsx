@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, Heart, LifeBuoy, HomeIcon } from 'lucide-react';
+import { ArrowRight, Heart, LifeBuoy, HomeIcon, PartyPopper } from 'lucide-react';
 
 interface Props {
   adoptionCount: number;
@@ -70,6 +70,18 @@ export function CommunityCTA({ adoptionCount, lostCount, foundCount }: Props) {
               <div className="min-w-0">
                 <p className="text-white font-semibold text-sm">Animales Encontrados</p>
                 <p className="text-white/60 text-xs">{foundCount > 0 ? `${foundCount} esperando a su familia` : 'Publica lo que encontraste'}</p>
+              </div>
+            </Link>
+            <Link
+              href="/finales-felices"
+              className="flex items-center gap-3 rounded-2xl bg-emerald-400/20 backdrop-blur-sm border border-emerald-300/40 p-4 hover:bg-emerald-400/30 transition-colors"
+            >
+              <div className="h-11 w-11 rounded-xl bg-emerald-400/30 flex items-center justify-center shrink-0">
+                <PartyPopper className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-white font-semibold text-sm">🎉 Finales Felices</p>
+                <p className="text-white/70 text-xs">Mascotas que volvieron a casa y encontraron hogar</p>
               </div>
             </Link>
           </div>
