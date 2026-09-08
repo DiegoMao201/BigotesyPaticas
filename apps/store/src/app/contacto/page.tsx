@@ -108,6 +108,14 @@ export default function ContactoPage() {
                   </div>
                 </li>
               </ul>
+              <div className="mt-5 rounded-2xl bg-white/60 border border-border p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider mb-2">Servicios en tienda</p>
+                <ul className="text-sm space-y-1">
+                  {BUSINESS_INFO.services.map((s) => (
+                    <li key={s.name}><span className="font-medium">{s.name}</span> <span className="opacity-70">· {s.description}</span></li>
+                  ))}
+                </ul>
+              </div>
             </div>
 
             {/* Verificador zona */}

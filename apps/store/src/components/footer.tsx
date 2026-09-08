@@ -180,6 +180,10 @@ export function Footer() {
               <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
               <span>{BUSINESS_INFO.address.streetAddress},<br />Dosquebradas, Risaralda</span>
             </li>
+            <li className="pt-1">
+              <span className="block text-xs font-semibold uppercase tracking-wider text-foreground/80 mb-1">Servicios en tienda</span>
+              <span>{BUSINESS_INFO.services.map((s) => s.name).join(' · ')}</span>
+            </li>
           </ul>
           <a
             href={BUSINESS_INFO.mapsUrl}

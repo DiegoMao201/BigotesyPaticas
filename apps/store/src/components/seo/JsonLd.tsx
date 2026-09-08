@@ -130,6 +130,14 @@ export function LocalBusinessSchema() {
         '@id': `${BUSINESS_INFO.url}/#localbusiness`,
         name: BUSINESS_INFO.name,
         sameAs: [...BUSINESS_INFO.sameAs],
+        hasOfferCatalog: {
+          '@type': 'OfferCatalog',
+          name: 'Servicios en tienda',
+          itemListElement: BUSINESS_INFO.services.map((s) => ({
+            '@type': 'Offer',
+            itemOffered: { '@type': 'Service', name: s.name, description: s.description, areaServed: [...BUSINESS_INFO.areaServed] },
+          })),
+        },
         alternateName: [
           'Pet Shop Pereira',
           'Pet Shop Dosquebradas',

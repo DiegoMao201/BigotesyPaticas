@@ -49,6 +49,13 @@ export const BUSINESS_INFO = {
 
   areaServed: ["Pereira", "Dosquebradas"],
 
+  // Servicios en tienda, confirmados por Diego el 8 sep 2026 (los mismos que declara la pagina de Facebook)
+  services: [
+    { name: "Grooming", description: "Baño y peluquería completos para perros y gatos" },
+    { name: "Consulta veterinaria", description: "Consulta veterinaria en tienda" },
+    { name: "Vacunación con carnet", description: "Vacunación con registro en carnet" },
+  ],
+
   priceRange: "$$$",  // marcas premium; igual que la pagina de Facebook (8 sep 2026)
   currenciesAccepted: "COP",
   paymentMethods: [
