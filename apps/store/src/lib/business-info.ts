@@ -49,7 +49,7 @@ export const BUSINESS_INFO = {
 
   areaServed: ["Pereira", "Dosquebradas"],
 
-  priceRange: "$$",
+  priceRange: "$$$",  // marcas premium; igual que la pagina de Facebook (8 sep 2026)
   currenciesAccepted: "COP",
   paymentMethods: [
     "Cash",
