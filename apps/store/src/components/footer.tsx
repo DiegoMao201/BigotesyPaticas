@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Phone, Mail, MapPin, Star } from 'lucide-react';
 import { BUSINESS_INFO } from '@/lib/business-info';
 import { Logo } from '@/components/brand/Logo';
+import { SocialIcons } from '@/components/social/SocialLinks';
 
 const GOOGLE_REVIEW_URL = 'https://g.page/r/CfL67OgLB-10EBM/review';
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
@@ -108,6 +109,8 @@ export function Footer() {
               Califícanos en Google
             </a>
           </div>
+          <p className="mt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Síguenos</p>
+          <SocialIcons className="mt-2" />
         </div>
 
         <div>

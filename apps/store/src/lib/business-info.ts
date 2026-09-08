@@ -94,7 +94,21 @@ export const BUSINESS_INFO = {
   mapsUrl:
     "https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Dosquebradas",
 
-  sameAs: ["https://www.instagram.com/bigotesypaticas/"] as string[],
+  // Redes verificadas (no inventar): Instagram y TikTok por nombre de usuario real;
+  // Facebook por id de pagina (la pagina no tiene username, ver commit 02ff11c).
+  social: {
+    instagram: { url: "https://www.instagram.com/bigotesypaticas/", handle: "@bigotesypaticas" },
+    tiktok: { url: "https://www.tiktok.com/@bigotesypaticas", handle: "@bigotesypaticas" },
+    facebook: { url: "https://www.facebook.com/1110830862122470", handle: "Bigotes y Paticas" },
+    whatsapp: { url: "https://wa.me/573206876633", handle: "320 687 6633" },
+    googleReviews: { url: "https://g.page/r/CfL67OgLB-10EBM/review", handle: "Google" },
+  },
+
+  sameAs: [
+    "https://www.instagram.com/bigotesypaticas/",
+    "https://www.tiktok.com/@bigotesypaticas",
+    "https://www.facebook.com/1110830862122470",
+  ] as string[],
 
   legal: {
     nit: "1088266407",

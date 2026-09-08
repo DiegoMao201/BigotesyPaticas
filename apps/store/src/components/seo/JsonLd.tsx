@@ -129,6 +129,7 @@ export function LocalBusinessSchema() {
         '@type': 'PetStore',
         '@id': `${BUSINESS_INFO.url}/#localbusiness`,
         name: BUSINESS_INFO.name,
+        sameAs: [...BUSINESS_INFO.sameAs],
         alternateName: [
           'Pet Shop Pereira',
           'Pet Shop Dosquebradas',

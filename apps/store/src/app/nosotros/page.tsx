@@ -1,5 +1,6 @@
 import { Heart, MapPin, Phone, Mail } from 'lucide-react';
 import Link from 'next/link';
+import { FollowUsSection } from '@/components/social/SocialLinks';
 
 export const metadata = {
   title: 'Nuestra historia',
@@ -94,6 +95,7 @@ export default function NosotrosPage() {
           </Link>
         </div>
       </div>
+      <FollowUsSection compact />
     </div>
   );
 }

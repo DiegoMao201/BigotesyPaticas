@@ -17,6 +17,7 @@ import { NewsletterForm } from '@/components/NewsletterForm';
 import { RealReviewsSection } from '@/components/reviews/RealReviewsSection';
 import { StoreMapEmbed } from '@/components/maps/StoreMapEmbed';
 import { BUSINESS_INFO } from '@/lib/business-info';
+import { FollowUsSection } from '@/components/social/SocialLinks';
 
 const CATEGORIES = [
   { slug: 'perros',     name: 'Perros',     emoji: '🐕', tone: 'from-orange-100 to-amber-50', accent: 'text-orange-700' },
@@ -292,6 +293,9 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* REDES: la misma tienda en todos los canales */}
+      <FollowUsSection />
 
       {/* CTA NEWSLETTER */}
       <section className="container-wide py-16">

@@ -359,6 +359,30 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Canales: la misma marca en tienda, portal y redes (omnicanal) */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Nuestros canales</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { label: 'Tienda bigotesypaticas.com', href: 'https://bigotesypaticas.com' },
+              { label: 'Portal clientes', href: 'https://mi.bigotesypaticas.com' },
+              { label: 'Instagram @bigotesypaticas', href: 'https://www.instagram.com/bigotesypaticas/' },
+              { label: 'TikTok @bigotesypaticas', href: 'https://www.tiktok.com/@bigotesypaticas' },
+              { label: 'Facebook', href: 'https://www.facebook.com/1110830862122470' },
+              { label: 'Reseñas en Google', href: 'https://g.page/r/CfL67OgLB-10EBM/review' },
+            ].map((c) => (
+              <a key={c.href} href={c.href} target="_blank" rel="noopener noreferrer"
+                 className="px-3 py-1.5 rounded-full border border-border text-xs font-medium hover:bg-muted transition-colors">
+                {c.label}
+              </a>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { FollowUsSection } from '@/components/social/SocialLinks';
 import { Phone, Mail, MapPin, Clock, ExternalLink } from 'lucide-react';
 import { ContactForm } from './ContactForm';
 import { DeliveryZoneChecker } from '@/components/maps/DeliveryZoneChecker';
@@ -132,6 +133,7 @@ export default function ContactoPage() {
           </div>
         </div>
       </div>
+      <FollowUsSection />
     </>
   );
 }

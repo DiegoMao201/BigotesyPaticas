@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { LogOut, Star, ChevronRight, LifeBuoy, ShoppingBag, CalendarClock } from 'lucide-react';
+import { LogOut, Star, ChevronRight, LifeBuoy, ShoppingBag, CalendarClock, Instagram, Facebook, Music2 } from 'lucide-react';
 import { auth, portalLocation } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { PageHeader } from '@/components/ui/page-header';
@@ -137,6 +137,17 @@ export default function ProfilePage() {
           <span className="text-sm font-medium">Soporte por WhatsApp</span>
           <ChevronRight className="h-4 w-4 text-muted" />
         </a>
+        {/* Redes verificadas de la tienda: la misma marca en todos los canales */}
+        {[
+          { label: 'Instagram @bigotesypaticas', href: 'https://www.instagram.com/bigotesypaticas/', Icon: Instagram },
+          { label: 'TikTok @bigotesypaticas', href: 'https://www.tiktok.com/@bigotesypaticas', Icon: Music2 },
+          { label: 'Facebook Bigotes y Paticas', href: 'https://www.facebook.com/1110830862122470', Icon: Facebook },
+        ].map(({ label, href, Icon }) => (
+          <a key={href} href={href} target="_blank" rel="noopener noreferrer me" className="flex items-center justify-between py-3">
+            <span className="flex items-center gap-2 text-sm font-medium"><Icon className="h-4 w-4 text-primary-700" />{label}</span>
+            <ChevronRight className="h-4 w-4 text-muted" />
+          </a>
+        ))}
       </div>
 
       {/* Logout */}
