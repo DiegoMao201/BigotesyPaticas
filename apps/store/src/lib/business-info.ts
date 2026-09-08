@@ -95,11 +95,11 @@ export const BUSINESS_INFO = {
     "https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Dosquebradas",
 
   // Redes verificadas (no inventar): Instagram y TikTok por nombre de usuario real;
-  // Facebook por id de pagina (la pagina no tiene username, ver commit 02ff11c).
+  // Facebook por nombre de usuario (BigotesyPaticas, creado el 8 sep 2026; antes solo por id).
   social: {
     instagram: { url: "https://www.instagram.com/bigotesypaticas/", handle: "@bigotesypaticas" },
     tiktok: { url: "https://www.tiktok.com/@bigotesypaticas", handle: "@bigotesypaticas" },
-    facebook: { url: "https://www.facebook.com/1110830862122470", handle: "Bigotes y Paticas" },
+    facebook: { url: "https://www.facebook.com/BigotesyPaticas", handle: "/BigotesyPaticas" },
     whatsapp: { url: "https://wa.me/573206876633", handle: "320 687 6633" },
     googleReviews: { url: "https://g.page/r/CfL67OgLB-10EBM/review", handle: "Google" },
   },
@@ -107,7 +107,7 @@ export const BUSINESS_INFO = {
   sameAs: [
     "https://www.instagram.com/bigotesypaticas/",
     "https://www.tiktok.com/@bigotesypaticas",
-    "https://www.facebook.com/1110830862122470",
+    "https://www.facebook.com/BigotesyPaticas",
   ] as string[],
 
   legal: {

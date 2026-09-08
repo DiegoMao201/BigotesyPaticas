@@ -141,7 +141,7 @@ export default function ProfilePage() {
         {[
           { label: 'Instagram @bigotesypaticas', href: 'https://www.instagram.com/bigotesypaticas/', Icon: Instagram },
           { label: 'TikTok @bigotesypaticas', href: 'https://www.tiktok.com/@bigotesypaticas', Icon: Music2 },
-          { label: 'Facebook Bigotes y Paticas', href: 'https://www.facebook.com/1110830862122470', Icon: Facebook },
+          { label: 'Facebook Bigotes y Paticas', href: 'https://www.facebook.com/BigotesyPaticas', Icon: Facebook },
         ].map(({ label, href, Icon }) => (
           <a key={href} href={href} target="_blank" rel="noopener noreferrer me" className="flex items-center justify-between py-3">
             <span className="flex items-center gap-2 text-sm font-medium"><Icon className="h-4 w-4 text-primary-700" />{label}</span>

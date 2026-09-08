@@ -372,7 +372,7 @@ export default function DashboardPage() {
               { label: 'Portal clientes', href: 'https://mi.bigotesypaticas.com' },
               { label: 'Instagram @bigotesypaticas', href: 'https://www.instagram.com/bigotesypaticas/' },
               { label: 'TikTok @bigotesypaticas', href: 'https://www.tiktok.com/@bigotesypaticas' },
-              { label: 'Facebook', href: 'https://www.facebook.com/1110830862122470' },
+              { label: 'Facebook', href: 'https://www.facebook.com/BigotesyPaticas' },
               { label: 'Reseñas en Google', href: 'https://g.page/r/CfL67OgLB-10EBM/review' },
             ].map((c) => (
               <a key={c.href} href={c.href} target="_blank" rel="noopener noreferrer"
