@@ -33,6 +33,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/categorias/snacks`, lastModified: now, changeFrequency: 'weekly', priority: 0.85 },
     { url: `${BASE}/categorias/todos`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
     { url: `${BASE}/blog`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${BASE}/noticias`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
     { url: `${BASE}/nosotros`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/contacto`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE}/pereira-dosquebradas-mascotas`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
@@ -64,10 +65,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     page++;
   }
 
-  // Posts de blog
+  // Posts de blog (SIN las noticias: van aparte, cada URL una sola vez)
   const blogPages: MetadataRoute.Sitemap = [];
   const blogData = await fetchJson<{ posts: { slug: string; updated_at?: string }[] }>(
-    '/v1/blog/posts?published=true&per_page=200',
+    '/v1/blog/posts?published=true&per_page=200&exclude_category=noticias',
   );
   if (blogData?.posts) {
     blogPages.push(
@@ -76,6 +77,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         lastModified: p.updated_at ? new Date(p.updated_at) : now,
         changeFrequency: 'monthly' as const,
         priority: 0.6,
+      })),
+    );
+  }
+
+  // Noticias de interés. Prioridad y frecuencia altas a propósito: son hechos
+  // con fecha y su valor de búsqueda se cae a los pocos días, así que a Google
+  // hay que decirle que vuelva pronto.
+  const newsPages: MetadataRoute.Sitemap = [];
+  const newsData = await fetchJson<{ posts: { slug: string; updated_at?: string; published_at?: string }[] }>(
+    '/v1/blog/posts?published=true&per_page=200&category=noticias',
+  );
+  if (newsData?.posts) {
+    newsPages.push(
+      ...newsData.posts.map((p) => ({
+        url: `${BASE}/noticias/${p.slug}`,
+        lastModified: p.updated_at ? new Date(p.updated_at) : now,
+        changeFrequency: 'daily' as const,
+        priority: 0.8,
       })),
     );
   }
@@ -155,6 +174,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...staticPages,
     ...productPages,
     ...blogPages,
+    ...newsPages,
     ...landingPages,
     ...lostPages,
     ...foundPages,

@@ -43,7 +43,9 @@ function formatDate(iso: string) {
 }
 
 export default async function BlogPage() {
-  const data = await storeApi.blogList({ per_page: 30 });
+  // sin las noticias: viven en /noticias y si salieran aquí también, la misma
+  // URL competiría consigo misma en Google.
+  const data = await storeApi.blogList({ per_page: 30, exclude_category: 'noticias' });
   const posts = data.posts;
 
   return (

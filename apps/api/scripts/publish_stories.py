@@ -462,7 +462,51 @@ async def publish_story(story: dict, dry_run: bool, cur, conn) -> bool:
         fb_feed_id,
         dry_run,
     )
+    publicar_landing(conn, cur, story_id)
     return True
+
+
+def publicar_landing(conn, cur, story_id: str) -> None:
+    """Saca del borrador la página de /noticias asociada a esta pieza.
+
+    La landing se crea cuando se arma el video, pero apagada: se enciende aquí,
+    cuando la pieza YA salió a las redes. Así la web nunca publica algo que Diego
+    no aprobó, y Google ve la nota el mismo día que la gente la ve en el celular.
+
+    Si algo falla aquí NO se toca el resultado de la publicación: la pieza ya salió
+    y no tiene sentido marcarla como fallida por una página web.
+    """
+    try:
+        cur.execute(
+            "SELECT slug FROM content.blog_posts WHERE story_id = %s AND published_at IS NULL",
+            (story_id,),
+        )
+        fila = cur.fetchone()
+        if not fila:
+            return
+        slug = fila[0]
+        # el endpoint pone la fecha y avisa a IndexNow de una vez; hacerlo aquí a
+        # mano dejaría la página publicada pero sin avisarle a los buscadores
+        r = requests.post(f"http://localhost:8000/v1/blog/posts/{slug}/publicar", timeout=20)
+        if r.status_code != 200:
+            log.warning("landing %s: la API respondió %s %s", slug, r.status_code, r.text[:120])
+            return
+        try:
+            requests.post(
+                "https://bigotesypaticas.com/api/revalidate",
+                json={"paths": ["/noticias", f"/noticias/{slug}"]},
+                headers={"Authorization": f"Bearer {os.environ.get('REVALIDATE_TOKEN', '')}"},
+                timeout=15,
+            )
+        except requests.RequestException as e:
+            log.warning("landing %s publicada, pero la tienda no se refrescó: %s", slug, e)
+        log.info("Landing publicada: https://bigotesypaticas.com/noticias/%s", slug)
+    except Exception as e:  # noqa: BLE001
+        log.warning("no se pudo publicar la landing de %s: %s", story_id[:8], e)
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 async def run():

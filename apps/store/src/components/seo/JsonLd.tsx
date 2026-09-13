@@ -403,6 +403,66 @@ export function ArticleSchema({ post }: { post: ArticleData }) {
   );
 }
 
+// ─── NewsArticleSchema ───────────────────────────────────────────────────────
+// Landing de "Noticias de interés". Va como NewsArticle y no como Article
+// porque son hechos verificables con fecha, que es lo que Google premia en esta
+// sección. `citation` apunta al medio original: es la forma correcta de decir
+// de dónde salió el dato sin copiarle el artículo a nadie.
+
+export function NewsArticleSchema({
+  post,
+  url,
+}: {
+  post: ArticleData & {
+    source_url?: string | null;
+    source_name?: string | null;
+    video_url?: string | null;
+  };
+  url: string;
+}) {
+  return (
+    <JsonLd
+      data={{
+        '@context': 'https://schema.org',
+        '@type': 'NewsArticle',
+        headline: post.title,
+        inLanguage: 'es-CO',
+        ...(post.cover_image_url && { image: [post.cover_image_url] }),
+        ...(post.published_at && { datePublished: post.published_at }),
+        ...(post.updated_at && { dateModified: post.updated_at }),
+        author: {
+          '@type': 'Organization',
+          '@id': `${BUSINESS_INFO.url}/#organization`,
+          name: BUSINESS_INFO.name,
+        },
+        publisher: {
+          '@type': 'Organization',
+          '@id': `${BUSINESS_INFO.url}/#organization`,
+          name: BUSINESS_INFO.name,
+          logo: { '@type': 'ImageObject', url: BUSINESS_INFO.logo },
+        },
+        description: post.meta_description || post.excerpt || undefined,
+        ...(post.source_url && {
+          citation: post.source_name
+            ? { '@type': 'CreativeWork', name: post.source_name, url: post.source_url }
+            : post.source_url,
+        }),
+        ...(post.video_url && {
+          video: {
+            '@type': 'VideoObject',
+            name: post.title,
+            description: post.meta_description || post.excerpt || post.title,
+            contentUrl: post.video_url,
+            ...(post.cover_image_url && { thumbnailUrl: [post.cover_image_url] }),
+            ...(post.published_at && { uploadDate: post.published_at }),
+          },
+        }),
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+      }}
+    />
+  );
+}
+
 // ─── SuccessStorySchema ──────────────────────────────────────────────────────
 // Final feliz de la comunidad (mascota en casa / reunidos / adoptado): se
 // marca como NewsArticle con fecha de publicación = fecha de resolución y

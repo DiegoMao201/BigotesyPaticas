@@ -121,6 +121,11 @@ export interface BlogPost {
   published_at: string | null;
   updated_at: string | null;
   view_count: number;
+  // Solo vienen con las noticias (category='noticias'): de dónde salió el hecho
+  // y el video vertical que ya se publicó en redes.
+  source_url?: string | null;
+  source_name?: string | null;
+  video_url?: string | null;
 }
 
 export interface BlogListResponse {
@@ -320,11 +325,12 @@ export const storeApi = {
   related: async (productId: string, limit = 4): Promise<Product[]> => {
     try { return await get<Product[]>(`/v1/products/${productId}/related?limit=${limit}`); } catch { return []; }
   },
-  blogList: async (params: { page?: number; per_page?: number; category?: string } = {}): Promise<BlogListResponse> => {
+  blogList: async (params: { page?: number; per_page?: number; category?: string; exclude_category?: string } = {}): Promise<BlogListResponse> => {
     const qs = new URLSearchParams({ published: 'true' });
     if (params.page) qs.set('page', String(params.page));
     if (params.per_page) qs.set('per_page', String(params.per_page));
     if (params.category) qs.set('category', params.category);
+    if (params.exclude_category) qs.set('exclude_category', params.exclude_category);
     try {
       return await get<BlogListResponse>(`/v1/blog/posts?${qs.toString()}`);
     } catch {
@@ -333,6 +339,14 @@ export const storeApi = {
   },
   blogBySlug: async (slug: string): Promise<BlogPost | null> => {
     try { return await get<BlogPost>(`/v1/blog/posts/${slug}`); } catch { return null; }
+  },
+  // Noticias de interés: misma tabla que el blog, con category='noticias'. Se
+  // separan en dos secciones para que cada URL salga una sola vez en Google.
+  newsList: async (params: { page?: number; per_page?: number } = {}): Promise<BlogListResponse> =>
+    storeApi.blogList({ ...params, category: 'noticias' }),
+  newsBySlug: async (slug: string): Promise<BlogPost | null> => {
+    const p = await storeApi.blogBySlug(slug);
+    return p && p.category === 'noticias' ? p : null;
   },
   landingBySlug: async (slug: string): Promise<SeoLanding | null> => {
     try { return await get<SeoLanding>(`/v1/landings/${slug}`); } catch { return null; }

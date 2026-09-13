@@ -53,6 +53,11 @@ def main():
     with psycopg.connect(dsn) as con:
         cur = con.cursor()
         if not toca_ahora(cur):
+            # Deja constancia de que SÍ se ejecutó aunque no le tocara. Sin esto el
+            # log queda en cero bytes y no hay forma de distinguir "corrió y pasó
+            # de largo" de "nunca arrancó", que es exactamente la duda que hubo
+            # el 12-sep cuando el radar llevaba días sin estar enchufado.
+            print(f"{datetime.now(BOGOTA):%Y-%m-%d %H:%M}  sin turno (corre a las {', '.join(map(str, HORAS))})", flush=True)
             return
         marcar(cur); con.commit()
         sesion = LA._sesion()
