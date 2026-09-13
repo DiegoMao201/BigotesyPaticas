@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, or_, select
 
 from app.deps import CurrentUser, DBSession, require_permission
@@ -43,9 +43,26 @@ class PurchaseItemIn(BaseModel):
     sku_proveedor: str | None = None
     sku_interno: str | None = None
     product_name: str
-    quantity: int = Field(ge=1)
+    quantity: int = Field(ge=1, le=500)
     factor_pack: int = Field(default=1, ge=1)
     unit_cost: float = Field(ge=0)
+
+    # Candado (13-sep-2026). Compra #1246: alguien tecleó el costo (37.000) en
+    # cantidad y la cantidad (2) en costo. Pasó la validación porque 37.000 >= 1 y
+    # 2 >= 0, y dejó 36.999 unidades a $2 en inventario: $1.701 millones de valor
+    # fantasma y una venta con margen del 99,99 %. Ninguna línea real de esta tienda
+    # supera 500 unidades ni cuesta entre $1 y $99, así que se rechaza con un
+    # mensaje que nombra el error. unit_cost = 0 se sigue permitiendo (bonificaciones).
+    @field_validator("unit_cost")
+    @classmethod
+    def _costo_realista(cls, v: float) -> float:
+        if 0 < v < 100:
+            raise ValueError(
+                f"Costo unitario ${v:g} no es realista. ¿Quedó invertido con la cantidad? "
+                "Revisa: cantidad = unidades compradas, costo = precio por unidad."
+            )
+        return v
+
     tax_pct: float = Field(default=0, ge=0, le=100)
 
 
