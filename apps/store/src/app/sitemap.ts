@@ -45,13 +45,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   // Todos los productos publicados
+  // OJO: la API tope `per_page` en 100 (Query(..., le=100)). Con 200 devuelve 422
+  // y `fetchJson` se traga el error devolviendo null, así que el sitemap salía SIN
+  // un solo producto y SIN un solo artículo, en silencio, desde siempre. Detectado
+  // el 13-sep-2026: 71 URLs en el sitemap con más de 500 productos y 33 artículos
+  // publicados. Si algún día sube el tope de la API, súbelo aquí también.
+  const POR_PAGINA = 100;
+
   const productPages: MetadataRoute.Sitemap = [];
   let page = 1;
   while (true) {
     const data = await fetchJson<{
       items: { slug: string }[];
       total: number;
-    }>(`/v1/products?is_published=true&per_page=200&page=${page}`);
+    }>(`/v1/products?is_published=true&per_page=${POR_PAGINA}&page=${page}`);
     if (!data || data.items.length === 0) break;
     productPages.push(
       ...data.items.map((p) => ({
@@ -61,14 +68,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.7,
       })),
     );
-    if (data.items.length < 200) break;
+    if (data.items.length < POR_PAGINA) break;
     page++;
   }
 
   // Posts de blog (SIN las noticias: van aparte, cada URL una sola vez)
   const blogPages: MetadataRoute.Sitemap = [];
   const blogData = await fetchJson<{ posts: { slug: string; updated_at?: string }[] }>(
-    '/v1/blog/posts?published=true&per_page=200&exclude_category=noticias',
+    `/v1/blog/posts?published=true&per_page=${POR_PAGINA}&exclude_category=noticias`,
   );
   if (blogData?.posts) {
     blogPages.push(
@@ -86,7 +93,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // hay que decirle que vuelva pronto.
   const newsPages: MetadataRoute.Sitemap = [];
   const newsData = await fetchJson<{ posts: { slug: string; updated_at?: string; published_at?: string }[] }>(
-    '/v1/blog/posts?published=true&per_page=200&category=noticias',
+    `/v1/blog/posts?published=true&per_page=${POR_PAGINA}&category=noticias`,
   );
   if (newsData?.posts) {
     newsPages.push(
