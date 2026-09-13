@@ -545,14 +545,54 @@ async def tiktok_test_publish(
 # ── Stories IA → TikTok (botón "Enviar a TikTok" en cada tarjeta) ────
 
 
-@router.post("/v1/admin/tiktok/stories/{story_id}/send")
+async def _subir_en_segundo_plano(story_id: str, video_url: str, caption: str, cover_url: str | None) -> None:
+    """Sube a TikTok fuera del ciclo de la petición.
+
+    La subida (bajar el video del CDN + pegar la portada + mandarlo por trozos)
+    tarda más que el timeout de gunicorn. Antes se hacía dentro de la petición:
+    gunicorn mataba al worker a los 180 s, el admin mostraba "falló" y el
+    publish_id nunca se guardaba, aunque TikTok SÍ había recibido el video.
+    Al reintentar se subía otra vez -> DOS notificaciones del mismo video.
+    """
+    from app.db import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        try:
+            result = await send_video_to_tiktok(db, video_url, caption, cover_url=cover_url)
+        except Exception as e:  # noqa: BLE001 — se libera la reserva para poder reintentar
+            log.exception("TikTok: falló la subida de %s", story_id)
+            await db.execute(
+                text("""
+                    UPDATE content.story_posts
+                    SET tiktok_status = 'FAILED', error_message = :err
+                    WHERE id = :id
+                """),
+                {"id": story_id, "err": f"TikTok: {e}"[:500]},
+            )
+            await db.commit()
+            return
+        await db.execute(
+            text("""
+                UPDATE content.story_posts
+                SET tiktok_publish_id = :pid, tiktok_status = 'PROCESSING_UPLOAD'
+                WHERE id = :id
+            """),
+            {"pid": result["publish_id"], "id": story_id},
+        )
+        await db.commit()
+        log.info("TikTok: %s subido, publish_id=%s", story_id, result["publish_id"])
+
+
+@router.post("/v1/admin/tiktok/stories/{story_id}/send", status_code=202)
 async def tiktok_send_story(
     story_id: str,
     db: DBSession,
     _admin=Depends(get_current_admin_user),
 ):
-    """Sube el video de una story (ya aprobada o publicada en Meta) a la
-    bandeja de TikTok. Guarda el publish_id en la story para seguir su estado."""
+    """Reserva la pieza y lanza la subida a la bandeja de TikTok en segundo plano.
+
+    Responde de inmediato (202). El estado se sigue con el endpoint /status.
+    """
     row = (
         await db.execute(
             text("""
@@ -569,29 +609,36 @@ async def tiktok_send_story(
         raise HTTPException(400, "Esta pieza no tiene video (solo imagen); TikTok requiere video")
     if row.status not in ("approved", "published"):
         raise HTTPException(400, "Aprueba la pieza antes de enviarla a TikTok")
-    if row.tiktok_publish_id and row.tiktok_status not in ("FAILED", None):
-        raise HTTPException(409, "Esta pieza ya fue enviada a TikTok")
 
-    # base_image_url es la portada 9:16 de la pieza (la misma que usan los
-    # Reels de Instagram); para TikTok va como primeros fotogramas del video.
-    result = await send_video_to_tiktok(
-        db, row.video_url, row.caption or "", cover_url=row.base_image_url
-    )
-    await db.execute(
-        text("""
-            UPDATE content.story_posts
-            SET tiktok_publish_id = :pid, tiktok_status = :st, tiktok_sent_at = :now
-            WHERE id = :id
-        """),
-        {
-            "pid": result["publish_id"],
-            "st": "PROCESSING_UPLOAD",
-            "now": datetime.now(UTC),
-            "id": story_id,
-        },
-    )
+    # RESERVA ATÓMICA: marca la pieza como "SENDING" ANTES de empezar a subir.
+    # Un segundo clic (u otro worker de gunicorn) no encuentra fila que actualizar
+    # y recibe 409, así que es imposible subir el mismo video dos veces.
+    # Si una reserva lleva más de 15 min sin terminar, se considera muerta y se
+    # puede reintentar.
+    reservada = (
+        await db.execute(
+            text("""
+                UPDATE content.story_posts
+                SET tiktok_status = 'SENDING', tiktok_sent_at = now(), error_message = NULL
+                WHERE id = :id
+                  AND (tiktok_publish_id IS NULL OR tiktok_status = 'FAILED')
+                  AND (tiktok_status IS DISTINCT FROM 'SENDING'
+                       OR tiktok_sent_at < now() - interval '15 minutes')
+                RETURNING id
+            """),
+            {"id": story_id},
+        )
+    ).fetchone()
+    if reservada is None:
+        estado = row.tiktok_status or "enviada"
+        raise HTTPException(409, f"Esta pieza ya está en TikTok o en proceso de envío ({estado})")
     await db.commit()
-    return {"story_id": story_id, **result}
+
+    asyncio.create_task(
+        _subir_en_segundo_plano(story_id, row.video_url, row.caption or "", row.base_image_url)
+    )
+    return {"story_id": story_id, "tiktok_status": "SENDING",
+            "detail": "Subida iniciada. El estado se actualiza solo en unos minutos."}
 
 
 @router.get("/v1/admin/tiktok/stories/{story_id}/status")
@@ -603,11 +650,16 @@ async def tiktok_story_status(
     """Consulta a TikTok el estado del envío de una story y lo persiste."""
     row = (
         await db.execute(
-            text("SELECT tiktok_publish_id FROM content.story_posts WHERE id = :id"),
+            text("SELECT tiktok_publish_id, tiktok_status FROM content.story_posts WHERE id = :id"),
             {"id": story_id},
         )
     ).fetchone()
-    if not row or not row.tiktok_publish_id:
+    if not row:
+        raise HTTPException(404, "Story no encontrada")
+    if not row.tiktok_publish_id:
+        # Reservada y subiendo en segundo plano: todavía no hay publish_id que consultar.
+        if row.tiktok_status == "SENDING":
+            return {"story_id": story_id, "publish_id": None, "status": "SENDING"}
         raise HTTPException(404, "Esta pieza no se ha enviado a TikTok")
     data = await _fetch_publish_status(db, row.tiktok_publish_id)
     status = data.get("status")

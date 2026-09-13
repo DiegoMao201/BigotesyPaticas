@@ -1,4 +1,4 @@
-import { Instagram, Facebook } from 'lucide-react';
+import { Instagram, Facebook, Youtube } from 'lucide-react';
 import { BUSINESS_INFO } from '@/lib/business-info';
 
 /** Icono de TikTok (lucide no lo trae). */
@@ -25,6 +25,7 @@ export const SOCIAL_LINKS = [
   { key: 'instagram', label: 'Instagram', handle: S.instagram.handle, url: S.instagram.url, Icon: Instagram, color: 'hover:text-pink-600' },
   { key: 'tiktok', label: 'TikTok', handle: S.tiktok.handle, url: S.tiktok.url, Icon: TikTokIcon, color: 'hover:text-black' },
   { key: 'facebook', label: 'Facebook', handle: S.facebook.handle, url: S.facebook.url, Icon: Facebook, color: 'hover:text-blue-600' },
+  { key: 'youtube', label: 'YouTube', handle: S.youtube.handle, url: S.youtube.url, Icon: Youtube, color: 'hover:text-red-600' },
   { key: 'whatsapp', label: 'WhatsApp', handle: S.whatsapp.handle, url: S.whatsapp.url, Icon: WhatsAppIcon, color: 'hover:text-green-600' },
 ] as const;
 
@@ -63,7 +64,7 @@ export function FollowUsSection({ compact = false }: { compact?: boolean }) {
             </h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
               Cada día publicamos una historia corta sobre perros y gatos: lo que hacen, por qué lo hacen y cómo cuidarlos mejor.
-              Somos la misma tienda en Instagram, TikTok, Facebook, WhatsApp y aquí en la web.
+              Somos la misma tienda en Instagram, TikTok, YouTube, Facebook, WhatsApp y aquí en la web.
             </p>
           </div>
           <ul className="md:col-span-3 grid grid-cols-2 gap-3">

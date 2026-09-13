@@ -225,6 +225,10 @@ def _welcome_html(email: str) -> str:
             </td>
             <td style="color:#a8ddd9;font-size:12px;">·</td>
             <td style="padding:0 6px;">
+              <a href="https://www.youtube.com/@bigotesypaticas" style="color:#5ecdc7;font-size:12px;text-decoration:none;">YouTube</a>
+            </td>
+            <td style="color:#a8ddd9;font-size:12px;">·</td>
+            <td style="padding:0 6px;">
               <a href="https://bigotesypaticas.com" style="color:#5ecdc7;font-size:12px;text-decoration:none;">bigotesypaticas.com</a>
             </td>
           </tr>

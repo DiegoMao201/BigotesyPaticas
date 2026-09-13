@@ -373,6 +373,7 @@ export default function DashboardPage() {
               { label: 'Instagram @bigotesypaticas', href: 'https://www.instagram.com/bigotesypaticas/' },
               { label: 'TikTok @bigotesypaticas', href: 'https://www.tiktok.com/@bigotesypaticas' },
               { label: 'Facebook', href: 'https://www.facebook.com/BigotesyPaticas' },
+              { label: 'YouTube @bigotesypaticas', href: 'https://www.youtube.com/@bigotesypaticas' },
               { label: 'Reseñas en Google', href: 'https://g.page/r/CfL67OgLB-10EBM/review' },
             ].map((c) => (
               <a key={c.href} href={c.href} target="_blank" rel="noopener noreferrer"

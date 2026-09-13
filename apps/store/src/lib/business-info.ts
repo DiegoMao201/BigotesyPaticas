@@ -103,10 +103,12 @@ export const BUSINESS_INFO = {
 
   // Redes verificadas (no inventar): Instagram y TikTok por nombre de usuario real;
   // Facebook por nombre de usuario (BigotesyPaticas, creado el 8 sep 2026; antes solo por id).
+  // YouTube: canal UC3kyMQMz10R3jdmgscZ5H7Q con el mismo @usuario, creado el 11 sep 2026.
   social: {
     instagram: { url: "https://www.instagram.com/bigotesypaticas/", handle: "@bigotesypaticas" },
     tiktok: { url: "https://www.tiktok.com/@bigotesypaticas", handle: "@bigotesypaticas" },
     facebook: { url: "https://www.facebook.com/BigotesyPaticas", handle: "/BigotesyPaticas" },
+    youtube: { url: "https://www.youtube.com/@bigotesypaticas", handle: "@bigotesypaticas" },
     whatsapp: { url: "https://wa.me/573206876633", handle: "320 687 6633" },
     googleReviews: { url: "https://g.page/r/CfL67OgLB-10EBM/review", handle: "Google" },
   },
@@ -115,6 +117,7 @@ export const BUSINESS_INFO = {
     "https://www.instagram.com/bigotesypaticas/",
     "https://www.tiktok.com/@bigotesypaticas",
     "https://www.facebook.com/BigotesyPaticas",
+    "https://www.youtube.com/@bigotesypaticas",
   ] as string[],
 
   legal: {

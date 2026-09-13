@@ -197,6 +197,7 @@ function StoryCard({ story, onApprove, onReject, loading }: {
 // ── TikTok (manual mientras TikTok no apruebe video.publish) ─────────────────
 
 const TIKTOK_STATUS_LABEL: Record<string, string> = {
+  SENDING: 'Enviando a TikTok… (puede tardar unos minutos)',
   PROCESSING_UPLOAD: 'Subiendo a TikTok…',
   PROCESSING_DOWNLOAD: 'TikTok procesando…',
   SEND_TO_USER_INBOX: 'En tu bandeja de TikTok — publícalo desde el celular',
@@ -208,12 +209,10 @@ function TikTokSendRow({ story }: { story: StoryItem }) {
   const qc = useQueryClient();
   const sendMut = useMutation({
     mutationFn: () => tiktok.sendStory(story.id),
-    onSuccess: (d) => {
-      toast.success(
-        d.mode === 'inbox'
-          ? 'Enviado a la bandeja de TikTok. Ábrelo en la app del celular para publicarlo.'
-          : 'Publicado en TikTok.'
-      );
+    onSuccess: () => {
+      // La subida corre en segundo plano: el servidor responde de inmediato y el
+      // estado llega después. No se vuelve a habilitar el botón (evita el doble envío).
+      toast.success('Envío iniciado. Tarda unos minutos; el estado se actualiza solo.');
       qc.invalidateQueries({ queryKey: ['stories'] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -228,7 +227,9 @@ function TikTokSendRow({ story }: { story: StoryItem }) {
   });
 
   const st = story.tiktok_status;
-  const sent = !!story.tiktok_publish_id && st !== 'FAILED';
+  // 'SENDING' = reservada y subiendo en segundo plano: cuenta como enviada para
+  // que el botón desaparezca y no se pueda disparar un segundo envío.
+  const sent = (!!story.tiktok_publish_id || st === 'SENDING') && st !== 'FAILED';
   const done = st === 'PUBLISH_COMPLETE';
 
   if (!sent) {

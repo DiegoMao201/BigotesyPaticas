@@ -1838,12 +1838,13 @@ export const tiktok = {
   publishStatus: (publishId: string) =>
     api<Record<string, unknown>>(`/v1/admin/tiktok/publish-status/${publishId}`),
   sendStory: (storyId: string) =>
-    api<{ story_id: string; publish_id: string; mode: 'direct' | 'inbox'; video_bytes: number }>(
+    // Responde 202 de inmediato: la subida corre en segundo plano en el servidor.
+    api<{ story_id: string; tiktok_status: string; detail: string }>(
       `/v1/admin/tiktok/stories/${storyId}/send`,
       { method: 'POST' }
     ),
   storyStatus: (storyId: string) =>
-    api<{ story_id: string; publish_id: string; status?: string; fail_reason?: string }>(
+    api<{ story_id: string; publish_id: string | null; status?: string; fail_reason?: string }>(
       `/v1/admin/tiktok/stories/${storyId}/status`
     ),
   account: () => api<{ scope: string; user: TikTokUser }>('/v1/admin/tiktok/account'),

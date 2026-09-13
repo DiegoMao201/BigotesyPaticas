@@ -10,6 +10,8 @@ python -m app.cli.seed_partners
 while true; do
   python3 scripts/publish_scheduled_posts.py >> /tmp/publish_feed.log 2>&1
   python3 scripts/publish_stories.py >> /tmp/publish_stories.log 2>&1
+  # Radar de noticias: el script decide solo si le toca (6, 11, 16 y 21 Bogotá)
+  python3 scripts/radar_noticias.py >> /tmp/radar_noticias.log 2>&1
   sleep 300
 done &
 
