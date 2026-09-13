@@ -4,6 +4,7 @@ import './globals.css';
 import { Providers } from '@/components/providers';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
+import { HuellasFondo } from '@/components/brand/HuellasFondo';
 import { OrganizationSchema, LocalBusinessSchema } from '@/components/seo/JsonLd';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 import { MetaPixel } from '@/components/analytics/MetaPixel';
@@ -101,6 +102,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <MetaPixel />
         <OrganizationSchema />
         <LocalBusinessSchema />
+        <HuellasFondo />
         <Providers>
           <Header />
           <main className="min-h-[calc(100vh-4rem-1px)]">{children}</main>

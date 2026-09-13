@@ -68,8 +68,12 @@
 
 @layer base {
   * { @apply border-border; }
+  /* El color de fondo vive en <html> y el <body> queda transparente. Es el único
+     modo de que las huellitas del fondo (fixed, -z-10 dentro del body) se vean:
+     si el body pinta su propio fondo, tapa todo lo que esté detrás de él. */
+  html { @apply bg-background; }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-transparent text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
   }
   h1, h2, h3, h4 { @apply font-display tracking-tight; }
@@ -214,8 +218,12 @@
 
 @layer base {
   * { @apply border-border; }
+  /* El color de fondo vive en <html> y el <body> queda transparente. Es el único
+     modo de que las huellitas del fondo (fixed, -z-10 dentro del body) se vean:
+     si el body pinta su propio fondo, tapa todo lo que esté detrás de él. */
+  html { @apply bg-background; }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-transparent text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
   }
   h1, h2, h3, h4 { @apply font-display tracking-tight; }
@@ -292,4 +300,26 @@
   .blog-content a { @apply text-[#187f77] underline underline-offset-2 hover:text-[#0d4a45] transition-colors; }
   .blog-content blockquote { @apply border-l-4 border-[#187f77] pl-5 italic text-muted-foreground my-6; }
   .blog-content hr { @apply border-border my-8; }
+}
+
+/* Huellitas del fondo (components/brand/HuellasFondo.tsx).
+   Solo `transform`: lo resuelve la GPU y no obliga al navegador a recalcular la
+   página, así que no le pesa ni al celular más flojo. */
+@keyframes huella-flota {
+  0%   { transform: translateY(0)     scale(1);    }
+  50%  { transform: translateY(-26px) scale(1.06); }
+  100% { transform: translateY(0)     scale(1);    }
+}
+
+.huella-flota {
+  animation-name: huella-flota;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+/* A quien le moleste el movimiento, se le quita. No es negociable: hay gente a
+   la que una animación de fondo le produce mareo. */
+@media (prefers-reduced-motion: reduce) {
+  .huella-flota { animation: none; }
 }

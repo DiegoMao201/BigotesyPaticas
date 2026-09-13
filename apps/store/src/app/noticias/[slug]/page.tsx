@@ -58,7 +58,7 @@ export default async function NoticiaPage({ params }: Props) {
         ]}
       />
 
-      <div className="container-tight py-12">
+      <div className="container-wide py-12">
         <Link
           href="/noticias"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-teal-700 mb-8 transition-colors"
@@ -89,93 +89,102 @@ export default async function NoticiaPage({ params }: Props) {
           </div>
         </header>
 
-        {/* El video vertical que ya salió en redes. Va antes del texto porque es
-            lo que la gente reconoce y lo que la retiene en la página. */}
-        {post.video_url ? (
-          <div className="mx-auto mb-10 w-full max-w-[340px] overflow-hidden rounded-3xl shadow-sm bg-black">
-            <video
-              src={post.video_url}
-              poster={post.cover_image_url || undefined}
-              controls
-              playsInline
-              preload="metadata"
-              className="h-auto w-full"
+        {/* DOS COLUMNAS en escritorio: el video vertical a la izquierda, pegado
+            mientras se baja, y el texto arrancando a su derecha. En una sola
+            columna el video de 9:16 dejaba dos franjas blancas enormes a los
+            lados (Diego: "se ve muy mal esos espacios en blanco"). En celular
+            se apilan, que es como se lee de verdad. */}
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:gap-14">
+          <div className="lg:sticky lg:top-24 lg:self-start">
+            {post.video_url ? (
+              <div className="mx-auto w-full max-w-[340px] overflow-hidden rounded-3xl bg-black shadow-sm">
+                <video
+                  src={post.video_url}
+                  poster={post.cover_image_url || undefined}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="h-auto w-full"
+                />
+              </div>
+            ) : post.cover_image_url ? (
+              <div className="relative mx-auto aspect-[9/16] w-full max-w-[340px] overflow-hidden rounded-3xl shadow-sm">
+                <Image
+                  src={post.cover_image_url}
+                  alt={post.title}
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 100vw, 340px"
+                  className="object-cover"
+                />
+              </div>
+            ) : null}
+
+            {/* La fuente va junto al video, no perdida al final: es lo que hace
+                que esto informe en vez de desinformar. */}
+            {post.source_url && (
+              <div className="mt-6 rounded-2xl border border-teal-100 bg-teal-50 p-5">
+                <p className="text-sm text-teal-900">
+                  <strong>Verifícalo tú mismo.</strong> Esta nota se basa en información publicada
+                  {post.source_name ? ` por ${post.source_name}` : ''}.
+                </p>
+                <a
+                  href={post.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 underline underline-offset-4 hover:text-teal-900"
+                >
+                  Ver la fuente original <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <div
+              className="blog-content"
+              dangerouslySetInnerHTML={{ __html: post.content ?? '' }}
             />
-          </div>
-        ) : post.cover_image_url ? (
-          <div className="relative mb-10 aspect-video w-full overflow-hidden rounded-3xl shadow-sm">
-            <Image
-              src={post.cover_image_url}
-              alt={post.title}
-              fill
-              priority
-              sizes="(max-width: 768px) 100vw, 768px"
-              className="object-cover"
-            />
-          </div>
-        ) : null}
 
-        <div
-          className="blog-content"
-          dangerouslySetInnerHTML={{ __html: post.content ?? '' }}
-        />
+            {post.keywords.length > 0 && (
+              <div className="mt-10 flex flex-wrap gap-2 border-t border-border pt-8">
+                {post.keywords.map((kw) => (
+                  <span
+                    key={kw}
+                    className="rounded-full border border-teal-100 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700"
+                  >
+                    #{kw}
+                  </span>
+                ))}
+              </div>
+            )}
 
-        {/* La fuente es la razón por la que esto informa en vez de desinformar.
-            Va visible y enlazada, no escondida al final en letra chiquita. */}
-        {post.source_url && (
-          <div className="mt-10 rounded-2xl border border-teal-100 bg-teal-50 p-5">
-            <p className="text-sm text-teal-900">
-              <strong>Verifícalo tú mismo.</strong> Esta nota se basa en información publicada
-              {post.source_name ? ` por ${post.source_name}` : ''}.
-            </p>
-            <a
-              href={post.source_url}
-              target="_blank"
-              rel="noopener noreferrer nofollow"
-              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 hover:text-teal-900 underline underline-offset-4"
-            >
-              Ver la fuente original <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          </div>
-        )}
-
-        {post.keywords.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-10 pt-8 border-t border-border">
-            {post.keywords.map((kw) => (
-              <span
-                key={kw}
-                className="px-3 py-1.5 text-xs rounded-full bg-teal-50 border border-teal-100 text-teal-700 font-medium"
-              >
-                #{kw}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-12 rounded-3xl bg-gradient-to-br from-teal-600 to-teal-900 text-white p-8 text-center">
-          <div className="text-4xl mb-3">🐾</div>
-          <h3 className="font-display font-bold text-2xl mb-2">
-            ¿Tienes perro o gato en Pereira o Dosquebradas?
-          </h3>
-          <p className="text-teal-200 mb-6">
-            Alimento, grooming, consulta veterinaria y vacunación con carnet. Domicilio gratis
-            desde $30.000.
-          </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            <Link
-              href="/categorias/todos"
-              className="px-6 py-3 rounded-full bg-[#f5a641] text-[#0d4a45] font-bold hover:bg-amber-300 transition-colors"
-            >
-              Ver catálogo →
-            </Link>
-            <a
-              href="https://wa.me/573206876633"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-6 py-3 rounded-full bg-green-500 text-white font-semibold hover:bg-green-400 transition-colors"
-            >
-              💬 WhatsApp
-            </a>
+            <div className="mt-12 rounded-3xl bg-gradient-to-br from-teal-600 to-teal-900 p-8 text-center text-white">
+              <div className="mb-3 text-4xl">🐾</div>
+              <h3 className="mb-2 font-display text-2xl font-bold">
+                ¿Tienes perro o gato en Pereira o Dosquebradas?
+              </h3>
+              <p className="mb-6 text-teal-200">
+                Alimento, grooming, consulta veterinaria y vacunación con carnet. Domicilio gratis
+                desde $30.000.
+              </p>
+              <div className="flex flex-wrap justify-center gap-3">
+                <Link
+                  href="/categorias/todos"
+                  className="rounded-full bg-[#f5a641] px-6 py-3 font-bold text-[#0d4a45] transition-colors hover:bg-amber-300"
+                >
+                  Ver catálogo →
+                </Link>
+                <a
+                  href="https://wa.me/573206876633"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full bg-green-500 px-6 py-3 font-semibold text-white transition-colors hover:bg-green-400"
+                >
+                  💬 WhatsApp
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </div>
