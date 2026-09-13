@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
 
 export const metadata: Metadata = {
-  title: 'Pet Shop y Tienda de Mascotas Pereira y Dosquebradas — Bigotes y Paticas',
+  title: { absolute: 'Tienda de Mascotas y Pet Shop en Dosquebradas y Pereira' },
   description:
-    'Pet shop con domicilio en Pereira y Dosquebradas. Concentrado, accesorios, medicamentos veterinarios. Envío gratis desde $30.000, entrega el mismo día lo más rápido posible. El petshop más completo de Risaralda.',
+    'Tienda de mascotas y pet shop en Samara Plaza Mall, Dosquebradas, con domicilio en Pereira. Concentrado, accesorios y medicamentos veterinarios. Envío gratis desde $30.000 y entrega el mismo día.',
   keywords: [
     'pet shop Pereira', 'petshop Pereira', 'pet shop Dosquebradas',
     'domicilio pet shop Pereira', 'pet shop domicilio Risaralda',
@@ -64,11 +64,12 @@ export default function PereiraPage() {
             Pereira · Dosquebradas · Risaralda
           </p>
           <h1 className="text-4xl md:text-5xl font-display font-extrabold leading-tight mb-5 text-[#0d4a45]">
-            Pet Shop con domicilio en Pereira y Dosquebradas
+            Tienda de mascotas y pet shop con domicilio en Pereira y Dosquebradas
           </h1>
           <p className="text-lg text-muted-foreground leading-relaxed mb-4">
-            <strong>Bigotes y Paticas</strong> es el pet shop de Pereira y Dosquebradas que lleva hasta tu puerta
-            todo lo que tu perro o gato necesita: concentrado premium, accesorios, medicamentos veterinarios y más.
+            <strong>Bigotes y Paticas</strong> es la tienda de mascotas y pet shop de Dosquebradas, en Samara
+            Plaza Mall sobre la calle 15, y llevamos a domicilio hasta Pereira todo lo que tu perro o gato
+            necesita: concentrado premium, accesorios, juguetes, arena y medicamentos veterinarios.
           </p>
           <p className="text-lg text-muted-foreground leading-relaxed mb-8">
             Nuestro petshop tiene servicio de domicilio <strong>el mismo día</strong>, lo más rápido
@@ -147,7 +148,7 @@ export default function PereiraPage() {
         {/* Cobertura */}
         <section className="mb-16">
           <h2 className="text-2xl font-display font-bold mb-3 text-[#0d4a45]">
-            Cobertura de domicilio en Pereira
+            Pet shop con domicilio en Pereira: zonas que cubrimos
           </h2>
           <p className="text-muted-foreground mb-6">
             Cubrimos toda la zona urbana de Pereira. Algunos de los barrios que atendemos:
@@ -167,7 +168,7 @@ export default function PereiraPage() {
           </div>
 
           <h2 className="text-2xl font-display font-bold mb-3 text-[#0d4a45]">
-            Cobertura de domicilio en Dosquebradas
+            Tienda de mascotas en Dosquebradas: cobertura de domicilio
           </h2>
           <p className="text-muted-foreground mb-6">
             Nuestra sede está en Dosquebradas. Entregamos en toda la zona urbana:
