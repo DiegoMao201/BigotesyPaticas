@@ -19,7 +19,11 @@ interface Props { params: { slug: string } }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = await storeApi.bySlug(params.slug);
-  if (!product) {
+  // Un producto activo pero NO publicado (471 al 13-sep, casi todos sin foto)
+  // no está en el catálogo ni en el sitemap, pero su URL respondía 200 con
+  // "index, follow": Google los rastreaba como páginas huérfanas ("rastreada,
+  // actualmente sin indexar"). Se tratan igual que un borrado: 404 real.
+  if (!product || !product.is_published) {
     return { title: 'Producto no encontrado | Bigotes y Paticas', robots: { index: false, follow: false } };
   }
 
@@ -57,7 +61,7 @@ const WA_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP ?? '573206876633';
 
 export default async function ProductPage({ params }: Props) {
   const product = await storeApi.bySlug(params.slug);
-  if (!product) {
+  if (!product || !product.is_published) {
     // Solo redirigimos (301) cuando el slug fue renombrado y hay un mapeo real
     // a un producto vivo (tabla catalog.slug_redirects). Si no existe ese mapeo,
     // el producto está oculto/eliminado y debe devolver un 404 real: redirigir

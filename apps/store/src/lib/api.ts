@@ -28,6 +28,7 @@ export interface Product {
   sku: string;
   slug: string;
   name: string;
+  is_published: boolean;
   short_description: string | null;
   description?: string | null;
   brand_id: string | null;
