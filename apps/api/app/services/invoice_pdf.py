@@ -678,7 +678,7 @@ def render_invoice_html(*, order, customer_name: str, customer_doc: str) -> str:
         <div class="footer-text">
             <p class="thanks">¡Gracias por tu compra!</p>
             <p>Escanea el código para escribirnos por WhatsApp si tienes alguna pregunta sobre tu pedido.</p>
-            <p><strong>Mall Zamara Plaza, Local 2</strong> · 320 687 6633 · bigotesypaticasdosquebradas@gmail.com · @bigotesypaticas</p>
+            <p><strong>Samara Plaza Mall, Local 2</strong> · 320 687 6633 · bigotesypaticasdosquebradas@gmail.com · @bigotesypaticas</p>
         </div>
     </div>
 </body>

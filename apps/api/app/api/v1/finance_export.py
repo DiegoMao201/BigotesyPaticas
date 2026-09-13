@@ -424,7 +424,7 @@ async def _get_ai_analysis(summary: dict) -> dict:
         return fallback
 
     prompt = f"""Eres un analista financiero experto en retail de mascotas en Colombia.
-Analiza los siguientes datos financieros REALES de Bigotes y Paticas (pet shop ubicado en Mall Zamara Plaza, Dosquebradas, Risaralda) y entrega un análisis ejecutivo tipo informe para inversionistas.
+Analiza los siguientes datos financieros REALES de Bigotes y Paticas (pet shop ubicado en Samara Plaza Mall, Dosquebradas, Risaralda) y entrega un análisis ejecutivo tipo informe para inversionistas.
 
 CONTEXTO DEL NEGOCIO:
 - Tienda física + tienda online (bigotesypaticas.com)

@@ -35,7 +35,7 @@ _INTENTS: list[tuple[list[str], str]] = [
     ),
     (
         ["donde", "dónde", "ubicacion", "ubicación", "direccion", "dirección", "local", "tienda"],
-        "📍 Estamos en Mall Zamara Plaza, Cl. 15 #3A-07 Local 2, Dosquebradas. También hacemos domicilios en toda Pereira y Dosquebradas 🛵",
+        "📍 Estamos en Samara Plaza Mall, Cl. 15 #3A-07 Local 2, Dosquebradas. También hacemos domicilios en toda Pereira y Dosquebradas 🛵",
     ),
     (
         ["grooming", "baño", "bano", "peluqueria", "peluquería", "corte"],
@@ -94,7 +94,7 @@ def _handle_postback(sender_id: str, payload: str) -> None:
             "Somos tu tienda de mascotas en Pereira y Dosquebradas.\n\n"
             "• 🛍️ Tienda: bigotesypaticas.com\n"
             "• 📱 Portal cliente: mi.bigotesypaticas.com\n"
-            "• 📍 Mall Zamara Plaza, Local 2, Dosquebradas\n"
+            "• 📍 Samara Plaza Mall, Local 2, Dosquebradas\n"
             "• 🕐 Lun-Sáb 10am-7pm\n\n"
             "¿En qué te puedo ayudar?",
         )

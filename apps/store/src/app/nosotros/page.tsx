@@ -77,7 +77,7 @@ export default function NosotrosPage() {
           <p><span className="font-medium text-gray-700">Razón social:</span> Diego Mauricio García — Bigotes y Paticas</p>
           <p><span className="font-medium text-gray-700">NIT:</span> 1088266407-7</p>
           <p><span className="font-medium text-gray-700">Régimen:</span> Simple de Tributación</p>
-          <p><span className="font-medium text-gray-700">Dirección:</span> Mall Zamara Plaza, Cl. 15 #3A-07 Local 2, Dosquebradas, Risaralda, C.P. 661001</p>
+          <p><span className="font-medium text-gray-700">Dirección:</span> Samara Plaza Mall, Cl. 15 #3A-07 Local 2, Dosquebradas, Risaralda, C.P. 661001</p>
           <p className="text-xs text-gray-500 mt-2">
             Cumplimos con la <Link href="/politica-privacidad" className="underline hover:text-teal-600">Ley 1581 de 2012</Link> (protección de datos) y los{' '}
             <Link href="/terminos" className="underline hover:text-teal-600">términos y condiciones</Link> vigentes.

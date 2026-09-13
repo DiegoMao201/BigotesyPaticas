@@ -17,7 +17,7 @@ En **Editar perfil → Biografía**, borrar todo y pegar exactamente:
 ```
 🐾 Bigotes y Paticas | Mascotas Pereira y Dosquebradas
 
-🏠 Mall Zamara Plaza, Local 2, Dosquebradas
+🏠 Samara Plaza Mall, Local 2, Dosquebradas
 
 📦 Domicilio gratis +$30k · Lun–Sáb 10am–7pm
 

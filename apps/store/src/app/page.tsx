@@ -245,7 +245,7 @@ export default async function HomePage() {
                 <p className="text-brand-600 font-semibold text-sm mb-2 uppercase tracking-wider">Punto físico</p>
                 <h2 className="text-3xl font-display font-extrabold mb-1">Encuéntranos</h2>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Visítanos en el Mall Zamara Plaza o haz tu pedido con domicilio — cubrimos toda la zona urbana de Pereira y Dosquebradas.
+                  Visítanos en el Samara Plaza Mall o haz tu pedido con domicilio — cubrimos toda la zona urbana de Pereira y Dosquebradas.
                 </p>
               </div>
               <ul className="space-y-3 text-sm">

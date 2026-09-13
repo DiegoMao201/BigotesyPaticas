@@ -24,7 +24,7 @@ import asyncpg
 import httpx
 from rapidfuzz import fuzz
 
-PLACE_ID = os.environ.get("GBP_PLACE_ID", "ChIJUbZRoXGBOI4R8vrs6AsH7XQ")  # Mall Zamara Plaza
+PLACE_ID = os.environ.get("GBP_PLACE_ID", "ChIJUbZRoXGBOI4R8vrs6AsH7XQ")  # Samara Plaza Mall
 API_KEY = os.environ.get("GBP_PLACES_API_KEY", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 

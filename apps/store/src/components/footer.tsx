@@ -200,7 +200,7 @@ export function Footer() {
               📱 WhatsApp directo
             </a>
             <a
-              href="https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Mall+Zamara+Plaza+Dosquebradas"
+              href="https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Samara+Plaza+Mall+Dosquebradas"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#187f77] hover:text-[#0d4a45] transition-colors"
@@ -214,7 +214,7 @@ export function Footer() {
       {/* Legal bar */}
       <div className="border-t border-border">
         <div className="container-wide py-6 flex flex-col md:flex-row justify-between items-center gap-3 text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} Bigotes y Paticas · {BUSINESS_INFO.legal.nitFormatted} · {BUSINESS_INFO.legal.owner} · Mall Zamara Plaza, Cl. 15 #3A-07 Local 2, Dosquebradas, Risaralda.</p>
+          <p>© {new Date().getFullYear()} Bigotes y Paticas · {BUSINESS_INFO.legal.nitFormatted} · {BUSINESS_INFO.legal.owner} · Samara Plaza Mall, Cl. 15 #3A-07 Local 2, Dosquebradas, Risaralda.</p>
           <div className="flex gap-4">
             <Link href="/politica-privacidad" className="hover:text-brand">Privacidad</Link>
             <Link href="/terminos" className="hover:text-brand">Términos</Link>

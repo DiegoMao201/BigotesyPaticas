@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { LocalBusinessSchema, BreadcrumbSchema } from '@/components/seo/JsonLd';
+import { BreadcrumbSchema } from '@/components/seo/JsonLd';
 
 export const metadata: Metadata = {
   title: 'Pet Shop y Tienda de Mascotas Pereira y Dosquebradas — Bigotes y Paticas',
@@ -47,7 +47,9 @@ const CATEGORIAS = [
 export default function PereiraPage() {
   return (
     <>
-      <LocalBusinessSchema />
+      {/* La ficha del negocio ya la emite layout.tsx en TODAS las páginas. Tenerla
+          dos veces en la misma página deja dos PetStore idénticos y Google no sabe
+          cuál es la entidad buena; con una sola y su @id, la consolida. */}
       <BreadcrumbSchema
         items={[
           { name: 'Inicio', url: 'https://bigotesypaticas.com' },

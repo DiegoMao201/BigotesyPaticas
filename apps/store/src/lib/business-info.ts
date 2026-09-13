@@ -20,7 +20,7 @@ export const BUSINESS_INFO = {
   email: "bigotesypaticasdosquebradas@gmail.com",
 
   address: {
-    streetAddress: "Mall Zamara Plaza, Cl. 15 #3A-07 Local 2",
+    streetAddress: "Samara Plaza Mall, Cl. 15 #3A-07 Local 2",
     addressLocality: "Dosquebradas",
     addressRegion: "Risaralda",
     postalCode: "661001",
@@ -97,9 +97,10 @@ export const BUSINESS_INFO = {
     country: "CO",
   },
 
-  // Completar con URL del perfil real cuando Diego confirme el CID
-  mapsUrl:
-    "https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Dosquebradas",
+  // Confirmado el 13-sep-2026 con la API de Places: la ficha existe, está
+  // OPERATIONAL, categoría pet_store, 5,0 con 28 reseñas. Este es su enlace
+  // canónico por cid; antes había una búsqueda por texto, que no apunta a la ficha.
+  mapsUrl: "https://maps.google.com/?cid=8425398225613945586",
 
   // Redes verificadas (no inventar): Instagram y TikTok por nombre de usuario real;
   // Facebook por nombre de usuario (BigotesyPaticas, creado el 8 sep 2026; antes solo por id).
@@ -113,7 +114,14 @@ export const BUSINESS_INFO = {
     googleReviews: { url: "https://g.page/r/CfL67OgLB-10EBM/review", handle: "Google" },
   },
 
+  // La ficha del negocio en Google, por su identificador propio. Ponerla aquí y en
+  // hasMap le dice a Google que esta web y ese punto del mapa son la MISMA entidad.
+  // Un enlace de búsqueda por texto no sirve: apunta a lo que Google encuentre,
+  // no a la ficha. Place ID ChIJUbZRoXGBOI4R8vrs6AsH7XQ.
+  googleBusinessUrl: "https://maps.google.com/?cid=8425398225613945586",
+
   sameAs: [
+    "https://maps.google.com/?cid=8425398225613945586",
     "https://www.instagram.com/bigotesypaticas/",
     "https://www.tiktok.com/@bigotesypaticas",
     "https://www.facebook.com/BigotesyPaticas",

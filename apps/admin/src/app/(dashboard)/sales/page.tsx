@@ -36,7 +36,7 @@ function buildWhatsAppMsg(order: Order): string {
     `📱 *¿Ya conocés nuestro portal?* Llevá el historial de tu mascota, acumulá Puntos Bigotes y pedí domicilio:\n` +
     `👉 https://mi.bigotesypaticas.com/registro\n\n` +
     `🛒 bigotesypaticas.com · 📸 @bigotesypaticas\n` +
-    `📍 Mall Zamara Plaza, Local 2 · 320 687 6633\n\n` +
+    `📍 Samara Plaza Mall, Local 2 · 320 687 6633\n\n` +
     `¡Gracias por confiar en nosotros! 🐶🐱🐾`
   );
 }

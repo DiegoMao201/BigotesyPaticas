@@ -187,7 +187,7 @@ def _render_template(template_code: str, data: dict) -> str:
             f"✓ Pedir domicilio sin llamar\n\n"
             f"📸 Seguinos en Instagram: @bigotesypaticas\n"
             f"🛒 Tienda: https://bigotesypaticas.com\n"
-            f"📍 Mall Zamara Plaza, Local 2 · 320 687 6633\n\n"
+            f"📍 Samara Plaza Mall, Local 2 · 320 687 6633\n\n"
             f"¡Gracias por confiar en Bigotes y Paticas! 🏠🐾"
         )
 

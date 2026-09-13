@@ -20,7 +20,7 @@ export default function PoliticaPrivacidadPage() {
             <strong>Diego Mauricio García</strong>, responsable del establecimiento comercial{' '}
             <strong>Bigotes y Paticas</strong>.<br />
             NIT: <strong>1088266407-7</strong> · Régimen Simple de Tributación.<br />
-            Dirección: Mall Zamara Plaza, Cl. 15 #3A-07 Local 2, Dosquebradas, Risaralda, Colombia. C.P. 661001.<br />
+            Dirección: Samara Plaza Mall, Cl. 15 #3A-07 Local 2, Dosquebradas, Risaralda, Colombia. C.P. 661001.<br />
             Contacto: <a href="mailto:bigotesypaticasdosquebradas@gmail.com" className="text-teal-600 hover:underline">
               bigotesypaticasdosquebradas@gmail.com
             </a> · +57 320 687 6633

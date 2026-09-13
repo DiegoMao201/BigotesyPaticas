@@ -54,7 +54,7 @@ export default function DevolucionesPage() {
             <li>Cuéntanos el motivo de la devolución y adjunta una foto del producto</li>
             <li>
               Acordaremos el método de devolución: puedes traer el producto a nuestra tienda en
-              <strong> Mall Zamara Plaza, Cl. 15 #3A-07 Local 2, Dosquebradas</strong>, o coordinamos
+              <strong> Samara Plaza Mall, Cl. 15 #3A-07 Local 2, Dosquebradas</strong>, o coordinamos
               un reenvío gratuito.
             </li>
             <li>Una vez recibido el producto, procesamos el reembolso o cambio en máximo 3 días hábiles.</li>

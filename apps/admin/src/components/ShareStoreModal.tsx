@@ -24,7 +24,7 @@ const SCENARIOS: Scenario[] = [
       '  Envío gratis en pedidos desde $30.000\n\n' +
       '📱 *Portal de clientes:* https://mi.bigotesypaticas.com\n' +
       '  Pedí domicilio, acumulá Puntos Bigotes y llevá el carnet de tu mascota\n\n' +
-      '📍 *Tienda física:* Mall Zamara Plaza, Local 2 · Dosquebradas\n' +
+      '📍 *Tienda física:* Samara Plaza Mall, Local 2 · Dosquebradas\n' +
       '🕐 Lun–Sáb 10am–7pm\n\n' +
       '📸 Instagram: @bigotesypaticas\n' +
       '💬 WhatsApp: 320 687 6633',
@@ -63,7 +63,7 @@ const SCENARIOS: Scenario[] = [
       '🚚 *Envío:* el mismo día en Pereira y Dosquebradas\n' +
       '💰 *Envío gratis* en pedidos desde $30.000\n' +
       '💵 Pago contra entrega (efectivo, tarjeta, Nequi, Daviplata)\n\n' +
-      '📍 Mall Zamara Plaza, Local 2 · 320 687 6633',
+      '📍 Samara Plaza Mall, Local 2 · 320 687 6633',
   },
   {
     id: 'ubicacion',
@@ -72,11 +72,11 @@ const SCENARIOS: Scenario[] = [
     description: 'Dirección, cómo llegar y horario de atención',
     message:
       '¡Hola! Nuestra *tienda física* está en 🐾\n\n' +
-      '📍 *Mall Zamara Plaza, Local 2*\n' +
+      '📍 *Samara Plaza Mall, Local 2*\n' +
       '  Cl. 15 #3A-07 · Dosquebradas, Risaralda\n\n' +
       '🕐 *Horario:* Lunes a Sábado, 10am a 7pm\n\n' +
       '🗺️ Ver en Google Maps:\n' +
-      'https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Mall+Zamara+Plaza+Dosquebradas\n\n' +
+      'https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Samara+Plaza+Mall+Dosquebradas\n\n' +
       '🚚 También hacemos *domicilio el mismo día* a Pereira y Dosquebradas.\n' +
       'Pedí por el portal: https://mi.bigotesypaticas.com\n\n' +
       '💬 320 687 6633 · 📸 @bigotesypaticas',

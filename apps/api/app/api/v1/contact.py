@@ -204,7 +204,7 @@ def _welcome_html(email: str) -> str:
       <!-- FOOTER verde oscuro -->
       <tr><td style="background:#0d4a45;border-radius:0 0 20px 20px;padding:28px 40px;text-align:center;">
         <p style="color:#a8ddd9;font-size:13px;margin:0 0 8px;">
-          <strong style="color:#ffffff;">Mall Zamara Plaza</strong> · Cl. 15 #3A-07 Local 2, Dosquebradas
+          <strong style="color:#ffffff;">Samara Plaza Mall</strong> · Cl. 15 #3A-07 Local 2, Dosquebradas
         </p>
         <p style="color:#a8ddd9;font-size:13px;margin:0 0 16px;">
           📱 <a href="https://wa.me/573206876633" style="color:#5ecdc7;text-decoration:none;">+57 320 687 6633</a>

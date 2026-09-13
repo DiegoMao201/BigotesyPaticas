@@ -7,7 +7,7 @@ import { loadMapsScript } from '@/lib/maps';
 
 const KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? '';
 const GOOGLE_MAPS_URL =
-  'https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Mall+Zamara+Plaza+Dosquebradas';
+  'https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Samara+Plaza+Mall+Dosquebradas';
 
 interface Props {
   height?: number;
@@ -47,7 +47,7 @@ export function StoreMapEmbed({ height = 420, zoom = 17, className = '' }: Props
       const info = new window.google.maps.InfoWindow({
         content: `<div style="font-family:system-ui,sans-serif;padding:4px 2px;max-width:220px;">
           <p style="font-weight:700;font-size:14px;margin:0 0 4px">${BUSINESS_INFO.name}</p>
-          <p style="font-size:12px;color:#555;margin:0 0 2px">Mall Zamara Plaza, Cl. 15 #3A-07 Local 2</p>
+          <p style="font-size:12px;color:#555;margin:0 0 2px">Samara Plaza Mall, Cl. 15 #3A-07 Local 2</p>
           <p style="font-size:12px;color:#555;margin:0 0 8px">Dosquebradas, Risaralda</p>
           <a href="${GOOGLE_MAPS_URL}" target="_blank"
             style="font-size:12px;color:#0a7f6c;font-weight:600;text-decoration:none">
@@ -85,7 +85,7 @@ export function StoreMapEmbed({ height = 420, zoom = 17, className = '' }: Props
       >
         <div className="text-center space-y-2 text-muted-foreground">
           <MapPin className="h-8 w-8 mx-auto text-brand-400" />
-          <p className="text-sm font-medium">Mall Zamara Plaza, Cl. 15 #3A-07 Local 2</p>
+          <p className="text-sm font-medium">Samara Plaza Mall, Cl. 15 #3A-07 Local 2</p>
           <p className="text-xs">Dosquebradas, Risaralda</p>
           <a
             href={GOOGLE_MAPS_URL}

@@ -10,7 +10,7 @@ import { BUSINESS_INFO } from '@/lib/business-info';
 export const metadata: Metadata = {
   title: 'Contacto — Bigotes y Paticas Pereira y Dosquebradas',
   description:
-    'Contáctanos por WhatsApp, teléfono o correo. Pet shop con domicilio en Pereira y Dosquebradas, Risaralda. Horario: Lunes a Sábado 10am-7pm. Mall Zamara Plaza, Dosquebradas.',
+    'Contáctanos por WhatsApp, teléfono o correo. Pet shop con domicilio en Pereira y Dosquebradas, Risaralda. Horario: Lunes a Sábado 10am-7pm. Samara Plaza Mall, Dosquebradas.',
   alternates: { canonical: 'https://bigotesypaticas.com/contacto' },
   openGraph: {
     title: 'Contacto — Bigotes y Paticas',
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   },
 };
 
-const GOOGLE_MAPS_URL = 'https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Mall+Zamara+Plaza+Dosquebradas';
+const GOOGLE_MAPS_URL = 'https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Samara+Plaza+Mall+Dosquebradas';
 
 export default function ContactoPage() {
   return (
@@ -94,7 +94,7 @@ export default function ContactoPage() {
                     <MapPin className="h-4 w-4" />
                   </div>
                   <address className="not-italic">
-                    Mall Zamara Plaza, Cl. 15 #3A-07 Local 2<br />
+                    Samara Plaza Mall, Cl. 15 #3A-07 Local 2<br />
                     <span className="opacity-70">Dosquebradas, Risaralda</span>
                   </address>
                 </li>
