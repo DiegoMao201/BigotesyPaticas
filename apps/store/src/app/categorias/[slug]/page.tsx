@@ -19,29 +19,36 @@ const SLUG_STRATEGY: Record<string, {
   perros:     { type: 'species',  value: 'perro',      label: 'Perros',            emoji: '🐕', description: 'Alimento, accesorios y cuidado para perros',             pet_type: 'dog'  },
   gatos:      { type: 'species',  value: 'gato',       label: 'Gatos',             emoji: '🐈', description: 'Alimento, accesorios y cuidado para gatos',              pet_type: 'cat'  },
   accesorios: { type: 'category', value: 'accesorios', label: 'Accesorios',        emoji: '🎀', description: 'Correas, collares, juguetes y más'  },
-  snacks:     { type: 'category', value: 'snack',      label: 'Snacks y premios',  emoji: '🦴', description: 'Premios y golosinas saludables para tus mascotas' },
+  snacks:     { type: 'category', value: 'snacks',     label: 'Snacks y premios',  emoji: '🦴', description: 'Premios y golosinas saludables para tus mascotas' },
+  // 18-sep-2026: /categorias/higiene se enlaza desde nutricion-salud-oral y no estaba
+  // definida, así que consultaba el slug 'higiene' (0 productos publicados) y salía vacía.
+  // La categoría real con productos es 'higiene-y-cuidado' (50 publicados).
+  higiene:    { type: 'category', value: 'higiene-y-cuidado', label: 'Higiene y cuidado', emoji: '🧼', description: 'Shampoo, cepillos y todo para el aseo de tu mascota' },
+  medicamentos: { type: 'category', value: 'medicamentos', label: 'Salud y medicamentos', emoji: '💊', description: 'Medicamentos veterinarios y suplementos' },
+  juguetes:   { type: 'category', value: 'juguetes',   label: 'Juguetes',          emoji: '🎾', description: 'Juguetes para perros y gatos' },
+  alimento:   { type: 'category', value: 'alimento-seco', label: 'Alimento seco',  emoji: '🥣', description: 'Concentrado para perros y gatos' },
   todos:      { type: 'all',                           label: 'Todo el catálogo',  emoji: '🐾', description: 'Todos nuestros productos para mascotas' },
 };
 
 const FILTER_CHIPS: Record<string, FilterChip[]> = {
   perros:     [
-    { label: 'Concentrado', keyword: 'concentrado', categorySlug: 'concentrado' },
+    { label: 'Concentrado', keyword: 'concentrado', categorySlug: 'alimento-seco' },
     { label: 'Snacks',      keyword: 'snack',        categorySlug: 'snacks'      },
-    { label: 'Higiene',     keyword: 'higiene',      categorySlug: 'higiene'     },
+    { label: 'Higiene',     keyword: 'higiene',      categorySlug: 'higiene-y-cuidado' },
     { label: 'Salud',       keyword: 'salud',        categorySlug: 'medicamentos'},
     { label: 'Accesorios',  keyword: 'accesorio',    categorySlug: 'accesorios'  },
   ],
   gatos:      [
-    { label: 'Concentrado', keyword: 'concentrado', categorySlug: 'concentrado' },
+    { label: 'Concentrado', keyword: 'concentrado', categorySlug: 'alimento-seco' },
     { label: 'Snacks',      keyword: 'snack',        categorySlug: 'snacks'      },
-    { label: 'Higiene',     keyword: 'higiene',      categorySlug: 'higiene'     },
+    { label: 'Higiene',     keyword: 'higiene',      categorySlug: 'higiene-y-cuidado' },
     { label: 'Salud',       keyword: 'salud',        categorySlug: 'medicamentos'},
   ],
   snacks:     [{ label: 'Dental', keyword: 'dental' }, { label: 'Natural', keyword: 'natural' }, { label: 'Perro', keyword: 'perro' }, { label: 'Gato', keyword: 'gato' }],
   todos:      [
-    { label: 'Concentrado',  keyword: 'concentrado', categorySlug: 'concentrado'  },
+    { label: 'Concentrado',  keyword: 'concentrado', categorySlug: 'alimento-seco'  },
     { label: 'Snacks',       keyword: 'snack',        categorySlug: 'snacks'       },
-    { label: 'Higiene',      keyword: 'higiene',      categorySlug: 'higiene'      },
+    { label: 'Higiene',      keyword: 'higiene',      categorySlug: 'higiene-y-cuidado'  },
     { label: 'Medicamentos', keyword: 'medicamento',  categorySlug: 'medicamentos' },
     { label: 'Accesorios',   keyword: 'accesorio',    categorySlug: 'accesorios'   },
   ],
