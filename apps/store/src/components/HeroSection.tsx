@@ -98,11 +98,14 @@ export function HeroSection() {
           <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-extrabold text-white leading-[1.05] tracking-tight drop-shadow-2xl">
             El amor que se<br />
             <span className="text-amber-300">merece tu mascota.</span>
-            {/* La portada es la página con más autoridad del sitio y su H1 solo decía
+            {/* OJO (18-sep-2026): el h1 lleva `tracking-tight` y el span lo heredaba;
+                a 18 px las letras quedaban PEGADAS ("Tiendademascotas"). Por eso este
+                span fija `tracking-normal`.
+                La portada es la página con más autoridad del sitio y su H1 solo decía
                 la frase de marca: para Google no significaba nada. Esta segunda línea
                 le da el significado sin quitarle fuerza a la primera. Va VISIBLE y en
                 tamaño legible: texto escondido para posicionar es penalizable. */}
-            <span className="mt-3 block text-lg font-semibold leading-snug text-white/90 drop-shadow md:text-xl lg:text-2xl">
+            <span className="mt-3 block text-lg font-semibold leading-snug tracking-normal text-white/90 drop-shadow md:text-xl lg:text-2xl">
               Tienda de mascotas y pet shop con domicilio en Dosquebradas y Pereira
             </span>
           </h1>
