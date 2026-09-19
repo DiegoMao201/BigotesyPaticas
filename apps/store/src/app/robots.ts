@@ -20,7 +20,10 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: 'ClaudeBot', allow: '/' },
       { userAgent: 'Google-Extended', allow: '/' },
     ],
-    sitemap: 'https://bigotesypaticas.com/sitemap.xml',
+    // Los dos mapas: el de siempre para los buscadores y /llms.txt para los
+    // modelos de lenguaje, que es donde encuentran los datos de la tienda ya
+    // masticados en vez de tener que sacarlos del HTML.
+    sitemap: ['https://bigotesypaticas.com/sitemap.xml', 'https://bigotesypaticas.com/llms.txt'],
     host: 'https://bigotesypaticas.com',
   };
 }
