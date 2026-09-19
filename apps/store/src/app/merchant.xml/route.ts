@@ -39,6 +39,22 @@ type ProductoFeed = {
   category?: { name: string } | null;
 };
 
+/**
+ * La imagen que se le manda a Google, pasada por /img-feed para que llegue a
+ * 1000x1000. Medimos el catálogo el 18-sep-2026: solo 14 de 520 fotos llegaban a
+ * los 500 px que Google exige, así que las estaba rechazando por tandas. Ver el
+ * comentario de apps/store/src/app/img-feed/[slug]/route.ts.
+ *
+ * Si la URL no tiene la forma esperada del CDN, se manda tal cual: mejor la foto
+ * original que ninguna.
+ */
+const RE_CDN = /\/bigotesypaticas\/products\/([a-z0-9][a-z0-9-]*)\/main\.webp$/;
+
+function imagenParaGoogle(url: string): string {
+  const m = RE_CDN.exec(url);
+  return m ? `${BASE}/img-feed/${m[1]}.jpg` : url;
+}
+
 function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -97,8 +113,8 @@ export async function GET() {
           `      <g:title>${esc(p.name.slice(0, 150))}</g:title>`,
           `      <g:description>${esc(descripcion(p))}</g:description>`,
           `      <g:link>${BASE}/producto/${encodeURIComponent(p.slug)}</g:link>`,
-          `      <g:image_link>${esc(p.primary_image_url)}</g:image_link>`,
-          ...extras.map((u) => `      <g:additional_image_link>${esc(u)}</g:additional_image_link>`),
+          `      <g:image_link>${esc(imagenParaGoogle(p.primary_image_url))}</g:image_link>`,
+          ...extras.map((u) => `      <g:additional_image_link>${esc(imagenParaGoogle(u))}</g:additional_image_link>`),
           `      <g:availability>${p.in_stock && p.stock_qty > 0 ? 'in_stock' : 'out_of_stock'}</g:availability>`,
           `      <g:price>${(enOferta ? antes : precio).toFixed(2)} COP</g:price>`,
           ...(enOferta ? [`      <g:sale_price>${precio.toFixed(2)} COP</g:sale_price>`] : []),
