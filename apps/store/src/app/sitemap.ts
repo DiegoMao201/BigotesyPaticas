@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { ZONAS } from '@/data/zonas';
 
 export const revalidate = 3600; // regenerar cada hora
 
@@ -42,7 +43,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/mascotas-perdidas`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
     { url: `${BASE}/mascotas-encontradas`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
     { url: `${BASE}/finales-felices`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
+    { url: `${BASE}/domicilio-mascotas`, lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
   ];
+
+  // Una entrada por zona de Pereira y Dosquebradas. Sin esto Google tardaría
+  // semanas en descubrirlas, porque solo se enlazan entre ellas y desde su índice.
+  const zonaPages: MetadataRoute.Sitemap = ZONAS.map((z) => ({
+    url: `${BASE}/domicilio-mascotas/${z.slug}`,
+    lastModified: now,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }));
 
   // Todos los productos publicados
   // OJO: la API tope `per_page` en 100 (Query(..., le=100)). Con 200 devuelve 422
@@ -179,6 +190,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [
     ...staticPages,
+    ...zonaPages,
     ...productPages,
     ...blogPages,
     ...newsPages,
