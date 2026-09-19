@@ -18,6 +18,10 @@
  * Por eso el código se puede pasar de tres formas, en este orden:
  *   1. En la propia URL:  /inventario-local.xml?store=EL_CODIGO   ← la más rápida,
  *      se cambia desde Merchant Center sin tocar el código ni redesplegar.
+ *      Admite VARIOS separados por coma: ?store=A,B,C. Entonces cada producto
+ *      sale una vez por código. Sirve para dos cosas: el día que haya un segundo
+ *      local, y para averiguar el código cuando Google no lo enseña por ningún
+ *      lado — se mandan los candidatos y su informe de errores dice cuál acepta.
  *   2. Variable de entorno MERCHANT_STORE_CODE.
  *   3. 'MAIN' como último recurso (que es justo el que Google rechazó).
  */
@@ -64,8 +68,12 @@ async function traerPagina(page: number): Promise<ProductoInv[]> {
 }
 
 export async function GET(request: Request) {
-  const pedido = new URL(request.url).searchParams.get('store')?.trim();
-  const storeCode = pedido || STORE_POR_DEFECTO;
+  const pedido = new URL(request.url).searchParams.get('store');
+  const codigos = (pedido ?? STORE_POR_DEFECTO)
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
+  if (codigos.length === 0) codigos.push(STORE_POR_DEFECTO);
 
   const items: string[] = [];
   let page = 1;
@@ -88,20 +96,22 @@ export async function GET(request: Request) {
       const antes = p.compare_at_price ? Number(p.compare_at_price) : 0;
       const enOferta = antes > precio;
 
-      items.push(
-        [
-          '    <item>',
-          `      <g:id>${esc(p.sku || p.slug)}</g:id>`,
-          `      <g:store_code>${esc(storeCode)}</g:store_code>`,
-          `      <g:availability>${disponibilidad}</g:availability>`,
-          ...(hay ? [`      <g:quantity>${cantidad}</g:quantity>`] : []),
-          `      <g:price>${(enOferta ? antes : precio).toFixed(2)} COP</g:price>`,
-          ...(enOferta ? [`      <g:sale_price>${precio.toFixed(2)} COP</g:sale_price>`] : []),
-          `      <g:pickup_method>buy</g:pickup_method>`,
-          `      <g:pickup_sla>same_day</g:pickup_sla>`,
-          '    </item>',
-        ].join('\n'),
-      );
+      for (const codigo of codigos) {
+        items.push(
+          [
+            '    <item>',
+            `      <g:id>${esc(p.sku || p.slug)}</g:id>`,
+            `      <g:store_code>${esc(codigo)}</g:store_code>`,
+            `      <g:availability>${disponibilidad}</g:availability>`,
+            ...(hay ? [`      <g:quantity>${cantidad}</g:quantity>`] : []),
+            `      <g:price>${(enOferta ? antes : precio).toFixed(2)} COP</g:price>`,
+            ...(enOferta ? [`      <g:sale_price>${precio.toFixed(2)} COP</g:sale_price>`] : []),
+            `      <g:pickup_method>buy</g:pickup_method>`,
+            `      <g:pickup_sla>same_day</g:pickup_sla>`,
+            '    </item>',
+          ].join('\n'),
+        );
+      }
     }
 
     if (lote.length < POR_PAGINA) break;
@@ -113,7 +123,7 @@ export async function GET(request: Request) {
   <channel>
     <title>Bigotes y Paticas — inventario en tienda</title>
     <link>https://bigotesypaticas.com</link>
-    <description>Disponibilidad en el local de Samara Plaza Mall, Dosquebradas (código de tienda: ${esc(storeCode)})</description>
+    <description>Disponibilidad en el local de Samara Plaza Mall, Dosquebradas (códigos de tienda: ${esc(codigos.join(', '))})</description>
 ${items.join('\n')}
   </channel>
 </rss>`;
@@ -123,7 +133,7 @@ ${items.join('\n')}
       'Content-Type': 'application/xml; charset=utf-8',
       'Cache-Control': 'public, max-age=0, s-maxage=1800, stale-while-revalidate=3600',
       // Sirve para verificar de un vistazo con qué código salió el feed.
-      'X-Store-Code': storeCode,
+      'X-Store-Code': codigos.join(','),
     },
   });
 }
