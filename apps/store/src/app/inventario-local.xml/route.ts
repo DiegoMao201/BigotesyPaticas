@@ -23,7 +23,8 @@
  *      local, y para averiguar el código cuando Google no lo enseña por ningún
  *      lado — se mandan los candidatos y su informe de errores dice cuál acepta.
  *   2. Variable de entorno MERCHANT_STORE_CODE.
- *   3. 'MAIN' como último recurso (que es justo el que Google rechazó).
+ *   3. El código del local, fijo aquí abajo. Es el camino normal: la URL que
+ *      Merchant Center tiene registrada va limpia, sin parámetros.
  */
 
 // La respuesta depende de ?store=, así que se genera por petición. El coste real
@@ -36,7 +37,9 @@ const API =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   'http://localhost:8000';
 
-const STORE_POR_DEFECTO = process.env.MERCHANT_STORE_CODE || 'MAIN';
+// El código del local de Samara Plaza Mall, el que Diego encontró en el Perfil de
+// Empresa el 18-sep-2026 tras descartar 'MAIN' y el ID de la cuenta omnicanal.
+const STORE_POR_DEFECTO = process.env.MERCHANT_STORE_CODE || '16216148396074054431';
 const POR_PAGINA = 100;
 
 type ProductoInv = {
