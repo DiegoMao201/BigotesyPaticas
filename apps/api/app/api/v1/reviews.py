@@ -160,6 +160,65 @@ async def list_product_reviews(
     return {"reviews": result, "total": total, "aggregate": aggregate, "page": page}
 
 
+@router.get("/reviews/feed")
+async def reviews_feed(
+    page: int = 1,
+    page_size: int = 500,
+    db: DBSession = ...,
+):
+    """Todas las reseñas aprobadas, para el feed de valoraciones de Google.
+
+    El endpoint de arriba entrega las reseñas de UN producto y pagina de a 10,
+    que es lo que necesita la ficha. Google pide lo contrario: el archivo
+    completo de una sola pasada. Sin esto, armar el feed exigiría una llamada por
+    producto — más de 500 — cada vez que Google lo consulta.
+
+    Solo lectura y solo lo aprobado. Devuelve el slug y el SKU porque son los que
+    emparejan cada reseña con su producto en el feed de Merchant Center.
+    """
+    page_size = min(page_size, 1000)
+
+    base = (
+        select(ProductReview, Product.slug, Product.sku, Product.name, Customer.full_name)
+        .join(Product, Product.id == ProductReview.product_id)
+        .join(Customer, Customer.id == ProductReview.customer_id, isouter=True)
+        .where(
+            ProductReview.status.in_(["approved", "auto_published"]),
+            Product.is_published.is_(True),
+        )
+    )
+
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    rows = (
+        await db.execute(
+            base.order_by(desc(ProductReview.created_at))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).all()
+
+    items = []
+    for rev, slug, sku, nombre, full_name in rows:
+        items.append(
+            {
+                "id": str(rev.id),
+                "product_slug": slug,
+                "product_sku": sku,
+                "product_name": nombre,
+                "rating": rev.rating,
+                "title": rev.title,
+                "comment": rev.comment,
+                # Solo el nombre de pila: Google publica al autor y no hay por qué
+                # exponer el apellido de un cliente.
+                "reviewer": (full_name.split()[0] if full_name else "Cliente"),
+                "is_verified_purchase": rev.is_verified_purchase,
+                "created_at": rev.created_at.isoformat() if rev.created_at else None,
+            }
+        )
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
 @router.post("/products/{product_id}/reviews/{review_id}/helpful", status_code=200)
 async def mark_helpful(
     product_id: uuid.UUID,
