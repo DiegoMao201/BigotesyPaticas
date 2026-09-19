@@ -11,19 +11,28 @@
  *   https://bigotesypaticas.com/inventario-local.xml
  *
  * OJO con `store_code`: tiene que ser EXACTAMENTE el código de tienda que aparece
- * en Merchant Center → Tiendas físicas (viene del Perfil de Empresa). Se configura
- * con la variable de entorno MERCHANT_STORE_CODE; si no está, usa el código de la
- * ubicación por defecto del inventario.
+ * en Merchant Center → Información de empresa → Tiendas (viene del Perfil de
+ * Empresa). Si no coincide, Google rechaza el feed entero con "[Perfil de Empresa]
+ * Código de tienda no válido" — nos pasó el 18-sep-2026 con las 522 filas.
+ *
+ * Por eso el código se puede pasar de tres formas, en este orden:
+ *   1. En la propia URL:  /inventario-local.xml?store=EL_CODIGO   ← la más rápida,
+ *      se cambia desde Merchant Center sin tocar el código ni redesplegar.
+ *   2. Variable de entorno MERCHANT_STORE_CODE.
+ *   3. 'MAIN' como último recurso (que es justo el que Google rechazó).
  */
 
-export const revalidate = 1800; // el stock cambia durante el día: cada 30 min
+// La respuesta depende de ?store=, así que se genera por petición. El coste real
+// es bajo: los datos de la API siguen cacheados 30 min (el stock cambia durante
+// el día) y Google consulta el feed una vez al día.
+export const dynamic = 'force-dynamic';
 
 const API =
   process.env.API_BASE_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   'http://localhost:8000';
 
-const STORE_CODE = process.env.MERCHANT_STORE_CODE || 'MAIN';
+const STORE_POR_DEFECTO = process.env.MERCHANT_STORE_CODE || 'MAIN';
 const POR_PAGINA = 100;
 
 type ProductoInv = {
@@ -31,6 +40,7 @@ type ProductoInv = {
   sku: string | null;
   price: string;
   compare_at_price: string | null;
+  primary_image_url: string | null;
   in_stock: boolean;
   stock_qty?: number;
 };
@@ -53,7 +63,10 @@ async function traerPagina(page: number): Promise<ProductoInv[]> {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const pedido = new URL(request.url).searchParams.get('store')?.trim();
+  const storeCode = pedido || STORE_POR_DEFECTO;
+
   const items: string[] = [];
   let page = 1;
 
@@ -63,7 +76,9 @@ export async function GET() {
 
     for (const p of lote) {
       const precio = Number(p.price);
-      if (!precio || precio <= 0) continue;
+      // Mismos descartes que merchant.xml: un id que no existe en el feed de
+      // productos no se puede emparejar y Google lo cuenta como no coincidente.
+      if (!precio || precio <= 0 || !p.primary_image_url) continue;
 
       const cantidad = Number(p.stock_qty ?? 0);
       const hay = p.in_stock && cantidad > 0;
@@ -77,7 +92,7 @@ export async function GET() {
         [
           '    <item>',
           `      <g:id>${esc(p.sku || p.slug)}</g:id>`,
-          `      <g:store_code>${esc(STORE_CODE)}</g:store_code>`,
+          `      <g:store_code>${esc(storeCode)}</g:store_code>`,
           `      <g:availability>${disponibilidad}</g:availability>`,
           ...(hay ? [`      <g:quantity>${cantidad}</g:quantity>`] : []),
           `      <g:price>${(enOferta ? antes : precio).toFixed(2)} COP</g:price>`,
@@ -98,7 +113,7 @@ export async function GET() {
   <channel>
     <title>Bigotes y Paticas — inventario en tienda</title>
     <link>https://bigotesypaticas.com</link>
-    <description>Disponibilidad en el local de Samara Plaza Mall, Dosquebradas</description>
+    <description>Disponibilidad en el local de Samara Plaza Mall, Dosquebradas (código de tienda: ${esc(storeCode)})</description>
 ${items.join('\n')}
   </channel>
 </rss>`;
@@ -107,6 +122,8 @@ ${items.join('\n')}
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
       'Cache-Control': 'public, max-age=0, s-maxage=1800, stale-while-revalidate=3600',
+      // Sirve para verificar de un vistazo con qué código salió el feed.
+      'X-Store-Code': storeCode,
     },
   });
 }
