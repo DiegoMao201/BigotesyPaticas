@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AddressAutocompleteInput } from '@/components/maps/AddressAutocompleteInput';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -155,10 +156,10 @@ export default function CheckoutPage() {
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1">Dirección de entrega</label>
-              <input
-                type="text"
+              {/* Autocompletado de Google al tocar el campo; si falla, input normal */}
+              <AddressAutocompleteInput
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                onChange={setAddress}
                 placeholder="Barrio, calle, número..."
                 className="w-full rounded-xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/50"
               />

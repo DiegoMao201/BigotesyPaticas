@@ -34,7 +34,10 @@ export function generateMetadata({ params }: { params: { zona: string } }): Meta
     title: { absolute: `${titulo} | Bigotes y Paticas` },
     // ≤155 caracteres: las anteriores medían ~205 y Google las cortaba.
     description:
-      `Tienda de mascotas con domicilio en ${z.nombre} y los barrios de ${z.comuna}, ${z.ciudad}. ` +
+      // Sin "y los barrios de {comuna}": con las zonas de nombre largo (Altos de
+      // Santa Mónica) pasaba de 155 y Google lo cortaba. Los barrios ya van en
+      // el cuerpo de la página.
+      `Tienda de mascotas con domicilio en ${z.nombre}, ${z.ciudad}. ` +
       `Concentrado, snacks y accesorios para perros y gatos. Envío gratis desde $30.000.`,
     keywords: [
       `tienda de mascotas ${z.nombre}`,

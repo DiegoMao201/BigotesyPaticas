@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   // diferencia de las tiendas que salen al lado. Descripción ≤155 caracteres.
   title: { absolute: 'Tienda de Mascotas en Pereira y Dosquebradas · Domicilio el Mismo Día | Bigotes y Paticas' },
   description:
-    'Tienda de mascotas y pet shop en Samara Plaza Mall, Dosquebradas, con domicilio en Pereira. Concentrado, accesorios y medicamentos. 5,0 ★ en Google. Envío gratis desde $30.000.',
+    'Tienda de mascotas en Samara Plaza Mall, Dosquebradas, con domicilio en Pereira. Concentrado, accesorios y medicamentos. 5,0 ★ en Google. Envío gratis.',
   keywords: [
     'pet shop Pereira', 'petshop Pereira', 'pet shop Dosquebradas',
     'domicilio pet shop Pereira', 'pet shop domicilio Risaralda',
