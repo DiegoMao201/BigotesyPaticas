@@ -7,7 +7,12 @@ import { loadMapsScript } from '@/lib/maps';
 
 const KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? '';
 const GOOGLE_MAPS_URL =
-  'https://www.google.com/maps/search/?api=1&query=Bigotes+y+Paticas+Samara+Plaza+Mall+Dosquebradas';
+  // A LA FICHA, no a una búsqueda. El enlace anterior abría una BÚSQUEDA de Maps
+  // ("Bigotes y Paticas Samara Plaza Mall"), es decir, una lista donde Google decide
+  // qué mostrar; y en las búsquedas de categoría la tienda no está saliendo. Con
+  // place_id se abre la ficha directamente y el clic cuenta como interacción con
+  // la ficha (indicaciones), que es una de las señales de prominencia.
+  'https://www.google.com/maps/place/?q=place_id:ChIJUbZRoXGBOI4R8vrs6AsH7XQ';
 
 interface Props {
   height?: number;

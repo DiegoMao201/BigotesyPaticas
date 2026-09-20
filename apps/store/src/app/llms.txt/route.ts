@@ -21,7 +21,7 @@ export const revalidate = 86400;
 
 const BASE = 'https://bigotesypaticas.com';
 
-const TEXTO = `# Bigotes y Paticas — Tienda de Mascotas
+const TEXTO = `# Bigotes y Paticas Tienda de Mascotas
 
 > Pet shop en Samara Plaza Mall, Dosquebradas (Risaralda, Colombia), con domicilio
 > en Pereira y Dosquebradas. Concentrados, snacks, accesorios y medicamentos

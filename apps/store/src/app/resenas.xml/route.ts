@@ -126,10 +126,10 @@ export async function GET() {
       xsi:noNamespaceSchemaLocation="http://www.google.com/shopping/reviews/schema/product/2.3/product_reviews.xsd">
   <version>2.3</version>
   <aggregator>
-    <name>Bigotes y Paticas</name>
+    <name>Bigotes y Paticas Tienda de Mascotas</name>
   </aggregator>
   <publisher>
-    <name>Bigotes y Paticas</name>
+    <name>Bigotes y Paticas Tienda de Mascotas</name>
     <favicon>${BASE}/favicon.ico</favicon>
   </publisher>
   <reviews>

@@ -12,6 +12,7 @@ import { ProductFAQ } from '@/components/seo/ProductFAQ';
 import { ProductReviews } from '@/components/reviews/ProductReviews';
 import { Truck, ShieldCheck, RefreshCw, ChevronRight, MessageCircle } from 'lucide-react';
 import { getOutOfStockWhatsAppUrl } from '@/lib/whatsapp-messages';
+import { ZonaModalButton } from '@/components/maps/ZonaModalButton';
 
 export const revalidate = 3600; // 1 hora
 
@@ -304,6 +305,9 @@ export default async function ProductPage({ params }: Props) {
               <MessageCircle className="h-4 w-4" />
               Consultar disponibilidad por WhatsApp
             </a>
+
+            {/* ¿Llegamos a tu zona? — el comprobador de domicilio, en modal */}
+            <ZonaModalButton />
 
             {/* Beneficios */}
             <div className="grid grid-cols-3 gap-3 pt-5 border-t border-border">

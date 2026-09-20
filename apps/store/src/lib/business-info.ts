@@ -1,9 +1,14 @@
 /** Fuente única de verdad para datos del negocio — usada en todos los schemas JSON-LD. */
 export const BUSINESS_INFO = {
-  name: "Bigotes y Paticas",
+  // EXACTAMENTE el nombre de la ficha de Google (Perfil de Empresa, cambio
+  // aprobado el 18-sep-2026). Google consolida web y ficha como la misma entidad
+  // solo si el nombre coincide letra por letra; con "Bigotes y Paticas" a secas
+  // en el JSON-LD y en el mapa, la web y la ficha se leían como dos negocios.
+  name: "Bigotes y Paticas Tienda de Mascotas",
   legalName: "Diego Mauricio García — Bigotes y Paticas",
-  alternateName: "Bigotes y Paticas Dosquebradas",
+  alternateName: "Bigotes y Paticas",
   alternateNames: [
+    "Bigotes y Paticas Dosquebradas",
     "Pet Shop Pereira",
     "Pet Shop Dosquebradas",
     "Petshop Pereira",
