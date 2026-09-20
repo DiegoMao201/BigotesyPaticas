@@ -25,11 +25,16 @@ const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', displ
 export const metadata: Metadata = {
   metadataBase: new URL('https://bigotesypaticas.com'),
   title: {
-    default: 'Pet Shop Pereira y Dosquebradas — Bigotes y Paticas | Domicilio el mismo día',
+    // 19-sep-2026, Search Console (28 días): la búsqueda con más impresiones es
+    // "tienda de mascotas pereira" (216) y luego "tienda de mascotas dosquebradas"
+    // (131), y el título decía "Pet Shop". Solo el 5 % hacía clic. La frase que la
+    // gente escribe va PRIMERO; "pet shop" se queda porque también se busca.
+    default: 'Tienda de Mascotas en Pereira y Dosquebradas · Pet Shop con Domicilio | Bigotes y Paticas',
     template: '%s | Bigotes y Paticas Pet Shop',
   },
+  // ≤155 caracteres: la anterior medía 206 y Google la cortaba a media frase.
   description:
-    'Pet shop con domicilio en Pereira y Dosquebradas. Concentrados, accesorios y medicamentos veterinarios. Envío gratis desde $30.000, entrega el mismo día lo más rápido posible. El mejor petshop de Risaralda.',
+    'Tienda de mascotas con domicilio el mismo día en Pereira y Dosquebradas. Concentrado, accesorios y medicamentos. 5,0 ★ en Google. Envío gratis desde $30.000.',
   keywords: [
     'pet shop Pereira', 'pet shop Dosquebradas', 'petshop Pereira', 'petshop Dosquebradas',
     'domicilio pet shop Pereira', 'pet shop domicilio', 'petshop domicilio Risaralda',

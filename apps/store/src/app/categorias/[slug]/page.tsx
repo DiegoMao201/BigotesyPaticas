@@ -16,10 +16,10 @@ const SLUG_STRATEGY: Record<string, {
   description: string;
   pet_type?: string;
 }> = {
-  perros:     { type: 'species',  value: 'perro',      label: 'Perros',            emoji: '🐕', description: 'Alimento, accesorios y cuidado para perros',             pet_type: 'dog'  },
-  gatos:      { type: 'species',  value: 'gato',       label: 'Gatos',             emoji: '🐈', description: 'Alimento, accesorios y cuidado para gatos',              pet_type: 'cat'  },
-  accesorios: { type: 'category', value: 'accesorios', label: 'Accesorios',        emoji: '🎀', description: 'Correas, collares, juguetes y más'  },
-  snacks:     { type: 'category', value: 'snacks',     label: 'Snacks y premios',  emoji: '🦴', description: 'Premios y golosinas saludables para tus mascotas' },
+  perros:     { type: 'species',  value: 'perro',      label: 'Perros',            emoji: '🐕', description: 'Concentrado, snacks, accesorios y medicamentos para perros con domicilio en Pereira y Dosquebradas. Envío gratis desde $30.000.',             pet_type: 'dog'  },
+  gatos:      { type: 'species',  value: 'gato',       label: 'Gatos',             emoji: '🐈', description: 'Concentrado, arena, snacks y accesorios para gatos con domicilio en Pereira y Dosquebradas. Envío gratis desde $30.000.',              pet_type: 'cat'  },
+  accesorios: { type: 'category', value: 'accesorios', label: 'Accesorios',        emoji: '🎀', description: 'Collares, correas, camas, comederos y juguetes para perros y gatos, con domicilio en Pereira y Dosquebradas.'  },
+  snacks:     { type: 'category', value: 'snacks',     label: 'Snacks y premios',  emoji: '🦴', description: 'Snacks y premios para perros y gatos: Churu, galletas, patés y huesos, con domicilio en Pereira y Dosquebradas.' },
   // 18-sep-2026: /categorias/higiene se enlaza desde nutricion-salud-oral y no estaba
   // definida, así que consultaba el slug 'higiene' (0 productos publicados) y salía vacía.
   // La categoría real con productos es 'higiene-y-cuidado' (50 publicados).
@@ -27,7 +27,7 @@ const SLUG_STRATEGY: Record<string, {
   medicamentos: { type: 'category', value: 'medicamentos', label: 'Salud y medicamentos', emoji: '💊', description: 'Medicamentos veterinarios y suplementos' },
   juguetes:   { type: 'category', value: 'juguetes',   label: 'Juguetes',          emoji: '🎾', description: 'Juguetes para perros y gatos' },
   alimento:   { type: 'category', value: 'alimento-seco', label: 'Alimento seco',  emoji: '🥣', description: 'Concentrado para perros y gatos' },
-  todos:      { type: 'all',                           label: 'Todo el catálogo',  emoji: '🐾', description: 'Todos nuestros productos para mascotas' },
+  todos:      { type: 'all',                           label: 'Todo el catálogo',  emoji: '🐾', description: 'Más de 500 productos para perros y gatos con domicilio en Pereira y Dosquebradas: concentrado, snacks, arena, accesorios y medicamentos.' },
 };
 
 const FILTER_CHIPS: Record<string, FilterChip[]> = {

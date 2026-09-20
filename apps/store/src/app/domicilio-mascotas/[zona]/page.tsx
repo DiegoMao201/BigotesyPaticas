@@ -32,10 +32,10 @@ export function generateMetadata({ params }: { params: { zona: string } }): Meta
   const titulo = `Tienda de Mascotas con Domicilio en ${z.nombre}, ${z.ciudad}`;
   return {
     title: { absolute: `${titulo} | Bigotes y Paticas` },
+    // ≤155 caracteres: las anteriores medían ~205 y Google las cortaba.
     description:
-      `Pet shop con domicilio en ${z.nombre} y los barrios de ${z.comuna}, ${z.ciudad}. ` +
-      `Concentrado, snacks, accesorios y medicamentos veterinarios para perros y gatos. ` +
-      `Envío gratis desde $30.000 y entrega el mismo día.`,
+      `Tienda de mascotas con domicilio en ${z.nombre} y los barrios de ${z.comuna}, ${z.ciudad}. ` +
+      `Concentrado, snacks y accesorios para perros y gatos. Envío gratis desde $30.000.`,
     keywords: [
       `tienda de mascotas ${z.nombre}`,
       `pet shop ${z.nombre}`,
