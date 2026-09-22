@@ -8,7 +8,7 @@ import { Calendar, Tag } from 'lucide-react';
 export const revalidate = 1800; // 30 min
 
 export const metadata: Metadata = {
-  title: 'Blog de mascotas — Consejos y guías para perros y gatos en Pereira',
+  title: 'Blog de Mascotas · Consejos para Perros y Gatos',
   description:
     'Artículos sobre cuidado, nutrición y salud para mascotas. Guías veterinarias y consejos para dueños de perros y gatos en Pereira y Dosquebradas, Risaralda.',
   keywords: [

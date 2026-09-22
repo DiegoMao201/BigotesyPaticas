@@ -10,9 +10,9 @@ import { Calendar, Newspaper } from 'lucide-react';
 export const revalidate = 900;
 
 export const metadata: Metadata = {
-  title: 'Noticias de interés para dueños de perros y gatos en Colombia',
+  title: 'Noticias de Perros y Gatos en Colombia',
   description:
-    'Leyes, derechos, deberes, estudios y novedades reales sobre perros y gatos en Colombia. Verificadas y con la fuente a la vista, explicadas para dueños de Pereira y Dosquebradas.',
+    'Leyes, derechos y estudios reales sobre perros y gatos en Colombia. Verificados, con la fuente a la vista y explicados para dueños de Risaralda.',
   keywords: [
     'noticias mascotas Colombia',
     'leyes animales Colombia',

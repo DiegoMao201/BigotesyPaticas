@@ -9,7 +9,7 @@ import { PawPrint } from 'lucide-react';
 export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: 'Animales Encontrados en Pereira y Dosquebradas — Bigotes y Paticas',
+  title: 'Animales Encontrados en Pereira y Dosquebradas',
   description:
     'Perros y gatos que fueron encontrados o rescatados en Pereira y Dosquebradas y están a salvo, esperando que su familia los reconozca.',
   keywords: [

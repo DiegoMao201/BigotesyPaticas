@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { ExternalLink, Scale, TrendingDown } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Planes nutricionales para perros y gatos — Bigotes y Paticas Pereira',
+  title: 'Planes Nutricionales para Perros y Gatos',
   description:
-    'El sobrepeso es uno de los problemas de salud más comunes en mascotas. Aprende cómo calcular la ración correcta y elegir el alimento adecuado según su etapa de vida.',
+    'El sobrepeso es de los problemas más comunes en mascotas. Aprende a calcular la ración correcta y elegir el alimento según su etapa de vida.',
   alternates: { canonical: 'https://bigotesypaticas.com/planes-nutricionales' },
   openGraph: {
     title: 'Planes nutricionales para mascotas — Bigotes y Paticas',

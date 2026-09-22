@@ -8,9 +8,9 @@ import { BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { BUSINESS_INFO } from '@/lib/business-info';
 
 export const metadata: Metadata = {
-  title: 'Contacto — Bigotes y Paticas Pereira y Dosquebradas',
+  title: 'Contacto · Pereira y Dosquebradas',
   description:
-    'Contáctanos por WhatsApp, teléfono o correo. Pet shop con domicilio en Pereira y Dosquebradas, Risaralda. Horario: Lunes a Sábado 10am-7pm. Samara Plaza Mall, Dosquebradas.',
+    'Escríbenos por WhatsApp o llámanos. Pet shop con domicilio en Pereira y Dosquebradas. Lunes a sábado 10am-7pm, Samara Plaza Mall.',
   alternates: { canonical: 'https://bigotesypaticas.com/contacto' },
   openGraph: {
     title: 'Contacto — Bigotes y Paticas',

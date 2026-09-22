@@ -1,7 +1,7 @@
 const PORTAL_URL = 'https://mi.bigotesypaticas.com';
 
 export const metadata = {
-  title: 'Mi cuenta — Bigotes y Paticas',
+  title: 'Mi Cuenta',
   description: 'Ingresa o crea tu cuenta en el portal de fidelización de Bigotes y Paticas.',
 };
 

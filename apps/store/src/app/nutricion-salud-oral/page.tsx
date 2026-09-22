@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { AlertTriangle, ExternalLink } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Nutrición y salud oral en perros y gatos — Bigotes y Paticas',
+  title: 'Nutrición y Salud Oral en Perros y Gatos',
   description:
-    'La enfermedad periodontal es una de las causas más comunes de consulta veterinaria. Aprende cómo la alimentación correcta protege la salud bucal de tu mascota.',
+    'La enfermedad periodontal es de las causas más comunes de consulta veterinaria. Aprende cómo la comida correcta protege su salud bucal.',
   alternates: { canonical: 'https://bigotesypaticas.com/nutricion-salud-oral' },
   openGraph: {
     title: 'Salud oral y nutrición para mascotas — Bigotes y Paticas Pereira',

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Calendar, Shield, AlertTriangle, ExternalLink } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Esterilización responsable en Pereira y Dosquebradas — Bigotes y Paticas',
+  title: 'Esterilización Responsable en Pereira y Dosquebradas',
   description:
     'Por qué esterilizar a tu mascota es el acto más responsable que puedes hacer, y dónde consultar jornadas subsidiadas en Pereira y Dosquebradas.',
   alternates: { canonical: 'https://bigotesypaticas.com/jornadas-esterilizacion' },

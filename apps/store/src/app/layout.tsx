@@ -29,8 +29,11 @@ export const metadata: Metadata = {
     // "tienda de mascotas pereira" (216) y luego "tienda de mascotas dosquebradas"
     // (131), y el título decía "Pet Shop". Solo el 5 % hacía clic. La frase que la
     // gente escribe va PRIMERO; "pet shop" se queda porque también se busca.
-    default: 'Tienda de Mascotas en Pereira y Dosquebradas · Pet Shop con Domicilio | Bigotes y Paticas',
-    template: '%s | Bigotes y Paticas Pet Shop',
+    default: 'Tienda de Mascotas en Pereira y Dosquebradas · Domicilio Hoy',
+    // 22-sep-2026: la plantilla sumaba 31 caracteres a CADA titulo y Google corta
+    // hacia los 60: el nombre de la pagina se perdia. "Pet Shop" sobra aqui,
+    // ya va en los titulos que lo necesitan.
+    template: '%s | Bigotes y Paticas',
   },
   // ≤155 caracteres: la anterior medía 206 y Google la cortaba a media frase.
   description:

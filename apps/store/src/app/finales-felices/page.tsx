@@ -7,9 +7,9 @@ import { SuccessStoryCard, SUCCESS_BADGE } from '@/components/community/SuccessS
 export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: 'Finales Felices — Mascotas que volvieron a casa y fueron adoptadas en Pereira y Dosquebradas',
+  title: 'Finales Felices · Mascotas que Volvieron a Casa',
   description:
-    'Historias reales de la comunidad de Bigotes y Paticas: mascotas perdidas que ya están en casa, animales rescatados que se reunieron con su familia y peluditos que encontraron hogar en Pereira y Dosquebradas.',
+    'Historias reales de Pereira y Dosquebradas: mascotas perdidas que ya están en casa y peluditos que por fin encontraron su hogar.',
   keywords: [
     'mascota encontrada Pereira',
     'perro volvio a casa Pereira',

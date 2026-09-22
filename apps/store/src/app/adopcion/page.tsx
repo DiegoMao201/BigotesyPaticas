@@ -10,9 +10,9 @@ import { SuccessStoryCard } from '@/components/community/SuccessStoryCard';
 export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: 'Adopción, Rescate y Mascotas Perdidas en Pereira y Dosquebradas',
+  title: 'Adopción de Perros y Gatos en Pereira y Dosquebradas',
   description:
-    'Adoptar perro o gato, dar en adopción, reportar mascota perdida o animal encontrado en Pereira y Dosquebradas — todo en un solo foro real de la comunidad Bigotes y Paticas.',
+    'Perros y gatos en adopción en Pereira y Dosquebradas. También puedes dar en adopción, reportar una mascota perdida o publicar un animal encontrado.',
   keywords: [
     'adoptar perro Pereira',
     'adoptar perro Dosquebradas',

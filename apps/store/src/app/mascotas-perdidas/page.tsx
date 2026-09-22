@@ -9,7 +9,7 @@ import { Gift } from 'lucide-react';
 export const revalidate = 300; // 5 min -- son reportes urgentes, se refrescan seguido
 
 export const metadata: Metadata = {
-  title: 'Mascotas Perdidas en Pereira y Dosquebradas — Bigotes y Paticas',
+  title: 'Mascotas Perdidas en Pereira y Dosquebradas',
   description:
     'Reportes reales de perros y gatos perdidos en Pereira y Dosquebradas. Ayuda a la comunidad a encontrarlos, o reporta la tuya.',
   keywords: [

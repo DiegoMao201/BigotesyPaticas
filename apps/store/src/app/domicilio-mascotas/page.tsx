@@ -10,7 +10,7 @@ const BASE = 'https://bigotesypaticas.com';
 export const metadata: Metadata = {
   title: { absolute: 'Domicilio de Mascotas por Zonas de Pereira y Dosquebradas' },
   description:
-    'Bigotes y Paticas lleva concentrado, snacks, accesorios y medicamentos veterinarios a domicilio en las 19 comunas de Pereira y las 12 de Dosquebradas. Envío gratis desde $30.000.',
+    'Concentrado, snacks, accesorios y medicamentos a domicilio en las 19 comunas de Pereira y las 12 de Dosquebradas. Envío gratis desde $30.000.',
   alternates: { canonical: `${BASE}/domicilio-mascotas` },
 };
 
