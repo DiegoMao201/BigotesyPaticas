@@ -22,7 +22,10 @@ export const metadata: Metadata = {
       { url: '/favicon.ico', sizes: '48x48 32x32 16x16' },
       { url: '/icon-32.png', sizes: '32x32', type: 'image/png' },
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icon.svg', type: 'image/svg+xml' },
+      // 22-sep-2026: /icon.svg pesaba 1,97 MB y lo bajaba CADA visitante. No era
+      // un SVG: era un PNG de 1024x1024 en base64 dentro de una envoltura <svg>.
+      // Mismo bug que en el store, donde costaba 11 s de LCP. Los PNG ya cubren
+      // todos los tamanos y el manifest nunca lo uso.
     ],
     apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
     shortcut: ['/favicon.ico'],

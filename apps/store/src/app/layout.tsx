@@ -29,7 +29,15 @@ export const metadata: Metadata = {
     // "tienda de mascotas pereira" (216) y luego "tienda de mascotas dosquebradas"
     // (131), y el título decía "Pet Shop". Solo el 5 % hacía clic. La frase que la
     // gente escribe va PRIMERO; "pet shop" se queda porque también se busca.
-    default: 'Tienda de Mascotas en Pereira y Dosquebradas · Domicilio Hoy',
+    // 22-sep-2026, CANIBALIZACION: la portada y /pereira-dosquebradas-mascotas
+    // tenian titulos casi identicos y peleaban por la MISMA busqueda (413
+    // impresiones repartidas 211/202 en "tienda de mascotas dosquebradas").
+    // Google reparte la autoridad y no sube ninguna. La landing GANA lo
+    // geografico (324 impresiones contra 23 en "tienda de mascotas pereira"),
+    // asi que se le deja esa consulta a ella y la portada se queda con la
+    // marca y el producto, que es lo que de verdad aterriza aqui
+    // ("bigotes y patitas" puesto 2,7).
+    default: 'Bigotes y Paticas · Concentrado y Accesorios con Domicilio',
     // 22-sep-2026: la plantilla sumaba 31 caracteres a CADA titulo y Google corta
     // hacia los 60: el nombre de la pagina se perdia. "Pet Shop" sobra aqui,
     // ya va en los titulos que lo necesitan.
@@ -57,7 +65,11 @@ export const metadata: Metadata = {
       { url: '/favicon.ico', sizes: '48x48 32x32 16x16' },
       { url: '/icon-32.png', sizes: '32x32', type: 'image/png' },
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icon.svg', type: 'image/svg+xml' },
+      // 22-sep-2026: /icon.svg pesaba 2,07 MB y lo bajaba CADA visitante. No era
+      // un SVG: era un PNG de 1024x1024 incrustado en base64 (con metadatos
+      // C2PA) dentro de una envoltura <svg>. Saturaba la conexion movil justo
+      // en la ventana del LCP: 11,2 s de los 14,3 s eran render delay.
+      // Los PNG de arriba ya cubren todos los tamanos.
     ],
     apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
     shortcut: ['/favicon.ico'],
