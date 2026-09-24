@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { ProductosDestacados } from '@/components/catalog/ProductosDestacados';
+import { ZonaModalButton } from '@/components/maps/ZonaModalButton';
 import { storeApi } from '@/lib/api';
+import { fichaGoogle } from '@/lib/ficha-google';
 
 export const metadata: Metadata = {
   // 19-sep-2026: Pereira primero (216 impresiones vs 131 de Dosquebradas en
@@ -59,7 +61,10 @@ export const revalidate = 3600;
 export default async function PereiraPage() {
   // Si el catálogo no responde, la página sigue saliendo sin la rejilla:
   // una landing que carga a medias es mejor que una que revienta.
-  const destacados = await storeApi.featured().catch(() => []);
+  const [destacados, ficha] = await Promise.all([
+    storeApi.featured().catch(() => []),
+    fichaGoogle(),
+  ]);
 
   return (
     <>
@@ -93,9 +98,12 @@ export default async function PereiraPage() {
           {/* La prueba social va ARRIBA, junto al botón, no escondida abajo: es lo
               que decide si confían antes de escribir. 5,0 con 28 reseñas es real,
               está verificado en la ficha de Google. */}
-          <p className="text-sm font-semibold text-[#0d4a45] mb-6">
-            ★★★★★ 5,0 · 28 reseñas en Google
-          </p>
+          {ficha && (
+            <p className="text-sm font-semibold text-[#0d4a45] mb-6">
+              ★★★★★ {ficha.nota.toLocaleString('es-CO', { minimumFractionDigits: 1 })} ·{' '}
+              {ficha.resenas} reseñas en Google
+            </p>
+          )}
           <div className="flex flex-wrap gap-3">
             <Link
               href="/categorias/todos"
@@ -104,13 +112,18 @@ export default async function PereiraPage() {
               Ver catálogo completo →
             </Link>
             <a
-              href="https://wa.me/573206876633?text=Hola!%20Quiero%20pedir%20con%20domicilio%20en%20Pereira"
+              href="https://wa.me/573206876633?text=%C2%A1Hola%2C%20Bigotes%20y%20Paticas%21%20%F0%9F%90%BE%0A%0ALos%20encontr%C3%A9%20en%20Google%20y%20quiero%20pedir%20con%20domicilio.%0A%0A%C2%BFMe%20confirman%20si%20llegan%20a%20mi%20zona%20y%20cu%C3%A1nto%20se%20demoran%3F%0A%0AMi%20barrio%20es%3A%20"
               target="_blank"
               rel="noopener noreferrer"
               className="px-6 py-3.5 rounded-full bg-green-500 text-white font-semibold shadow-lg hover:bg-green-600 transition-colors"
             >
               💬 Pedir por WhatsApp
             </a>
+            {/* Diego (24-sep-2026): "al lado de ese botón de WhatsApp y catálogo
+                colócale un botón que diga llegamos a tu zona, míralo y pum,
+                oprimen y sale una ventanita con el mapa". El comprobador ya
+                existía y solo vivía en la ficha de producto y en /contacto. */}
+            <ZonaModalButton variante="pildora" />
           </div>
         </div>
 

@@ -8,7 +8,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, text
 
 from app.api.v1.portal_auth import PortalUser
 from app.api.v1.portal_loyalty import award_points
@@ -474,12 +474,27 @@ async def public_gbp_reviews(limit: int = 6, db: DBSession = ...):
         .all()
     )
 
+    # EL TOTAL REAL LO DICE GOOGLE, NO NUESTRA CACHE (24-sep-2026).
+    # Places Details solo devuelve 5 resenas, asi que la cache nunca las tiene
+    # todas: este COUNT(*) publicaba "7 resenas" cuando la ficha iba por 30.
+    # sync_gbp_reviews.py ahora guarda el dato real en content.engine_config;
+    # si por lo que sea no esta, se cae a la cuenta de la cache como antes.
+    cfg = dict(
+        (
+            await db.execute(
+                text(
+                    "SELECT key, value FROM content.engine_config "
+                    "WHERE key IN ('gbp_rating', 'gbp_total_ratings')"
+                )
+            )
+        ).all()
+    )
     avg_q = await db.execute(
         select(func.avg(GBPReviewCache.rating), func.count()).select_from(GBPReviewCache)
     )
     avg_row = avg_q.one()
-    avg = round(float(avg_row[0] or 5.0), 1)
-    count = avg_row[1] or 0
+    avg = round(float(cfg.get("gbp_rating") or avg_row[0] or 5.0), 1)
+    count = int(cfg.get("gbp_total_ratings") or avg_row[1] or 0)
 
     reviews = [
         {
