@@ -189,6 +189,23 @@ async def main():
             if customer_id:
                 await award_gbp_points(conn, customer_id, gbp_id)
 
+        # GUARDAR EL TOTAL REAL DE GOOGLE (24-sep-2026).
+        # Places Details solo devuelve 5 resenas, asi que la cache nunca las
+        # tendra todas. El endpoint publico hacia COUNT(*) sobre esa cache y
+        # publicaba "7 resenas" cuando la ficha ya iba por 30: el sitio
+        # malvendia su mejor activo por cuatro. Estos dos valores ya venian en
+        # la respuesta de Places y solo faltaba guardarlos.
+        if overall_rating is not None:
+            for clave, valor in (("gbp_rating", str(overall_rating)),
+                                 ("gbp_total_ratings", str(total_ratings))):
+                await conn.execute(
+                    """INSERT INTO content.engine_config (key, value, description, updated_at)
+                       VALUES ($1, $2, 'Ficha de Google, dato real (sync_gbp_reviews)', now())
+                       ON CONFLICT (key) DO UPDATE
+                       SET value = EXCLUDED.value, updated_at = now()""",
+                    clave, valor)
+            print(f"💾 Total real de Google guardado: {overall_rating} con {total_ratings} resenas")
+
         print(f"\n✅ Sync completado: {inserted} nuevas, {matched} matcheadas con clientes")
 
     finally:

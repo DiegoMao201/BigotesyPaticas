@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 """
+⚠️  ESTA COPIA NO SE USA. La que corre en produccion es
+    apps/api/scripts/sync_gbp_reviews.py (es la que se copia al contenedor).
+
+    Ademas apuntan a FICHAS DE GOOGLE DISTINTAS: esta tiene un PLACE_ID a fuego
+    y la buena lo lee de GBP_PLACE_ID. El 24-sep-2026 parchee esta por error y
+    el arreglo no llego a ningun lado.
+
+    Editar SIEMPRE la de apps/api.
+
+"""
+"""
 Sincroniza reseñas de Google Business Profile → catalog.gbp_reviews_cache.
 Uso: python scripts/sync_gbp_reviews.py
 
