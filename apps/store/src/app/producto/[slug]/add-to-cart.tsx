@@ -7,6 +7,9 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useCart, type CartItem } from '@/lib/cart-store';
 import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
+// Analytics medía CERO ventas (24-sep-2026): este botón solo avisaba al píxel
+// de Meta. trackAddToCart ya estaba escrito en lib/analytics.ts y nadie lo llamaba.
+import { trackAddToCart } from '@/lib/analytics';
 
 export function AddToCart({ product }: { product: Omit<CartItem, 'quantity'> }) {
   const [qty, setQty] = useState(1);
@@ -39,6 +42,12 @@ export function AddToCart({ product }: { product: Omit<CartItem, 'quantity'> }) 
           className="flex-1"
           onClick={() => {
             add(product, qty);
+            trackAddToCart({
+              id: product.productId,
+              name: product.name,
+              price: Number(product.price),
+              quantity: qty,
+            });
             track('AddToCart', {
               content_ids: [product.productId],
               content_name: product.name,

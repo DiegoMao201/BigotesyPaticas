@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/utils';
 import { AddToCart } from './add-to-cart';
 import { ProductTabs } from './ProductTabs';
 import { StickyCTAMobile } from './StickyCTAMobile';
+import { TrackView } from './TrackView';
 import { ProductSchema, BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
 import { ProductFAQ } from '@/components/seo/ProductFAQ';
 import { ProductReviews } from '@/components/reviews/ProductReviews';
@@ -274,6 +275,14 @@ export default async function ProductPage({ params }: Props) {
                 </a>
               </div>
             )}
+
+            <TrackView
+              id={product.id}
+              name={product.name}
+              price={parseFloat(product.price)}
+              category={product.category?.name}
+              brand={product.brand?.name}
+            />
 
             {/* Add to cart */}
             {product.in_stock ? (

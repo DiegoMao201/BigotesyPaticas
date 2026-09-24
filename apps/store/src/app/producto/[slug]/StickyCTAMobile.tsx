@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCart, type CartItem } from '@/lib/cart-store';
+// Este botón (el fijo de móvil) no avisaba a NADIE: ni a Google ni a Meta.
+// En móvil es por donde más se agrega, así que se perdía justo lo que más pasa.
+import { trackAddToCart } from '@/lib/analytics';
 
 interface Props {
   product: Omit<CartItem, 'quantity'>;
@@ -35,6 +38,12 @@ export function StickyCTAMobile({ product, inStock }: Props) {
             <button
               onClick={() => {
                 add(product, 1);
+                trackAddToCart({
+                  id: product.productId,
+                  name: product.name,
+                  price: Number(product.price),
+                  quantity: 1,
+                });
                 toast.success(`${product.name} agregado al carrito`);
               }}
               className="flex-1 btn-primary py-3.5 text-base flex items-center justify-center gap-2"

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { BreadcrumbSchema } from '@/components/seo/JsonLd';
+import { ProductosDestacados } from '@/components/catalog/ProductosDestacados';
+import { storeApi } from '@/lib/api';
 
 export const metadata: Metadata = {
   // 19-sep-2026: Pereira primero (216 impresiones vs 131 de Dosquebradas en
@@ -47,7 +49,18 @@ const CATEGORIAS = [
   { slug: 'snacks', emoji: '🦴', label: 'Premios y golosinas' },
 ];
 
-export default function PereiraPage() {
+// SEGURO CONTRA EL FALLO SILENCIOSO. La rejilla se arma en el build. Si el API
+// no responde justo en ese momento, la página saldría SIN productos y nadie se
+// enteraría hasta mirar el HTML a mano (pasó en la primera prueba). Con esto se
+// regenera cada hora: un build malo se cura solo en 60 minutos en vez de durar
+// hasta el siguiente despliegue.
+export const revalidate = 3600;
+
+export default async function PereiraPage() {
+  // Si el catálogo no responde, la página sigue saliendo sin la rejilla:
+  // una landing que carga a medias es mejor que una que revienta.
+  const destacados = await storeApi.featured().catch(() => []);
+
   return (
     <>
       {/* La ficha del negocio ya la emite layout.tsx en TODAS las páginas. Tenerla
@@ -74,10 +87,14 @@ export default function PereiraPage() {
             Plaza Mall sobre la calle 15, y llevamos a domicilio hasta Pereira todo lo que tu perro o gato
             necesita: concentrado premium, accesorios, juguetes, arena y medicamentos veterinarios.
           </p>
-          <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-            Nuestro petshop tiene servicio de domicilio <strong>el mismo día</strong>, lo más rápido
-            posible para que tu peludito no sienta la espera, en toda la zona urbana de Pereira y
-            Dosquebradas, Risaralda. Más de 500 productos disponibles.
+          <p className="text-lg text-muted-foreground leading-relaxed mb-5">
+            Domicilio <strong>el mismo día</strong> en toda la zona urbana. Más de 500 productos.
+          </p>
+          {/* La prueba social va ARRIBA, junto al botón, no escondida abajo: es lo
+              que decide si confían antes de escribir. 5,0 con 28 reseñas es real,
+              está verificado en la ficha de Google. */}
+          <p className="text-sm font-semibold text-[#0d4a45] mb-6">
+            ★★★★★ 5,0 · 28 reseñas en Google
           </p>
           <div className="flex flex-wrap gap-3">
             <Link
@@ -96,6 +113,16 @@ export default function PereiraPage() {
             </a>
           </div>
         </div>
+
+        {/* LO PRIMERO DESPUES DEL HERO: MERCANCIA DE VERDAD.
+            Antes aquí venían categorías, beneficios, barrios, marcas y preguntas
+            —siete bloques de texto— y ni un solo producto. La gente llegaba
+            buscando "tienda de mascotas pereira" y se iba a los 58 segundos. */}
+        <ProductosDestacados
+          productos={destacados}
+          titulo="Lo que más piden en Pereira y Dosquebradas"
+          bajada="Con domicilio el mismo día · envío gratis desde $30.000"
+        />
 
         {/* Categorías */}
         <section className="mb-16">
