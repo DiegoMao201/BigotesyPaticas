@@ -318,8 +318,59 @@
   will-change: transform;
 }
 
+/* ── BRILLO QUE CRUZA UN BOTÓN ──────────────────────────────────────────────
+   Diego (24-sep-2026): "que esos botones tengan como un color pasando de
+   izquierda a derecha, como que tengan vida... pero NO quiero que se vea como
+   una página de spam, dale clic aquí dale clic aquí".
+
+   Ahí está toda la dificultad. Lo que separa "vivo" de "spam" son tres cosas:
+   1. El brillo cruza en 1,2 s y luego HAY 4,3 SEGUNDOS DE NADA. Un destello
+      continuo es un letrero de casino; uno espaciado es un reflejo.
+   2. No parpadea, no cambia de tamaño, no rebota. Solo pasa una luz.
+   3. Los tres botones van DESFASADOS. Si brillaran a la vez parecería una
+      banda publicitaria; escalonados parece que la luz recorre la fila.
+
+   Solo mueve `transform`, que lo resuelve la GPU: no le pesa al celular más
+   flojo. El color lo pone cada botón con --brillo, porque sobre el verde va
+   blanco y sobre el botón de borde va un tinte de la marca (un brillo blanco
+   sobre fondo blanco no se ve). */
+@keyframes brillo-barrido {
+  0%   { transform: translateX(-165%) skewX(-18deg); }
+  22%  { transform: translateX(165%)  skewX(-18deg); }
+  100% { transform: translateX(165%)  skewX(-18deg); }
+}
+
+.brillo {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.brillo::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 55%;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    var(--brillo, rgba(255, 255, 255, 0.45)) 50%,
+    transparent 100%
+  );
+  transform: translateX(-165%) skewX(-18deg);
+  animation: brillo-barrido 5.5s ease-in-out infinite;
+  will-change: transform;
+}
+/* Desfase: la luz recorre la fila en vez de destellar toda de golpe. */
+.brillo-2::after { animation-delay: 0.75s; }
+.brillo-3::after { animation-delay: 1.5s; }
+
 /* A quien le moleste el movimiento, se le quita. No es negociable: hay gente a
    la que una animación de fondo le produce mareo. */
 @media (prefers-reduced-motion: reduce) {
   .huella-flota { animation: none; }
+  .brillo::after { animation: none; opacity: 0; }
 }

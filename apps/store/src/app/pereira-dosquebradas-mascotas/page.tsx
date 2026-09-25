@@ -107,7 +107,7 @@ export default async function PereiraPage() {
           <div className="flex flex-wrap gap-3">
             <Link
               href="/categorias/todos"
-              className="px-6 py-3.5 rounded-full gradient-brand text-white font-semibold shadow-lg hover:opacity-90 transition-opacity"
+              className="brillo px-6 py-3.5 rounded-full gradient-brand text-white font-semibold shadow-lg hover:opacity-90 transition-opacity"
             >
               Ver catálogo completo →
             </Link>
@@ -115,7 +115,7 @@ export default async function PereiraPage() {
               href="https://wa.me/573206876633?text=%C2%A1Hola%2C%20Bigotes%20y%20Paticas%21%20%F0%9F%90%BE%0A%0ALos%20encontr%C3%A9%20en%20Google%20y%20quiero%20pedir%20con%20domicilio.%0A%0A%C2%BFMe%20confirman%20si%20llegan%20a%20mi%20zona%20y%20cu%C3%A1nto%20se%20demoran%3F%0A%0AMi%20barrio%20es%3A%20"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-6 py-3.5 rounded-full bg-green-500 text-white font-semibold shadow-lg hover:bg-green-600 transition-colors"
+              className="brillo brillo-2 px-6 py-3.5 rounded-full bg-green-500 text-white font-semibold shadow-lg hover:bg-green-600 transition-colors"
             >
               💬 Pedir por WhatsApp
             </a>

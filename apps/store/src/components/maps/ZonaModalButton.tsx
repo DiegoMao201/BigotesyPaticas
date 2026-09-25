@@ -43,7 +43,11 @@ export function ZonaModalButton({ variante = 'bloque' }: { variante?: 'bloque' |
         onClick={() => setAbierto(true)}
         className={
           variante === 'pildora'
-            ? 'inline-flex items-center gap-2 px-6 py-3.5 rounded-full border-2 border-[#0d4a45] text-[#0d4a45] font-semibold hover:bg-[#0d4a45] hover:text-white transition-colors'
+            // El brillo blanco no se ve sobre un botón blanco: aquí la luz que
+            // cruza es un tinte de la marca (--brillo). Es el tercero en
+            // desfasarse, así la mirada acaba justo en este, que es el que
+            // Diego quiere que toquen.
+            ? 'brillo brillo-3 [--brillo:rgba(13,74,69,0.16)] inline-flex items-center gap-2 px-6 py-3.5 rounded-full border-2 border-[#0d4a45] text-[#0d4a45] font-semibold hover:bg-[#0d4a45] hover:text-white transition-colors'
             : 'flex items-center justify-center gap-2.5 w-full py-3 rounded-2xl border-2 border-teal-500 text-teal-700 font-semibold hover:bg-teal-50 transition-colors text-sm'
         }
       >
