@@ -38,6 +38,12 @@ export function WhatsAppFloat() {
         cart_items_count: itemCount,
         cart_value: cart.subtotal(),
       });
+      // Y la MISMA acción como conversión de Google Ads. Sin esto, Ads no sabe
+      // qué clic pagado terminó en un WhatsApp y optimiza a ciegas: es la única
+      // conversión real que hoy se puede medir (36 personas al mes).
+      (window as any).gtag('event', 'conversion', {
+        send_to: 'AW-17938999985/2DPgCNK0sYQdELHV_elC',
+      });
     }
   }
 
