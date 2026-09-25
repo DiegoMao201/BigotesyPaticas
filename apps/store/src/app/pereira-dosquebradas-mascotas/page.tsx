@@ -171,7 +171,7 @@ export default async function PereiraPage() {
               {
                 icon: '⭐',
                 title: 'Marcas premium verificadas',
-                desc: 'Hill\'s Science Diet, Royal Canin, Pro Plan, Bravecto y más de 500 productos seleccionados por veterinarios.',
+                desc: 'Hill\'s Science Diet, Royal Canin, Pro Plan, Acana y más de 500 productos seleccionados por veterinarios.',
               },
               {
                 icon: '🐾',
@@ -238,8 +238,14 @@ export default async function PereiraPage() {
           </h2>
           <div className="flex flex-wrap gap-3">
             {[
-              "Hill's Science Diet", "Royal Canin", "Pro Plan", "Bravecto",
-              "Nexgard", "Frontline", "Drontal", "Advocate", "Acana",
+              // SIN MARCAS DE MEDICAMENTO VETERINARIO (24-sep-2026). Google
+              // marcó los anuncios que llevan aquí como APPROVED_LIMITED por
+              // ANIMAL_DRUG_TERMS, señalando "BRAVECTO" en esta misma lista;
+              // Nexgard, Frontline, Drontal y Advocate son del mismo tipo.
+              // Se venden igual y siguen en sus fichas de producto: lo único
+              // que cambia es que esta landing, que es la de la campaña, ya no
+              // los nombra y así no limita el alcance.
+              "Hill's Science Diet", "Royal Canin", "Pro Plan", "Acana",
               "Orijen", "Taste of the Wild", "Diamond", "Eukanuba", "Pedigree",
               "Whiskas", "Fancy Feast", "Purina", "Nutram",
             ].map((m) => (
