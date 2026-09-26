@@ -57,6 +57,43 @@ interface EditableItem extends ParsedItem {
 
 const DEFAULT_MARGIN = 20;
 
+// ─── Matemática de la factura (26-sep-2026) ─────────────────────────
+// Diego: "facturas con descuento al final o por línea… no lo está teniendo en
+// cuenta al subir el XML". Una sola fuente de verdad para la grilla, los totales
+// y lo que se guarda. Norma DIAN UBL 2.1:
+//   neto de línea  = cantidad × costo unitario − descuento $ + cargos
+//   IVA de línea   = neto × IVA %
+//   total factura  = Σ(neto + IVA) − descuento global + cargos globales
+// El descuento global no cambia la base del IVA de cada línea: se reparte al final
+// en proporción al valor con IVA de cada producto.
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const lineaBruta = (it: EditableItem) => it.cantidad * it.costo_base_unitario;
+const lineaNeta = (it: EditableItem) => Math.max(0, lineaBruta(it) - (it.descuento || 0) + (it.cargos || 0));
+const lineaConIva = (it: EditableItem) => lineaNeta(it) * (1 + (it.iva_pct || 0) / 100);
+
+function totalesFactura(items: EditableItem[], descGlobal: number, cargosGlobal: number) {
+  const bruto = items.reduce((s, it) => s + lineaBruta(it), 0);
+  const descLineas = items.reduce((s, it) => s + (it.descuento || 0), 0);
+  const cargosLineas = items.reduce((s, it) => s + (it.cargos || 0), 0);
+  const base = items.reduce((s, it) => s + lineaNeta(it), 0);
+  const iva = items.reduce((s, it) => s + lineaNeta(it) * (it.iva_pct || 0) / 100, 0);
+  const total = base + iva - (descGlobal || 0) + (cargosGlobal || 0);
+  return { bruto, descLineas, cargosLineas, base, iva, total };
+}
+
+/** Costo unitario SIN IVA que se guarda: neto de la línea + su parte del descuento/cargo
+ *  global + su parte del transporte (todo repartido por valor con IVA). El backend le
+ *  suma el IVA (no somos responsables de IVA: es costo real). */
+function costoUnitarioFinal(
+  it: EditableItem, todos: EditableItem[], descGlobal: number, cargosGlobal: number, transporte: number,
+) {
+  const baseReparto = todos.reduce((s, x) => s + lineaConIva(x), 0);
+  const peso = baseReparto > 0 ? lineaConIva(it) / baseReparto : 0;
+  const conIvaFinal = lineaConIva(it) + peso * ((cargosGlobal || 0) - (descGlobal || 0) + (transporte || 0));
+  const unidades = it.cantidad || 1;
+  return r2(conIvaFinal / (1 + (it.iva_pct || 0) / 100) / unidades);
+}
+
 export default function PurchasesPage() {
   const [tab, setTab] = useState<Tab>('historial');
   const qc = useQueryClient();
@@ -434,6 +471,8 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
   const [newSupplier, setNewSupplier] = useState<SupplierIn>({ nit: '', name: '' });
   const [folio, setFolio] = useState('');
   const [transportCost, setTransportCost] = useState(0);
+  const [descGlobal, setDescGlobal] = useState(0);
+  const [cargosGlobal, setCargosGlobal] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<PurchasePaymentMethod>('efectivo');
   const parseMut = useMutation({
     mutationFn: (file: File) => purchases.parseXml(file),
@@ -455,12 +494,23 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
       }
       setItems(data.items.map((it, i) => ({
         ...it,
+        descuento: it.descuento || 0,
+        descuento_pct: it.descuento_pct || 0,
+        cargos: it.cargos || 0,
         _id: `item-${i}`,
         factor_pack: 1,
         margen_pct: DEFAULT_MARGIN,
       })));
+      setDescGlobal(data.descuento_global || 0);
+      setCargosGlobal(data.cargos_globales || 0);
       setStep(2);
-      toast.success(`XML procesado: ${data.items.length} items detectados`);
+      const conDesc = data.items.filter((it) => (it.descuento || 0) > 0).length;
+      toast.success(
+        `XML procesado: ${data.items.length} items` +
+        (conDesc ? ` · ${conDesc} con descuento por línea` : '') +
+        (data.descuento_global ? ` · descuento global ${formatCurrency(data.descuento_global)}` : ''),
+      );
+      if (data.aviso) toast.warning(data.aviso, { duration: 12000 });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -483,9 +533,16 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
       const matchedItems = items.filter((it) => it.suggested_product_id);
       if (matchedItems.length === 0) throw new Error('Debes asociar al menos un producto antes de guardar');
 
-      const totalCost = matchedItems.reduce((s, it) => s + it.cantidad * it.costo_base_unitario, 0);
-      const totalUnits = matchedItems.reduce((s, it) => s + it.cantidad, 0);
-      const transportPerUnit = totalCost > 0 && totalUnits > 0 ? transportCost / totalUnits : 0;
+      // Cuadre contra la factura antes de guardar: si no cuadra, preguntar.
+      const t = totalesFactura(items, descGlobal, cargosGlobal);
+      const ref = parsed?.xml_consistente ? parsed.xml_total_factura : 0;
+      if (ref > 0 && Math.abs(t.total - ref) > 100) {
+        const ok = window.confirm(
+          `El total calculado (${formatCurrency(t.total)}) no cuadra con la factura (${formatCurrency(ref)}): ` +
+          `diferencia ${formatCurrency(t.total - ref)}. ¿Guardar de todas formas?`,
+        );
+        if (!ok) throw new Error('Guardado cancelado: revisa costos y descuentos');
+      }
 
       return purchases.create({
         folio: folio || undefined,
@@ -500,7 +557,8 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
             product_name: it.suggested_product_name || it.descripcion,
             quantity: Math.round(it.cantidad),
             factor_pack: it.factor_pack,
-            unit_cost: it.costo_base_unitario + transportPerUnit,
+            // neto después de descuentos (línea + global) y con su parte del transporte
+            unit_cost: costoUnitarioFinal(it, items, descGlobal, cargosGlobal, transportCost),
             tax_pct: it.iva_pct,
           })),
         receive_now: true,
@@ -516,10 +574,11 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
   });
 
   const totals = useMemo(() => {
-    const subtotal = items.reduce((s, it) => s + it.cantidad * it.costo_base_unitario, 0);
-    const tax = items.reduce((s, it) => s + it.cantidad * it.costo_base_unitario * (it.iva_pct / 100), 0);
-    return { subtotal, tax, total: subtotal + tax + transportCost };
-  }, [items, transportCost]);
+    const t = totalesFactura(items, descGlobal, cargosGlobal);
+    const ref = parsed?.xml_consistente ? parsed.xml_total_factura : 0;
+    return { ...t, ref, diff: ref > 0 ? t.total - ref : 0, inventario: t.total + (transportCost || 0) };
+  }, [items, descGlobal, cargosGlobal, transportCost, parsed]);
+  const cuadra = totals.ref > 0 && Math.abs(totals.diff) <= 100;
 
   const unmatchedCount = items.filter((it) => !it.suggested_product_id).length;
 
@@ -600,23 +659,73 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
               </div>
             ) : null}
 
-            <div className="grid grid-cols-4 gap-3 mt-3">
+            <div className="grid grid-cols-3 gap-3 mt-3">
               <div>
                 <label className="text-sm">Folio factura</label>
                 <Input value={folio} onChange={(e) => setFolio(e.target.value)} />
               </div>
               <div>
-                <label className="text-sm">Costo de transporte</label>
-                <Input type="number" value={transportCost} onChange={(e) => setTransportCost(Number(e.target.value))} />
-              </div>
-              <div>
                 <label className="text-sm">Medio de pago</label>
                 <PaymentMethodSelect value={paymentMethod} onChange={setPaymentMethod} />
               </div>
-              <div className="text-sm">
-                <p className="text-gray-500">Subtotal: {formatCurrency(totals.subtotal)}</p>
-                <p className="text-gray-500">IVA: {formatCurrency(totals.tax)}</p>
-                <p className="font-bold">Total: {formatCurrency(totals.total)}</p>
+              <div>
+                <label className="text-sm">Transporte (no está en la factura)</label>
+                <Input type="number" value={transportCost} onChange={(e) => setTransportCost(Number(e.target.value) || 0)} />
+              </div>
+            </div>
+          </Card>
+
+          {parsed.aviso && (
+            <Card className="p-3 bg-amber-50 border-amber-300 text-sm text-amber-900 flex gap-2">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{parsed.aviso}</span>
+            </Card>
+          )}
+
+          <Card className="p-4">
+            <h3 className="font-bold mb-3">Cuadre con la factura</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              <div className="space-y-1">
+                <div className="flex justify-between"><span className="text-gray-500">Subtotal bruto</span><span>{formatCurrency(totals.bruto)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">− Descuentos por línea</span><span className="text-red-600">{formatCurrency(-totals.descLineas)}</span></div>
+                {totals.cargosLineas > 0 && (
+                  <div className="flex justify-between"><span className="text-gray-500">+ Cargos por línea</span><span>{formatCurrency(totals.cargosLineas)}</span></div>
+                )}
+                <div className="flex justify-between font-medium border-t pt-1"><span>Base neta</span><span>{formatCurrency(totals.base)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">+ IVA</span><span>{formatCurrency(totals.iva)}</span></div>
+              </div>
+              <div>
+                <label className="text-sm text-gray-600">− Descuento global de la factura ($)</label>
+                <Input type="number" value={descGlobal} onChange={(e) => setDescGlobal(Number(e.target.value) || 0)} />
+                {parsed.descuento_global_declarado > 0 && parsed.descuento_global_declarado !== parsed.descuento_global && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    El XML declara {formatCurrency(parsed.descuento_global_declarado)}, pero ya está compensado en el IVA
+                    de la factura: el valor real a restar es {formatCurrency(parsed.descuento_global)}.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-sm text-gray-600">+ Cargos globales ($)</label>
+                <Input type="number" value={cargosGlobal} onChange={(e) => setCargosGlobal(Number(e.target.value) || 0)} />
+                <p className="text-xs text-gray-500 mt-1">Fletes o recargos que el proveedor cobra al final.</p>
+              </div>
+              <div className={`rounded-lg p-3 border ${
+                totals.ref <= 0 ? 'bg-gray-50 border-gray-200' : cuadra ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'
+              }`}>
+                <div className="flex justify-between font-bold"><span>Total calculado</span><span>{formatCurrency(totals.total)}</span></div>
+                <div className="flex justify-between text-gray-600"><span>Total de la factura</span><span>{totals.ref > 0 ? formatCurrency(totals.ref) : '—'}</span></div>
+                {totals.ref > 0 && (
+                  <p className={`mt-1 font-semibold flex items-center gap-1 ${cuadra ? 'text-green-700' : 'text-red-700'}`}>
+                    {cuadra ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                    {cuadra ? 'Cuadra con la factura' : `Diferencia ${formatCurrency(totals.diff)}`}
+                  </p>
+                )}
+                {parsed.xml_anticipo > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">Anticipo ya pagado: {formatCurrency(parsed.xml_anticipo)} (no baja el costo).</p>
+                )}
+                {transportCost > 0 && (
+                  <p className="text-xs text-gray-600 mt-1">Costo a inventario con transporte: {formatCurrency(totals.inventario)}</p>
+                )}
               </div>
             </div>
           </Card>
@@ -638,7 +747,12 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
                     <th className="text-left p-2">SKU Prov</th>
                     <th className="text-left p-2">Descripción XML</th>
                     <th className="text-right p-2">Cant</th>
-                    <th className="text-right p-2">Costo Unit</th>
+                    <th className="text-right p-2">Costo unit.</th>
+                    <th className="text-right p-2">Desc %</th>
+                    <th className="text-right p-2">Desc $</th>
+                    <th className="text-right p-2">IVA %</th>
+                    <th className="text-right p-2">Neto unit.</th>
+                    <th className="text-right p-2">Total c/IVA</th>
                     <th className="text-left p-2">Producto Asociado</th>
                     <th className="text-center p-2"></th>
                   </tr>
@@ -675,7 +789,13 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
             <div><strong>Proveedor:</strong> {createNewSupplier ? newSupplier.name : supplierName}</div>
             <div><strong>Folio:</strong> {folio || '—'}</div>
             <div><strong>Items asociados:</strong> {items.filter(i => i.suggested_product_id).length} / {items.length}</div>
-            <div><strong>Total:</strong> {formatCurrency(totals.total)}</div>
+            <div>
+              <strong>Total factura:</strong> {formatCurrency(totals.total)}{' '}
+              {totals.ref > 0 && (cuadra
+                ? <span className="text-green-700">✓ cuadra</span>
+                : <span className="text-red-700">✗ diferencia {formatCurrency(totals.diff)}</span>)}
+            </div>
+            {transportCost > 0 && <div><strong>Con transporte:</strong> {formatCurrency(totals.inventario)}</div>}
           </div>
 
           {unmatchedCount > 0 && (
@@ -723,7 +843,44 @@ function ItemRow({ item, onChange, onRemove }: { item: EditableItem; onChange: (
         <td className="p-2 font-mono">{item.sku_proveedor || '—'}</td>
         <td className="p-2 max-w-[200px] truncate">{item.descripcion}</td>
         <td className="p-2 text-right">{item.cantidad}</td>
-        <td className="p-2 text-right">{formatCurrency(item.costo_base_unitario)}</td>
+        <td className="p-1 text-right">
+          <Input
+            type="number" className="h-8 w-28 text-right text-xs" value={r2(item.costo_base_unitario)}
+            onChange={(e) => {
+              const costo = Number(e.target.value) || 0;
+              // el % del proveedor se mantiene: el $ se recalcula con el nuevo costo
+              const descuento = item.descuento_pct > 0 ? r2(item.cantidad * costo * item.descuento_pct / 100) : item.descuento;
+              onChange({ ...item, costo_base_unitario: costo, descuento });
+            }}
+          />
+        </td>
+        <td className="p-1 text-right">
+          <Input
+            type="number" className="h-8 w-16 text-right text-xs" value={r2(item.descuento_pct)}
+            onChange={(e) => {
+              const pct = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+              onChange({ ...item, descuento_pct: pct, descuento: r2(lineaBruta(item) * pct / 100) });
+            }}
+          />
+        </td>
+        <td className="p-1 text-right">
+          <Input
+            type="number" className="h-8 w-24 text-right text-xs" value={r2(item.descuento)}
+            onChange={(e) => {
+              const valor = Math.max(0, Number(e.target.value) || 0);
+              const bruto = lineaBruta(item);
+              onChange({ ...item, descuento: valor, descuento_pct: bruto > 0 ? (valor / bruto) * 100 : 0 });
+            }}
+          />
+        </td>
+        <td className="p-1 text-right">
+          <Input
+            type="number" className="h-8 w-16 text-right text-xs" value={item.iva_pct}
+            onChange={(e) => onChange({ ...item, iva_pct: Math.max(0, Number(e.target.value) || 0) })}
+          />
+        </td>
+        <td className="p-2 text-right font-medium">{formatCurrency(item.cantidad > 0 ? lineaNeta(item) / item.cantidad : 0)}</td>
+        <td className="p-2 text-right">{formatCurrency(lineaConIva(item))}</td>
         <td className="p-2">
           {item.suggested_product_id ? (
             <div>
@@ -954,6 +1111,8 @@ function NuevaManualTab({ onDone }: { onDone: () => void }) {
               costo_base_unitario: 0,
               iva_pct: 19,
               descuento: 0,
+              descuento_pct: 0,
+              cargos: 0,
               total_linea: 0,
               suggested_product_id: p.id,
               suggested_product_sku: p.sku,

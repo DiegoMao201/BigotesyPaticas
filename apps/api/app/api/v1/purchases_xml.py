@@ -38,7 +38,13 @@ class ParsedItem(BaseModel):
     cantidad: float
     costo_base_unitario: float
     iva_pct: float
+    # costo_base_unitario = precio de lista ANTES de descuentos (PriceAmount).
+    # descuento = $ total de descuentos de la línea; descuento_pct = % sobre el bruto.
+    # cargos = $ de recargos de la línea (raros). total_linea = LineExtensionAmount
+    # del XML = cantidad x precio - descuentos + cargos, SIN IVA (norma DIAN UBL 2.1).
     descuento: float = 0
+    descuento_pct: float = 0
+    cargos: float = 0
     total_linea: float
     # Match suggestion
     suggested_product_id: str | None = None
@@ -68,6 +74,22 @@ class ParsedInvoice(BaseModel):
     total: float
     moneda: str = "COP"
     items: list[ParsedItem]
+    # Descuento / cargo GLOBAL EFECTIVO: lo que hay que restar (o sumar) a
+    # "líneas netas + su IVA" para llegar al valor real de la factura. NO es el
+    # AllowanceTotalAmount a ciegas: hay proveedores que cobran IVA sobre una base
+    # inflada y lo compensan con un "descuento no condicionado" del mismo valor
+    # (factura fv08300854970152600094551: 309.549 = 19 % de 1.629.205); restarlo
+    # dejaría el costo por debajo de lo pagado.
+    descuento_global: float = 0
+    cargos_globales: float = 0
+    descuento_global_declarado: float = 0   # lo que el XML dice (informativo)
+    xml_consistente: bool = True
+    aviso: str | None = None
+    # Totales oficiales del XML (LegalMonetaryTotal) para cuadrar en el admin.
+    xml_subtotal: float = 0          # LineExtensionAmount (suma de líneas netas)
+    xml_iva: float = 0               # TaxInclusiveAmount - TaxExclusiveAmount
+    xml_total_factura: float = 0     # valor de la factura antes de anticipos
+    xml_anticipo: float = 0          # PrepaidAmount (ya pagado; no baja el costo)
 
 
 # ─── Helpers ────────────────────────────────────────────────────────
@@ -128,7 +150,7 @@ def _parse_supplier(root: ET.Element) -> tuple[str, str, str | None]:
     return nombre, nit, email
 
 
-def _resolver_costo_unitario(qty, price_amount, base_qty, line_extension, discount_amount):
+def _resolver_costo_unitario(qty, price_amount, base_qty, line_extension, discount_amount, charge_amount=0):
     """Reconcilia costo unitario cuando PriceAmount no es claro.
 
     Lógica portada de Streamlit Compras.py.
@@ -138,7 +160,9 @@ def _resolver_costo_unitario(qty, price_amount, base_qty, line_extension, discou
     pa = _f(price_amount)
     le = _f(line_extension)
     disc = _f(discount_amount)
-    line_before_discount = le + disc
+    # bruto de la línea = neto oficial + descuentos - recargos (DIAN: LineExtension =
+    # cantidad x precio - descuentos + cargos)
+    line_before_discount = le + disc - _f(charge_amount)
 
     # PriceAmount ya unitario (caso más común): qty * pa ~= total de línea
     if pa > 0 and line_before_discount > 0:
@@ -163,11 +187,12 @@ def _resolver_costo_unitario(qty, price_amount, base_qty, line_extension, discou
                 1.0, line_before_discount * 0.03
             ):
                 return est_unit
-        # Fallback conservador: preferir PriceAmount como unitario si no hay señal clara.
-        if base_qty == 1:
-            return pa
 
-    # Último fallback: total de línea / qty
+    # Si el precio no cuadra con la línea, MANDA el valor oficial de la línea
+    # (LineExtensionAmount es la base según la DIAN). Antes aquí se devolvía el
+    # PriceAmount "por si acaso": con precios que ya traen el impuesto incluido
+    # (factura ad09015277600002600009646, impoconsumo 8 %: precio 14.500, base
+    # 13.425,93) el costo quedaba inflado con el impuesto adentro.
     if line_before_discount > 0 and qty > 0:
         return line_before_discount / qty
 
@@ -200,37 +225,137 @@ def _parse_items(root: ET.Element) -> list[dict]:
         if not desc:
             desc = _txt(line.find("cac:Item/cbc:Name", NS), "Sin descripción")
 
-        # IVA
+        # IVA: la tarifa de la línea. Si el XML declara el VALOR del impuesto y no es
+        # línea x tarifa (base gravable distinta al valor de la línea, p. ej. factura
+        # ad08909113270242600088634: base 1.540.480 sobre línea 1.943.000), se usa la
+        # tarifa EFECTIVA para que el costo sea exactamente lo pagado.
         iva_pct = _f(_txt(line.find(".//cac:TaxCategory/cbc:Percent", NS)))
+        iva_linea = sum(_f(_txt(t.find("cbc:TaxAmount", NS))) for t in line.findall("cac:TaxTotal", NS))
+        if line_ext > 0 and iva_linea > 0 and abs(iva_linea - line_ext * iva_pct / 100) > 1:
+            iva_pct = round(iva_linea / line_ext * 100, 4)
 
-        # Allowance/Charge: ChargeIndicator=false → descuento
+        # Allowance/Charge de la línea: ChargeIndicator=false → descuento, true → cargo
         descuento_total = 0.0
+        cargos_total = 0.0
         for ac in line.findall("cac:AllowanceCharge", NS):
             ind = _txt(ac.find("cbc:ChargeIndicator", NS), "false").lower()
             amt = _f(_txt(ac.find("cbc:Amount", NS)))
             if ind == "false":
                 descuento_total += amt
+            else:
+                cargos_total += amt
 
-        costo_unit = _resolver_costo_unitario(
-            qty,
-            _txt(price_node, "0"),
-            _txt(base_qty_node, "1"),
-            line_ext,
-            descuento_total,
-        )
+        if line_ext > 0:
+            # El valor OFICIAL de la línea manda (DIAN: LineExtensionAmount =
+            # cantidad x precio - descuentos + cargos). Derivar el unitario de ahí hace
+            # que la línea cuadre exacta: varios proveedores publican el PriceAmount
+            # redondeado (27.714 cuando la línea usa 27.714,33) y esos pesos se colaban
+            # como un "cargo global" falso al cuadrar la factura.
+            costo_unit = (line_ext + descuento_total - cargos_total) / qty
+        else:
+            # XML sin valor de línea (proveedores que lo emiten en 0): mejor esfuerzo
+            costo_unit = _resolver_costo_unitario(
+                qty,
+                _txt(price_node, "0"),
+                _txt(base_qty_node, "1"),
+                line_ext,
+                descuento_total,
+                cargos_total,
+            )
 
+        bruto = costo_unit * qty
         items.append(
             {
                 "sku_proveedor": sku_prov,
                 "descripcion": desc,
                 "cantidad": qty,
-                "costo_base_unitario": round(costo_unit, 2),
+                "costo_base_unitario": round(costo_unit, 4),
                 "iva_pct": iva_pct,
                 "descuento": round(descuento_total, 2),
+                "descuento_pct": round(descuento_total / bruto * 100, 4) if bruto > 0 else 0,
+                "cargos": round(cargos_total, 2),
                 "total_linea": round(line_ext, 2),
             }
         )
     return items
+
+
+def _parse_globales(root: ET.Element) -> dict:
+    """Descuentos/cargos de FACTURA y totales oficiales (LegalMonetaryTotal).
+
+    Solo cuentan los cac:AllowanceCharge HIJOS DIRECTOS de Invoice: los de las
+    líneas ya van en cada ítem. Si el XML trae AllowanceTotalAmount/ChargeTotalAmount
+    se usan esos (son los que suman al PayableAmount); si no, la suma de los nodos.
+    """
+    desc_nodos = cargo_nodos = 0.0
+    for ac in root.findall("cac:AllowanceCharge", NS):
+        ind = _txt(ac.find("cbc:ChargeIndicator", NS), "false").lower()
+        amt = _f(_txt(ac.find("cbc:Amount", NS)))
+        if ind == "false":
+            desc_nodos += amt
+        else:
+            cargo_nodos += amt
+    lmt = root.find("cac:LegalMonetaryTotal", NS)
+
+    def m(tag):
+        return _f(_txt(lmt.find(f"cbc:{tag}", NS))) if lmt is not None else 0.0
+
+    desc = m("AllowanceTotalAmount") or desc_nodos
+    cargo = m("ChargeTotalAmount") or cargo_nodos
+    excl, incl = m("TaxExclusiveAmount"), m("TaxInclusiveAmount")
+    payable, prepaid, redondeo = m("PayableAmount"), m("PrepaidAmount"), m("PayableRoundingAmount")
+    # IVA e impuestos de la factura: TaxTotal hijos directos (las retenciones van
+    # en WithholdingTaxTotal y no cuentan)
+    impuestos = sum(_f(_txt(t.find("cbc:TaxAmount", NS))) for t in root.findall("cac:TaxTotal", NS))
+    # Valor de la factura (lo que realmente cuesta la mercancía): antes de anticipos.
+    total_factura = (incl - desc + cargo + redondeo) if incl else payable + prepaid
+    return {
+        "descuento_global_declarado": round(desc, 2),
+        "cargos_declarados": round(cargo, 2),
+        "xml_subtotal": round(m("LineExtensionAmount"), 2),
+        "xml_iva": round(impuestos, 2),
+        "xml_incl": incl,
+        "xml_excl": excl,
+        "xml_total_factura": round(total_factura, 2),
+        "xml_anticipo": round(prepaid, 2),
+    }
+
+
+def _conciliar(subtotal: float, tax_amount: float, g: dict) -> dict:
+    """Descuento/cargo global EFECTIVO y coherencia del XML (función pura, testeable).
+
+    subtotal / tax_amount = líneas netas y su IVA calculados desde los ítems.
+    """
+    # ¿El XML es coherente? Las líneas netas deben sumar el LineExtensionAmount
+    # oficial y el total no puede ser menor que la base. Hay proveedores que emiten
+    # líneas en 0 y un "total" que es solo el IVA (ad0890900148…: 44.711 = 19 % de 235.320).
+    avisos = []
+    consistente = True
+    if g["xml_subtotal"] <= 0 or abs(g["xml_subtotal"] - subtotal) > max(1.0, subtotal * 0.005):
+        consistente = False
+        avisos.append(
+            f"las líneas suman {subtotal:,.0f} y el XML declara {g['xml_subtotal']:,.0f}"
+        )
+    if g["xml_incl"] and g["xml_excl"] and g["xml_incl"] < g["xml_excl"]:
+        consistente = False
+        avisos.append("el total con IVA del XML es menor que la base")
+    desc_ef = cargo_ef = 0.0
+    if consistente and g["xml_total_factura"] > 0:
+        ajuste = round(subtotal + tax_amount - g["xml_total_factura"], 2)
+        if ajuste > 1:
+            desc_ef = ajuste
+        elif ajuste < -1:
+            cargo_ef = -ajuste
+    aviso = None
+    if not consistente:
+        aviso = (
+            "El XML del proveedor trae totales incoherentes ("
+            + "; ".join(avisos)
+            + "). Se usan los valores de cada línea: compáralos con la factura física."
+        )
+
+    return {"descuento_global": desc_ef, "cargos_globales": cargo_ef,
+            "xml_consistente": consistente, "aviso": aviso}
 
 
 def _score_match(s1: str, s2: str) -> float:
@@ -369,9 +494,15 @@ async def parse_invoice_xml(
         match = await _suggest_match(db, it, supplier_id_db, productos)
         items_out.append(ParsedItem(**it, **match))
 
-    # Calcular subtotal / tax desde los items
-    subtotal = sum(it.costo_base_unitario * it.cantidad for it in items_out)
-    tax_amount = sum(it.costo_base_unitario * it.cantidad * it.iva_pct / 100 for it in items_out)
+    # Subtotal / IVA NETOS (después de descuentos de línea), como los calcula la DIAN
+    def _neto(it: ParsedItem) -> float:
+        return it.costo_base_unitario * it.cantidad - it.descuento + it.cargos
+
+    subtotal = sum(_neto(it) for it in items_out)
+    tax_amount = sum(_neto(it) * it.iva_pct / 100 for it in items_out)
+    g = _parse_globales(invoice)
+
+    c = _conciliar(subtotal, tax_amount, g)
 
     return ParsedInvoice(
         supplier=ParsedSupplier(
@@ -386,4 +517,13 @@ async def parse_invoice_xml(
         tax_amount=round(tax_amount, 2),
         total=total,
         items=items_out,
+        descuento_global=c["descuento_global"],
+        cargos_globales=c["cargos_globales"],
+        descuento_global_declarado=g["descuento_global_declarado"],
+        xml_consistente=c["xml_consistente"],
+        aviso=c["aviso"],
+        xml_subtotal=g["xml_subtotal"],
+        xml_iva=g["xml_iva"],
+        xml_total_factura=g["xml_total_factura"],
+        xml_anticipo=g["xml_anticipo"],
     )

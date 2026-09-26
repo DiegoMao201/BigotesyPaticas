@@ -1049,7 +1049,12 @@ export interface ParsedItem {
   cantidad: number;
   costo_base_unitario: number;
   iva_pct: number;
+  /** $ total de descuentos de la línea (del XML) */
   descuento: number;
+  /** % de descuento sobre el bruto de la línea */
+  descuento_pct: number;
+  /** $ de recargos de la línea */
+  cargos: number;
   total_linea: number;
   suggested_product_id: string | null;
   suggested_product_sku: string | null;
@@ -1073,6 +1078,18 @@ export interface ParsedInvoice {
   tax_amount: number;
   total: number;
   items: ParsedItem[];
+  /** Descuento global EFECTIVO: lo que hay que restar a líneas+IVA para llegar al valor de la factura */
+  descuento_global: number;
+  cargos_globales: number;
+  /** Lo que el XML dice como descuento global (informativo) */
+  descuento_global_declarado: number;
+  xml_consistente: boolean;
+  aviso: string | null;
+  xml_subtotal: number;
+  xml_iva: number;
+  /** Valor real de la factura (antes de anticipos) */
+  xml_total_factura: number;
+  xml_anticipo: number;
 }
 
 // ─── BI Analytics ──────────────────────────────────────────────────────────
