@@ -216,7 +216,11 @@ async def _apply_stock_and_cost(
                 await db.execute(select(Product).where(Product.id == item.product_id))
             ).scalar_one_or_none()
             if product:
-                cost_con_iva = round(float(item.unit_cost) * (1 + float(item.tax_pct) / 100), 2)
+                # unit_cost es el costo del EMPAQUE (lo que factura el proveedor); el
+                # inventario se lleva por UNIDAD (quantity x factor_pack). Sin dividir,
+                # una caja de 30 sobres de Fortiflora dejaba cada sobre a precio de caja.
+                factor = max(1, int(item.factor_pack or 1))
+                cost_con_iva = round(float(item.unit_cost) * (1 + float(item.tax_pct) / 100) / factor, 2)
                 product.cost = Decimal(str(cost_con_iva))
 
         # Unidades reales = quantity x factor_pack
@@ -250,7 +254,7 @@ async def _apply_stock_and_cost(
             movement_type="PURCHASE",
             quantity_delta=units,
             quantity_after=new_qty,
-            unit_cost=item.unit_cost,
+            unit_cost=round(float(item.unit_cost) / max(1, int(item.factor_pack or 1)), 2),
             reference_type="purchase",
             reference_id=purchase.id,
             notes=f"Compra #{purchase.folio or str(purchase.id)[:8]} — {item.product_name}",

@@ -1061,6 +1061,10 @@ export interface ParsedItem {
   suggested_product_name: string | null;
   match_reason: string | null;
   match_score: number | null;
+  /** Unidades por empaque sugeridas (caja x 30 sobres -> 30) */
+  factor_sugerido?: number;
+  factor_motivo?: string | null;
+  factor_alerta?: string | null;
 }
 
 export interface ParsedInvoice {

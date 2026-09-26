@@ -498,7 +498,7 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
         descuento_pct: it.descuento_pct || 0,
         cargos: it.cargos || 0,
         _id: `item-${i}`,
-        factor_pack: 1,
+        factor_pack: Math.max(1, it.factor_sugerido || 1),
         margen_pct: DEFAULT_MARGIN,
       })));
       setDescGlobal(data.descuento_global || 0);
@@ -511,6 +511,8 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
         (data.descuento_global ? ` · descuento global ${formatCurrency(data.descuento_global)}` : ''),
       );
       if (data.aviso) toast.warning(data.aviso, { duration: 12000 });
+      const empaques = data.items.filter((it) => (it.factor_sugerido || 1) > 1).length;
+      if (empaques) toast.info(`${empaques} producto(s) vienen por empaque y se ingresan por unidad: revisa "Und/emp."`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -747,12 +749,14 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
                     <th className="text-left p-2">SKU Prov</th>
                     <th className="text-left p-2">Descripción XML</th>
                     <th className="text-right p-2">Cant</th>
+                    <th className="text-right p-2" title="Unidades que trae cada empaque (caja x 30 sobres = 30)">Und/emp.</th>
                     <th className="text-right p-2">Costo unit.</th>
                     <th className="text-right p-2">Desc %</th>
                     <th className="text-right p-2">Desc $</th>
                     <th className="text-right p-2">IVA %</th>
                     <th className="text-right p-2">Neto unit.</th>
                     <th className="text-right p-2">Total c/IVA</th>
+                    <th className="text-right p-2" title="Unidades que entran al inventario y costo de cada una con IVA">A inventario</th>
                     <th className="text-left p-2">Producto Asociado</th>
                     <th className="text-center p-2"></th>
                   </tr>
@@ -841,8 +845,34 @@ function ItemRow({ item, onChange, onRemove }: { item: EditableItem; onChange: (
     <>
       <tr className="border-t">
         <td className="p-2 font-mono">{item.sku_proveedor || '—'}</td>
-        <td className="p-2 max-w-[200px] truncate">{item.descripcion}</td>
-        <td className="p-2 text-right">{item.cantidad}</td>
+        <td className="p-2 max-w-[220px]">
+          <p className="truncate" title={item.descripcion}>{item.descripcion}</p>
+          {item.factor_pack > 1 && item.factor_motivo && (
+            <p className="text-[10px] text-orange-700">📦 x{item.factor_pack}: {item.factor_motivo}</p>
+          )}
+          {item.factor_pack === 1 && item.factor_alerta && (
+            <p className="text-[10px] text-amber-700">⚠️ {item.factor_alerta}</p>
+          )}
+        </td>
+        <td className="p-1 text-right">
+          <Input
+            type="number" min={1} className="h-8 w-16 text-right text-xs" value={item.cantidad}
+            onChange={(e) => {
+              const cantidad = Math.max(1, Math.round(Number(e.target.value) || 1));
+              // el % se mantiene; el $ se recalcula con la nueva cantidad
+              const descuento = r2(cantidad * item.costo_base_unitario * (item.descuento_pct || 0) / 100);
+              onChange({ ...item, cantidad, descuento });
+            }}
+          />
+        </td>
+        <td className="p-1 text-right">
+          <Input
+            type="number" min={1} className={`h-8 w-16 text-right text-xs ${item.factor_pack > 1 ? 'border-orange-400 bg-orange-50' : ''}`}
+            value={item.factor_pack}
+            title={item.factor_motivo || 'Unidades que trae cada empaque'}
+            onChange={(e) => onChange({ ...item, factor_pack: Math.max(1, Math.round(Number(e.target.value) || 1)) })}
+          />
+        </td>
         <td className="p-1 text-right">
           <Input
             type="number" className="h-8 w-28 text-right text-xs" value={r2(item.costo_base_unitario)}
@@ -881,6 +911,12 @@ function ItemRow({ item, onChange, onRemove }: { item: EditableItem; onChange: (
         </td>
         <td className="p-2 text-right font-medium">{formatCurrency(item.cantidad > 0 ? lineaNeta(item) / item.cantidad : 0)}</td>
         <td className="p-2 text-right">{formatCurrency(lineaConIva(item))}</td>
+        <td className="p-2 text-right whitespace-nowrap">
+          <p className="font-semibold">{item.cantidad * item.factor_pack} und</p>
+          <p className="text-gray-500">
+            {formatCurrency(item.cantidad > 0 ? lineaConIva(item) / (item.cantidad * item.factor_pack) : 0)} c/u
+          </p>
+        </td>
         <td className="p-2">
           {item.suggested_product_id ? (
             <div>

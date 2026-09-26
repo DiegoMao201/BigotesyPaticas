@@ -54,6 +54,11 @@ class ParsedItem(BaseModel):
         None  # "memoria_proveedor", "sku_exacto", "nombre_exacto", "fuzzy_85"
     )
     match_score: float = 0
+    # Unidades por empaque sugeridas (26-sep-2026): el proveedor factura la CAJA
+    # y Diego vende por UNIDAD (Fortiflora: caja x 30 sobres, se vende el sobre).
+    factor_sugerido: int = 1
+    factor_motivo: str | None = None
+    factor_alerta: str | None = None
 
 
 class ParsedSupplier(BaseModel):
@@ -358,15 +363,82 @@ def _conciliar(subtotal: float, tax_amount: float, g: dict) -> dict:
             "xml_consistente": consistente, "aviso": aviso}
 
 
+# "X 30 SOBRES", "*80 TAB", "por 12 und", "caja x 10"... El número de unidades que trae.
+_RE_EMPAQUE = re.compile(
+    r"(?:\bx|\*|\bpor|\bcaja\s*(?:x|por|de)?)\s*(\d{1,4})\s*"
+    r"(sobres?|und|unds|unid|unidades|u\b|tab|tabs|tabletas|pastillas|comprimidos|masticables|"
+    r"pipetas?|ampollas?|capsulas?|cápsulas?|sticks?|piezas?|bolsitas?|latas?)",
+    re.IGNORECASE,
+)
+
+
+def _sugerir_factor(desc: str, costo_empaque_iva: float, producto, memoria: int | None) -> dict:
+    """Unidades por empaque: memoria del proveedor > descripción + precio > 1.
+
+    Solo se sugiere N>1 cuando la descripción dice cuántas unidades trae Y el
+    precio de venta del producto interno es menor que medio empaque (se vende
+    suelto). Mungos Mobility "50 TAB" se vende por frasco ($65.000 > caja $46.999)
+    y debe quedar en 1: leer solo el texto lo habría convertido en 50 unidades.
+    """
+    if memoria and memoria > 1:
+        return {"factor_sugerido": memoria, "factor_motivo": "memoria: así lo ingresaste la última vez",
+                "factor_alerta": None}
+    m = _RE_EMPAQUE.search(desc or "")
+    n = int(m.group(1)) if m else 0
+    precio = float(getattr(producto, "price", 0) or 0) if producto is not None else 0
+    costo = float(getattr(producto, "cost", 0) or 0) if producto is not None else 0
+    if n > 1 and precio > 0 and costo_empaque_iva > 0 and precio < costo_empaque_iva / 2:
+        return {"factor_sugerido": n,
+                "factor_motivo": f"la factura dice «{m.group(0).strip()}» y lo vendes a ${precio:,.0f} la unidad",
+                "factor_alerta": None}
+    alerta = None
+    if costo > 0 and costo_empaque_iva / costo >= 3:
+        alerta = (f"El empaque cuesta {costo_empaque_iva / costo:.0f} veces tu costo actual "
+                  f"(${costo:,.0f}): ¿viene por unidades? Ajusta las unidades por empaque.")
+    return {"factor_sugerido": 1, "factor_motivo": None, "factor_alerta": alerta}
+
+
+_RE_TAMANO = re.compile(r"(\d+(?:[.,]\d+)?)\s*(kg|kgs|kilos?|gr|grs|g|gramos|ml|lt|l|lb|lbs|oz)\b", re.IGNORECASE)
+_PERRO = re.compile(r"\b(perro|perros|canine|canino|dog|dogs|cachorro|puppy)\b", re.IGNORECASE)
+_GATO = re.compile(r"\b(gato|gatos|feline|felino|cat|cats|gatito|kitten)\b", re.IGNORECASE)
+
+
+def _tamano_g(s: str) -> float | None:
+    """Primer tamaño del nombre en gramos/ml (85 gr -> 85, 7.5 Kg -> 7500)."""
+    m = _RE_TAMANO.search(s or "")
+    if not m:
+        return None
+    v = float(m.group(1).replace(",", "."))
+    u = m.group(2).lower()
+    if u.startswith("k") or u in ("l", "lt"):
+        v *= 1000
+    elif u.startswith("lb"):
+        v *= 453.6
+    elif u == "oz":
+        v *= 28.35
+    return v
+
+
 def _score_match(s1: str, s2: str) -> float:
-    """Similitud combinada: SequenceMatcher + Jaccard de tokens."""
+    """Similitud combinada: SequenceMatcher + Jaccard de tokens, castigada si el
+    TAMAÑO o la ESPECIE no coinciden (26-sep-2026: "PRO PLAN GATO ADULTO SALMON
+    85 GR" se asociaba a "Pro Plan Gato Adulto 7.5 Kg" y "BONNAT ... CANINE GASTRO"
+    a "Bonnat Feline Gastrointestinal": el stock entraba al producto equivocado)."""
     n1, n2 = _normalize(s1), _normalize(s2)
     if not n1 or not n2:
         return 0.0
     seq = SequenceMatcher(None, n1, n2).ratio()
     t1, t2 = set(n1.split()), set(n2.split())
     jac = len(t1 & t2) / max(1, len(t1 | t2))
-    return 0.6 * seq + 0.4 * jac
+    score = 0.6 * seq + 0.4 * jac
+    a, b = _tamano_g(s1), _tamano_g(s2)
+    if a and b and abs(a - b) / max(a, b) > 0.08:
+        score *= 0.5
+    e1 = "perro" if _PERRO.search(s1 or "") else "gato" if _GATO.search(s1 or "") else None
+    e2 = "perro" if _PERRO.search(s2 or "") else "gato" if _GATO.search(s2 or "") else None
+    if e1 and e2 and e1 != e2:
+        score *= 0.5
+    return score
 
 
 async def _suggest_match(
@@ -396,6 +468,7 @@ async def _suggest_match(
                 "suggested_product_sku": prod.sku,
                 "match_reason": "memoria_proveedor",
                 "match_score": 1.0,
+                "_factor_memoria": int(mp.factor_pack or 1),
             }
 
     # 2) SKU exacto contra catálogo (sku interno = sku proveedor)
@@ -490,9 +563,15 @@ async def parse_invoice_xml(
 
     raw_items = _parse_items(invoice)
     items_out: list[ParsedItem] = []
+    por_id = {str(p.id): p for p in productos}
     for it in raw_items:
         match = await _suggest_match(db, it, supplier_id_db, productos)
-        items_out.append(ParsedItem(**it, **match))
+        memoria = match.pop("_factor_memoria", None)
+        neto = it["costo_base_unitario"] * it["cantidad"] - it["descuento"] + it["cargos"]
+        empaque_iva = neto / it["cantidad"] * (1 + it["iva_pct"] / 100) if it["cantidad"] else 0
+        prod = por_id.get(match.get("suggested_product_id") or "")
+        fac = _sugerir_factor(it["descripcion"], empaque_iva, prod, memoria)
+        items_out.append(ParsedItem(**it, **match, **fac))
 
     # Subtotal / IVA NETOS (después de descuentos de línea), como los calcula la DIAN
     def _neto(it: ParsedItem) -> float:
