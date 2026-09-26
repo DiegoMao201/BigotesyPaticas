@@ -6,6 +6,7 @@ Meta leerá este feed periódicamente para sincronizar el catálogo.
 
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 from io import BytesIO
 
@@ -18,6 +19,21 @@ from app.deps import DBSession
 router = APIRouter(prefix="/v1/catalog", tags=["catalog-feed"])
 
 _STORE_URL = "https://bigotesypaticas.com"
+
+# Merchant Center lee ESTE feed (no /merchant.xml de la tienda) — verificado por API
+# el 25-sep-2026. Las fotos del CDN miden 230-380 px de ancho y Google exige 500:
+# tenía 11 productos rechazados y 506 con aviso. Se mandan por /img-feed de la
+# tienda, que las entrega a 1000x1000 (mismo arreglo que ya tenía merchant.xml).
+_RE_CDN = re.compile(r"/bigotesypaticas/products/([a-z0-9][a-z0-9-]*)/main\.webp$")
+
+
+def _imagen_para_google(url: str | None) -> str | None:
+    """URL del CDN -> /img-feed/<slug>.jpg; si no tiene la forma esperada, tal cual."""
+    if not url:
+        return url
+    m = _RE_CDN.search(url)
+    return f"{_STORE_URL}/img-feed/{m.group(1)}.jpg" if m else url
+
 
 # Mapa de categoría propia → taxonomía Google Merchant
 _GOOGLE_CAT: dict[str, str] = {
@@ -57,6 +73,7 @@ async def products_feed_xml(db: DBSession) -> Response:
             p.id::text, p.sku, p.name,
             COALESCE(p.enriched_content->>'descripcion_corta', p.description, p.name) AS description,
             p.price,
+            p.compare_at_price,
             p.primary_image_url,
             p.image_url_transparent,
             p.slug,
@@ -104,11 +121,12 @@ async def products_feed_xml(db: DBSession) -> Response:
         ET.SubElement(item, "g:description").text = (p["description"] or p["name"] or "")[:5000]
         ET.SubElement(item, "g:link").text = f"{_STORE_URL}/producto/{p['slug']}"
 
-        # Imagen principal (transparente preferida) + imagen adicional si existe la otra
-        main_img = p["image_url_transparent"] or p["primary_image_url"]
+        # Imagen principal: la foto a 1000x1000 por /img-feed (la transparente sale con
+        # fondo negro o blanco segun la superficie de Google); la transparente va de adicional.
+        main_img = _imagen_para_google(p["primary_image_url"]) or p["image_url_transparent"]
         extra_img = (
-            p["primary_image_url"]
-            if p["image_url_transparent"] and p["primary_image_url"] != p["image_url_transparent"]
+            p["image_url_transparent"]
+            if p["image_url_transparent"] and p["image_url_transparent"] != p["primary_image_url"]
             else None
         )
         ET.SubElement(item, "g:image_link").text = main_img
@@ -117,8 +135,15 @@ async def products_feed_xml(db: DBSession) -> Response:
 
         ET.SubElement(item, "g:availability").text = "in stock" if stock > 0 else "out of stock"
         ET.SubElement(item, "g:condition").text = "new"
-        # Formato requerido por Google: "XXXXX.XX COP" con 2 decimales
-        ET.SubElement(item, "g:price").text = f"{price:.2f} COP"
+        # Formato requerido por Google: "XXXXX.XX COP" con 2 decimales.
+        # En oferta: price = precio de antes y sale_price = el que se cobra (antes se
+        # mandaba el de oferta como precio normal y Google no mostraba el descuento).
+        antes = float(p["compare_at_price"] or 0)
+        if antes > price:
+            ET.SubElement(item, "g:price").text = f"{antes:.2f} COP"
+            ET.SubElement(item, "g:sale_price").text = f"{price:.2f} COP"
+        else:
+            ET.SubElement(item, "g:price").text = f"{price:.2f} COP"
         ET.SubElement(item, "g:brand").text = brand
         ET.SubElement(item, "g:identifier_exists").text = "no"
 
