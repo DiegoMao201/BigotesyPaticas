@@ -1,50 +1,62 @@
 'use client';
 
 import { useState } from 'react';
-import { AddressAutocompleteInput } from '@/components/maps/AddressAutocompleteInput';
+import { DeliveryLocationPicker } from '@/components/maps/DeliveryLocationPicker';
+import { useUbicacionEntrega, calcularDomicilio, lineasUbicacion, GRATIS_DESDE, REGLA_TEXTO, type Domicilio, type UbicacionEntrega } from '@/lib/delivery';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { useMounted } from '@/lib/use-mounted';
 import { useCart } from '@/lib/cart-store';
 import { formatCurrency } from '@/lib/utils';
 import { BUSINESS_INFO } from '@/lib/business-info';
 import { MessageCircle, ArrowLeft, Package, ShoppingBag, CheckCircle } from 'lucide-react';
 import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
 
-const FREE_SHIPPING_THRESHOLD = 30_000;
-const SHIPPING_COST = 3_000;
-
+// El mensaje lleva la dirección que dio Google Maps y el enlace con el punto exacto,
+// para que el domiciliario llegue sin preguntar (Diego, 27-sep-2026).
 function buildWhatsAppMessage(
   items: { name: string; quantity: number; price: number }[],
   subtotal: number,
-  shipping: number,
-  total: number,
+  dom: Domicilio,
+  ubicacion: UbicacionEntrega | null,
   name: string,
-  address: string,
   notes: string,
 ): string {
   const header = `Hola! Quiero hacer un pedido 🐾\n`;
   const itemLines = items
     .map((i) => `• ${i.name} x${i.quantity} — ${formatCurrency(i.price * i.quantity)}`)
     .join('\n');
-  const shippingLine = shipping === 0 ? '🎉 Envío gratis' : `Envío: ${formatCurrency(shipping)}`;
-  const totalLine = `*TOTAL: ${formatCurrency(total)}*`;
-  const customerLine = name ? `\n\n👤 Nombre: ${name}` : '';
-  const addressLine = address ? `\n📍 Dirección: ${address}` : '';
+  const subtotalLine = `Subtotal: ${formatCurrency(subtotal)}`;
+  const shippingLine =
+    dom.tipo === 'gratis' ? '🎉 Domicilio GRATIS'
+    : dom.tipo === 'tarifa' ? `🛵 Domicilio: ${formatCurrency(dom.valor)}`
+    : '🛵 Domicilio: por confirmar según mi ubicación';
+  const totalLine = dom.valor == null
+    ? `*TOTAL: ${formatCurrency(subtotal)} + domicilio*`
+    : `*TOTAL: ${formatCurrency(subtotal + dom.valor)}*`;
+  const customerLine = name ? `\n\n👤 Nombre: ${name}` : '\n';
   const notesLine = notes ? `\n📝 Notas: ${notes}` : '';
-  return `${header}\n${itemLines}\n\n${shippingLine}\n${totalLine}${customerLine}${addressLine}${notesLine}`;
+  return `${header}\n${itemLines}\n\n${subtotalLine}\n${shippingLine}\n${totalLine}${customerLine}${lineasUbicacion(ubicacion)}${notesLine}`;
 }
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const mounted = useMounted();
   const items = useCart((s) => s.items);
   const subtotal = useCart((s) => s.subtotal());
-  const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_COST;
+  const ubicacion = useUbicacionEntrega((s) => s.ubicacion);
+  const dom = calcularDomicilio(subtotal, ubicacion?.km ?? null);
+  const shipping = dom.valor ?? 0;
   const total = subtotal + shipping;
+  const { track } = useMetaPixelEvent();   // antes se llamaba DESPUÉS de un return (regla de hooks)
 
   const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
+  const [pideUbicacion, setPideUbicacion] = useState(false);
+
+  // el carrito vive en el navegador: hasta montar no se sabe si está vacío (ver use-mounted)
+  if (!mounted) return <div className="container-tight py-24 min-h-[60vh]" />;
 
   if (items.length === 0) {
     return (
@@ -59,12 +71,17 @@ export default function CheckoutPage() {
     );
   }
 
-  const { track } = useMetaPixelEvent();
   const phone = (BUSINESS_INFO.whatsapp ?? '573206876633').replace(/\D/g, '');
-  const waMsg = buildWhatsAppMessage(items, subtotal, shipping, total, name, address, notes);
+  const waMsg = buildWhatsAppMessage(items, subtotal, dom, ubicacion, name, notes);
   const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(waMsg)}`;
 
   async function openWhatsApp() {
+    // sin ubicación no sale el pedido: es lo que el domiciliario necesita
+    if (!ubicacion) {
+      setPideUbicacion(true);
+      document.getElementById('entrega')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     track('InitiateCheckout', {
       content_ids: items.map((i) => i.productId),
       value: total,
@@ -81,7 +98,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-28 lg:pb-0">
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="container-tight py-4 flex items-center gap-3">
@@ -104,7 +121,7 @@ export default function CheckoutPage() {
             <div className="flex flex-col gap-2">
               {[
                 { step: '1', text: 'Revisa tu pedido aquí abajo' },
-                { step: '2', text: 'Opcionalmente escribe tu nombre y dirección' },
+                { step: '2', text: 'Dinos dónde entregamos: tu ubicación o tu dirección en Google Maps' },
                 { step: '3', text: 'Toca "Pedir por WhatsApp" — te enviaremos el resumen con el total' },
                 { step: '4', text: 'Confirmamos disponibilidad y coordinamos la entrega' },
               ].map((item) => (
@@ -141,9 +158,16 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Optional form */}
-          <div className="bg-white border border-border rounded-2xl p-5 flex flex-col gap-4">
-            <p className="font-semibold text-gray-900">Datos de entrega (opcional)</p>
+          {/* Entrega: ubicación con Google Maps */}
+          <div id="entrega" className={`bg-white border rounded-2xl p-5 flex flex-col gap-4 ${pideUbicacion && !ubicacion ? 'border-amber-400 ring-2 ring-amber-200' : 'border-border'}`}>
+            <div>
+              <p className="font-semibold text-gray-900">¿Dónde te lo llevamos?</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{REGLA_TEXTO}</p>
+            </div>
+            <DeliveryLocationPicker subtotal={subtotal} />
+            {pideUbicacion && !ubicacion && (
+              <p className="text-sm font-medium text-amber-700">Indícanos dónde entregar para enviar el pedido.</p>
+            )}
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1">Tu nombre</label>
               <input
@@ -151,16 +175,6 @@ export default function CheckoutPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="¿Cómo te llamamos?"
-                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/50"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Dirección de entrega</label>
-              {/* Autocompletado de Google al tocar el campo; si falla, input normal */}
-              <AddressAutocompleteInput
-                value={address}
-                onChange={setAddress}
-                placeholder="Barrio, calle, número..."
                 className="w-full rounded-xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/50"
               />
             </div>
@@ -209,19 +223,19 @@ export default function CheckoutPage() {
                 <span>{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Envío</span>
-                <span className={shipping === 0 ? 'text-green-600 font-medium' : ''}>
-                  {shipping === 0 ? '¡Gratis! 🎉' : formatCurrency(shipping)}
+                <span className="text-muted-foreground">Domicilio</span>
+                <span className={dom.tipo === 'gratis' ? 'text-green-600 font-medium' : dom.tipo === 'pendiente' ? 'text-muted-foreground text-xs' : ''}>
+                  {dom.tipo === 'gratis' ? '¡Gratis! 🎉' : dom.tipo === 'tarifa' ? formatCurrency(dom.valor) : dom.texto}
                 </span>
               </div>
-              {shipping > 0 && (
+              {subtotal < GRATIS_DESDE && (
                 <p className="text-xs text-muted-foreground">
-                  Agrega {formatCurrency(FREE_SHIPPING_THRESHOLD - subtotal)} más para envío gratis
+                  Agrega {formatCurrency(GRATIS_DESDE - subtotal)} más y el domicilio es gratis
                 </p>
               )}
             </div>
             <div className="border-t border-border pt-4 flex justify-between font-bold text-lg mb-5">
-              <span>Total</span>
+              <span>Total{dom.valor == null ? ' productos' : ''}</span>
               <span className="text-gradient">{formatCurrency(total)}</span>
             </div>
 
@@ -232,7 +246,7 @@ export default function CheckoutPage() {
               style={{ backgroundColor: '#25D366' }}
             >
               <MessageCircle className="h-6 w-6" />
-              Pedir por WhatsApp
+              {ubicacion ? 'Pedir por WhatsApp' : 'Indica dónde entregamos'}
             </button>
 
             <p className="text-xs text-center text-muted-foreground mt-3">
@@ -253,6 +267,26 @@ export default function CheckoutPage() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Celular: total y botón siempre a la vista (antes quedaban al final de la página) */}
+      <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-border px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] text-muted-foreground leading-none">
+              {dom.valor == null ? 'Total productos' : 'Total con domicilio'}
+            </p>
+            <p className="font-bold text-lg leading-tight">{formatCurrency(total)}</p>
+          </div>
+          <button
+            onClick={openWhatsApp}
+            className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl font-bold text-white active:scale-[0.98] transition-all"
+            style={{ backgroundColor: '#25D366' }}
+          >
+            <MessageCircle className="h-5 w-5" />
+            {ubicacion ? 'Pedir por WhatsApp' : 'Indica dónde entregamos'}
+          </button>
         </div>
       </div>
     </div>

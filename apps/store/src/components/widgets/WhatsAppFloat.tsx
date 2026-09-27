@@ -5,10 +5,12 @@ import { usePathname } from 'next/navigation';
 import { MessageCircle } from 'lucide-react';
 import { useCart } from '@/lib/cart-store';
 import { generateContextualMessage, getWhatsAppUrl } from '@/lib/whatsapp-messages';
+import { useUbicacionEntrega } from '@/lib/delivery';
 
 export function WhatsAppFloat() {
   const cart = useCart();
   const pathname = usePathname();
+  const ubicacion = useUbicacionEntrega((s) => s.ubicacion);
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -27,9 +29,9 @@ export function WhatsAppFloat() {
     const message = generateContextualMessage(pathname, {
       items: cartItems,
       subtotal: () => cart.subtotal(),
-    });
+    }, ubicacion);
     return getWhatsAppUrl(message);
-  }, [pathname, itemCount, cart]);
+  }, [pathname, itemCount, cart, ubicacion]);
 
   function handleClick() {
     if (typeof window !== 'undefined' && 'gtag' in window) {
@@ -47,7 +49,8 @@ export function WhatsAppFloat() {
     }
   }
 
-  if (!show) return null;
+  // en el pago ya hay botón de WhatsApp (barra fija abajo): no montar dos
+  if (!show || pathname === '/checkout') return null;
 
   return (
     <a

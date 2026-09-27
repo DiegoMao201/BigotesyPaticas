@@ -1,3 +1,5 @@
+import { calcularDomicilio, lineasUbicacion, type UbicacionEntrega } from '@/lib/delivery';
+
 const WA_NUMBER = '573206876633';
 
 export interface CartItemLike {
@@ -13,10 +15,12 @@ const INSTAGRAM = '@bigotesypaticas';
 export function generateContextualMessage(
   pathname: string,
   cart: { items: CartItemLike[]; subtotal: () => number },
+  ubicacion: UbicacionEntrega | null = null,
 ): string {
   if (cart.items.length > 0) {
     const total = cart.subtotal();
-    const envio = total >= 30000 ? 0 : 3000;
+    // domicilio por distancia (lib/delivery); sin ubicación queda "por confirmar"
+    const dom = calcularDomicilio(total, ubicacion?.km ?? null);
     const lines = cart.items
       .map(
         (i) =>
@@ -27,8 +31,9 @@ export function generateContextualMessage(
     return (
       `¡Hola! Quiero hacer este pedido 🐾\n\n🛒 *Mi pedido:*\n${lines}\n\n` +
       `Subtotal: $${total.toLocaleString('es-CO')}\n` +
-      `${envio === 0 ? '🎉 Envío GRATIS' : `Envío estándar: $${envio.toLocaleString('es-CO')}`}\n` +
-      `*Total: $${(total + envio).toLocaleString('es-CO')}*\n\n` +
+      `${dom.tipo === 'gratis' ? '🎉 Domicilio GRATIS' : dom.tipo === 'tarifa' ? `🛵 Domicilio: $${dom.valor.toLocaleString('es-CO')}` : '🛵 Domicilio: por confirmar según mi ubicación'}\n` +
+      `*Total: $${(total + (dom.valor ?? 0)).toLocaleString('es-CO')}${dom.valor == null ? ' + domicilio' : ''}*\n` +
+      `${lineasUbicacion(ubicacion)}\n\n` +
       `¿Me confirman disponibilidad y método de pago?\n\n` +
       `📱 Portal de clientes: ${PORTAL_URL}`
     );

@@ -27,7 +27,7 @@ _INTENTS: list[tuple[list[str], str]] = [
     ),
     (
         ["domicilio", "envio", "envío", "delivery", "mandarlo", "despacho"],
-        "🛵 ¡Domicilio GRATIS en Pereira y Dosquebradas para pedidos desde $30.000! Pedidos menores: $5.000 de envío. ¿Quieres pedir algo?",
+        "🛵 ¡Domicilio GRATIS en Pereira y Dosquebradas para pedidos desde $30.000! Pedidos menores: $3.000 hasta 5 km del local y $5.000 más lejos. Por el portal mi.bigotesypaticas.com el domicilio es GRATIS. ¿Quieres pedir algo?",
     ),
     (
         ["horario", "abren", "cierran", "atienden", "abierto", "abiert"],

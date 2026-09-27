@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Trash2, ShoppingBag, Star } from 'lucide-react';
+import { useUbicacionEntrega, calcularDomicilio, REGLA_TEXTO } from '@/lib/delivery';
+import { useMounted } from '@/lib/use-mounted';
 import { useCart } from '@/lib/cart-store';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -18,6 +20,7 @@ function trackGA4(event: string, params?: Record<string, unknown>) {
 }
 
 export default function CartPage() {
+  const mounted = useMounted();
   const items = useCart((s) => s.items);
   const subtotal = useCart((s) => s.subtotal());
   const setQty = useCart((s) => s.setQty);
@@ -40,8 +43,10 @@ export default function CartPage() {
     .filter((p: { id: string }) => !items.find((i) => i.productId === p.id))
     .slice(0, 4);
 
-  const shipping = subtotal >= 30000 ? 0 : 3000;
-  const total = subtotal + shipping;
+  // Domicilio por distancia (lib/delivery): usa la ubicación si ya la dieron
+  const ubicacion = useUbicacionEntrega((s) => s.ubicacion);
+  const dom = calcularDomicilio(subtotal, ubicacion?.km ?? null);
+  const total = subtotal + (dom.valor ?? 0);
 
   const shareCart = () => {
     const names = items.map((i) => `${i.quantity}x ${i.name}`).join(', ');
@@ -50,6 +55,9 @@ export default function CartPage() {
     );
     window.open(`https://wa.me/?text=${msg}`, '_blank');
   };
+
+  // el carrito vive en el navegador: hasta montar no se sabe si está vacío (ver use-mounted)
+  if (!mounted) return <div className="container-tight py-24 min-h-[60vh]" />;
 
   if (items.length === 0) {
     return (
@@ -136,9 +144,14 @@ export default function CartPage() {
               <span>{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Envío</span>
-              <span>{shipping === 0 ? 'Gratis 🎉' : formatCurrency(shipping)}</span>
+              <span className="text-muted-foreground">Domicilio</span>
+              <span className={dom.tipo === 'pendiente' ? 'text-xs text-muted-foreground' : ''}>
+                {dom.tipo === 'gratis' ? 'Gratis 🎉' : dom.tipo === 'tarifa' ? formatCurrency(dom.valor) : dom.texto}
+              </span>
             </div>
+            {dom.tipo === 'pendiente' && (
+              <p className="text-xs text-muted-foreground -mt-2">{REGLA_TEXTO} Lo calculamos en el siguiente paso.</p>
+            )}
             <div className="border-t border-border pt-4 flex justify-between font-bold">
               <span>Total</span>
               <span className="text-gradient text-xl">{formatCurrency(total)}</span>

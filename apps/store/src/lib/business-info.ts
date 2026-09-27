@@ -33,8 +33,8 @@ export const BUSINESS_INFO = {
   },
 
   geo: {
-    latitude: 4.827259,
-    longitude: -75.692291,
+    latitude: 4.8266652,   // pin oficial de la ficha de Google (antes 4.827259, -75.692291)
+    longitude: -75.6923926,
   },
 
   openingHours: [
@@ -87,7 +87,9 @@ export const BUSINESS_INFO = {
 
   shipping: {
     freeShippingMinimum: 30000,
-    standardShippingCost: 3000,
+    standardShippingCost: 3000,     // hasta 5 km del local; más lejos $5.000 (lib/delivery)
+    farShippingCost: 5000,
+    nearRadiusKm: 5,
     transitDaysMin: 1,
     transitDaysMax: 3,
     handlingDaysMin: 0,

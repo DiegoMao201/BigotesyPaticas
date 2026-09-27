@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
+import { useMounted } from '@/lib/use-mounted';
 
 // Enlaces del menú móvil. Antes las 3 rayitas no tenían acción: el botón existía
 // pero no abría nada (Diego, 27-sep-2026: "las 3 rayitas del celular no funcionan").
@@ -39,6 +40,7 @@ export function Header() {
     document.body.style.overflow = menuOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [menuOpen]);
+  const mounted = useMounted();
   const count = useCart((s) => s.count());
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -116,7 +118,7 @@ export function Header() {
           </Link>
           <Link href="/carrito" aria-label="Carrito" className={ICONO}>
             <ShoppingBag className="h-5 w-5" />
-            {count > 0 && (
+            {mounted && count > 0 && (
               <span className="absolute top-0 right-0 gradient-brand text-white text-[10px] font-semibold w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
                 {count}
               </span>

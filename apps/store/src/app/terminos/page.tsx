@@ -46,7 +46,8 @@ export default function TerminosPage() {
           <h2 className="text-xl font-bold text-gray-900 mb-3">4. Envío y entrega</h2>
           <ul className="list-disc pl-5 space-y-1">
             <li>Envío gratis en pedidos desde $30.000 COP</li>
-            <li>Costo de envío estándar: $3.000 COP</li>
+            <li>Pedidos de menos de $30.000: domicilio de $3.000 COP hasta 5 km del local y de $5.000 COP a mayor distancia</li>
+            <li>Pedidos hechos desde el portal de clientes (mi.bigotesypaticas.com): domicilio gratis</li>
             <li>Tiempo estimado: 1 a 3 días hábiles en Pereira y Dosquebradas</li>
             <li>Nos reservamos el derecho de rechazar pedidos con dirección fuera de nuestra zona de cobertura</li>
           </ul>

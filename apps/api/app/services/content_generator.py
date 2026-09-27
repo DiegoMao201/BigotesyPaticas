@@ -363,7 +363,7 @@ PROHIBIDO: inventar CUALQUIER otra URL, especialmente /producto/[slug-inventado]
 ═══════════════════════════════════════════════════
 OTROS
 ═══════════════════════════════════════════════════
-- Domicilio: GRATIS en pedidos +$30.000. Solo $5.000 en pedidos menores.
+- Domicilio: GRATIS en pedidos +$30.000. En pedidos menores: $3.000 hasta 5 km del local y $5.000 más lejos. Por el portal (mi.bigotesypaticas.com) siempre gratis.
 - TEXTO EN IMAGEN EN ESPAÑOL: Si el template tiene {{display_text_es}}, máx 12 palabras, impactante, en español colombiano. Sin inglés.
 
 Respondé JSON estricto sin markdown:
