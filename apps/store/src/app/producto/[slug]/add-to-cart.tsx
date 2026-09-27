@@ -39,7 +39,8 @@ export function AddToCart({ product }: { product: Omit<CartItem, 'quantity'> }) 
         </div>
         <Button
           size="lg"
-          className="flex-1"
+          // min-w-0 + menos relleno en celular: el botón no se encogía y la fila se salía 5 px
+          className="flex-1 min-w-0 px-4 sm:px-8"
           onClick={() => {
             add(product, qty);
             trackAddToCart({

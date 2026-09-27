@@ -12,14 +12,14 @@ export function ProductTabs({ product }: { product: Product }) {
   const ai = product.enriched_content;
 
   return (
-    <div>
+    <div className="min-w-0 w-full">
       {/* Tab headers */}
       <div className="flex gap-0 border-b border-border overflow-x-auto scrollbar-none">
         {TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActive(tab)}
-            className={`px-5 py-3.5 text-sm font-semibold whitespace-nowrap transition-all border-b-2 -mb-px ${
+            className={`px-3.5 md:px-5 py-3.5 text-sm font-semibold whitespace-nowrap transition-all border-b-2 -mb-px ${
               active === tab
                 ? 'border-brand-600 text-brand-600'
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
