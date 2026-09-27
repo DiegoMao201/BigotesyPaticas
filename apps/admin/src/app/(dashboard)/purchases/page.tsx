@@ -1208,6 +1208,10 @@ function NuevaManualTab({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
   const [supplierId, setSupplierId] = useState('');
   const [supplierName, setSupplierName] = useState('');
+  // proveedor nuevo desde la compra manual (antes solo se podía escoger de la lista)
+  const [nuevoProv, setNuevoProv] = useState(false);
+  const [nuevoNit, setNuevoNit] = useState('');
+  const [nuevoNombre, setNuevoNombre] = useState('');
   const [folio, setFolio] = useState('');
   const [items, setItems] = useState<EditableItem[]>([]);
   const [picking, setPicking] = useState(false);
@@ -1216,10 +1220,20 @@ function NuevaManualTab({ onDone }: { onDone: () => void }) {
   const supList = useQuery({ queryKey: ['suppliers-all'], queryFn: () => suppliersApi.list({ is_active: true, page_size: 200 }) });
 
   const saveMut = useMutation({
-    mutationFn: () => purchases.create({
+    mutationFn: async () => {
+      let provId = supplierId;
+      let provNombre = supplierName;
+      if (nuevoProv) {
+        if (!nuevoNit.trim() || !nuevoNombre.trim()) throw new Error('Escribe el NIT y el nombre del proveedor nuevo');
+        const creado = await suppliersApi.create({ nit: nuevoNit.trim(), name: nuevoNombre.trim() });
+        provId = creado.id;
+        provNombre = creado.name;
+        qc.invalidateQueries({ queryKey: ['suppliers-all'] });
+      }
+      return purchases.create({
       folio: folio || undefined,
-      supplier_id: supplierId || undefined,
-      supplier_name: supplierName,
+      supplier_id: provId || undefined,
+      supplier_name: provNombre,
       payment_method: paymentMethod,
       items: items.map((it) => ({
         product_id: it.suggested_product_id!,
@@ -1230,7 +1244,8 @@ function NuevaManualTab({ onDone }: { onDone: () => void }) {
         tax_pct: it.iva_pct,
       })),
       receive_now: true,
-    }),
+    });
+    },
     onSuccess: () => {
       toast.success('Compra registrada');
       qc.invalidateQueries({ queryKey: ['purchases'] });
@@ -1248,18 +1263,28 @@ function NuevaManualTab({ onDone }: { onDone: () => void }) {
           <label className="text-sm">Proveedor</label>
           <select
             className="w-full border rounded px-3 py-2"
-            value={supplierId}
+            value={nuevoProv ? '__nuevo__' : supplierId}
             onChange={(e) => {
+              if (e.target.value === '__nuevo__') { setNuevoProv(true); setSupplierId(''); setSupplierName(''); return; }
+              setNuevoProv(false);
               const s = supList.data?.items.find(x => x.id === e.target.value);
               setSupplierId(e.target.value);
               setSupplierName(s?.name || '');
             }}
           >
             <option value="">— Selecciona —</option>
+            <option value="__nuevo__">+ Proveedor nuevo…</option>
             {supList.data?.items.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
+          {nuevoProv && (
+            <div className="mt-2 space-y-2">
+              <Input placeholder="NIT (sin dígito de verificación)" value={nuevoNit} onChange={(e) => setNuevoNit(e.target.value)} />
+              <Input placeholder="Nombre del proveedor" value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} />
+              <p className="text-xs text-gray-500">Se crea al guardar la compra.</p>
+            </div>
+          )}
         </div>
         <div>
           <label className="text-sm">Folio</label>
@@ -1338,7 +1363,7 @@ function NuevaManualTab({ onDone }: { onDone: () => void }) {
       <div className="flex justify-end">
         <Button
           onClick={() => saveMut.mutate()}
-          disabled={!supplierName || !items.length || saveMut.isPending}
+          disabled={(!supplierName && !(nuevoProv && nuevoNit.trim() && nuevoNombre.trim())) || !items.length || saveMut.isPending}
           className="bg-green-600 hover:bg-green-700"
         >
           <Save className="h-4 w-4 mr-2" />Registrar compra

@@ -15,7 +15,7 @@ from difflib import SequenceMatcher
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.deps import CurrentUser, DBSession, require_permission
 from app.models.catalog import Product
@@ -559,7 +559,12 @@ async def parsear_xml(db, content: bytes) -> "ParsedInvoice":
     # Buscar supplier en BD por NIT
     supplier_id_db: uuid.UUID | None = None
     if nit:
-        s = (await db.execute(select(Supplier).where(Supplier.nit == nit))).scalar_one_or_none()
+        # por NIT sin dígito de verificación ni puntos: "1088025932-4" = "1088025932"
+        # (antes solo coincidía exacto y proponía crear el proveedor otra vez)
+        base = re.sub(r"\D", "", nit.split("-")[0])
+        s = (await db.execute(select(Supplier).where(
+            func.regexp_replace(func.split_part(Supplier.nit, "-", 1), r"\D", "", "g") == base
+        ).limit(1))).scalar_one_or_none()
         if s is not None:
             supplier_id_db = s.id
 
