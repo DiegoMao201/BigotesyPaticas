@@ -65,44 +65,62 @@ export default function CartPage() {
   }
 
   return (
-    <div className="container-tight py-12">
+    <div className="container-tight py-6 md:py-12">
       {/* Sección 1 — Carrito + Resumen */}
-      <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-3">
-          <h1 className="text-3xl font-display font-bold mb-6">Carrito ({items.length})</h1>
+      <div className="grid lg:grid-cols-3 gap-6 lg:gap-8">
+        <div className="lg:col-span-2 space-y-3 min-w-0">
+          <h1 className="text-2xl md:text-3xl font-display font-bold mb-4 md:mb-6">Carrito ({items.length})</h1>
           {items.map((i) => (
+            // En celular la fila en una sola línea (foto + cantidad + total + papelera) no
+            // cabía en 390 px y empujaba la página a la derecha: ahora va en dos niveles.
             <div
               key={i.productId}
-              className="flex gap-4 items-center p-4 rounded-2xl border border-border bg-card"
+              className="flex gap-3 md:gap-4 p-3 md:p-4 rounded-2xl border border-border bg-card"
             >
-              <div className="relative w-20 h-20 rounded-xl bg-secondary overflow-hidden flex items-center justify-center text-3xl shrink-0">
+              <div className="relative w-20 h-20 rounded-xl bg-white overflow-hidden flex items-center justify-center text-3xl shrink-0">
                 {i.image ? (
-                  <Image src={i.image} alt={i.name} fill sizes="80px" className="object-cover" />
+                  <Image src={i.image} alt={i.name} fill sizes="80px" className="object-contain p-1" />
                 ) : (
                   '🐾'
                 )}
               </div>
-              <div className="flex-1 min-w-0">
-                <Link href={`/producto/${i.slug}`} className="font-medium hover:text-brand line-clamp-1">
-                  {i.name}
-                </Link>
-                <div className="text-sm text-muted-foreground">{formatCurrency(i.price)} c/u</div>
+              <div className="flex-1 min-w-0 flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <Link href={`/producto/${i.slug}`} className="font-medium text-sm md:text-base leading-snug hover:text-brand line-clamp-2">
+                      {i.name}
+                    </Link>
+                    <div className="text-xs md:text-sm text-muted-foreground mt-0.5">{formatCurrency(i.price)} c/u</div>
+                  </div>
+                  <button
+                    onClick={() => remove(i.productId)}
+                    aria-label="Eliminar"
+                    className="text-muted-foreground hover:text-destructive p-2 -mr-2 -mt-1 shrink-0"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center border border-border rounded-full">
+                    <button
+                      onClick={() => setQty(i.productId, Math.max(0, i.quantity - 1))}
+                      aria-label="Disminuir"
+                      className="h-9 w-9 flex items-center justify-center text-lg rounded-l-full active:bg-accent"
+                    >
+                      −
+                    </button>
+                    <span className="w-8 text-center text-sm font-semibold">{i.quantity}</span>
+                    <button
+                      onClick={() => setQty(i.productId, i.quantity + 1)}
+                      aria-label="Aumentar"
+                      className="h-9 w-9 flex items-center justify-center text-lg rounded-r-full active:bg-accent"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="font-bold text-base">{formatCurrency(i.price * i.quantity)}</div>
+                </div>
               </div>
-              <input
-                type="number"
-                min={0}
-                value={i.quantity}
-                onChange={(e) => setQty(i.productId, parseInt(e.target.value) || 0)}
-                className="w-16 h-9 px-2 rounded-lg border border-border bg-background text-center text-sm"
-              />
-              <div className="font-semibold w-24 text-right">{formatCurrency(i.price * i.quantity)}</div>
-              <button
-                onClick={() => remove(i.productId)}
-                aria-label="Eliminar"
-                className="text-muted-foreground hover:text-destructive p-2"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
             </div>
           ))}
           <button onClick={clear} className="text-xs text-muted-foreground hover:text-destructive mt-4">
@@ -111,7 +129,7 @@ export default function CartPage() {
         </div>
 
         <aside className="lg:sticky lg:top-24 h-fit">
-          <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
+          <div className="rounded-2xl border border-border bg-card p-5 md:p-6 space-y-4">
             <h2 className="font-display font-semibold text-lg">Resumen</h2>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
