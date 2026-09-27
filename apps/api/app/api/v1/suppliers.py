@@ -150,8 +150,8 @@ async def create_supplier(payload: SupplierIn, db: DBSession, user: CurrentUser)
         payment_terms_days=payload.payment_terms_days,
         notes=payload.notes,
         is_active=payload.is_active,
-        created_by=user.id,
-        updated_by=user.id,
+        created_by=str(user.id),
+        updated_by=str(user.id),
     )
     db.add(s)
     await db.commit()
@@ -175,7 +175,7 @@ async def update_supplier(
     data = payload.model_dump(exclude_unset=True)
     for k, v in data.items():
         setattr(s, k, v)
-    s.updated_by = user.id
+    s.updated_by = str(user.id)
     await db.commit()
     await db.refresh(s)
     out = SupplierOut.model_validate(s)
@@ -197,7 +197,7 @@ async def delete_supplier(supplier_id: uuid.UUID, db: DBSession, user: CurrentUs
         raise HTTPException(404, "Proveedor no encontrado")
     # Soft delete via is_active (preserva integridad de compras)
     s.is_active = False
-    s.updated_by = user.id
+    s.updated_by = str(user.id)
     await db.commit()
     return {"ok": True, "soft_deleted": True}
 
