@@ -13,6 +13,7 @@ lo envía. Los "Envío de recepción de pago" de Siigo no traen ese asunto y se 
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import logging
@@ -138,6 +139,12 @@ async def sincronizar(db, dias: int = 3, max_mensajes: int = 500) -> dict:
                 if not aid or not (fn.endswith(".zip") or fn.endswith(".xml")):
                     continue
                 a = (await c.get(f"{API}/messages/{mid}/attachments/{aid}")).json()
+                if "data" not in a:   # límite de velocidad de Gmail u otro error: un reintento
+                    await asyncio.sleep(2)
+                    a = (await c.get(f"{API}/messages/{mid}/attachments/{aid}")).json()
+                if "data" not in a:
+                    log.info("adjunto sin datos: %s", mid)
+                    continue
                 data = base64.urlsafe_b64decode(a["data"] + "==")
                 xml = _xml_del_zip(data) if fn.endswith(".zip") else data
                 if xml:
