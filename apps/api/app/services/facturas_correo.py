@@ -97,6 +97,22 @@ def _xml_del_zip(data: bytes) -> bytes | None:
     return None
 
 
+async def _get(c, url: str, params: dict | None = None) -> dict:
+    """GET a Gmail con reintentos: ante 429/5xx Gmail devuelve un JSON de error y, sin
+    esto, un correo con factura se leía como "sin asunto" y se saltaba (27-sep-2026)."""
+    espera = 1.0
+    for _ in range(6):
+        r = await c.get(url, params=params)
+        if r.status_code == 200:
+            return r.json()
+        if r.status_code in (429, 500, 502, 503, 504):
+            await asyncio.sleep(espera)
+            espera *= 2
+            continue
+        r.raise_for_status()
+    raise RuntimeError(f"Gmail no respondió tras reintentos: {url.rsplit('/', 1)[-1]}")
+
+
 def _partes(p: dict):
     yield p
     for h in p.get("parts", []) or []:
@@ -116,7 +132,7 @@ async def sincronizar(db, dias: int = 3, max_mensajes: int = 500) -> dict:
             params = {"q": f"newer_than:{dias}d has:attachment", "maxResults": 100}
             if pag:
                 params["pageToken"] = pag
-            r = (await c.get(f"{API}/messages", params=params)).json()
+            r = await _get(c, f"{API}/messages", params)
             ids += [m["id"] for m in r.get("messages", [])]
             pag = r.get("nextPageToken")
             if not pag:
@@ -125,23 +141,20 @@ async def sincronizar(db, dias: int = 3, max_mensajes: int = 500) -> dict:
             if mid in vistos:
                 continue
             res["revisados"] += 1
-            meta = (await c.get(f"{API}/messages/{mid}", params={"format": "metadata", "metadataHeaders": "Subject"})).json()
+            meta = await _get(c, f"{API}/messages/{mid}", {"format": "metadata", "metadataHeaders": "Subject"})
             asunto = next((x["value"] for x in meta.get("payload", {}).get("headers", []) if x["name"] == "Subject"), "")
             g = DIAN.match(asunto)
             if not g:
                 continue
             nit, nombre, doc_type = g.group(1), g.group(2).strip(), g.group(4)
-            full = (await c.get(f"{API}/messages/{mid}", params={"format": "full"})).json()
+            full = await _get(c, f"{API}/messages/{mid}", {"format": "full"})
             xml = None
             for parte in _partes(full.get("payload", {})):
                 fn = (parte.get("filename") or "").lower()
                 aid = parte.get("body", {}).get("attachmentId")
                 if not aid or not (fn.endswith(".zip") or fn.endswith(".xml")):
                     continue
-                a = (await c.get(f"{API}/messages/{mid}/attachments/{aid}")).json()
-                if "data" not in a:   # límite de velocidad de Gmail u otro error: un reintento
-                    await asyncio.sleep(2)
-                    a = (await c.get(f"{API}/messages/{mid}/attachments/{aid}")).json()
+                a = await _get(c, f"{API}/messages/{mid}/attachments/{aid}")
                 if "data" not in a:
                     log.info("adjunto sin datos: %s", mid)
                     continue
