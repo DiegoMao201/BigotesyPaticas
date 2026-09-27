@@ -14,32 +14,22 @@ import { getSpeciesEmoji, cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
 import 'react-day-picker/dist/style.css';
 
+// Solo lo que se presta de verdad (27-sep-2026): la tienda NO hace consulta veterinaria
+// ni vacunación; antes el portal las ofrecía y alguien podía reservarlas.
 const SERVICES = [
   {
     value: 'grooming',
     icon: '🛁',
-    label: 'Grooming',
-    sublabel: 'Baño + peluquería completos',
-    description: 'Baño con shampoo, secado, corte de uñas y peluquería opcional',
+    label: 'Baño y peluquería',
+    sublabel: 'Canina y felina',
+    description: 'Baño, corte, cepillado y corte de uñas',
     duration: 120,
   },
-  {
-    value: 'consulta_vet',
-    icon: '🩺',
-    label: 'Consulta veterinaria',
-    sublabel: 'Revisión médica general',
-    description: 'Consulta con el veterinario para chequeo de salud',
-    duration: 30,
-  },
-  {
-    value: 'vacunacion',
-    icon: '💉',
-    label: 'Vacunación',
-    sublabel: 'Aplicación de vacunas',
-    description: 'Aplicación de vacuna según calendario de tu mascota',
-    duration: 20,
-  },
 ];
+
+// Promoción de lanzamiento del groomer: quien reserva por el portal tiene 10% de
+// descuento. Viaja como nota en la cita para que quien atiende lo vea y lo aplique.
+const NOTA_DESCUENTO = 'Reservó por el portal: 10% de descuento en el servicio.';
 
 function formatLocalDate(d: Date): string {
   const y = d.getFullYear();
@@ -53,7 +43,7 @@ export default function NewAppointmentPage() {
   const qc = useQueryClient();
 
   const [petId, setPetId] = useState('');
-  const [service, setService] = useState('');
+  const [service, setService] = useState('grooming');
   const [selectedDay, setSelectedDay] = useState<Date | undefined>();
   const [selectedSlot, setSelectedSlot] = useState('');
   const [notes, setNotes] = useState('');
@@ -77,7 +67,7 @@ export default function NewAppointmentPage() {
         service_type: service,
         scheduled_at: `${dateStr}T${selectedSlot}:00`,
         duration_min: SERVICES.find((s) => s.value === service)?.duration ?? 60,
-        notes: notes || undefined,
+        notes: [NOTA_DESCUENTO, notes.trim()].filter(Boolean).join(' · '),
       });
     },
     onSuccess: () => {
@@ -95,7 +85,12 @@ export default function NewAppointmentPage() {
 
   return (
     <div className="p-4 pt-6 pb-8 flex flex-col gap-5">
-      <PageHeader title="Solicitar cita" subtitle="Baño, grooming o consulta veterinaria" back />
+      <PageHeader title="Solicitar cita" subtitle="Baño y peluquería canina y felina" back />
+
+      <div className="rounded-2xl bg-gradient-to-r from-teal-600 to-emerald-500 text-white p-4 shadow-md">
+        <p className="text-lg font-extrabold leading-tight">🎉 10% de descuento</p>
+        <p className="text-sm opacity-95">por reservar tu cita de peluquería aquí en el portal. Lunes a sábado, 10 a. m. a 7 p. m.</p>
+      </div>
 
       {/* Paso 1: Mascota */}
       {petsData && petsData.length > 0 && (

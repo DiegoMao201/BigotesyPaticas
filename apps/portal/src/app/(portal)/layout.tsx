@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { auth } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
@@ -14,10 +14,12 @@ import { TermsModal } from '@/components/portal/TermsModal';
 import { GoogleReviewPrompt } from '@/components/reviews/GoogleReviewPrompt';
 import { NotificationBell } from '@/components/portal/NotificationBell';
 import { LocationTracker } from '@/components/portal/LocationTracker';
+import { PromoGroomer } from '@/components/portal/PromoGroomer';
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { setCustomer } = useAuthStore();
+  const pathname = usePathname();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['portal-me'],
@@ -28,8 +30,9 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (data) setCustomer(data);
-    if (isError) router.replace('/login');
-  }, [data, isError, setCustomer, router]);
+    // recuerda a dónde iba (p. ej. el QR de citas) para volver ahí después de entrar
+    if (isError) router.replace(`/login?next=${encodeURIComponent(pathname || '/dashboard')}`);
+  }, [data, isError, setCustomer, router, pathname]);
 
   if (isLoading) return <PageLoader />;
   if (!data) return null;
@@ -37,6 +40,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   return (
     <div className="min-h-screen pb-24" style={{ background: 'transparent' }}>
       <LocationTracker />
+      <PromoGroomer />
 
       {/* Campana de notificaciones — esquina superior derecha */}
       <div className="fixed top-3 right-3 z-30">

@@ -72,7 +72,8 @@ export default function RegistroPage() {
       const me = await auth.me();
       setCustomer(me);
       track('CompleteRegistration', { content_name: 'portal_signup', status: true });
-      router.replace('/dashboard');
+      const nx = new URLSearchParams(window.location.search).get('next') ?? '';
+      router.replace(nx.startsWith('/') && !nx.startsWith('//') ? nx : '/dashboard');
     } catch (err: any) {
       toast.error(err.message ?? 'Error al registrarse');
     } finally {

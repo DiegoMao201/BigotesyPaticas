@@ -35,6 +35,9 @@ function LoginPageInner() {
   const { setCustomer } = useAuthStore();
   const searchParams    = useSearchParams();
   const refCode   = searchParams.get('ref') ?? null;
+  // solo rutas internas: evita redirigir a otro sitio con ?next=https://...
+  const nextRaw   = searchParams.get('next') ?? '';
+  const destino   = nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/dashboard';
   const videoRef  = useRef<HTMLVideoElement>(null);
 
   const [step,      setStep]      = useState<Step>('login');
@@ -83,7 +86,7 @@ function LoginPageInner() {
         return;
       }
 
-      router.replace('/dashboard');
+      router.replace(destino);
     } catch (err: any) {
       toast.error(err.message ?? 'Error al iniciar sesión');
     } finally {
@@ -278,7 +281,7 @@ function LoginPageInner() {
 
                 <p className="text-center text-xs text-gray-400 mt-1">
                   ¿Primera vez?{' '}
-                  <a href="/registro" className="text-primary-700 font-semibold">
+                  <a href={destino !== '/dashboard' ? `/registro?next=${encodeURIComponent(destino)}` : '/registro'} className="text-primary-700 font-semibold">
                     Crear cuenta gratis
                   </a>
                 </p>
@@ -296,7 +299,7 @@ function LoginPageInner() {
               <OnboardingStep
                 key="onboarding"
                 loginData={loginData}
-                onComplete={() => router.replace('/dashboard')}
+                onComplete={() => router.replace(destino)}
                 setCustomer={setCustomer}
                 qc={qc}
               />

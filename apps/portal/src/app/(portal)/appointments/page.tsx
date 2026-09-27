@@ -48,7 +48,7 @@ export default function AppointmentsPage() {
         <div className="card flex flex-col items-center gap-4 py-12 text-center">
           <Calendar className="h-12 w-12 text-primary-200" />
           <p className="font-semibold text-foreground">Sin citas programadas</p>
-          <p className="text-muted text-sm">Agenda un baño, grooming o consulta veterinaria.</p>
+          <p className="text-muted text-sm">Agenda el baño y la peluquería de tu mascota: 10% de descuento reservando aquí.</p>
           <Link href="/appointments/new" className="btn-primary">Agendar cita</Link>
         </div>
       )}
