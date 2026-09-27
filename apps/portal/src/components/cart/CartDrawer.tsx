@@ -19,8 +19,7 @@ export function CartDrawer({ open, onClose }: Props) {
   const updateQuantity = usePortalCart((s) => s.updateQuantity);
   const removeItem = usePortalCart((s) => s.removeItem);
 
-  const shipping = isFreeShipping ? 0 : 3000;
-  const missingForFree = Math.max(0, 30000 - subtotal);
+  const shipping = 0; // el portal no cobra domicilio
 
   function goToCheckout() {
     onClose();
@@ -101,14 +100,9 @@ export function CartDrawer({ open, onClose }: Props) {
         {/* Footer */}
         {items.length > 0 && (
           <div className="p-4 border-t space-y-3">
-            {missingForFree > 0 && (
-              <p className="text-xs text-center text-amber-600 bg-amber-50 rounded-xl py-2 px-3">
-                Te faltan {formatCOP(missingForFree)} para envío gratis 🚚
-              </p>
-            )}
             {isFreeShipping && (
               <p className="text-xs text-center text-green-700 bg-green-50 rounded-xl py-2 px-3">
-                ¡Tienes envío gratis! 🎉
+                Domicilio gratis por pedir en el portal 🎉
               </p>
             )}
             <div className="flex justify-between text-sm text-gray-600">

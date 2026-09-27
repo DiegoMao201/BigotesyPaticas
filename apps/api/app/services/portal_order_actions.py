@@ -80,7 +80,7 @@ async def _order_render_data(order: PortalOrder, db: DBSession) -> dict:
     if not subtotal and order.unit_price:
         subtotal = float(order.unit_price) * (order.quantity or 1)
     discount = float(order.discount_amount or 0)
-    shipping = 0.0 if subtotal >= 30_000 else 3_000.0
+    shipping = 0.0  # portal: domicilio gratis en TODO pedido (Diego 27-sep-2026, para incentivar el portal)
     total = subtotal - discount + shipping
 
     return {

@@ -64,7 +64,7 @@ export const usePortalCart = create<CartStore>()(
       clear: () => set({ items: [] }),
       subtotal: () => get().items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0),
       pointsToEarn: () => Math.floor(get().subtotal() / 1000),
-      isFreeShipping: () => get().subtotal() >= 30000,
+      isFreeShipping: () => true, // domicilio gratis en todo pedido del portal (27-sep-2026)
       itemCount: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
     }),
     { name: 'bp-portal-cart' },

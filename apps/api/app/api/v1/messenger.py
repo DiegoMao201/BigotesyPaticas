@@ -55,7 +55,7 @@ _INTENTS: list[tuple[list[str], str]] = [
     ),
     (
         ["portal", "cuenta", "puntos", "fidelidad", "registro"],
-        "✨ Tienes un portal exclusivo en mi.bigotesypaticas.com donde puedes acumular puntos, agendar citas y pedir a domicilio. ¡Regístrate gratis!",
+        "✨ Tienes un portal exclusivo en mi.bigotesypaticas.com donde acumulas puntos, agendas citas y pides con DOMICILIO GRATIS en todos tus pedidos. ¡Regístrate gratis!",
     ),
 ]
 

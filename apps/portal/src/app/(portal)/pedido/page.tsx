@@ -37,7 +37,6 @@ export default function PedidoPage() {
   const items = usePortalCart((s) => s.items);
   const subtotal = usePortalCart((s) => s.subtotal());
   const pointsToEarn = usePortalCart((s) => s.pointsToEarn());
-  const isFreeShipping = usePortalCart((s) => s.isFreeShipping());
   const clearCart = usePortalCart((s) => s.clear);
 
   const { data: me } = useQuery({ queryKey: ['portal-me'], queryFn: auth.me });
@@ -45,7 +44,7 @@ export default function PedidoPage() {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [generalNotes, setGeneralNotes] = useState('');
 
-  const shipping = isFreeShipping ? 0 : 3000;
+  const shipping = 0; // el portal no cobra domicilio (27-sep-2026)
   const total = subtotal + shipping;
 
   const mutation = useMutation({
