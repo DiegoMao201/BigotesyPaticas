@@ -12,6 +12,8 @@ while true; do
   python3 scripts/publish_stories.py >> /tmp/publish_stories.log 2>&1
   # Radar de noticias: el script decide solo si le toca (6, 11, 16 y 21 Bogotá)
   python3 scripts/radar_noticias.py >> /tmp/radar_noticias.log 2>&1
+  # Facturas DIAN del correo de Bigotes → bandeja "Facturas por cargar" del admin
+  python3 scripts/facturas_correo.py >> /tmp/facturas_correo.log 2>&1
   sleep 300
 done &
 

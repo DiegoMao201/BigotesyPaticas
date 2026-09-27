@@ -41,6 +41,7 @@ from app.api.v1 import (
     products,
     purchases,
     purchases_xml,
+    purchases_inbox,
     rescues,
     reviews,
     sales,
@@ -80,6 +81,8 @@ api_router.include_router(catalog_export.catalog_export_router, prefix="/v1")
 api_router.include_router(finance.suppliers_router, prefix="/v1-legacy")
 api_router.include_router(finance.closings_router, prefix="/v1")
 api_router.include_router(suppliers.router, prefix="/v1")
+# la bandeja va ANTES que purchases: si no, /purchases/inbox cae en /purchases/{id}
+api_router.include_router(purchases_inbox.router, prefix="/v1")
 api_router.include_router(purchases.router, prefix="/v1")
 api_router.include_router(purchases_xml.router, prefix="/v1")
 # Portal de fidelización — rutas bajo /v1/portal/...

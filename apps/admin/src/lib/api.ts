@@ -1026,6 +1026,17 @@ export const purchases = {
   markPaid: (id: string) => api<PurchaseOut>(`/v1/purchases/${id}/mark-paid`, { method: 'POST', body: JSON.stringify({}) }),
   cartera: () => api<CarteraResponse>('/v1/purchases/cartera/pendiente'),
   stats: () => api<{ total_spend_month: number; total_count_month: number; top_suppliers: { supplier_name: string; total: number; count: number }[] }>('/v1/purchases/stats/summary'),
+  // Bandeja "Facturas por cargar": facturas DIAN leídas del correo de Bigotes (27-sep-2026)
+  inbox: {
+    list: (estado: 'pendiente' | 'todas' | 'otros' | 'descartada' | 'cargada' | 'ya_ingresada' = 'pendiente') =>
+      api<InboxResponse>(`/v1/purchases/inbox?estado=${estado}`),
+    sync: (dias = 3) =>
+      api<{ revisados: number; nuevos: number; ya_ingresadas: number; otros: number; sin_xml: number }>(
+        `/v1/purchases/inbox/sync?dias=${dias}`, { method: 'POST' }),
+    parse: (id: string) => api<ParsedInvoice>(`/v1/purchases/inbox/${id}/parse`),
+    setEstado: (id: string, body: { estado: 'cargada' | 'descartada' | 'pendiente'; purchase_id?: string; nota?: string }) =>
+      api<{ ok: boolean }>(`/v1/purchases/inbox/${id}/estado`, { method: 'POST', body: JSON.stringify(body) }),
+  },
   parseXml: async (file: File): Promise<ParsedInvoice> => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('bp_admin_token') : null;
     const fd = new FormData();
@@ -1042,6 +1053,28 @@ export const purchases = {
     return res.json();
   },
 };
+
+export interface InboxInvoice {
+  id: string;
+  doc_type: string;
+  tipo: string;
+  nit: string;
+  supplier_name: string;
+  folio: string | null;
+  issue_date: string | null;
+  subtotal: number | null;
+  tax_amount: number | null;
+  total: number | null;
+  estado: 'pendiente' | 'cargada' | 'ya_ingresada' | 'descartada' | 'otros';
+  purchase_id: string | null;
+  nota: string | null;
+  proveedor_registrado: boolean;
+}
+
+export interface InboxResponse {
+  items: InboxInvoice[];
+  conteo: Record<string, number>;
+}
 
 export interface ParsedItem {
   sku_proveedor: string | null;

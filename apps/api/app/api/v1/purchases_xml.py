@@ -543,7 +543,12 @@ async def parse_invoice_xml(
         raise HTTPException(400, "Archivo vacío")
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(413, "Archivo > 10MB")
+    return await parsear_xml(db, content)
 
+
+async def parsear_xml(db, content: bytes) -> "ParsedInvoice":
+    """Núcleo del parser, compartido por la carga manual (/parse) y por la bandeja de
+    facturas que llegan al correo (/purchases/inbox/{id}/parse): mismo resultado."""
     invoice = _extract_invoice_root(content)
 
     proveedor, nit, email = _parse_supplier(invoice)

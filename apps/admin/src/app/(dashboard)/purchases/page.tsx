@@ -1,16 +1,17 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Upload, FileText, Plus, Trash2, Search, Save, Eye, Truck, Sparkles,
-  AlertTriangle, CheckCircle2, Package, X, FileUp, Edit2, RefreshCw, Wallet, CalendarClock,
+  AlertTriangle, CheckCircle2, Package, X, FileUp, Edit2, RefreshCw, Wallet, CalendarClock, Inbox,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   purchases, suppliers as suppliersApi, products as productsApi, adminEtl,
   type ParsedInvoice, type ParsedItem, type Supplier, type SupplierIn,
   type PurchaseSummary, type PurchasePaymentMethod, PURCHASE_PAYMENT_METHOD_LABELS,
+  type InboxInvoice,
 } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
@@ -20,7 +21,9 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { Pagination } from '@/components/ui/pagination';
 
-type Tab = 'historial' | 'cartera' | 'nueva-xml' | 'nueva-manual';
+type Tab = 'historial' | 'cartera' | 'correo' | 'nueva-xml' | 'nueva-manual';
+/** Factura que viene del correo, ya leída: se abre directo en el paso de revisión */
+type DesdeCorreo = { id: string; parsed: ParsedInvoice; etiqueta: string };
 type Step = 1 | 2 | 3;
 
 function PaymentMethodSelect({
@@ -96,7 +99,10 @@ function costoUnitarioFinal(
 
 export default function PurchasesPage() {
   const [tab, setTab] = useState<Tab>('historial');
+  const [desdeCorreo, setDesdeCorreo] = useState<DesdeCorreo | null>(null);
   const qc = useQueryClient();
+  const pendientesQ = useQuery({ queryKey: ['inbox', 'pendiente'], queryFn: () => purchases.inbox.list('pendiente'), refetchInterval: 120_000 });
+  const nPendientes = pendientesQ.data?.conteo?.pendiente ?? 0;
   const bootstrapMut = useMutation({
     mutationFn: () => adminEtl.bootstrapSuppliers(),
     onSuccess: (res) => {
@@ -132,25 +138,207 @@ export default function PurchasesPage() {
         {[
           { id: 'historial', label: 'Historial', icon: FileText },
           { id: 'cartera', label: 'Cartera con proveedores', icon: Wallet },
+          { id: 'correo', label: 'Facturas por cargar', icon: Inbox, badge: nPendientes },
           { id: 'nueva-xml', label: 'Nueva con XML DIAN', icon: FileUp },
           { id: 'nueva-manual', label: 'Nueva manual', icon: Edit2 },
         ].map((t) => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id as Tab)}
+            onClick={() => { setTab(t.id as Tab); if (t.id === 'nueva-xml') setDesdeCorreo(null); }}
             className={`px-4 py-2 font-medium border-b-2 transition flex items-center gap-2 ${
               tab === t.id ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-600 hover:text-gray-900'
             }`}
           >
             <t.icon className="h-4 w-4" />{t.label}
+            {'badge' in t && (t as { badge?: number }).badge ? (
+              <span className="ml-1 min-w-5 h-5 px-1.5 rounded-full bg-orange-500 text-white text-xs flex items-center justify-center">
+                {(t as { badge?: number }).badge}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
 
       {tab === 'historial' && <HistorialTab />}
       {tab === 'cartera' && <CarteraTab />}
-      {tab === 'nueva-xml' && <NuevaXmlTab onDone={() => setTab('historial')} />}
+      {tab === 'correo' && (
+        <FacturasCorreoTab onCargar={(d) => { setDesdeCorreo(d); setTab('nueva-xml'); }} />
+      )}
+      {tab === 'nueva-xml' && (
+        <NuevaXmlTab
+          key={desdeCorreo?.id ?? 'manual'}
+          inicial={desdeCorreo}
+          onDone={() => {
+            const venia = !!desdeCorreo;
+            setDesdeCorreo(null);
+            setTab(venia ? 'correo' : 'historial');
+          }}
+        />
+      )}
       {tab === 'nueva-manual' && <NuevaManualTab onDone={() => setTab('historial')} />}
+    </div>
+  );
+}
+
+// ─── FACTURAS POR CARGAR (bandeja del correo) ─────────────────────
+// Las facturas DIAN que llegan a bigotesypaticasdosquebradas@ se leen solas (solo
+// lectura) cada 5 min. Aquí se revisan: "Cargar" abre el flujo normal de ingreso
+// por XML ya con la factura leída; al guardar queda marcada como cargada.
+const FILTROS_CORREO: { id: 'pendiente' | 'ya_ingresada' | 'cargada' | 'descartada' | 'otros' | 'todas'; label: string }[] = [
+  { id: 'pendiente', label: 'Por cargar' },
+  { id: 'ya_ingresada', label: 'Ya ingresadas a mano' },
+  { id: 'cargada', label: 'Cargadas' },
+  { id: 'descartada', label: 'Descartadas' },
+  { id: 'otros', label: 'No son mercancía' },
+  { id: 'todas', label: 'Todas' },
+];
+
+function FacturasCorreoTab({ onCargar }: { onCargar: (d: DesdeCorreo) => void }) {
+  const qc = useQueryClient();
+  const [filtro, setFiltro] = useState<(typeof FILTROS_CORREO)[number]['id']>('pendiente');
+  const [abriendo, setAbriendo] = useState<string | null>(null);
+  const q = useQuery({ queryKey: ['inbox', filtro], queryFn: () => purchases.inbox.list(filtro) });
+
+  const syncMut = useMutation({
+    mutationFn: (dias: number) => purchases.inbox.sync(dias),
+    onSuccess: (r) => {
+      toast.success(r.nuevos ? `Correo revisado: ${r.nuevos} documento(s) nuevo(s)` : 'Correo revisado: no hay facturas nuevas');
+      qc.invalidateQueries({ queryKey: ['inbox'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const estadoMut = useMutation({
+    mutationFn: (v: { id: string; estado: 'descartada' | 'pendiente' }) => purchases.inbox.setEstado(v.id, { estado: v.estado }),
+    onSuccess: (_r, v) => {
+      toast.success(v.estado === 'descartada' ? 'Factura descartada' : 'Factura devuelta a "por cargar"');
+      qc.invalidateQueries({ queryKey: ['inbox'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  async function cargar(f: InboxInvoice) {
+    setAbriendo(f.id);
+    try {
+      const parsed = await purchases.inbox.parse(f.id);
+      onCargar({ id: f.id, parsed, etiqueta: `${f.supplier_name} · ${f.folio ?? ''}` });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAbriendo(null);
+    }
+  }
+
+  const items = q.data?.items ?? [];
+  const conteo = q.data?.conteo ?? {};
+  const totalPend = items.filter((i) => i.estado === 'pendiente' && i.doc_type === '01').reduce((a, i) => a + (i.total ?? 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-semibold flex items-center gap-2"><Inbox className="h-5 w-5 text-orange-500" /> Facturas que llegaron al correo</p>
+          <p className="text-sm text-gray-600">
+            Se leen solas cada 5 minutos desde bigotesypaticasdosquebradas@ (solo lectura). Toca <b>Cargar</b> para revisarla y guardarla como compra.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => syncMut.mutate(3)} disabled={syncMut.isPending}>
+            <RefreshCw className={`w-4 h-4 mr-1 ${syncMut.isPending ? 'animate-spin' : ''}`} /> Revisar correo ahora
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => syncMut.mutate(120)} disabled={syncMut.isPending}>
+            Traer últimos 4 meses
+          </Button>
+        </div>
+      </Card>
+
+      <div className="flex flex-wrap gap-2">
+        {FILTROS_CORREO.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFiltro(f.id)}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${
+              filtro === f.id ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-700 border-gray-200 hover:border-orange-300'
+            }`}
+          >
+            {f.label}{f.id !== 'todas' && conteo[f.id] ? ` (${conteo[f.id]})` : ''}
+          </button>
+        ))}
+      </div>
+
+      {filtro === 'pendiente' && items.length > 0 && (
+        <p className="text-sm text-gray-600">
+          {items.filter((i) => i.doc_type === '01').length} factura(s) por cargar · total {formatCurrency(totalPend)}
+        </p>
+      )}
+
+      {q.isLoading ? (
+        <Card className="p-8 text-center text-gray-500">Cargando…</Card>
+      ) : items.length === 0 ? (
+        <Card className="p-10 text-center text-gray-500">
+          <CheckCircle2 className="h-10 w-10 mx-auto text-green-500 mb-2" />
+          {filtro === 'pendiente' ? 'No hay facturas pendientes por cargar.' : 'No hay documentos en este filtro.'}
+        </Card>
+      ) : (
+        <Card className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="text-left p-3">Fecha</th>
+                <th className="text-left p-3">Proveedor</th>
+                <th className="text-left p-3">Factura</th>
+                <th className="text-right p-3">Subtotal</th>
+                <th className="text-right p-3">IVA</th>
+                <th className="text-right p-3">Total</th>
+                <th className="text-right p-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((f) => (
+                <tr key={f.id} className="border-t">
+                  <td className="p-3 whitespace-nowrap">{f.issue_date ?? '—'}</td>
+                  <td className="p-3">
+                    <div className="font-medium">{f.supplier_name}</div>
+                    <div className="text-xs text-gray-500 flex flex-wrap gap-1 items-center">
+                      NIT {f.nit}
+                      {!f.proveedor_registrado && f.estado !== 'otros' && <Badge className="bg-amber-100 text-amber-800 text-[10px]">proveedor nuevo</Badge>}
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    <div className="font-mono">{f.folio ?? '—'}</div>
+                    {f.doc_type !== '01' && <Badge className="mt-1 bg-purple-100 text-purple-700 text-[10px]">{f.tipo}</Badge>}
+                    {f.nota && <div className="text-xs text-gray-500 mt-0.5">{f.nota}</div>}
+                  </td>
+                  <td className="p-3 text-right whitespace-nowrap">{f.subtotal != null ? formatCurrency(f.subtotal) : '—'}</td>
+                  <td className="p-3 text-right whitespace-nowrap">{f.tax_amount != null ? formatCurrency(f.tax_amount) : '—'}</td>
+                  <td className="p-3 text-right whitespace-nowrap font-semibold">{f.total != null ? formatCurrency(f.total) : '—'}</td>
+                  <td className="p-3 text-right whitespace-nowrap">
+                    <div className="flex justify-end gap-2">
+                      {f.doc_type === '01' && (f.estado === 'pendiente' || f.estado === 'descartada') && (
+                        <Button size="sm" onClick={() => cargar(f)} disabled={abriendo === f.id} className="bg-orange-500 hover:bg-orange-600 text-white">
+                          {abriendo === f.id ? 'Abriendo…' : 'Cargar'}
+                        </Button>
+                      )}
+                      {f.estado === 'pendiente' && (
+                        <Button size="sm" variant="outline" onClick={() => estadoMut.mutate({ id: f.id, estado: 'descartada' })}>
+                          Descartar
+                        </Button>
+                      )}
+                      {f.estado === 'descartada' && (
+                        <Button size="sm" variant="outline" onClick={() => estadoMut.mutate({ id: f.id, estado: 'pendiente' })}>
+                          Restaurar
+                        </Button>
+                      )}
+                      {(f.estado === 'cargada' || f.estado === 'ya_ingresada') && (
+                        <Badge className="bg-green-100 text-green-700">{f.estado === 'cargada' ? 'Cargada' : 'Ya estaba ingresada'}</Badge>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
     </div>
   );
 }
@@ -460,7 +648,7 @@ function CarteraTab() {
 }
 
 // ─── NUEVA CON XML ────────────────────────────────────────────────
-function NuevaXmlTab({ onDone }: { onDone: () => void }) {
+function NuevaXmlTab({ onDone, inicial }: { onDone: () => void; inicial?: DesdeCorreo | null }) {
   const qc = useQueryClient();
   const [step, setStep] = useState<Step>(1);
   const [parsed, setParsed] = useState<ParsedInvoice | null>(null);
@@ -476,7 +664,17 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
   const [paymentMethod, setPaymentMethod] = useState<PurchasePaymentMethod>('efectivo');
   const parseMut = useMutation({
     mutationFn: (file: File) => purchases.parseXml(file),
-    onSuccess: (data) => {
+    onSuccess: (data) => aplicarParsed(data),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Factura del correo: ya viene leída por el MISMO parser → directo al paso 2 (revisión)
+  useEffect(() => {
+    if (inicial) aplicarParsed(inicial.parsed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inicial?.id]);
+
+  function aplicarParsed(data: ParsedInvoice) {
       setParsed(data);
       setFolio(data.folio || '');
       if (data.supplier.matched_supplier_id) {
@@ -513,9 +711,7 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
       if (data.aviso) toast.warning(data.aviso, { duration: 12000 });
       const empaques = data.items.filter((it) => (it.factor_sugerido || 1) > 1).length;
       if (empaques) toast.info(`${empaques} producto(s) vienen por empaque y se ingresan por unidad: revisa "Und/emp."`);
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+  }
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -566,8 +762,17 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
         receive_now: true,
       });
     },
-    onSuccess: () => {
+    onSuccess: async (compra) => {
       toast.success('Compra registrada correctamente');
+      if (inicial) {
+        // la factura del correo queda como cargada, enlazada a la compra creada
+        try {
+          await purchases.inbox.setEstado(inicial.id, { estado: 'cargada', purchase_id: compra.id });
+        } catch {
+          toast.warning('La compra se guardó, pero no se pudo marcar la factura como cargada en la bandeja');
+        }
+        qc.invalidateQueries({ queryKey: ['inbox'] });
+      }
       qc.invalidateQueries({ queryKey: ['purchases'] });
       qc.invalidateQueries({ queryKey: ['inventory'] });
       onDone();
@@ -586,6 +791,11 @@ function NuevaXmlTab({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-4">
+      {inicial && (
+        <Card className="p-3 bg-orange-50 border-orange-200 text-sm text-orange-900 flex items-center gap-2">
+          <Inbox className="h-4 w-4" /> Factura del correo: <b>{inicial.etiqueta}</b>. Revisa, asocia y guarda como siempre.
+        </Card>
+      )}
       <Card className="p-4">
         <div className="flex items-center gap-2">
           {[1, 2, 3].map((n) => (
