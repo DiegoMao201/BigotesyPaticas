@@ -20,7 +20,7 @@ import os
 import re
 import zipfile
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import httpx
 from sqlalchemy import text
@@ -172,11 +172,13 @@ async def sincronizar(db, dias: int = 3, max_mensajes: int = 500) -> dict:
                 INSERT INTO purchasing.inbox_invoices
                   (gmail_message_id, cufe, doc_type, nit, supplier_name, folio, issue_date,
                    subtotal, tax_amount, total, xml, email_date, estado, purchase_id, nota)
-                VALUES (:mid, :cufe, :tipo, :nit, :nom, :folio, CAST(:fecha AS date),
+                VALUES (:mid, :cufe, :tipo, :nit, :nom, :folio, :fecha,
                         :sub, :iva, :tot, :xml, :fc, :estado, :pid, :nota)
                 ON CONFLICT DO NOTHING"""), {
                 "mid": mid, "cufe": info["cufe"], "tipo": doc_type, "nit": nit,
-                "nom": (info["nombre_xml"] or nombre)[:200], "folio": info["folio"], "fecha": info["issue_date"],
+                "nom": (info["nombre_xml"] or nombre)[:200], "folio": info["folio"],
+                # asyncpg exige un date, no el texto '2026-09-25'
+                "fecha": date.fromisoformat(info["issue_date"][:10]) if info["issue_date"] else None,
                 "sub": info["subtotal"], "iva": info["tax_amount"], "tot": info["total"], "xml": xml,
                 "fc": fecha_correo, "estado": estado, "pid": purchase_id, "nota": nota})
             await db.commit()
