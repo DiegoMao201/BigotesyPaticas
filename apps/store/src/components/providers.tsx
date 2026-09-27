@@ -16,7 +16,8 @@ export function Providers({ children }: { children: ReactNode }) {
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
       <QueryClientProvider client={client}>
         {children}
-        <Toaster position="top-center" theme="system" richColors />
+        {/* debajo del encabezado (h-16): encima tapaba el carrito y el menú mientras se veía */}
+        <Toaster position="top-center" offset={76} theme="system" richColors />
       </QueryClientProvider>
     </ThemeProvider>
   );

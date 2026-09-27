@@ -119,7 +119,7 @@ export function ProductTile({ p }: { p: Product }) {
               e.stopPropagation();
               add({ productId: p.id, slug: p.slug, name: p.name, price: Number(p.price) || 0, image: p.primary_image_url ?? null });
               trackAddToCart({ id: p.id, name: p.name, price: Number(p.price) || 0, quantity: 1 });
-              toast.success('Agregado al carrito', { description: p.name });
+              toast.success('Agregado al carrito', { description: p.name, duration: 2200 });
             }}
             className="mt-1.5 flex items-center justify-center gap-1.5 w-full h-10 md:h-8 rounded-xl
                        bg-[#187f77] hover:bg-[#0d4a45] active:scale-[0.98] text-white text-sm md:text-xs font-bold
