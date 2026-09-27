@@ -1,16 +1,44 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useState, useRef, useEffect } from 'react';
-import { ShoppingBag, Search, Menu, User, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ShoppingBag, Search, Menu, User, X, ChevronRight, MessageCircle } from 'lucide-react';
 import { useCart } from '@/lib/cart-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
 
+// Enlaces del menú móvil. Antes las 3 rayitas no tenían acción: el botón existía
+// pero no abría nada (Diego, 27-sep-2026: "las 3 rayitas del celular no funcionan").
+const MENU_MOVIL = [
+  { href: '/categorias/perros', label: 'Perros', emoji: '🐶' },
+  { href: '/categorias/gatos', label: 'Gatos', emoji: '🐱' },
+  { href: '/categorias/snacks', label: 'Snacks', emoji: '🦴' },
+  { href: '/categorias/accesorios', label: 'Accesorios', emoji: '🎾' },
+  { href: '/categorias/todos', label: 'Todo el catálogo', emoji: '🛍️' },
+  { href: '/adopcion', label: 'Adopción', emoji: '🏠' },
+  { href: '/blog', label: 'Blog', emoji: '📖' },
+  { href: '/noticias', label: 'Noticias', emoji: '📰' },
+  { href: '/nosotros', label: 'Nosotros', emoji: '💚' },
+  { href: '/contacto', label: 'Contacto y ubicación', emoji: '📍' },
+];
+
+// Icono-enlace del encabezado. Antes era <Link><Button/></Link>: un botón DENTRO de un
+// enlace, que en algunos celulares no responde al toque. Ahora el enlace es el botón.
+const ICONO = 'relative inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-accent active:scale-[0.97] transition-all';
+
 export function Header() {
+  const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+  // se cierra solo al navegar, y la página de atrás no se desplaza mientras está abierto
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [menuOpen]);
   const count = useCart((s) => s.count());
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -83,26 +111,80 @@ export function Header() {
           >
             <Search className="h-5 w-5" />
           </Button>
-          <Link href="/cuenta">
-            <Button variant="ghost" size="icon" aria-label="Cuenta">
-              <User className="h-5 w-5" />
-            </Button>
+          <Link href="/cuenta" aria-label="Cuenta" className={ICONO}>
+            <User className="h-5 w-5" />
           </Link>
-          <Link href="/carrito" className="relative">
-            <Button variant="ghost" size="icon" aria-label="Carrito">
-              <ShoppingBag className="h-5 w-5" />
-              {count > 0 && (
-                <span className="absolute -top-1 -right-1 gradient-brand text-white text-[10px] font-semibold w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
-                  {count}
-                </span>
-              )}
-            </Button>
+          <Link href="/carrito" aria-label="Carrito" className={ICONO}>
+            <ShoppingBag className="h-5 w-5" />
+            {count > 0 && (
+              <span className="absolute top-0 right-0 gradient-brand text-white text-[10px] font-semibold w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
+                {count}
+              </span>
+            )}
           </Link>
-          <Button variant="ghost" size="icon" className="md:hidden" aria-label="Menú">
+          <button
+            type="button"
+            aria-label="Menú"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(true)}
+            className={cn(ICONO, 'md:hidden')}
+          >
             <Menu className="h-5 w-5" />
-          </Button>
+          </button>
         </div>
       </div>
+
+      {/* Menú móvil: panel que entra desde la derecha. Va por PORTAL al <body>: el
+          encabezado tiene backdrop-filter (clase glass) y eso convierte al header en el
+          contenedor de los `fixed`, así que el panel quedaba encerrado en sus 64 px. */}
+      {menuOpen && typeof document !== 'undefined' && createPortal(
+        <div className="md:hidden fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Menú">
+          <button aria-label="Cerrar menú" onClick={() => setMenuOpen(false)} className="absolute inset-0 bg-black/40 animate-in fade-in" />
+          <nav className="absolute right-0 top-0 h-full w-[86%] max-w-sm bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+            <div className="flex items-center justify-between px-5 h-16 border-b border-gray-100">
+              <span className="font-display font-bold text-lg text-[#0d4a45]">Bigotes y Paticas</span>
+              <button aria-label="Cerrar menú" onClick={() => setMenuOpen(false)} className={ICONO}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto py-2">
+              {MENU_MOVIL.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setMenuOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 px-5 py-3.5 text-base font-semibold text-gray-800 active:bg-gray-50',
+                    pathname === l.href && 'text-[#187f77] bg-[#187f77]/5',
+                  )}
+                >
+                  <span className="text-xl w-7 text-center">{l.emoji}</span>
+                  <span className="flex-1">{l.label}</span>
+                  <ChevronRight className="h-4 w-4 text-gray-300" />
+                </Link>
+              ))}
+            </div>
+            <div className="p-4 border-t border-gray-100 space-y-2.5">
+              <Link
+                href="/cuenta"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center justify-center gap-2 w-full h-12 rounded-2xl bg-[#187f77] text-white font-bold"
+              >
+                <User className="h-5 w-5" /> Mi cuenta · Portal
+              </Link>
+              <a
+                href="https://wa.me/573206876633"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full h-12 rounded-2xl bg-green-500 text-white font-bold"
+              >
+                <MessageCircle className="h-5 w-5" /> Pedir por WhatsApp
+              </a>
+            </div>
+          </nav>
+        </div>,
+        document.body,
+      )}
 
       {/* Search mobile */}
       {searchOpen && (

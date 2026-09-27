@@ -3,11 +3,9 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
-import { ChevronDown, Heart, MessageCircle } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { ChevronDown } from 'lucide-react';
 import type { Product } from '@/lib/api';
-import { getOutOfStockWhatsAppUrl } from '@/lib/whatsapp-messages';
+import { ProductTile } from '@/components/catalog/ProductTile';
 
 export interface FilterChip {
   label: string;
@@ -168,13 +166,13 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
   return (
     <div>
       {/* ── Barra sticky de filtros ── */}
-      <div className="sticky top-14 z-30 bg-white/95 backdrop-blur py-2.5 -mx-4 px-4 border-b border-gray-100 mb-6">
+      <div className="sticky top-16 z-30 bg-white/95 backdrop-blur py-2.5 -mx-4 px-4 border-b border-gray-100 mb-4 md:mb-6">
         <div className="flex gap-2 overflow-x-auto scrollbar-hide items-center">
           {allChips.map((chip) => (
             <button
               key={chip.label}
               onClick={() => handleChipClick(chip)}
-              className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              className={`flex-shrink-0 px-4 py-2 md:px-3.5 md:py-1.5 rounded-full text-sm md:text-xs font-semibold transition-all ${
                 isChipActive(chip)
                   ? 'bg-[#187f77] text-white shadow-sm'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -189,7 +187,7 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
-              className="appearance-none pl-3 pr-7 py-1.5 rounded-full text-xs font-semibold
+              className="appearance-none pl-3 pr-7 py-2 md:py-1.5 rounded-full text-sm md:text-xs font-semibold
                          bg-gray-100 text-gray-600 border-0 cursor-pointer focus:outline-none"
             >
               <option value="relevance">Relevancia</option>
@@ -229,127 +227,10 @@ export function CatalogGrid({ initialItems, totalCount, apiQuery, filterChips = 
       {!chipLoading && displayed.length > 0 ? (
         <>
           {/* ── Grid ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {displayed.map((p) => {
-              const discount =
-                p.compare_at_price && Number(p.compare_at_price) > Number(p.price)
-                  ? Math.round((1 - Number(p.price) / Number(p.compare_at_price)) * 100)
-                  : null;
-
-              return (
-                <Link
-                  key={p.id}
-                  href={`/producto/${p.slug}`}
-                  className="group block relative bg-white rounded-2xl overflow-hidden
-                             border border-gray-100 hover:border-[#187f77]/40
-                             hover:shadow-lg hover:shadow-black/5
-                             transition-all duration-200"
-                >
-                  {/* Imagen */}
-                  <div className="relative aspect-square bg-[#F8F9FA] overflow-hidden">
-                    {p.primary_image_url ? (
-                      <Image
-                        src={p.primary_image_url}
-                        alt={p.name}
-                        fill
-                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
-                        className={`object-contain p-2.5
-                                   group-hover:scale-105 transition-transform duration-300
-                                   ${!p.in_stock ? 'grayscale opacity-70' : ''}`}
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-4xl opacity-25">
-                        🐾
-                      </div>
-                    )}
-
-                    {/* Badge stock */}
-                    <div className="absolute top-1.5 left-1.5">
-                      {p.in_stock ? (
-                        <span className="bg-[#187f77] text-white text-[9px] font-bold
-                                         px-1.5 py-0.5 rounded-full uppercase tracking-wide">
-                          Disponible
-                        </span>
-                      ) : (
-                        <span className="bg-amber-100 text-amber-700 text-[9px] font-bold
-                                         px-1.5 py-0.5 rounded-full uppercase tracking-wide border border-amber-200">
-                          Agotado · Lo conseguimos
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Badge descuento */}
-                    {discount && (
-                      <div className="absolute top-1.5 right-1.5">
-                        <span className="bg-[#f5a641] text-white text-[9px] font-bold
-                                         px-1.5 py-0.5 rounded-full">
-                          -{discount}%
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Favorito (hover desktop / siempre móvil) */}
-                    <button
-                      onClick={(e) => e.preventDefault()}
-                      aria-label="Guardar"
-                      className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-full bg-white
-                                 shadow-md flex items-center justify-center
-                                 opacity-100 sm:opacity-0 sm:group-hover:opacity-100
-                                 transition-opacity duration-150"
-                    >
-                      <Heart className="w-3.5 h-3.5 text-gray-500" />
-                    </button>
-                  </div>
-
-                  {/* Info compacta */}
-                  <div className="p-2.5 space-y-0.5">
-                    {(p.category?.name || p.brand?.name) && (
-                      <p className="text-[9px] text-gray-400 uppercase tracking-wide truncate">
-                        {p.category?.name}
-                        {p.brand?.name ? ` · ${p.brand.name}` : ''}
-                      </p>
-                    )}
-                    <h3 className="text-xs font-semibold text-[#0d4a45] line-clamp-2
-                                   leading-tight min-h-[2rem]">
-                      {p.name}
-                    </h3>
-                    <div className="flex items-baseline gap-1 pt-0.5">
-                      {discount && p.compare_at_price && (
-                        <span className="text-[10px] text-gray-400 line-through">
-                          {formatCurrency(p.compare_at_price)}
-                        </span>
-                      )}
-                      <span
-                        className={`text-sm font-bold ${
-                          p.in_stock ? 'text-[#187f77]' : 'text-gray-400'
-                        }`}
-                      >
-                        {formatCurrency(p.price)}
-                      </span>
-                    </div>
-                    {!p.in_stock && (
-                      <a
-                        href={getOutOfStockWhatsAppUrl({
-                          name: p.name,
-                          brand: p.brand ? { name: p.brand.name } : null,
-                          price: p.price,
-                          slug: p.slug,
-                        })}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-1 flex items-center justify-center gap-1 w-full py-1 rounded-lg
-                                   bg-green-500 hover:bg-green-600 text-white text-[9px] font-bold
-                                   transition-colors"
-                      >
-                        <MessageCircle className="w-2.5 h-2.5" />
-                        Lo consigo por WhatsApp
-                      </a>
-                    )}
-                  </div>
-                </Link>
-              );
-            })}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+            {displayed.map((p) => (
+              <ProductTile key={p.id} p={p} />
+            ))}
           </div>
 
           {/* Cargar más */}

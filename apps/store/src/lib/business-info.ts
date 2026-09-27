@@ -54,11 +54,10 @@ export const BUSINESS_INFO = {
 
   areaServed: ["Pereira", "Dosquebradas"],
 
-  // Servicios en tienda, confirmados por Diego el 8 sep 2026 (los mismos que declara la pagina de Facebook)
+  // Servicios en tienda. 25-26 sep 2026: Diego sacó la consulta veterinaria y confirmó
+  // que la vacunación NO se presta (FICHA_OFICIAL_UNICA.txt). Solo peluquería.
   services: [
-    { name: "Grooming", description: "Baño y peluquería completos para perros y gatos" },
-    { name: "Consulta veterinaria", description: "Consulta veterinaria en tienda" },
-    { name: "Vacunación con carnet", description: "Vacunación con registro en carnet" },
+    { name: "Grooming", description: "Baño, corte, cepillado y corte de uñas para perros y gatos" },
   ],
 
   priceRange: "$$$",  // marcas premium; igual que la pagina de Facebook (8 sep 2026)

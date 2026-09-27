@@ -168,7 +168,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   );
 
   return (
-    <div className="container-wide py-8">
+    <div className="container-wide py-5 md:py-8">
       <BreadcrumbSchema
         items={[
           { name: 'Inicio', url: 'https://bigotesypaticas.com' },
@@ -177,7 +177,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
       />
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-6">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4 md:mb-6">
         <Link href="/" className="hover:text-brand-600 transition-colors flex items-center gap-1">
           <ArrowLeft className="h-3 w-3" /> Inicio
         </Link>
@@ -186,25 +186,25 @@ export default async function CategoryPage({ params, searchParams }: Props) {
       </div>
 
       {/* Header */}
-      <header className="mb-6">
+      <header className="mb-4 md:mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <span className="text-3xl">{emoji}</span>
+          <span className="text-3xl hidden md:inline">{emoji}</span>
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
               Catálogo · {label.toUpperCase()}
             </p>
-            <h1 className="text-2xl md:text-3xl font-display font-extrabold text-[#0d4a45] leading-tight">
+            <h1 className="text-lg leading-snug md:text-3xl md:leading-tight font-display font-extrabold text-[#0d4a45]">
               {(dbCategory as any)?.description ?? description ?? `Productos para ${label.toLowerCase()}`}
             </h1>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-1 ml-12">
+        <p className="text-xs text-muted-foreground mt-1.5 md:ml-12">
           <span className="font-semibold text-foreground">{data.total}</span> productos · Entrega el mismo día en Pereira y Dosquebradas
         </p>
       </header>
 
       {/* Layout con sidebar de filtros */}
-      <div className="flex gap-8 items-start">
+      <div className="flex flex-col lg:flex-row gap-0 lg:gap-8 lg:items-start">
         {/* FilterSidebar — solo si hay facets */}
         {hasSidebarFilters && (
           <Suspense fallback={null}>

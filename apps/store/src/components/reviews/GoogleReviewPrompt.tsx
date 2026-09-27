@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Star, X, CheckCircle } from 'lucide-react';
 
 const GOOGLE_REVIEW_URL = 'https://g.page/r/CfL67OgLB-10EBM/review';
@@ -8,6 +9,10 @@ const COOLDOWN_DAYS = 30;
 const STORAGE_KEY = 'bp_google_review_prompted_at';
 const MIN_VISITS = 3;
 const VISITS_KEY = 'bp_visit_count';
+const SESSION_KEY = 'bp_visit_session';
+// Donde la persona está eligiendo o pagando NO se interrumpe con una ventana que tapa
+// toda la pantalla (27-sep-2026: en celular salía a los 5 s mientras miraba productos).
+const SIN_VENTANA = ['/categorias', '/buscar', '/producto', '/carrito', '/checkout', '/landing'];
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
 
 function trackEvent(name: string, params?: Record<string, unknown>) {
@@ -23,10 +28,18 @@ export function GoogleReviewPrompt() {
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const pathname = usePathname() ?? '/';
 
   useEffect(() => {
-    const visits = parseInt(localStorage.getItem(VISITS_KEY) ?? '0') + 1;
-    localStorage.setItem(VISITS_KEY, String(visits));
+    // Una VISITA es una sesión, no cada página abierta: antes 3 páginas seguidas ya
+    // contaban como "3 visitas" y la ventana salía a quien apenas llegaba.
+    let visits = parseInt(localStorage.getItem(VISITS_KEY) ?? '0');
+    if (!sessionStorage.getItem(SESSION_KEY)) {
+      sessionStorage.setItem(SESSION_KEY, '1');
+      visits += 1;
+      localStorage.setItem(VISITS_KEY, String(visits));
+    }
+    if (SIN_VENTANA.some((r) => pathname.startsWith(r))) return;
 
     const lastPrompted = localStorage.getItem(STORAGE_KEY);
     if (lastPrompted) {
@@ -35,9 +48,9 @@ export function GoogleReviewPrompt() {
     }
     if (visits < MIN_VISITS) return;
 
-    const timer = setTimeout(() => setShow(true), 5000);
+    const timer = setTimeout(() => setShow(true), 15000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [pathname]);
 
   const handleDismiss = () => {
     localStorage.setItem(STORAGE_KEY, String(Date.now()));

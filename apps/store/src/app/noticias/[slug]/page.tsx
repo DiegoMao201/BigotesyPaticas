@@ -165,7 +165,7 @@ export default async function NoticiaPage({ params }: Props) {
                 ¿Tienes perro o gato en Pereira o Dosquebradas?
               </h3>
               <p className="mb-6 text-teal-200">
-                Alimento, grooming, consulta veterinaria y vacunación con carnet. Domicilio gratis
+                Alimento, snacks, accesorios y peluquería canina y felina. Domicilio gratis
                 desde $30.000.
               </p>
               <div className="flex flex-wrap justify-center gap-3">

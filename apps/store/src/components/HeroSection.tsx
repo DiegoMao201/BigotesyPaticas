@@ -112,7 +112,7 @@ export function HeroSection() {
 
           <p className="text-lg md:text-xl text-white/85 max-w-lg leading-relaxed">
             Tu petshop de confianza en Samara Plaza Mall: alimento premium, accesorios,
-            medicamentos veterinarios, peluquería y vacunación para perros y gatos.
+            medicamentos veterinarios y peluquería para perros y gatos.
             Entregamos el mismo día en Pereira y Dosquebradas, lo más rápido posible.
           </p>
 

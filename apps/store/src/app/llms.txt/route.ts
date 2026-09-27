@@ -25,8 +25,8 @@ const TEXTO = `# Bigotes y Paticas Tienda de Mascotas
 
 > Pet shop en Samara Plaza Mall, Dosquebradas (Risaralda, Colombia), con domicilio
 > en Pereira y Dosquebradas. Concentrados, snacks, accesorios y medicamentos
-> veterinarios para perros y gatos, más servicios de peluquería, consulta
-> veterinaria y vacunación en el local. Catálogo en línea con más de 500 productos
+> veterinarios para perros y gatos, más peluquería canina y felina en el
+> local. Catálogo en línea con más de 500 productos
 > y precio y disponibilidad actualizados el mismo día.
 
 ## Datos de la tienda
@@ -41,9 +41,7 @@ const TEXTO = `# Bigotes y Paticas Tienda de Mascotas
 
 ## Servicios en el local
 
-- **Peluquería y baño** para perros y gatos
-- **Consulta veterinaria**
-- **Vacunación con carnet**
+- **Peluquería y baño** para perros y gatos: baño, corte, cepillado y corte de uñas
 
 ## Catálogo
 

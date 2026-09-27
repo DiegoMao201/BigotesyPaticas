@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Search, MessageCircle, ArrowRight } from 'lucide-react';
 import { storeApi } from '@/lib/api';
+import { ProductTile } from '@/components/catalog/ProductTile';
 import { formatCurrency } from '@/lib/utils';
 import { getWhatsAppUrl } from '@/lib/whatsapp-messages';
 import { matchSitePages } from '@/lib/site-pages';
@@ -125,40 +126,10 @@ function SearchResults() {
       <p className="text-sm text-muted-foreground mb-6">
         {data.total} resultado{data.total !== 1 ? 's' : ''} para <strong>&ldquo;{q}&rdquo;</strong>
       </p>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      {/* Misma tarjeta que el catálogo: grande en celular y con botón Agregar */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
         {data.items.map((p) => (
-          <Link
-            key={p.id}
-            href={`/producto/${p.slug}`}
-            className="group rounded-2xl border border-border bg-card hover:border-brand/30 hover:shadow-elegant transition-all overflow-hidden"
-          >
-            <div className="aspect-square bg-white flex items-center justify-center overflow-hidden relative p-3">
-              {p.primary_image_url ? (
-                <Image
-                  src={p.primary_image_url}
-                  alt={p.name}
-                  fill
-                  sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                  className={`object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-sm ${!p.in_stock ? 'grayscale opacity-70' : ''}`}
-                />
-              ) : (
-                <span className="text-5xl">🐾</span>
-              )}
-              <div className={`absolute top-2 left-2 text-xs font-medium px-2 py-0.5 rounded-full ${
-                p.in_stock
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-amber-100 text-amber-700 border border-amber-200'
-              }`}>
-                {p.in_stock ? 'Disponible' : 'Agotado · Lo conseguimos'}
-              </div>
-            </div>
-            <div className="p-3 space-y-1">
-              <h3 className="font-medium text-sm leading-tight line-clamp-2">{p.name}</h3>
-              <p className={`font-bold ${p.in_stock ? 'text-brand-700' : 'text-gray-400'}`}>
-                {formatCurrency(Number(p.price))}
-              </p>
-            </div>
-          </Link>
+          <ProductTile key={p.id} p={p} />
         ))}
       </div>
     </>
@@ -167,8 +138,8 @@ function SearchResults() {
 
 export default function BuscarPage() {
   return (
-    <main className="container-wide py-10">
-      <h1 className="text-2xl font-display font-bold mb-6">Resultados de búsqueda</h1>
+    <main className="container-wide py-6 md:py-10">
+      <h1 className="text-xl md:text-2xl font-display font-bold mb-4 md:mb-6">Resultados de búsqueda</h1>
       <Suspense fallback={
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {[...Array(8)].map((_, i) => (

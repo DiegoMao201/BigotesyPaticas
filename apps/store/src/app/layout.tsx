@@ -11,7 +11,6 @@ import { MetaPixel } from '@/components/analytics/MetaPixel';
 import { GoogleReviewPrompt } from '@/components/reviews/GoogleReviewPrompt';
 import { WhatsAppFloat } from '@/components/widgets/WhatsAppFloat';
 import { PWAInstallBanner } from '@/components/widgets/PWAInstallBanner';
-import { Toaster } from 'sonner';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 const jakarta = Plus_Jakarta_Sans({
@@ -130,7 +129,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <GoogleReviewPrompt />
           <WhatsAppFloat />
           <PWAInstallBanner />
-          <Toaster position="bottom-left" richColors closeButton />
         </Providers>
       </body>
     </html>

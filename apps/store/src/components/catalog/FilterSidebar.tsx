@@ -236,21 +236,28 @@ export function FilterSidebar({ facets }: FilterSidebarProps) {
     <>
       {/* Mobile: sticky button + drawer */}
       <div className="lg:hidden">
+        {/* Barra ancha y clara (antes una pastilla pequeña que en celular robaba una
+            columna entera al lado de los productos) */}
         <button
           onClick={() => setMobileOpen(true)}
-          className="sticky top-14 z-20 flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white shadow-sm text-sm font-semibold text-gray-700 hover:border-teal-400 hover:text-teal-700 transition-colors mb-4"
+          className="flex w-full items-center gap-3 px-4 h-12 mb-3 rounded-2xl border border-gray-200 bg-white shadow-sm text-sm font-semibold text-gray-800 active:bg-gray-50"
         >
-          <SlidersHorizontal className="h-4 w-4" />
-          Filtros {activeFilters.length > 0 && `(${activeFilters.length})`}
+          <SlidersHorizontal className="h-5 w-5 text-[#187f77]" />
+          <span className="flex-1 text-left">Filtrar por marca, etapa y tamaño</span>
+          {activeFilters.length > 0 && (
+            <span className="min-w-6 h-6 px-2 rounded-full bg-[#187f77] text-white text-xs flex items-center justify-center">
+              {activeFilters.length}
+            </span>
+          )}
         </button>
 
         {mobileOpen && (
-          <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div className="fixed inset-0 z-[70] flex flex-col justify-end">
             <div
               className="absolute inset-0 bg-black/40"
               onClick={() => setMobileOpen(false)}
             />
-            <div className="relative bg-white rounded-t-3xl p-6 max-h-[80vh] overflow-y-auto">
+            <div className="relative bg-white rounded-t-3xl p-6 pb-8 max-h-[85vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-lg">Filtros</h3>
                 <button onClick={() => setMobileOpen(false)}>
