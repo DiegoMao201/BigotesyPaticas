@@ -101,11 +101,12 @@ async def _get(c, url: str, params: dict | None = None) -> dict:
     """GET a Gmail con reintentos: ante 429/5xx Gmail devuelve un JSON de error y, sin
     esto, un correo con factura se leía como "sin asunto" y se saltaba (27-sep-2026)."""
     espera = 1.0
-    for _ in range(6):
+    for _ in range(7):
         r = await c.get(url, params=params)
         if r.status_code == 200:
             return r.json()
-        if r.status_code in (429, 500, 502, 503, 504):
+        limite = r.status_code == 403 and "ateLimitExceeded" in r.text   # Gmail también limita con 403
+        if r.status_code in (429, 500, 502, 503, 504) or limite:
             await asyncio.sleep(espera)
             espera *= 2
             continue
