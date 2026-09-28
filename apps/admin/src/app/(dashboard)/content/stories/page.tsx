@@ -429,7 +429,7 @@ export default function StoriesPage() {
       stories: d.stories.filter((s: StoryItem & { post_type?: string }) =>
         section === 'feed'
           ? s.post_type === 'feed_post'
-          : (s.post_type === 'story' || !s.post_type)
+          : (s.post_type === 'story' || s.post_type === 'story_only' || !s.post_type)
       ),
     }),
   });

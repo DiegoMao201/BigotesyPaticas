@@ -15,6 +15,10 @@ Para contenido de VIDEO, además de la Story (24h) también publica:
 Cada destino se intenta de forma independiente (un fallo no bloquea a los
 demás); el contenido de imagen sigue publicándose solo como Story, igual
 que antes (Instagram no admite Reels de imagen).
+
+post_type='story_only' (28-sep-2026): solo la Story de IG y FB, sin Reel ni feed.
+Sirve para repetir una pieza varios días en historias sin duplicar el Reel
+(Diego: "en reel y en feed una sola vez, en historias toda la semana").
 """
 
 from __future__ import annotations
@@ -392,7 +396,7 @@ async def publish_story(story: dict, dry_run: bool, cur, conn) -> bool:
             # admite Reels de imagen. base_image_url, para contenido de
             # video, se reutiliza como portada 9:16 (no es la imagen
             # principal como en un post de imagen) -- ver cover_url del Reel.
-            if not is_image:
+            if not is_image and story.get("post_type") != "story_only":
                 cover_url = story.get("base_image_url") or None
                 try:
                     ig_reel_id = publish_ig_reel(media_url, caption, cover_url=cover_url)
