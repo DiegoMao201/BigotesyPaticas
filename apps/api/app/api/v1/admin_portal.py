@@ -2098,7 +2098,18 @@ async def list_pending_notifications(
     min_age_minutes: int = Query(default=0, ge=0),
 ) -> list[dict]:
     """Lista notificaciones WhatsApp pendientes de envío por el admin."""
-    q = select(PendingNotification).where(PendingNotification.status == "pending")
+    # Solo mensajes de pedidos ABIERTOS: los de pedidos ya entregados o cancelados
+    # inflaban el contador del menú sin que hubiera nada que hacer (Diego 28-sep-2026).
+    q = (
+        select(PendingNotification)
+        .join(PortalOrder, PortalOrder.id == PendingNotification.portal_order_id)
+        .where(
+            PendingNotification.status == "pending",
+            func.coalesce(PortalOrder.workflow_status, PortalOrder.status).notin_(
+                ["delivered", "cancelled", "returned"]
+            ),
+        )
+    )
     if min_age_minutes > 0:
         cutoff = datetime.now(UTC) - timedelta(minutes=min_age_minutes)
         q = q.where(PendingNotification.created_at <= cutoff)

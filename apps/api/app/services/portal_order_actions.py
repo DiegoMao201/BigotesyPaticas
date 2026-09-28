@@ -507,6 +507,19 @@ async def queue_customer_notification(
     digits = _wa_digits(render_data.get("customer_phone"))
     wa_link = f"https://wa.me/{digits}?text={quote(rendered_message)}"
 
+    # El mensaje anterior de este pedido que nunca se envió ya no aplica: queda
+    # "saltado" para que no se acumulen avisos viejos en el contador del admin.
+    from sqlalchemy import update as sa_update
+
+    await db.execute(
+        sa_update(PendingNotification)
+        .where(
+            PendingNotification.portal_order_id == order.id,
+            PendingNotification.status == "pending",
+        )
+        .values(status="skipped")
+    )
+
     notif = PendingNotification(
         portal_order_id=order.id,
         template_code=template_code,
