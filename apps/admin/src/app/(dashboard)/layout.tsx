@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { Sidebar } from '@/components/sidebar';
 import { PendingPortalOrdersAlert } from '@/components/PendingPortalOrdersAlert';
+import { PendingAppointmentsAlert } from '@/components/PendingAppointmentsAlert';
 import { WhatsAppLinkInterceptor } from '@/components/WhatsAppLinkInterceptor';
 import { useAuth } from '@/lib/auth-store';
 
@@ -24,6 +25,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background">
       {token && <PendingPortalOrdersAlert />}
+      {token && <PendingAppointmentsAlert />}
       <WhatsAppLinkInterceptor />
       <Sidebar />
 

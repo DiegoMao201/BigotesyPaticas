@@ -294,6 +294,14 @@ export default function NewAppointmentPage() {
               <p className="text-xs text-primary-700 font-semibold">+50 puntos Bigotes al completar</p>
             </div>
 
+            {/* Mismas reglas que la reserva de la web (28-sep-2026): sin vacíos para el cliente */}
+            <div className="rounded-2xl bg-primary-50 px-4 py-3 text-xs text-foreground flex flex-col gap-1">
+              <p>🏪 Traes a tu mascota a la tienda: no hacemos recogida.</p>
+              <p>📍 Samara Plaza Mall, Cl. 15 #3A-07, Local 2, Dosquebradas.</p>
+              <p>⏰ Llega 20 minutos antes de tu cita.</p>
+              <p>✅ La cita queda en firme cuando te la confirmemos por WhatsApp.</p>
+            </div>
+
             <button
               onClick={() => book()}
               disabled={!canBook}
@@ -306,7 +314,7 @@ export default function NewAppointmentPage() {
               )}
             </button>
             <p className="text-xs text-muted text-center">
-              Un asesor confirmará la cita y te notificará en la campana 🔔
+              Te confirmamos por WhatsApp y en la campana 🔔
             </p>
           </motion.div>
         )}

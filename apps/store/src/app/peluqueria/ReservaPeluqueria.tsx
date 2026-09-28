@@ -6,7 +6,7 @@
  * disponibilidad y el mismo flujo de citas del portal (API /v1/public/grooming).
  */
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Loader2, ShieldCheck, MapPin, AlarmClock, MessageCircle, Store } from 'lucide-react';
 import { trackEvent } from '@/lib/analytics';
 import { BUSINESS_INFO } from '@/lib/business-info';
 
@@ -24,6 +24,17 @@ function horaBonita(t: string) {
   const h12 = h > 12 ? h - 12 : h;
   return `${h12}:00 ${h < 12 ? 'a. m.' : 'p. m.'}`;
 }
+
+/** Hora a la que debe llegar: 20 minutos antes de la cita. */
+function horaLlegada(t: string) {
+  const min = Number(t.slice(0, 2)) * 60 - 20;
+  const h = Math.floor(min / 60);
+  const m = String(min % 60).padStart(2, '0');
+  const h12 = h > 12 ? h - 12 : h;
+  return `${h12}:${m} ${h < 12 ? 'a. m.' : 'p. m.'}`;
+}
+
+const DIRECCION = `${BUSINESS_INFO.address.streetAddress}, ${BUSINESS_INFO.address.addressLocality}`;
 
 export function ReservaPeluqueria() {
   // 14 días hábiles hacia adelante (domingo cerrado)
@@ -116,28 +127,55 @@ export function ReservaPeluqueria() {
     const fechaTxt = `${['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][f.getDay()]} ${f.getDate()} de ${['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'][f.getMonth()]}`;
     const texto = `Hola, acabo de reservar en la web la peluquería para ${hecho.mascota} el ${fechaTxt} a las ${horaBonita(hecho.hora)}.`;
     return (
-      <div className="rounded-3xl bg-white border border-teal-100 shadow-xl p-6 sm:p-8 text-center">
-        <CheckCircle2 className="h-16 w-16 text-teal-600 mx-auto mb-3" />
-        <h3 className="text-2xl font-display font-extrabold text-[#0d4a45]">¡Listo! Tu cita quedó solicitada</h3>
-        <p className="mt-2 text-gray-600">
-          <strong>{hecho.mascota}</strong> · {fechaTxt} a las <strong>{horaBonita(hecho.hora)}</strong>
-        </p>
-        <p className="mt-3 text-sm text-gray-600">
-          Te escribimos por WhatsApp para confirmarla y decirte el precio según el tamaño y el pelaje. Recuerda: tienes <strong>10% de descuento</strong> por reservar en línea.
-        </p>
-        <a
-          href={`https://wa.me/${BUSINESS_INFO.whatsapp}?text=${encodeURIComponent(texto)}`}
-          target="_blank" rel="noopener noreferrer"
-          className="mt-5 inline-flex w-full justify-center rounded-2xl bg-[#25D366] px-5 py-3.5 font-bold text-white shadow-md hover:brightness-95"
-        >
-          Avisar por WhatsApp (opcional)
-        </a>
+      <div className="rounded-3xl bg-white text-gray-900 border border-teal-100 shadow-xl p-6 sm:p-8">
+        <div className="text-center">
+          <CheckCircle2 className="h-16 w-16 text-teal-600 mx-auto mb-3" />
+          <h3 className="text-2xl font-display font-extrabold text-[#0d4a45]">¡Recibimos tu solicitud!</h3>
+          <p className="mt-2 text-gray-600">
+            <strong>{hecho.mascota}</strong> · {fechaTxt} a las <strong>{horaBonita(hecho.hora)}</strong>
+          </p>
+        </div>
+        <ol className="mt-5 space-y-3 text-sm text-gray-700">
+          <li className="flex gap-3">
+            <MessageCircle className="h-5 w-5 shrink-0 text-[#187f77]" />
+            <span>
+              <strong>Te escribimos por WhatsApp</strong> al celular que nos dejaste para confirmar la cita y decirte el
+              precio. <strong>La cita queda en firme cuando te la confirmemos.</strong>
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <Store className="h-5 w-5 shrink-0 text-[#187f77]" />
+            <span>
+              <strong>Trae a {hecho.mascota} a la tienda</strong> (no hacemos recogida): {DIRECCION}.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <AlarmClock className="h-5 w-5 shrink-0 text-[#187f77]" />
+            <span>
+              <strong>Llega 20 minutos antes: a las {horaLlegada(hecho.hora)}</strong>
+            </span>
+          </li>
+        </ol>
+        <p className="mt-4 text-center text-xs text-gray-500">Por reservar en línea tienes 10% de descuento.</p>
+        <div className="mt-5 grid gap-2">
+          <a href={BUSINESS_INFO.mapsUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-[#187f77] px-5 py-3.5 font-bold text-white shadow-md hover:brightness-110">
+            <MapPin className="h-4 w-4" /> Cómo llegar
+          </a>
+          <a
+            href={`https://wa.me/${BUSINESS_INFO.whatsapp}?text=${encodeURIComponent(texto)}`}
+            target="_blank" rel="noopener noreferrer"
+            className="flex justify-center rounded-2xl border-2 border-[#25D366] px-5 py-3 font-bold text-[#128C4B] hover:bg-green-50"
+          >
+            Escribirnos por WhatsApp (opcional)
+          </a>
+        </div>
       </div>
     );
   }
 
   return (
-    <form onSubmit={pedirPermiso} className="rounded-3xl bg-white border border-teal-100 shadow-xl p-5 sm:p-7 space-y-6">
+    <form onSubmit={pedirPermiso} className="rounded-3xl bg-white text-gray-900 border border-teal-100 shadow-xl p-5 sm:p-7 space-y-6">
       {/* 1. Mascota */}
       <div>
         <p className="text-sm font-bold text-[#0d4a45] mb-2">1. Tu mascota</p>
@@ -221,13 +259,20 @@ export function ReservaPeluqueria() {
           onChange={(e) => set('website', e.target.value)} className="hidden" name="website" />
       </div>
 
+      <div className="rounded-2xl bg-teal-50 px-4 py-3 text-sm text-[#0d4a45] space-y-1.5">
+        <p className="flex gap-2"><Store className="h-4 w-4 mt-0.5 shrink-0" /> Traes a tu mascota a la tienda: no hacemos recogida.</p>
+        <p className="flex gap-2"><MapPin className="h-4 w-4 mt-0.5 shrink-0" /> {DIRECCION}.</p>
+        <p className="flex gap-2"><AlarmClock className="h-4 w-4 mt-0.5 shrink-0" /> Llega 20 minutos antes{hora ? ` (a las ${horaLlegada(hora)})` : ''}.</p>
+        <p className="flex gap-2"><MessageCircle className="h-4 w-4 mt-0.5 shrink-0" /> La cita queda en firme cuando te la confirmemos por WhatsApp.</p>
+      </div>
+
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
       <button type="submit" disabled={!listo || estado === 'enviando'}
         className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#F5A641] py-4 text-lg font-black text-[#0d4a45] shadow-lg transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50">
         {estado === 'enviando' ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Reservar mi cita ✂️'}
       </button>
-      <p className="text-center text-xs text-gray-500">Sin registrarte · te confirmamos por WhatsApp · 10% de descuento</p>
+      <p className="text-center text-xs text-gray-500">Sin registrarte · 10% de descuento reservando en línea</p>
 
       {pidiendoPermiso && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true"

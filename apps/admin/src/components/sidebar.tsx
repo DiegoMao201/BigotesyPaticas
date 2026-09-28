@@ -102,7 +102,16 @@ export function Sidebar({
     refetchInterval: 5 * 60 * 1000,
     staleTime: 4 * 60 * 1000,
   });
-  const pendingCount = pendingNotifs?.length ?? 0;
+  // + citas por confirmar (misma consulta que PendingAppointmentsAlert, comparten caché)
+  const { data: pendingAppts } = useQuery({
+    queryKey: ['admin-pending-appointments'],
+    queryFn: async () => {
+      const rows = await adminPortal.appointments({ status: 'pending', date_from: new Date().toISOString() });
+      return rows.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+    },
+    refetchInterval: 2 * 60 * 1000,
+  });
+  const pendingCount = (pendingNotifs?.length ?? 0) + (pendingAppts?.length ?? 0);
 
   const { data: pendingStories } = useQuery({
     queryKey: ['stories-pending-count'],

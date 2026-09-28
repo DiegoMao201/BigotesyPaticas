@@ -96,6 +96,12 @@ export default function PetMonitorPage() {
   const qc = useQueryClient();
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [mainTab, setMainTab] = useState<'orders' | 'appointments'>('orders');
+  // el aviso de citas por confirmar abre /pet-monitor?tab=appointments
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get('tab') === 'appointments') setMainTab('appointments');
+    } catch { /* sin window */ }
+  }, []);
   const [workflowTab, setWorkflowTab] = useState<'active' | 'delivered' | 'cancelled'>('active');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [selectedApptId, setSelectedApptId] = useState<string | null>(null);

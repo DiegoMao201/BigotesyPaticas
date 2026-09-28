@@ -42,6 +42,11 @@ interface Props {
   onRefreshList: () => void;
 }
 
+// Lo mismo que ve el cliente en bigotesypaticas.com/peluqueria: se trae a la tienda,
+// se llega 20 minutos antes, la cita queda en firme con esta confirmación.
+const DIRECCION_TIENDA = 'Samara Plaza Mall, Cl. 15 #3A-07, Local 2, Dosquebradas';
+const MAPA_TIENDA = 'https://maps.google.com/?cid=8425398225613945586';
+
 const SERVICE_LABELS: Record<string, string> = {
   grooming: 'baño y peluquería',
   'baño': 'baño',
@@ -136,12 +141,13 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
     const mascota = appt.pet_name ? ` de ${appt.pet_name}` : '';
     const hola = `¡Hola${firstName ? ' ' + firstName : ''}! Te escribo de Bigotes y Paticas`;
     // El mensaje sigue a lo que hizo el admin: confirmar, reacomodar o cancelar (28-sep-2026)
+    const llegada = new Date(dt.getTime() - 20 * 60 * 1000).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
     const msg =
       appt.status === 'confirmed'
-        ? `${hola}. Tu cita de ${servicio}${mascota} quedó confirmada para el ${fecha} a las ${hora}. Te esperamos en Samara Plaza Mall, Local 2. 🐾`
+        ? `${hola}. ✅ Tu cita de ${servicio}${mascota} quedó confirmada para el ${fecha} a las ${hora}.\n\n📍 Trae a tu mascota a la tienda (no hacemos recogida): ${DIRECCION_TIENDA}.\n⏰ Por favor llega 20 minutos antes, a las ${llegada}.\n🗺️ Cómo llegar: ${MAPA_TIENDA}\n\nSi no puedes asistir, avísanos por aquí. ¡Te esperamos! 🐾`
         : appt.status === 'cancelled'
           ? `${hola}. Tuvimos que cancelar tu cita de ${servicio}${mascota} del ${fecha} a las ${hora}${appt.cancel_reason ? ` (${appt.cancel_reason})` : ''}. ¿Te buscamos otro horario?`
-          : `${hola}. Recibimos tu solicitud de ${servicio}${mascota} para el ${fecha} a las ${hora}. ¿Nos confirmas que te queda bien ese horario?`;
+          : `${hola}. Recibimos tu solicitud de ${servicio}${mascota} para el ${fecha} a las ${hora}. ¿Nos confirmas que te queda bien ese horario? Te recuerdo que la mascota se trae a la tienda (no hacemos recogida) y que es bueno llegar 20 minutos antes.`;
     return { url: buildWhatsAppUrl(appt.customer_phone, msg), label:
       appt.status === 'confirmed' ? 'Avisar confirmación por WhatsApp'
         : appt.status === 'cancelled' ? 'Avisar cancelación por WhatsApp'

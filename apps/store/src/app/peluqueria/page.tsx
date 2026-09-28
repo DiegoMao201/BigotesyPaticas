@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { MapPin, Clock, Phone, Star, Scissors, Bath, Sparkles, PawPrint } from 'lucide-react';
+import { MapPin, Clock, Phone, Star, Scissors, Bath, Sparkles, PawPrint, CalendarCheck, MessageCircle, Store, AlarmClock } from 'lucide-react';
 import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
 import { BUSINESS_INFO } from '@/lib/business-info';
 import { ReservaPeluqueria } from './ReservaPeluqueria';
@@ -35,6 +35,16 @@ const SERVICIOS = [
   { icono: PawPrint, titulo: 'Corte de uñas', texto: 'Para que camine cómodo y no se lastime.' },
 ];
 
+// Cómo funciona: sin vacíos para el cliente (Diego, 28-sep-2026): la cita queda en firme
+// cuando la tienda confirma por WhatsApp, la mascota se TRAE a la tienda (no hay recogida)
+// y se llega 20 minutos antes.
+const PASOS = [
+  { icono: CalendarCheck, titulo: 'Reservas aquí', texto: 'Eliges el día y la hora, y nos dejas tu nombre, tu celular y el nombre de tu mascota.' },
+  { icono: MessageCircle, titulo: 'Te confirmamos por WhatsApp', texto: 'Te escribimos para confirmar la cita y decirte el precio. La cita queda en firme cuando la confirmamos.' },
+  { icono: Store, titulo: 'Traes tu mascota a la tienda', texto: 'No recogemos a domicilio: la traes a Samara Plaza Mall, Local 2, Dosquebradas.' },
+  { icono: AlarmClock, titulo: 'Llegas 20 minutos antes', texto: 'Así la recibimos con calma y empezamos a la hora de tu cita.' },
+];
+
 const FAQS = [
   {
     pregunta: '¿Atienden perros y gatos?',
@@ -45,13 +55,27 @@ const FAQS = [
     respuesta: 'De lunes a sábado, de 10 a. m. a 7 p. m., en Samara Plaza Mall, Local 2, Dosquebradas.',
   },
   {
+    pregunta: '¿Recogen a la mascota en la casa?',
+    respuesta:
+      'No. La peluquería es en la tienda: traes a tu mascota a Samara Plaza Mall, Cl. 15 #3A-07, Local 2, Dosquebradas, y la recoges allí mismo cuando esté lista.',
+  },
+  {
+    pregunta: '¿Cuándo queda confirmada mi cita?',
+    respuesta:
+      'Cuando te escribimos por WhatsApp y la confirmamos. Si esa hora no se puede, te proponemos otra por el mismo WhatsApp.',
+  },
+  {
+    pregunta: '¿Con cuánto tiempo debo llegar?',
+    respuesta: 'Llega 20 minutos antes de la hora de tu cita, para recibir a tu mascota con calma y empezar a tiempo.',
+  },
+  {
     pregunta: '¿Cuánto cuesta el baño?',
     respuesta:
       'Depende del tamaño y del tipo de pelo de tu mascota. Cuando reservas te escribimos por WhatsApp con el precio exacto antes de la cita, y por reservar en línea tienes 10% de descuento.',
   },
   {
     pregunta: '¿Tengo que registrarme para reservar?',
-    respuesta: 'No. Eliges el día y la hora, escribes tu nombre y tu celular, y te confirmamos por WhatsApp.',
+    respuesta: 'No. Eliges el día y la hora, escribes tu nombre, tu celular y el nombre de tu mascota, y te confirmamos por WhatsApp.',
   },
 ];
 
@@ -100,7 +124,8 @@ export default function PeluqueriaPage() {
             </div>
             <ul className="mt-6 space-y-2 text-white/90">
               <li className="flex items-center gap-2"><Clock className="h-5 w-5 text-[#B2FF59]" /> Lunes a sábado · 10 a. m. a 7 p. m.</li>
-              <li className="flex items-center gap-2"><MapPin className="h-5 w-5 text-[#B2FF59]" /> Samara Plaza Mall, Local 2 · Dosquebradas</li>
+              <li className="flex items-center gap-2"><MapPin className="h-5 w-5 shrink-0 text-[#B2FF59]" /> Samara Plaza Mall, Local 2 · Dosquebradas</li>
+              <li className="flex items-center gap-2"><Store className="h-5 w-5 shrink-0 text-[#B2FF59]" /> En la tienda: traes a tu mascota (no hacemos recogida)</li>
               <li className="flex items-center gap-2">
                 <Star className="h-5 w-5 fill-[#F5A641] text-[#F5A641]" />
                 <a href={BUSINESS_INFO.mapsUrl} target="_blank" rel="noopener noreferrer" className="underline decoration-white/40">
@@ -123,6 +148,21 @@ export default function PeluqueriaPage() {
             <ReservaPeluqueria />
           </div>
         </div>
+      </section>
+
+      {/* Cómo funciona */}
+      <section className="container-wide pt-12">
+        <h2 className="text-2xl md:text-3xl font-display font-bold text-[#0d4a45] mb-6">Cómo funciona</h2>
+        <ol className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {PASOS.map(({ icono: Icono, titulo, texto }, i) => (
+            <li key={titulo} className="relative rounded-2xl border border-teal-100 bg-white p-5 shadow-sm">
+              <span className="absolute right-4 top-4 text-3xl font-black text-teal-100">{i + 1}</span>
+              <Icono className="h-7 w-7 text-[#187f77] mb-3" />
+              <h3 className="font-bold text-[#0d4a45]">{titulo}</h3>
+              <p className="mt-1 text-sm text-gray-600">{texto}</p>
+            </li>
+          ))}
+        </ol>
       </section>
 
       {/* Qué incluye */}
@@ -151,8 +191,10 @@ export default function PeluqueriaPage() {
           <div>
             <h2 className="text-2xl md:text-3xl font-display font-bold text-[#0d4a45]">Dónde estamos</h2>
             <p className="mt-3 text-gray-700">
-              {BUSINESS_INFO.address.streetAddress}, {BUSINESS_INFO.address.addressLocality}. Atendemos a Dosquebradas y Pereira.
+              {BUSINESS_INFO.address.streetAddress}, {BUSINESS_INFO.address.addressLocality}. La peluquería es aquí, en la
+              tienda: traes a tu mascota y la recoges cuando esté lista. Llega 20 minutos antes de tu cita.
             </p>
+            <p className="mt-2 text-sm text-gray-600">Lunes a sábado, de 10 a. m. a 7 p. m.</p>
             <div className="mt-5 flex flex-wrap gap-3">
               <a href={BUSINESS_INFO.mapsUrl} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-2 rounded-2xl bg-[#187f77] px-5 py-3 font-bold text-white hover:brightness-110">
