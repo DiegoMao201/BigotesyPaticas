@@ -1537,6 +1537,7 @@ export interface AppointmentDetail {
   workflow_status: string | null;
   price: number | null;
   notes: string | null;
+  cancel_reason?: string | null;
   reschedule_reason: string | null;
   reschedule_reason_category: string | null;
   proposed_options: string[] | null;

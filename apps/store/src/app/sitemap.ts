@@ -44,6 +44,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/mascotas-encontradas`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
     { url: `${BASE}/finales-felices`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${BASE}/domicilio-mascotas`, lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${BASE}/peluqueria`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
   ];
 
   // Una entrada por zona de Pereira y Dosquebradas. Sin esto Google tardaría

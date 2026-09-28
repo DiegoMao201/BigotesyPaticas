@@ -8,7 +8,7 @@ import { es } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Loader2, CalendarDays, Clock } from 'lucide-react';
-import { appointments, pets } from '@/lib/api';
+import { appointments, pets, type PetCreate } from '@/lib/api';
 import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
 import { getSpeciesEmoji, cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
@@ -47,9 +47,14 @@ export default function NewAppointmentPage() {
   const [selectedDay, setSelectedDay] = useState<Date | undefined>();
   const [selectedSlot, setSelectedSlot] = useState('');
   const [notes, setNotes] = useState('');
+  // Quien llega sin mascota registrada (p. ej. desde el anuncio) la escribe aquí mismo;
+  // antes el botón nunca se habilitaba porque no había mascota que elegir.
+  const [newPetName, setNewPetName] = useState('');
+  const [newPetSpecies, setNewPetSpecies] = useState<'perro' | 'gato'>('perro');
   const { track } = useMetaPixelEvent();
 
-  const { data: petsData } = useQuery({ queryKey: ['portal-pets'], queryFn: pets.list });
+  const { data: petsData, isLoading: loadingPets } = useQuery({ queryKey: ['portal-pets'], queryFn: pets.list });
+  const sinMascotas = !loadingPets && (petsData?.length ?? 0) === 0;
 
   const dateStr = selectedDay ? formatLocalDate(selectedDay) : '';
   const { data: availability, isLoading: loadingSlots } = useQuery({
@@ -60,10 +65,16 @@ export default function NewAppointmentPage() {
   });
 
   const { mutate: book, isPending } = useMutation({
-    mutationFn: () => {
-      if (!selectedDay || !selectedSlot || !petId || !service) throw new Error('Faltan datos');
+    mutationFn: async () => {
+      let pid = petId;
+      if (!pid && sinMascotas && newPetName.trim()) {
+        const nueva = await pets.create({ name: newPetName.trim(), species: newPetSpecies } as PetCreate);
+        pid = nueva.id;
+        qc.invalidateQueries({ queryKey: ['portal-pets'] });
+      }
+      if (!selectedDay || !selectedSlot || !pid || !service) throw new Error('Faltan datos');
       return appointments.create({
-        pet_id: petId,
+        pet_id: pid,
         service_type: service,
         scheduled_at: `${dateStr}T${selectedSlot}:00`,
         duration_min: SERVICES.find((s) => s.value === service)?.duration ?? 60,
@@ -81,7 +92,8 @@ export default function NewAppointmentPage() {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const canBook = petId && service && selectedDay && selectedSlot && !isPending;
+  const tieneMascota = !!petId || (sinMascotas && newPetName.trim().length > 0);
+  const canBook = tieneMascota && service && selectedDay && selectedSlot && !isPending;
 
   return (
     <div className="p-4 pt-6 pb-8 flex flex-col gap-5">
@@ -116,6 +128,26 @@ export default function NewAppointmentPage() {
               </button>
             ))}
           </div>
+        </section>
+      )}
+
+      {sinMascotas && (
+        <section>
+          <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <span className="h-5 w-5 rounded-full bg-primary-700 text-white text-[10px] font-bold flex items-center justify-center shrink-0">1</span>
+            Tu mascota
+          </p>
+          <div className="flex gap-2 mb-2.5">
+            {(['perro', 'gato'] as const).map((sp) => (
+              <button key={sp} type="button" onClick={() => setNewPetSpecies(sp)}
+                className={cn('flex-1 py-2.5 rounded-xl border-2 text-sm font-semibold',
+                  newPetSpecies === sp ? 'border-primary-700 bg-primary-50 text-primary-700' : 'border-border bg-white text-muted')}>
+                {sp === 'perro' ? '🐶 Perro' : '🐱 Gato'}
+              </button>
+            ))}
+          </div>
+          <input className="input-field" placeholder="¿Cómo se llama?" value={newPetName} maxLength={60}
+            onChange={(e) => setNewPetName(e.target.value)} />
         </section>
       )}
 
@@ -178,7 +210,7 @@ export default function NewAppointmentPage() {
               mode="single"
               selected={selectedDay}
               onSelect={(day) => { setSelectedDay(day); setSelectedSlot(''); }}
-              disabled={{ before: today }}
+              disabled={[{ before: today }, { dayOfWeek: [0] }]}
               locale={es}
               weekStartsOn={1}
             />
@@ -199,6 +231,8 @@ export default function NewAppointmentPage() {
             <div className="flex justify-center py-6">
               <Loader2 className="h-6 w-6 animate-spin text-primary-700" />
             </div>
+          ) : (availability?.slots ?? []).length === 0 ? (
+            <p className="text-sm text-muted text-center py-4">Ese día no atendemos. Elige de lunes a sábado.</p>
           ) : (
             <div className="grid grid-cols-3 gap-2.5">
               {(availability?.slots ?? []).map((slot) => (
@@ -215,7 +249,7 @@ export default function NewAppointmentPage() {
                 >
                   <span className="font-bold">{slot.time}</span>
                   <span className="text-[10px] mt-0.5">
-                    {!slot.available ? 'ocupado' : selectedSlot === slot.time ? 'elegido ✓' : 'disponible'}
+                    {!slot.available ? (slot.reason ?? 'ocupado') : selectedSlot === slot.time ? 'elegido ✓' : 'disponible'}
                   </span>
                 </button>
               ))}

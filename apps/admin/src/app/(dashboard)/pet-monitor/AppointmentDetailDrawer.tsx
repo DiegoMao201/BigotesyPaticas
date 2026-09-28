@@ -42,6 +42,11 @@ interface Props {
   onRefreshList: () => void;
 }
 
+const SERVICE_LABELS: Record<string, string> = {
+  grooming: 'baño y peluquería',
+  'baño': 'baño',
+};
+
 export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Props) {
   const qc = useQueryClient();
   const [showReschedule, setShowReschedule] = useState(false);
@@ -127,8 +132,20 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
     const firstName = (appt.customer_name || '').split(' ')[0] || '';
     const fecha = dt.toLocaleDateString('es-CO', { day: 'numeric', month: 'long' });
     const hora = dt.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
-    const msg = `¡Hola${firstName ? ' ' + firstName : ''}! Te escribo de Bigotes y Paticas para confirmar tu cita de ${appt.service_type} el ${fecha} a las ${hora}. ¿Nos confirmas que te queda bien ese horario?`;
-    return buildWhatsAppUrl(appt.customer_phone, msg);
+    const servicio = SERVICE_LABELS[appt.service_type] ?? appt.service_type;
+    const mascota = appt.pet_name ? ` de ${appt.pet_name}` : '';
+    const hola = `¡Hola${firstName ? ' ' + firstName : ''}! Te escribo de Bigotes y Paticas`;
+    // El mensaje sigue a lo que hizo el admin: confirmar, reacomodar o cancelar (28-sep-2026)
+    const msg =
+      appt.status === 'confirmed'
+        ? `${hola}. Tu cita de ${servicio}${mascota} quedó confirmada para el ${fecha} a las ${hora}. Te esperamos en Samara Plaza Mall, Local 2. 🐾`
+        : appt.status === 'cancelled'
+          ? `${hola}. Tuvimos que cancelar tu cita de ${servicio}${mascota} del ${fecha} a las ${hora}${appt.cancel_reason ? ` (${appt.cancel_reason})` : ''}. ¿Te buscamos otro horario?`
+          : `${hola}. Recibimos tu solicitud de ${servicio}${mascota} para el ${fecha} a las ${hora}. ¿Nos confirmas que te queda bien ese horario?`;
+    return { url: buildWhatsAppUrl(appt.customer_phone, msg), label:
+      appt.status === 'confirmed' ? 'Avisar confirmación por WhatsApp'
+        : appt.status === 'cancelled' ? 'Avisar cancelación por WhatsApp'
+          : 'Escribir por WhatsApp para confirmar' };
   })();
 
   return (
@@ -138,7 +155,7 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b bg-gray-50 shrink-0">
           <div>
-            <p className="text-xs text-gray-500 mb-0.5">Cita del portal</p>
+            <p className="text-xs text-gray-500 mb-0.5">{appt.notes?.includes('Reservó en la web') ? 'Cita desde la web (sin cuenta)' : 'Cita del portal'}</p>
             <h2 className="font-bold text-gray-900 flex items-center gap-1.5">
               <User size={14} className="text-gray-400" /> {appt.customer_name ?? 'Cliente'}
             </h2>
@@ -165,7 +182,7 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
             </div>
             <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
               <span className="flex items-center gap-1"><PawPrint size={13} /> {appt.pet_name ?? '—'}</span>
-              <span>{appt.service_type}</span>
+              <span>{SERVICE_LABELS[appt.service_type] ?? appt.service_type}</span>
               {appt.price != null && (
                 <span className="flex items-center gap-1"><DollarSign size={13} /> {formatCurrency(appt.price)}</span>
               )}
@@ -179,15 +196,15 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
           </div>
 
           {/* WhatsApp */}
-          {waLink && (
+          {waLink && appt.status !== 'completed' && (
             <a
-              href={waLink}
+              href={waLink.url}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-white text-sm"
               style={{ backgroundColor: '#25D366' }}
             >
-              <MessageCircle size={16} /> Escribir por WhatsApp para confirmar
+              <MessageCircle size={16} /> {waLink.label}
             </a>
           )}
 

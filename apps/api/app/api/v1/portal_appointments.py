@@ -21,12 +21,16 @@ _TZ_CO = ZoneInfo("America/Bogota")
 
 router = APIRouter(prefix="/portal/appointments", tags=["portal"])
 
-# Horario configurable por ENV
-_AM_START = int(os.getenv("PORTAL_BUSINESS_HOURS_AM", "9-12").split("-")[0])
-_AM_END = int(os.getenv("PORTAL_BUSINESS_HOURS_AM", "9-12").split("-")[1])
-_PM_START = int(os.getenv("PORTAL_BUSINESS_HOURS_PM", "14-17").split("-")[0])
-_PM_END = int(os.getenv("PORTAL_BUSINESS_HOURS_PM", "14-17").split("-")[1])
+# Horario de la peluquería. 28-sep-2026: antes era 9-12 y 14-17 por defecto (ninguna
+# variable puesta en producción) → ofrecía 9 a. m. con la tienda cerrada, nada después de
+# las 5, domingos, y no contaba que un baño dura 2 h. El horario real es el de la ficha de
+# Google y la web: lunes a sábado de 10 a. m. a 7 p. m. (business-info.ts).
+_OPEN_H = int(os.getenv("PORTAL_OPEN_HOURS", "10-19").split("-")[0])
+_CLOSE_H = int(os.getenv("PORTAL_OPEN_HOURS", "10-19").split("-")[1])
+_CLOSED_WEEKDAYS = {6}  # domingo (date.weekday(): lunes=0)
 _SLOT_CAP = int(os.getenv("PORTAL_SLOT_CAPACITY", "1"))
+_DEFAULT_DURATION = 120  # baño y peluquería
+_MIN_LEAD = timedelta(hours=1)  # hoy: no ofrecer una hora que empieza en menos de 1 h
 
 
 # ── schemas ───────────────────────────────────────────────────────────
@@ -80,8 +84,57 @@ def _appt_out(a: Appointment, points: int | None = None) -> AppointmentOut:
     )
 
 
-def _build_slots(hours: range) -> list[str]:
-    return [f"{h:02d}:00" for h in hours]
+async def compute_slots(db, target_date: date, duration_min: int = _DEFAULT_DURATION) -> list[SlotOut]:
+    """Horas de inicio para una cita de `duration_min` ese día. Una hora está ocupada si
+    alguna cita pendiente o confirmada se cruza con [inicio, inicio + duración). La usan el
+    portal y la reserva pública de la web, para que las dos vean lo mismo."""
+    if target_date.weekday() in _CLOSED_WEEKDAYS:
+        return []
+    dur = timedelta(minutes=max(30, min(duration_min, 240)))
+    day_start = datetime(target_date.year, target_date.month, target_date.day, tzinfo=_TZ_CO)
+    existing = (
+        await db.execute(
+            select(Appointment.scheduled_at, Appointment.duration_min).where(
+                and_(
+                    Appointment.scheduled_at >= day_start - timedelta(hours=6),
+                    Appointment.scheduled_at < day_start + timedelta(days=1),
+                    Appointment.status.in_(["pending", "confirmed"]),
+                )
+            )
+        )
+    ).all()
+    now = datetime.now(_TZ_CO)
+    slots: list[SlotOut] = []
+    h = _OPEN_H
+    while day_start + timedelta(hours=h) + dur <= day_start + timedelta(hours=_CLOSE_H):
+        ini = day_start + timedelta(hours=h)
+        fin = ini + dur
+        cruces = sum(
+            1 for s_at, s_dur in existing
+            if s_at < fin and s_at + timedelta(minutes=s_dur or 60) > ini
+        )
+        if ini < now + _MIN_LEAD:
+            slots.append(SlotOut(time=f"{h:02d}:00", available=False, reason="ya pasó"))
+        else:
+            ok = cruces < _SLOT_CAP
+            slots.append(SlotOut(time=f"{h:02d}:00", available=ok, reason=None if ok else "ocupado"))
+        h += 1
+    return slots
+
+
+async def ensure_slot_free(db, scheduled: datetime, duration_min: int) -> None:
+    """409 si esa hora ya no está libre (otra persona la tomó mientras elegía) o está
+    fuera del horario. Misma regla que ve el calendario."""
+    local = scheduled.astimezone(_TZ_CO)
+    hora = local.strftime("%H:00")
+    slots = await compute_slots(db, local.date(), duration_min)
+    slot = next((x for x in slots if x.time == hora), None)
+    if slot is None or local.minute != 0:
+        raise HTTPException(status_code=422, detail="Esa hora está fuera del horario de la peluquería")
+    if not slot.available:
+        msg = ("Esa hora ya pasó. Elige otra, por favor." if slot.reason == "ya pasó"
+               else "Esa hora se acaba de ocupar. Elige otra, por favor.")
+        raise HTTPException(status_code=409, detail=msg)
 
 
 # ── endpoints ─────────────────────────────────────────────────────────
@@ -99,50 +152,10 @@ async def get_availability(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Fecha inválida, usa YYYY-MM-DD") from exc
 
-    if target_date < date.today():
+    if target_date < datetime.now(_TZ_CO).date():
         raise HTTPException(status_code=422, detail="No puedes agendar en días pasados")
 
-    # Generar todos los slots del día
-    am_slots = _build_slots(range(_AM_START, _AM_END))
-    pm_slots = _build_slots(range(_PM_START, _PM_END + 1))
-    all_slots = am_slots + pm_slots
-
-    # Contar citas existentes por slot (pending o confirmed)
-    # Usar inicio/fin del día en hora Colombia (UTC-5) para la query
-    day_start = datetime(target_date.year, target_date.month, target_date.day, 0, 0, tzinfo=_TZ_CO)
-    day_end = day_start + timedelta(days=1)
-
-    existing = (
-        (
-            await db.execute(
-                select(Appointment).where(
-                    and_(
-                        Appointment.scheduled_at >= day_start,
-                        Appointment.scheduled_at < day_end,
-                        Appointment.status.in_(["pending", "confirmed"]),
-                    )
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-
-    booked: dict[str, int] = {}
-    for a in existing:
-        # Convertir a hora Colombia antes de extraer el slot
-        local_dt = a.scheduled_at.astimezone(_TZ_CO)
-        slot = local_dt.strftime("%H:00")
-        booked[slot] = booked.get(slot, 0) + 1
-
-    slots = [
-        SlotOut(
-            time=slot,
-            available=booked.get(slot, 0) < _SLOT_CAP,
-            reason="ocupado" if booked.get(slot, 0) >= _SLOT_CAP else None,
-        )
-        for slot in all_slots
-    ]
+    slots = await compute_slots(db, target_date)
 
     return AvailabilityOut(date=date_str, service=service, slots=slots)
 
@@ -175,6 +188,7 @@ async def create_appointment(
         scheduled = scheduled.replace(tzinfo=_TZ_CO)
     if scheduled <= datetime.now(UTC):
         raise HTTPException(status_code=422, detail="La cita debe ser en el futuro")
+    await ensure_slot_free(db, scheduled, payload.duration_min)
 
     appt = Appointment(
         pet_id=uuid.UUID(payload.pet_id),

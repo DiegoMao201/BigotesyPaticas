@@ -151,6 +151,7 @@ export function Footer() {
         <div>
           <h4 className="font-display font-semibold text-sm mb-4 uppercase tracking-wider">Empresa</h4>
           <ul className="space-y-2 text-sm">
+            <li><Link href="/peluqueria" className="text-muted-foreground hover:text-brand">Peluquería canina y felina</Link></li>
             <li><Link href="/nosotros" className="text-muted-foreground hover:text-brand">Sobre nosotros</Link></li>
             <li><Link href="/blog" className="text-muted-foreground hover:text-brand">Blog de mascotas</Link></li>
             <li><Link href="/contacto" className="text-muted-foreground hover:text-brand">Contacto</Link></li>

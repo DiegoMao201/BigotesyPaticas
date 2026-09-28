@@ -1890,6 +1890,7 @@ async def get_appointment_detail(appt_id: uuid.UUID, db: DBSession) -> dict:
         "workflow_status": getattr(appt, "workflow_status", appt.status),
         "price": float(appt.price) if appt.price else None,
         "notes": appt.notes,
+        "cancel_reason": getattr(appt, "cancel_reason", None),
         "reschedule_reason": getattr(appt, "reschedule_reason", None),
         "reschedule_reason_category": getattr(appt, "reschedule_reason_category", None),
         "proposed_options": getattr(appt, "proposed_options", None),

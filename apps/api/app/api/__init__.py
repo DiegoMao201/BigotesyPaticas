@@ -28,6 +28,7 @@ from app.api.v1 import (
     partner_auth,
     partners_public,
     portal_appointments,
+    public_grooming,
     portal_auth,
     portal_bookings,
     portal_intelligence,
@@ -90,6 +91,7 @@ api_router.include_router(portal_auth.router, prefix="/v1")
 api_router.include_router(portal_pets.router, prefix="/v1")
 api_router.include_router(portal_orders.router, prefix="/v1")
 api_router.include_router(portal_appointments.router, prefix="/v1")
+api_router.include_router(public_grooming.router, prefix="/v1")
 api_router.include_router(portal_loyalty.router, prefix="/v1")
 api_router.include_router(portal_monitor.router, prefix="/v1")
 api_router.include_router(portal_intelligence.router, prefix="/v1")
