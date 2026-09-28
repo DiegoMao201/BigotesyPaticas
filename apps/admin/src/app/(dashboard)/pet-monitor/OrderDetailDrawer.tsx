@@ -1,19 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+/**
+ * Detalle y gestión de un pedido del portal.
+ *
+ * Rediseño 28-sep-2026 (Diego: "el flujo es demasiado tosco… no puedo modificar el
+ * pedido ni escribirle al cliente sin darle un aprobado"):
+ *  - Editar (cantidad, precio, quitar, sustituir, agregar, descuento, dirección) ya NO
+ *    cambia el estado solo. Los cambios quedan "sin avisar" y el admin decide:
+ *    pedir aprobación, o marcar que ya lo acordó con el cliente (llamada/WhatsApp/tienda).
+ *  - "Escribir al cliente" con plantillas rápidas: abre WhatsApp y NO toca el estado.
+ *  - Sin stock: "Dejar en lo disponible" en un clic, sustituir o quitar — sin cancelar.
+ *  - Después de facturar el pedido queda bloqueado (la venta ya existe).
+ *  - WhatsApp se abre en una sola pestaña o en la app (lib/whatsapp.ts): no tumba la sesión.
+ */
+import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   X, ChevronRight, MessageCircle, Package, MapPin,
-  StickyNote, Percent, UserCheck, XCircle, Clock,
+  Percent, UserCheck, XCircle, Clock,
   CheckCircle2, AlertCircle, Copy, Send, SkipForward,
-  AlertTriangle, Minus, Plus, Trash2, Repeat, PackagePlus, Pencil,
+  AlertTriangle, Minus, Plus, Trash2, Repeat, PackagePlus, Pencil, Lock, Bell, Undo2,
 } from 'lucide-react';
-import { adminPortal, ApiError, type PortalOrderDetail, type ActivityLogEntry, type PendingNotification, type Product } from '@/lib/api';
+import { adminPortal, ApiError, type PortalOrderDetail, type PendingNotification, type Product } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import { buildWhatsAppUrl } from '@/lib/phone';
+import { openWhatsApp, getWhatsAppMode, setWhatsAppMode, copyText, type WhatsAppMode } from '@/lib/whatsapp';
 import { ProductPickerModal } from '@/components/ProductPickerModal';
+
+const PORTAL_URL = 'https://mi.bigotesypaticas.com';
 
 function stockShortageMessage(err: unknown): string | null {
   if (!(err instanceof ApiError) || err.status !== 409) return null;
@@ -37,21 +52,88 @@ const WORKFLOW_LABELS: Record<string, { label: string; color: string }> = {
   returned:            { label: 'Devuelto',              color: 'bg-gray-100 text-gray-600' },
 };
 
+// La aprobación del cliente va aparte (bloque "Cliente aprobó"), aquí solo el avance normal
 const NEXT_STATUS: Record<string, { value: string; label: string }[]> = {
   received:           [{ value: 'under_review', label: 'Marcar en revisión' }],
-  under_review:       [{ value: 'awaiting_customer', label: 'Enviar a cliente (cambios)' }, { value: 'ready_to_invoice', label: 'Aprobar — listo p/facturar' }],
-  awaiting_customer:  [{ value: 'ready_to_invoice', label: 'Cliente aprobó (listo p/facturar)' }],
-  ready_to_invoice:   [{ value: 'invoiced', label: 'Marcar facturado' }],
+  under_review:       [],
+  awaiting_customer:  [{ value: 'under_review', label: 'Volver a revisión' }],
+  ready_to_invoice:   [{ value: 'invoiced', label: 'Facturar (descuenta inventario)' }],
   invoiced:           [{ value: 'in_preparation', label: 'Iniciar preparación' }],
   in_preparation:     [{ value: 'ready_for_delivery', label: 'Listo para entrega' }],
   ready_for_delivery: [{ value: 'in_transit', label: 'Enviado a domicilio' }],
   in_transit:         [{ value: 'delivered', label: 'Marcar entregado' }],
 };
 
+const APPROVABLE = ['received', 'under_review', 'awaiting_customer'];
+
+const CHANGE_LABELS: Record<string, string> = {
+  item_quantity_changed: 'Cantidad',
+  item_substituted: 'Sustitución',
+  item_added: 'Producto agregado',
+  item_removed: 'Producto quitado',
+  item_price_changed: 'Precio',
+  discount_applied: 'Descuento',
+  address_changed: 'Dirección',
+};
+
 interface Props {
   orderId: string;
   onClose: () => void;
   onRefreshList: () => void;
+}
+
+// ── Mensajes rápidos para escribirle al cliente (no cambian el estado) ─────────
+
+function money(n: number) {
+  return `$${Math.round(n || 0).toLocaleString('es-CO')}`;
+}
+
+function summaryLines(o: PortalOrderDetail) {
+  const items = o.items
+    .map((i) => `• ${i.name}${i.is_substituted ? ` (cambio por ${i.substituted_from_name})` : ''} x${i.quantity} — ${money(i.subtotal)}`)
+    .join('\n');
+  const parts = [items, ''];
+  if (o.discount_amount > 0) parts.push(`Descuento: -${money(o.discount_amount)}`);
+  parts.push(`Envío: ${o.shipping === 0 ? 'Gratis 🎉' : money(o.shipping)}`);
+  parts.push(`*Total: ${money(o.total)}*`);
+  return parts.join('\n');
+}
+
+function quickMessages(o: PortalOrderDetail): { key: string; label: string; text: string }[] {
+  const name = o.customer_name?.split(' ')[0] ?? '';
+  const hi = `¡Hola${name ? ` ${name}` : ''}! 🐾 Te escribimos de Bigotes y Paticas por tu pedido del portal.`;
+  const sinStock = o.items.filter((i) => !i.stock_ok);
+  const msgs = [
+    { key: 'hola', label: '👋 Saludo', text: `${hi}\n\n` },
+    {
+      key: 'stock',
+      label: '📦 Sin stock',
+      text: sinStock.length
+        ? `${hi}\n\n${sinStock
+            .map((i) => (i.available_stock && i.available_stock > 0
+              ? `De *${i.name}* nos quedan ${i.available_stock} y pediste ${i.quantity}.`
+              : `*${i.name}* no lo tenemos en este momento.`))
+            .join('\n')}\n\n¿Te lo cambiamos por una opción parecida, lo ajustamos a lo disponible o lo quitamos? Como prefieras 🐶🐱`
+        : `${hi}\n\nUno de los productos no lo tenemos en este momento. ¿Te lo cambiamos por una opción parecida o lo quitamos?`,
+    },
+    {
+      key: 'direccion',
+      label: '📍 Dirección',
+      text: `${hi}\n\n¿Nos confirmas la dirección de entrega?\n📍 ${o.shipping_address || '(no la tenemos)'}\n\nSi puedes, compártenos tu ubicación por aquí 🙏`,
+    },
+    { key: 'resumen', label: '🧾 Resumen', text: `${hi}\n\nAsí va tu pedido:\n\n${summaryLines(o)}` },
+    {
+      key: 'aprobar',
+      label: '✅ Pedir aprobación',
+      text: `${hi}\n\nRevisamos tu pedido y así quedaría:\n\n${summaryLines(o)}\n\n¿Lo confirmas? Responde *SÍ* o apruébalo en tu portal 👉 ${PORTAL_URL}/orders/${o.id}`,
+    },
+    {
+      key: 'camino',
+      label: '🚚 En camino',
+      text: `${hi}\n\nTu pedido ya va en camino 🚚\n📍 ${o.shipping_address || ''}\n\nTotal a pagar: *${money(o.total)}*`,
+    },
+  ];
+  return msgs;
 }
 
 export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
@@ -69,6 +151,11 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [editingAddress, setEditingAddress] = useState(false);
   const [addressText, setAddressText] = useState('');
+  const [priceEdit, setPriceEdit] = useState<{ itemId: string; value: string; reason: string } | null>(null);
+  const [showWrite, setShowWrite] = useState(false);
+  const [writeText, setWriteText] = useState('');
+  const [approvalChannel, setApprovalChannel] = useState('phone_call');
+  const [waMode, setWaModeState] = useState<WhatsAppMode>(() => (typeof window === 'undefined' ? 'web' : getWhatsAppMode()));
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['portal-order-detail', orderId],
@@ -80,11 +167,14 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
     queryFn: () => adminPortal.orderActivity(orderId),
   });
 
+  const templates = useMemo(() => (order ? quickMessages(order) : []), [order]);
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['portal-order-detail', orderId] });
     qc.invalidateQueries({ queryKey: ['portal-order-activity', orderId] });
     onRefreshList();
   };
+  const onErr = (e: Error) => toast.error(e.message);
 
   const workflowMut = useMutation({
     mutationFn: ({ status, notes }: { status: string; notes?: string }) =>
@@ -103,47 +193,48 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
   });
 
   const editQtyMut = useMutation({
-    mutationFn: ({ itemId, quantity }: { itemId: string; quantity: number }) =>
-      adminPortal.editItemQty(orderId, itemId, quantity, 'Ajuste de cantidad por disponibilidad'),
-    onSuccess: (d) => {
-      toast.success('Cantidad actualizada');
-      invalidate();
-      if (d.pending_notification) setPendingNotif(d.pending_notification);
-    },
-    onError: (e: Error) => toast.error(e.message),
+    mutationFn: ({ itemId, quantity, reason }: { itemId: string; quantity: number; reason?: string }) =>
+      adminPortal.editItemQty(orderId, itemId, quantity, reason ?? 'Ajuste de cantidad por disponibilidad'),
+    onSuccess: () => { toast.success('Cantidad actualizada'); invalidate(); },
+    onError: onErr,
+  });
+
+  const priceMut = useMutation({
+    mutationFn: ({ itemId, price, reason }: { itemId: string; price: number; reason: string }) =>
+      adminPortal.editItemPrice(orderId, itemId, price, reason),
+    onSuccess: () => { toast.success('Precio actualizado'); setPriceEdit(null); invalidate(); },
+    onError: onErr,
   });
 
   const removeItemMut = useMutation({
     mutationFn: (itemId: string) =>
       adminPortal.removeItem(orderId, itemId, 'Producto agotado, no se pudo conseguir'),
-    onSuccess: (d) => {
-      toast.success('Producto quitado del pedido');
-      invalidate();
-      if (d.pending_notification) setPendingNotif(d.pending_notification);
-    },
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: () => { toast.success('Producto quitado del pedido'); invalidate(); },
+    onError: onErr,
   });
 
   const cancelMut = useMutation({
     mutationFn: () => adminPortal.cancelOrder(orderId, cancelReason),
     onSuccess: () => { toast.success('Pedido cancelado'); setShowCancel(false); invalidate(); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: onErr,
   });
 
   const discountMut = useMutation({
     mutationFn: () => adminPortal.applyDiscount(orderId, parseFloat(discountAmount), discountReason),
-    onSuccess: () => { toast.success('Descuento aplicado'); setShowDiscount(false); invalidate(); },
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: () => { toast.success('Descuento aplicado'); setShowDiscount(false); setDiscountAmount(''); setDiscountReason(''); invalidate(); },
+    onError: onErr,
   });
 
   const notesMut = useMutation({
     mutationFn: () => adminPortal.updateNotes(orderId, { customer_facing_notes: customerNoteText }),
     onSuccess: () => { toast.success('Nota guardada'); setCustomerNoteText(''); invalidate(); },
+    onError: onErr,
   });
 
   const internalNotesMut = useMutation({
     mutationFn: () => adminPortal.updateNotes(orderId, { internal_notes: internalNoteText }),
     onSuccess: () => { toast.success('Nota interna guardada'); setInternalNoteText(''); invalidate(); },
+    onError: onErr,
   });
 
   const substituteMut = useMutation({
@@ -152,38 +243,32 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
         new_product_id: product.id,
         reason: 'Producto no disponible, sustituido por el administrador',
       }),
-    onSuccess: (d) => {
-      toast.success('Producto sustituido');
-      invalidate();
-      if (d.pending_notification) setPendingNotif(d.pending_notification);
-    },
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: () => { toast.success('Producto sustituido'); invalidate(); },
+    onError: onErr,
   });
 
   const addItemMut = useMutation({
     mutationFn: (product: Product) => adminPortal.addItem(orderId, { product_id: product.id, quantity: 1 }),
-    onSuccess: (d) => {
-      toast.success('Producto agregado al pedido');
-      invalidate();
-      if (d.pending_notification) setPendingNotif(d.pending_notification);
-    },
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: () => { toast.success('Producto agregado al pedido'); invalidate(); },
+    onError: onErr,
   });
 
   const addressMut = useMutation({
     mutationFn: () => adminPortal.updateShippingAddress(orderId, addressText),
     onSuccess: () => { toast.success('Dirección actualizada'); setEditingAddress(false); invalidate(); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: onErr,
   });
 
   const markSentMut = useMutation({
     mutationFn: () => adminPortal.markNotifSent(orderId),
-    onSuccess: () => { toast.success('Notificación marcada como enviada'); invalidate(); },
+    onSuccess: () => { toast.success('Cambios marcados como avisados'); invalidate(); },
+    onError: onErr,
   });
 
   const approvalMut = useMutation({
-    mutationFn: () => adminPortal.confirmApproval(orderId, 'whatsapp_replied'),
-    onSuccess: (d) => { toast.success('Aprobación confirmada — listo p/facturar'); invalidate(); },
+    mutationFn: (channel: string) => adminPortal.confirmApproval(orderId, channel),
+    onSuccess: () => { toast.success('Aprobado — listo para facturar'); invalidate(); },
+    onError: onErr,
   });
 
   if (isLoading || !order) {
@@ -201,13 +286,21 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
   const nextOptions = NEXT_STATUS[ws] ?? [];
   const canCancel = !['delivered', 'cancelled', 'returned'].includes(ws);
   const isAwaiting = ws === 'awaiting_customer';
-  const canEditItems = !['delivered', 'cancelled', 'returned'].includes(ws);
+  const canEditItems = order.is_editable ?? !['invoiced', 'in_preparation', 'ready_for_delivery', 'in_transit', 'delivered', 'cancelled', 'returned'].includes(ws);
+  const canEditAddress = !['delivered', 'cancelled', 'returned'].includes(ws);
+  const unsent = canEditItems ? order.unsent_changes ?? [] : [];
+  const canApprove = APPROVABLE.includes(ws);
+  const busy = workflowMut.isPending || approvalMut.isPending || markSentMut.isPending;
 
-  const whatsappMsg = () => {
-    const items = order.items.map((i) => `• ${i.name} x${i.quantity} — $${(i.subtotal || 0).toLocaleString('es-CO')}`).join('\n');
-    const discount = order.discount_amount > 0 ? `\nDescuento: -$${order.discount_amount.toLocaleString('es-CO')}` : '';
-    const msg = `Hola ${order.customer_name?.split(' ')[0] ?? ''}! Revisamos tu pedido 🐾\n\n${items}${discount}\n\nEnvío: $${order.shipping.toLocaleString('es-CO')}\n*Total: $${order.total.toLocaleString('es-CO')}*\n\n${order.customer_facing_notes ? order.customer_facing_notes + '\n\n' : ''}¿Confirmas el pedido?`;
-    return buildWhatsAppUrl(order.customer_phone, msg);
+  const changeWaMode = (m: WhatsAppMode) => { setWhatsAppMode(m); setWaModeState(m); };
+  const sendWhatsApp = (text: string) => {
+    openWhatsApp(order.customer_phone, text, waMode);
+    copyText(text);
+  };
+  const openWrite = (key?: string) => {
+    const t = templates.find((x) => x.key === key) ?? templates[0];
+    setWriteText(t?.text ?? '');
+    setShowWrite(true);
   };
 
   return (
@@ -216,9 +309,9 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
       <div className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white z-50 shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b bg-gray-50 shrink-0">
-          <div>
-            <p className="text-xs text-gray-500 mb-0.5">Pedido portal</p>
-            <h2 className="font-bold text-gray-900">{order.customer_name ?? 'Cliente'}</h2>
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500 mb-0.5">Pedido portal #{order.id.slice(0, 8).toUpperCase()}</p>
+            <h2 className="font-bold text-gray-900 truncate">{order.customer_name ?? 'Cliente'}</h2>
             {order.customer_phone && (
               <p className="text-xs text-gray-500">{order.customer_phone}</p>
             )}
@@ -243,10 +336,17 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
           <span className="font-bold text-teal-800">Total: {formatCurrency(order.total)}</span>
         </div>
 
-        {order.has_stock_issues && (
+        {!canEditItems && ws !== 'cancelled' && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-b border-indigo-100 text-indigo-700 text-xs font-semibold shrink-0">
+            <Lock size={13} className="shrink-0" />
+            {order.invoice_number ? `Facturado (${order.invoice_number}). ` : ''}Los productos y precios ya no se cambian: si hay que corregir, cancela (devuelve el inventario) y vuelve a crearlo.
+          </div>
+        )}
+
+        {canEditItems && order.has_stock_issues && (
           <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border-b border-red-100 text-red-700 text-xs font-semibold shrink-0">
             <AlertTriangle size={14} className="shrink-0" />
-            Falta stock en uno o más productos — no se podrá facturar hasta resolverlo (ajustá cantidad, sustituí o quitá el producto).
+            Falta stock: ajusta a lo disponible, sustituye o quita — no hace falta cancelar. Escríbele al cliente con “📦 Sin stock”.
           </div>
         )}
 
@@ -260,7 +360,7 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                 tab === t ? 'border-b-2 border-teal-600 text-teal-700' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {t === 'items' ? '📦 Items' : t === 'activity' ? '🕐 Actividad' : '📝 Notas'}
+              {t === 'items' ? '📦 Pedido' : t === 'activity' ? '🕐 Actividad' : '📝 Notas'}
             </button>
           ))}
         </div>
@@ -269,16 +369,58 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
           {tab === 'items' && (
             <>
+              {/* Cambios que el cliente no conoce */}
+              {unsent.length > 0 && (
+                <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 flex flex-col gap-2">
+                  <p className="text-sm font-bold text-amber-900 flex items-center gap-1.5">
+                    <Bell size={15} /> {unsent.length} cambio{unsent.length === 1 ? '' : 's'} que el cliente aún no conoce
+                  </p>
+                  <p className="text-xs text-amber-800">
+                    {unsent.map((u) => CHANGE_LABELS[u.action] ?? u.action).join(' · ')}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {ws !== 'awaiting_customer' ? (
+                      <button
+                        onClick={() => workflowMut.mutate({ status: 'awaiting_customer' })}
+                        disabled={busy}
+                        className="flex-1 min-w-[160px] rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                      >
+                        Pedirle aprobación al cliente
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { sendWhatsApp(templates.find((t) => t.key === 'aprobar')?.text ?? ''); markSentMut.mutate(); }}
+                        disabled={busy}
+                        className="flex-1 min-w-[160px] rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                      >
+                        Enviar cambios por WhatsApp
+                      </button>
+                    )}
+                    <button
+                      onClick={() => approvalMut.mutate('phone_call')}
+                      disabled={busy}
+                      className="flex-1 min-w-[160px] rounded-lg border border-amber-400 bg-white px-3 py-2 text-xs font-bold text-amber-900 disabled:opacity-50"
+                    >
+                      Ya lo acordé con el cliente ✓
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Dirección */}
               {!editingAddress ? (
                 <div className="flex items-start gap-2 bg-gray-50 rounded-xl p-3 text-sm">
                   <MapPin size={14} className="text-gray-400 mt-0.5 shrink-0" />
-                  <span className="text-gray-700 flex-1">{order.shipping_address || 'Sin dirección registrada'}</span>
-                  <button
-                    onClick={() => { setAddressText(order.shipping_address ?? ''); setEditingAddress(true); }}
-                    className="text-gray-400 hover:text-teal-600 shrink-0"
-                  >
-                    <Pencil size={13} />
-                  </button>
+                  <span className="text-gray-700 flex-1 whitespace-pre-line">{order.shipping_address || 'Sin dirección registrada'}</span>
+                  {canEditAddress && (
+                    <button
+                      onClick={() => { setAddressText(order.shipping_address ?? ''); setEditingAddress(true); }}
+                      className="text-gray-400 hover:text-teal-600 shrink-0"
+                      title="Editar dirección"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="bg-gray-50 rounded-xl p-3 flex flex-col gap-2">
@@ -298,6 +440,8 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                   </div>
                 </div>
               )}
+
+              {/* Items */}
               {order.items.map((item) => (
                 <div key={item.id} className={`flex flex-col gap-2 bg-white border rounded-xl p-3 ${
                   !item.stock_ok ? 'border-red-300 bg-red-50/40' : item.is_substituted ? 'border-amber-200 bg-amber-50' : 'border-gray-100'
@@ -317,18 +461,18 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                       {item.sku && <p className="text-xs text-gray-400">{item.sku}</p>}
                       {!item.stock_ok && (
                         <p className="text-xs font-semibold text-red-600 flex items-center gap-1 mt-0.5">
-                          <AlertTriangle size={12} /> Solo {item.available_stock ?? 0} disponible{item.available_stock === 1 ? '' : 's'}
+                          <AlertTriangle size={12} /> Hay {item.available_stock ?? 0} en inventario, pidió {item.quantity}
                         </p>
                       )}
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-xs text-gray-500">x{item.quantity}</p>
+                      <p className="text-xs text-gray-500">x{item.quantity} · {formatCurrency(item.unit_price)}</p>
                       <p className="text-sm font-bold text-gray-900">{formatCurrency(item.subtotal)}</p>
                     </div>
                   </div>
 
                   {canEditItems && (
-                    <div className="flex items-center gap-2 pl-[60px]">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pl-[60px]">
                       <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg">
                         <button
                           type="button"
@@ -338,7 +482,7 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                         >
                           <Minus size={12} />
                         </button>
-                        <span className="text-xs font-semibold w-5 text-center">{item.quantity}</span>
+                        <span className="text-xs font-semibold w-6 text-center">{item.quantity}</span>
                         <button
                           type="button"
                           onClick={() => editQtyMut.mutate({ itemId: item.id, quantity: item.quantity + 1 })}
@@ -348,13 +492,22 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                           <Plus size={12} />
                         </button>
                       </div>
+                      {!item.stock_ok && (item.available_stock ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => editQtyMut.mutate({ itemId: item.id, quantity: item.available_stock as number, reason: `Ajustado a lo disponible (${item.available_stock})` })}
+                          disabled={editQtyMut.isPending}
+                          className="text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg px-2 py-1 disabled:opacity-40"
+                        >
+                          Dejar en {item.available_stock}
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => removeItemMut.mutate(item.id)}
-                        disabled={removeItemMut.isPending}
-                        className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
+                        onClick={() => setPriceEdit({ itemId: item.id, value: String(Math.round(item.unit_price)), reason: '' })}
+                        className="flex items-center gap-1 text-xs text-teal-700 hover:text-teal-900"
                       >
-                        <Trash2 size={12} /> Quitar
+                        <Pencil size={12} /> Precio
                       </button>
                       <button
                         type="button"
@@ -364,6 +517,47 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                       >
                         <Repeat size={12} /> Sustituir
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => removeItemMut.mutate(item.id)}
+                        disabled={removeItemMut.isPending || order.items.length <= 1}
+                        title={order.items.length <= 1 ? 'Es el único producto: cancela el pedido o sustitúyelo' : undefined}
+                        className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 disabled:opacity-40"
+                      >
+                        <Trash2 size={12} /> Quitar
+                      </button>
+                    </div>
+                  )}
+
+                  {priceEdit?.itemId === item.id && (
+                    <div className="pl-[60px] flex flex-col gap-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          value={priceEdit.value}
+                          onChange={(e) => setPriceEdit({ ...priceEdit, value: e.target.value })}
+                          className="w-32 rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                          placeholder="Precio unitario"
+                          autoFocus
+                        />
+                        <input
+                          value={priceEdit.reason}
+                          onChange={(e) => setPriceEdit({ ...priceEdit, reason: e.target.value })}
+                          className="flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
+                          placeholder="Motivo (ej. precio actualizado)"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => priceMut.mutate({ itemId: item.id, price: parseFloat(priceEdit.value), reason: priceEdit.reason })}
+                          disabled={!priceEdit.reason.trim() || priceEdit.value === '' || parseFloat(priceEdit.value) < 0 || priceMut.isPending}
+                          className="bg-teal-600 text-white rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                        >
+                          Guardar precio
+                        </button>
+                        <button onClick={() => setPriceEdit(null)} className="text-xs text-gray-500 underline">Cancelar</button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -379,16 +573,18 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                 </button>
               )}
 
-              {/* Discount section */}
-              {!showDiscount ? (
+              {/* Descuento */}
+              {canEditItems && (!showDiscount ? (
                 <button onClick={() => setShowDiscount(true)} className="text-sm text-teal-700 underline flex items-center gap-1 self-start">
-                  <Percent size={13} /> Aplicar descuento
+                  <Percent size={13} /> {order.discount_amount > 0 ? 'Cambiar descuento' : 'Aplicar descuento'}
                 </button>
               ) : (
                 <div className="bg-gray-50 rounded-xl p-3 flex flex-col gap-2">
                   <div className="flex gap-2">
                     <input
                       type="number"
+                      min={0}
+                      max={order.subtotal}
                       placeholder="Monto descuento $"
                       value={discountAmount}
                       onChange={(e) => setDiscountAmount(e.target.value)}
@@ -402,15 +598,20 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                       className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
                     />
                   </div>
+                  {discountAmount !== '' && (parseFloat(discountAmount) < 0 || parseFloat(discountAmount) > order.subtotal) && (
+                    <p className="text-xs text-red-600">El descuento debe estar entre $0 y el subtotal ({formatCurrency(order.subtotal)}).</p>
+                  )}
                   <div className="flex gap-2">
-                    <button onClick={() => discountMut.mutate()} disabled={!discountAmount || !discountReason || discountMut.isPending}
+                    <button
+                      onClick={() => discountMut.mutate()}
+                      disabled={!discountAmount || !discountReason || discountMut.isPending || parseFloat(discountAmount) < 0 || parseFloat(discountAmount) > order.subtotal}
                       className="bg-teal-600 text-white rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50">
                       Aplicar
                     </button>
                     <button onClick={() => setShowDiscount(false)} className="text-sm text-gray-500 underline">Cancelar</button>
                   </div>
                 </div>
-              )}
+              ))}
             </>
           )}
 
@@ -433,7 +634,7 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                     <p className="text-sm font-medium text-gray-900">{formatAction(log.action)}</p>
                     {log.notes && <p className="text-xs text-gray-500 mt-0.5">{log.notes}</p>}
                     {log.notification_sent_at && (
-                      <p className="text-xs text-green-600">Enviado por {log.notification_sent_at}</p>
+                      <p className="text-xs text-green-600">Avisado al cliente · {new Date(log.notification_sent_at).toLocaleString('es-CO')}</p>
                     )}
                     <p className="text-[10px] text-gray-400 mt-0.5">{new Date(log.created_at).toLocaleString('es-CO')} · {log.actor_name ?? 'Sistema'}</p>
                   </div>
@@ -452,7 +653,7 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
               )}
               {order.customer_facing_notes && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-blue-800 mb-1">👤 Nota al cliente</p>
+                  <p className="text-xs font-semibold text-blue-800 mb-1">👤 Nota al cliente (la ve en su portal)</p>
                   <p className="text-sm text-blue-900">{order.customer_facing_notes}</p>
                 </div>
               )}
@@ -460,7 +661,7 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                 <textarea
                   value={customerNoteText}
                   onChange={(e) => setCustomerNoteText(e.target.value)}
-                  placeholder="Agregar nota visible para el cliente..."
+                  placeholder="Nota visible para el cliente en su portal..."
                   rows={3}
                   className="rounded-xl border border-gray-200 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
@@ -490,46 +691,109 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
 
         {/* Actions footer */}
         <div className="border-t bg-gray-50 p-4 flex flex-col gap-2 shrink-0">
-          {/* WhatsApp — always visible */}
-          <a
-            href={whatsappMsg()}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => { if (isAwaiting) markSentMut.mutate(); }}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-white text-sm"
-            style={{ backgroundColor: '#25D366' }}
-          >
-            <MessageCircle size={16} />
-            {isAwaiting ? 'Enviar resumen por WhatsApp (marcar enviado)' : 'WhatsApp al cliente'}
-          </a>
-
-          {/* Awaiting: confirm approval */}
-          {isAwaiting && (
-            <button
-              onClick={() => approvalMut.mutate()}
-              disabled={approvalMut.isPending}
-              className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-white text-sm bg-teal-600 disabled:opacity-50"
-            >
-              <UserCheck size={16} />
-              Cliente aprobó los cambios → listo p/facturar
-            </button>
+          {/* Escribir al cliente: nunca cambia el estado */}
+          {!showWrite ? (
+            <div className="flex gap-2">
+              <button
+                onClick={() => openWrite()}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-white text-sm"
+                style={{ backgroundColor: '#25D366' }}
+              >
+                <MessageCircle size={16} /> Escribir al cliente
+              </button>
+              <select
+                value={waMode}
+                onChange={(e) => changeWaMode(e.target.value as WhatsAppMode)}
+                className="rounded-xl border border-gray-200 bg-white px-2 text-xs text-gray-600"
+                title="Dónde abrir WhatsApp"
+              >
+                <option value="web">WhatsApp Web (1 pestaña)</option>
+                <option value="app">App de escritorio</option>
+              </select>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-green-200 bg-white p-3 flex flex-col gap-2">
+              <div className="flex flex-wrap gap-1.5">
+                {templates.map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => setWriteText(t.text)}
+                    className="rounded-full border border-gray-200 px-2.5 py-1 text-xs hover:bg-green-50"
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={writeText}
+                onChange={(e) => setWriteText(e.target.value)}
+                rows={5}
+                className="rounded-lg border border-gray-200 p-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => sendWhatsApp(writeText)}
+                  disabled={!writeText.trim()}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-green-500 text-white text-sm font-bold disabled:opacity-50"
+                >
+                  <Send size={14} /> Abrir en WhatsApp
+                </button>
+                <button
+                  onClick={async () => {
+                    const ok = await copyText(writeText);
+                    if (ok) toast.success('Mensaje copiado 📋'); else toast.error('No se pudo copiar');
+                  }}
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                >
+                  <Copy size={14} /> Copiar
+                </button>
+                <button onClick={() => setShowWrite(false)} className="px-2 text-xs text-gray-500 underline">Cerrar</button>
+              </div>
+              <p className="text-[11px] text-gray-400">Escribirle no cambia el estado del pedido. El mensaje también queda copiado por si WhatsApp no abre.</p>
+            </div>
           )}
 
-          {/* Next workflow statuses */}
-          <div className="flex flex-wrap gap-2">
-            {nextOptions.map((opt) => (
+          {/* Aprobación del cliente (ya se habló con él) */}
+          {canApprove && (
+            <div className="flex gap-2">
               <button
-                key={opt.value}
-                onClick={() => workflowMut.mutate({ status: opt.value })}
-                disabled={workflowMut.isPending}
-                className="flex-1 py-2 rounded-xl border-2 border-teal-600 text-teal-700 font-semibold text-sm hover:bg-teal-50 transition-colors disabled:opacity-50"
+                onClick={() => approvalMut.mutate(approvalChannel)}
+                disabled={busy}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-white text-sm bg-teal-600 disabled:opacity-50"
               >
-                {opt.label} <ChevronRight size={13} className="inline" />
+                <UserCheck size={16} /> Cliente aprobó → listo p/facturar
               </button>
-            ))}
-          </div>
+              <select
+                value={approvalChannel}
+                onChange={(e) => setApprovalChannel(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-white px-2 text-xs text-gray-600"
+                title="¿Cómo aprobó?"
+              >
+                <option value="phone_call">por llamada</option>
+                <option value="whatsapp_replied">por WhatsApp</option>
+                <option value="in_store">en la tienda</option>
+              </select>
+            </div>
+          )}
 
-          {/* Cancel */}
+          {/* Avance normal */}
+          {nextOptions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {nextOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => workflowMut.mutate({ status: opt.value })}
+                  disabled={busy}
+                  className="flex-1 py-2 rounded-xl border-2 border-teal-600 text-teal-700 font-semibold text-sm hover:bg-teal-50 transition-colors disabled:opacity-50"
+                >
+                  {opt.value === 'under_review' && ws === 'awaiting_customer' ? <Undo2 size={13} className="inline mr-1" /> : null}
+                  {opt.label} <ChevronRight size={13} className="inline" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Cancelar */}
           {canCancel && !showCancel && (
             <button onClick={() => setShowCancel(true)}
               className="text-xs text-red-500 underline self-center mt-1">
@@ -537,17 +801,22 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
             </button>
           )}
           {showCancel && (
-            <div className="flex gap-2 items-center">
-              <input
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="Motivo de cancelación..."
-                className="flex-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-              />
-              <button onClick={() => cancelMut.mutate()} disabled={!cancelReason || cancelMut.isPending}
-                className="bg-red-500 text-white rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50 flex items-center gap-1">
-                <XCircle size={13} /> Cancelar
-              </button>
+            <div className="flex flex-col gap-1">
+              <div className="flex gap-2 items-center">
+                <input
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Motivo de cancelación..."
+                  className="flex-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+                <button onClick={() => cancelMut.mutate()} disabled={!cancelReason || cancelMut.isPending}
+                  className="bg-red-500 text-white rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50 flex items-center gap-1">
+                  <XCircle size={13} /> Cancelar
+                </button>
+              </div>
+              {order.sales_order_id && (
+                <p className="text-[11px] text-red-600">Ya está facturado: al cancelar se anula la venta y el inventario vuelve a la tienda.</p>
+              )}
             </div>
           )}
         </div>
@@ -557,6 +826,7 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
       {pendingNotif && (
         <WhatsAppNotifModal
           notif={pendingNotif}
+          phone={order.customer_phone}
           onClose={() => setPendingNotif(null)}
         />
       )}
@@ -582,9 +852,11 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
 
 function WhatsAppNotifModal({
   notif,
+  phone,
   onClose,
 }: {
   notif: PendingNotification;
+  phone: string | null;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -607,9 +879,9 @@ function WhatsAppNotifModal({
   });
 
   function copyMessage() {
-    navigator.clipboard.writeText(notif.rendered_message)
-      .then(() => toast.success('Mensaje copiado al portapapeles 📋'))
-      .catch(() => toast.error('No se pudo copiar'));
+    copyText(notif.rendered_message).then((ok) =>
+      ok ? toast.success('Mensaje copiado al portapapeles 📋') : toast.error('No se pudo copiar'),
+    );
   }
 
   const TEMPLATE_LABELS: Record<string, string> = {
@@ -654,14 +926,12 @@ function WhatsAppNotifModal({
           >
             <Copy size={15} /> Copiar
           </button>
-          <a
-            href={notif.whatsapp_link}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => { openWhatsApp(phone ?? notif.customer_phone ?? null, notif.rendered_message); copyText(notif.rendered_message); }}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-green-500 text-white text-sm font-semibold hover:bg-green-600 transition-colors"
           >
             <Send size={15} /> Abrir WhatsApp
-          </a>
+          </button>
         </div>
 
         {/* Confirm or skip */}
@@ -693,6 +963,7 @@ function formatAction(action: string): string {
     created: '🆕 Pedido creado',
     status_changed: '🔄 Estado cambiado',
     item_quantity_changed: '✏️ Cantidad modificada',
+    item_price_changed: '💲 Precio ajustado',
     item_substituted: '↔️ Producto sustituido',
     item_added: '➕ Producto agregado',
     item_removed: '❌ Producto removido',
@@ -702,6 +973,7 @@ function formatAction(action: string): string {
     customer_confirmed_via_whatsapp_replied: '✅ Cliente aprobó (WhatsApp)',
     customer_confirmed_via_phone_call: '✅ Cliente aprobó (llamada)',
     customer_confirmed_via_in_store: '✅ Cliente aprobó (en tienda)',
+    customer_confirmed_via_portal: '✅ Cliente aprobó (desde el portal)',
     cancelled: '🚫 Pedido cancelado',
   };
   return map[action] ?? action.replace(/_/g, ' ');

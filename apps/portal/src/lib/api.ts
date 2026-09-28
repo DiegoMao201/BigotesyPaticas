@@ -618,6 +618,8 @@ export const orders = {
   list: (page = 1) => request<Order[]>(`/orders?page=${page}`),
   get: (id: string) => request<Order>(`/orders/${id}`),
   timeline: (id: string) => request<OrderTimeline>(`/orders/${id}/timeline`),
+  approveChanges: (id: string) =>
+    request<{ ok: boolean; workflow_status: string }>(`/orders/${id}/approve-changes`, { method: 'POST', body: '{}' }),
   create: (data: { product_id: string; pet_id?: string; quantity?: number; notes?: string }) =>
     request<Order>('/orders', { method: 'POST', body: JSON.stringify(data) }),
   createMulti: (data: MultiOrderPayload) =>

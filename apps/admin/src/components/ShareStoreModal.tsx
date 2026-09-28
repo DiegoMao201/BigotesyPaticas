@@ -1,5 +1,6 @@
 'use client';
 
+import { openWhatsApp as openWhatsAppLink } from '@/lib/whatsapp';
 import { useState } from 'react';
 import { X, Copy, MessageCircle, CheckCircle } from 'lucide-react';
 
@@ -121,7 +122,8 @@ export function ShareStoreModal({ open, onClose }: Props) {
   }
 
   function openWhatsApp() {
-    window.open(`https://wa.me/?text=${encodeURIComponent(scenario.message)}`, '_blank', 'noopener,noreferrer');
+    // Una sola pestaña de WhatsApp (o la app): ver lib/whatsapp.ts
+    openWhatsAppLink(null, scenario.message);
   }
 
   return (

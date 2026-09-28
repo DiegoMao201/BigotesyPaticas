@@ -1474,6 +1474,11 @@ export interface PortalOrderDetail {
   delivered_at: string | null;
   items: PortalOrderItem[];
   has_stock_issues: boolean;
+  /** false después de facturar: ya no se tocan items, precios ni descuento */
+  is_editable?: boolean;
+  sales_order_id?: string | null;
+  /** cambios del admin que el cliente todavía no conoce */
+  unsent_changes?: { action: string; changes: Record<string, unknown> | null; notes: string | null; created_at: string }[];
   pending_notification?: PendingNotification;
 }
 
@@ -1579,6 +1584,9 @@ export const adminPortal = {
   removeItem: (orderId: string, itemId: string, reason: string) =>
     api<PortalOrderDetail>(`/v1/admin/portal/orders/${orderId}/items/${itemId}`,
       { method: 'DELETE', body: JSON.stringify({ reason }) }),
+  editItemPrice: (orderId: string, itemId: string, new_unit_price: number, reason: string) =>
+    api<PortalOrderDetail>(`/v1/admin/portal/orders/${orderId}/items/${itemId}/price`,
+      { method: 'PATCH', body: JSON.stringify({ new_unit_price, reason }) }),
   applyDiscount: (orderId: string, discount_amount: number, reason: string) =>
     api<PortalOrderDetail>(`/v1/admin/portal/orders/${orderId}/discount`,
       { method: 'POST', body: JSON.stringify({ discount_amount, reason }) }),

@@ -385,7 +385,74 @@ ACTION_LABELS: dict[str, str] = {
     "address_changed": "Dirección actualizada",
     "notes_updated": "Nota del equipo",
     "cancelled": "Pedido cancelado",
+    "item_price_changed": "Precio ajustado",
+    "customer_confirmed_via_portal": "Aprobaste los cambios ✅",
 }
+
+
+@router.post("/{order_id}/approve-changes")
+async def approve_changes(
+    order_id: uuid.UUID,
+    db: DBSession,
+    customer: Customer = PortalUser,
+) -> dict:
+    """El cliente aprueba desde el portal los cambios que le propuso la tienda.
+    Antes solo podía confirmar por WhatsApp (y el botón llevaba a un número
+    equivocado). Deja el pedido listo para facturar y avisa a los admins."""
+    from datetime import UTC, datetime
+
+    from sqlalchemy import update as sa_update
+
+    from app.api.v1.portal_notifications import notify_admins
+
+    order = (
+        await db.execute(
+            select(PortalOrder).where(
+                PortalOrder.id == order_id,
+                PortalOrder.customer_id == customer.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if (order.workflow_status or order.status) != "awaiting_customer":
+        raise HTTPException(status_code=409, detail="Este pedido no tiene cambios pendientes por aprobar")
+
+    now = datetime.now(UTC)
+    await db.execute(
+        sa_update(ActivityLog)
+        .where(
+            ActivityLog.entity_type == "order",
+            ActivityLog.entity_id == order_id,
+            ActivityLog.visible_to_customer == True,  # noqa: E712
+            ActivityLog.notification_sent_at == None,  # noqa: E711
+        )
+        .values(notification_sent_at=now, notification_channel="portal")
+    )
+    order.workflow_status = "ready_to_invoice"
+    order.last_status_change_at = now
+    order.customer_confirmed_changes_at = now
+    order.customer_confirmation_channel = "portal"
+    db.add(
+        ActivityLog(
+            entity_type="order",
+            entity_id=order_id,
+            action="customer_confirmed_via_portal",
+            actor_type="customer",
+            actor_name=customer.full_name or "Cliente",
+            visible_to_customer=True,
+            notes="Aprobaste los cambios desde el portal",
+        )
+    )
+    await notify_admins(
+        db,
+        notif_type="portal_order_approved",
+        title="✅ Cliente aprobó su pedido",
+        body=f"{customer.full_name or 'Un cliente'} aprobó los cambios del pedido #{str(order_id)[:8].upper()}. Ya está listo para facturar.",
+        data={"order_id": str(order_id)},
+    )
+    await db.commit()
+    return {"ok": True, "workflow_status": "ready_to_invoice"}
 
 
 @router.get("/{order_id}/timeline")

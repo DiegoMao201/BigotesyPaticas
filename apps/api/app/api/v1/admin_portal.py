@@ -8,7 +8,7 @@ from decimal import Decimal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy import update as sa_update
 
@@ -960,19 +960,24 @@ class ChangeWorkflowPayload(BaseModel):
 
 
 class EditQuantityPayload(BaseModel):
-    new_quantity: int
+    new_quantity: int = Field(ge=1, le=999)
     reason: str | None = None
+
+
+class EditPricePayload(BaseModel):
+    new_unit_price: float = Field(ge=0)
+    reason: str
 
 
 class SubstitutePayload(BaseModel):
     new_product_id: uuid.UUID
-    new_quantity: int | None = None
+    new_quantity: int | None = Field(default=None, ge=1, le=999)
     reason: str
 
 
 class AddItemPayload(BaseModel):
     product_id: uuid.UUID
-    quantity: int = 1
+    quantity: int = Field(default=1, ge=1, le=999)
     notes: str | None = None
     reason: str | None = None
 
@@ -982,7 +987,7 @@ class RemoveItemPayload(BaseModel):
 
 
 class DiscountPayload(BaseModel):
-    discount_amount: float
+    discount_amount: float = Field(ge=0)
     reason: str
 
 
@@ -1022,6 +1027,43 @@ class ConfirmApptChoicePayload(BaseModel):
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
+
+# Pedido editable (items, precio, descuento) solo ANTES de facturar: después ya
+# existe la venta en sales.orders y el inventario se descontó; editar el pedido
+# del portal dejaría la factura y el pedido diciendo cosas distintas.
+NON_EDITABLE_STATUSES = {
+    "invoiced", "in_preparation", "ready_for_delivery", "in_transit",
+    "delivered", "cancelled", "returned",
+}
+
+# Acciones que cambian lo que el cliente pidió: si no se le han avisado, el admin
+# ve "N cambios que el cliente no conoce" y decide si pedir aprobación o no.
+CHANGE_ACTIONS = (
+    "item_quantity_changed", "item_substituted", "item_added", "item_removed",
+    "item_price_changed", "discount_applied", "address_changed",
+)
+
+
+def _is_editable(order: PortalOrder) -> bool:
+    return not order.sales_order_id and (order.workflow_status or "received") not in NON_EDITABLE_STATUSES
+
+
+def _ensure_editable(order: PortalOrder) -> None:
+    if not _is_editable(order):
+        raise HTTPException(
+            409,
+            "El pedido ya está facturado o cerrado: no se puede cambiar. "
+            "Si hay que corregirlo, cancélalo (devuelve el inventario) y créalo de nuevo.",
+        )
+
+
+async def _load_order(db: DBSession, order_id: uuid.UUID) -> PortalOrder:
+    order = (
+        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Pedido no encontrado")
+    return order
 
 
 async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
@@ -1086,8 +1128,27 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
         else None
     )
 
+    # Cambios hechos por el admin que el cliente todavía no conoce
+    unsent_q = select(ActivityLog).where(
+        ActivityLog.entity_type == "order",
+        ActivityLog.entity_id == order_id,
+        ActivityLog.visible_to_customer.is_(True),
+        ActivityLog.notification_sent_at.is_(None),
+        ActivityLog.action.in_(CHANGE_ACTIONS),
+    )
+    if order.customer_confirmed_changes_at:
+        unsent_q = unsent_q.where(ActivityLog.created_at > order.customer_confirmed_changes_at)
+    unsent = (await db.execute(unsent_q.order_by(ActivityLog.created_at))).scalars().all()
+
     return {
         "id": str(order.id),
+        "is_editable": _is_editable(order),
+        "sales_order_id": str(order.sales_order_id) if order.sales_order_id else None,
+        "unsent_changes": [
+            {"action": lg.action, "changes": lg.changes, "notes": lg.notes,
+             "created_at": lg.created_at.isoformat()}
+            for lg in unsent
+        ],
         "customer_id": str(order.customer_id) if order.customer_id else None,
         "customer_name": customer.full_name if customer else None,
         "customer_phone": customer.phone if customer else None,
@@ -1208,10 +1269,11 @@ async def get_order_activity(order_id: uuid.UUID, db: DBSession) -> list[dict]:
 # ── PATCH workflow status ──────────────────────────────────────────────────────
 
 WORKFLOW_TRANSITIONS: dict[str, list[str]] = {
-    "received": ["under_review", "awaiting_customer", "cancelled"],
+    "received": ["under_review", "awaiting_customer", "ready_to_invoice", "cancelled"],
     "under_review": ["awaiting_customer", "ready_to_invoice", "cancelled"],
-    "awaiting_customer": ["ready_to_invoice", "cancelled"],
-    "ready_to_invoice": ["invoiced", "cancelled"],
+    "awaiting_customer": ["ready_to_invoice", "under_review", "cancelled"],
+    # si se edita después de aprobado, se puede volver a pedir aprobación o revisar
+    "ready_to_invoice": ["invoiced", "awaiting_customer", "under_review", "cancelled"],
     "invoiced": ["in_preparation", "cancelled"],
     "in_preparation": ["ready_for_delivery"],
     "ready_for_delivery": ["in_transit"],
@@ -1249,6 +1311,10 @@ async def change_workflow_status(
     if new == "delivered":
         order.delivered_at = datetime.now(UTC)
         order.status = "delivered"
+
+    if new == "cancelled":
+        await _reverse_invoice(order, payload.internal_notes or "cancelado desde el flujo", db)
+        order.status = "cancelled"
 
     # ── Portar lógica del endpoint viejo ──────────────────────────────────────
     if new == "invoiced":
@@ -1301,6 +1367,7 @@ async def edit_item_quantity(
     ).scalar_one_or_none()
     if not item:
         raise HTTPException(404, "Item no encontrado")
+    _ensure_editable(await _load_order(db, order_id))
 
     old_qty = item.quantity
     item.quantity = payload.new_quantity
@@ -1319,19 +1386,54 @@ async def edit_item_quantity(
         notes=payload.reason,
         visible=True,
     )
-    # Mark as awaiting_customer if currently under_review
-    order = (
-        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
-    ).scalar_one_or_none()
-    pending_notif = None
-    if order and order.workflow_status in ("received", "under_review"):
-        order.workflow_status = "awaiting_customer"
-        pending_notif = await queue_customer_notification(order, "awaiting_customer", db)
+    # Ya NO pasa sola a "esperando cliente" (Diego 28-sep-2026: "no puedo modificar el
+    # pedido sin darle un aprobado"). El cambio queda como "sin avisar" y el admin
+    # decide: pedir aprobación, solo avisar, o seguir si ya lo acordó con el cliente.
     await db.commit()
-    result = await _get_order_with_items(db, order_id)
-    if pending_notif:
-        result["pending_notification"] = pending_notif
-    return result
+    return await _get_order_with_items(db, order_id)
+
+
+# ── PATCH item unit price ─────────────────────────────────────────────────────
+
+
+@router.patch(
+    "/orders/{order_id}/items/{item_id}/price",
+    dependencies=[Depends(require_permission("crm:write"))],
+)
+async def edit_item_price(
+    order_id: uuid.UUID, item_id: uuid.UUID, payload: EditPricePayload, db: DBSession
+) -> dict:
+    item = (
+        await db.execute(
+            select(PortalOrderItem).where(
+                PortalOrderItem.id == item_id,
+                PortalOrderItem.portal_order_id == order_id,
+                PortalOrderItem.is_removed.is_(False),
+            )
+        )
+    ).scalar_one_or_none()
+    if not item:
+        raise HTTPException(404, "Item no encontrado")
+    _ensure_editable(await _load_order(db, order_id))
+
+    old_price = float(item.unit_price or 0)
+    item.unit_price = Decimal(str(payload.new_unit_price))
+    item.subtotal = item.unit_price * item.quantity
+    await _recalculate_total(db, order_id)
+    await _log(
+        db,
+        order_id,
+        "item_price_changed",
+        changes={
+            "item": item.name,
+            "unit_price": {"before": old_price, "after": payload.new_unit_price},
+            "reason": payload.reason,
+        },
+        notes=payload.reason,
+        visible=True,
+    )
+    await db.commit()
+    return await _get_order_with_items(db, order_id)
 
 
 # ── POST substitute item ──────────────────────────────────────────────────────
@@ -1355,6 +1457,7 @@ async def substitute_item(
     ).scalar_one_or_none()
     if not item:
         raise HTTPException(404, "Item no encontrado")
+    _ensure_editable(await _load_order(db, order_id))
 
     new_prod = (
         await db.execute(select(Product).where(Product.id == payload.new_product_id))
@@ -1389,18 +1492,8 @@ async def substitute_item(
         notes=payload.reason,
         visible=True,
     )
-    order = (
-        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
-    ).scalar_one_or_none()
-    pending_notif = None
-    if order and order.workflow_status in ("received", "under_review"):
-        order.workflow_status = "awaiting_customer"
-        pending_notif = await queue_customer_notification(order, "awaiting_customer", db)
     await db.commit()
-    result = await _get_order_with_items(db, order_id)
-    if pending_notif:
-        result["pending_notification"] = pending_notif
-    return result
+    return await _get_order_with_items(db, order_id)
 
 
 # ── POST add item ─────────────────────────────────────────────────────────────
@@ -1415,6 +1508,7 @@ async def add_item_to_order(order_id: uuid.UUID, payload: AddItemPayload, db: DB
     ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
+    _ensure_editable(order)
 
     prod = (
         await db.execute(select(Product).where(Product.id == payload.product_id))
@@ -1443,8 +1537,6 @@ async def add_item_to_order(order_id: uuid.UUID, payload: AddItemPayload, db: DB
         notes=payload.reason,
         visible=True,
     )
-    if order.workflow_status in ("received", "under_review"):
-        order.workflow_status = "awaiting_customer"
     await db.commit()
     return await _get_order_with_items(db, order_id)
 
@@ -1458,6 +1550,7 @@ async def add_item_to_order(order_id: uuid.UUID, payload: AddItemPayload, db: DB
 async def remove_item_from_order(
     order_id: uuid.UUID, item_id: uuid.UUID, payload: RemoveItemPayload, db: DBSession
 ) -> dict:
+    _ensure_editable(await _load_order(db, order_id))
     items_count = (
         await db.execute(
             select(func.count())
@@ -1492,18 +1585,8 @@ async def remove_item_from_order(
         notes=payload.reason,
         visible=True,
     )
-    order = (
-        await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))
-    ).scalar_one_or_none()
-    pending_notif = None
-    if order and order.workflow_status in ("received", "under_review"):
-        order.workflow_status = "awaiting_customer"
-        pending_notif = await queue_customer_notification(order, "awaiting_customer", db)
     await db.commit()
-    result = await _get_order_with_items(db, order_id)
-    if pending_notif:
-        result["pending_notification"] = pending_notif
-    return result
+    return await _get_order_with_items(db, order_id)
 
 
 # ── POST apply discount ───────────────────────────────────────────────────────
@@ -1516,6 +1599,10 @@ async def apply_discount(order_id: uuid.UUID, payload: DiscountPayload, db: DBSe
     ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
+    _ensure_editable(order)
+    subtotal = await _recalculate_total(db, order_id)
+    if payload.discount_amount > subtotal:
+        raise HTTPException(400, f"El descuento no puede ser mayor que el subtotal (${int(subtotal):,})".replace(",", "."))
     order.discount_amount = Decimal(str(payload.discount_amount))
     order.discount_reason = payload.reason
     await _log(
@@ -1525,8 +1612,6 @@ async def apply_discount(order_id: uuid.UUID, payload: DiscountPayload, db: DBSe
         changes={"discount_amount": payload.discount_amount, "reason": payload.reason},
         visible=True,
     )
-    if order.workflow_status in ("received", "under_review"):
-        order.workflow_status = "awaiting_customer"
     await db.commit()
     return await _get_order_with_items(db, order_id)
 
@@ -1545,6 +1630,10 @@ async def change_shipping_address(
     ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
+    if (order.workflow_status or "received") in ("delivered", "cancelled", "returned"):
+        raise HTTPException(409, "El pedido ya está cerrado: no se puede cambiar la dirección")
+    if not payload.shipping_address.strip():
+        raise HTTPException(400, "La dirección no puede quedar vacía")
     old_addr = order.shipping_address
     order.shipping_address = payload.shipping_address
     await _log(
@@ -1601,10 +1690,24 @@ async def confirm_customer_approval(
     ).scalar_one_or_none()
     if not order:
         raise HTTPException(404, "Pedido no encontrado")
-    order.customer_confirmed_changes_at = datetime.now(UTC)
+    now = datetime.now(UTC)
+    # Los cambios quedan "avisados": el cliente los aprobó por este canal
+    await db.execute(
+        sa_update(ActivityLog)
+        .where(
+            ActivityLog.entity_id == order_id,
+            ActivityLog.entity_type == "order",
+            ActivityLog.visible_to_customer.is_(True),
+            ActivityLog.notification_sent_at.is_(None),
+        )
+        .values(notification_sent_at=now, notification_channel=payload.channel)
+    )
+    order.customer_confirmed_changes_at = now
     order.customer_confirmation_channel = payload.channel
-    if order.workflow_status == "awaiting_customer":
+    # Aprobar sirve desde cualquier punto antes de facturar (ya se habló con el cliente)
+    if (order.workflow_status or "received") in ("received", "under_review", "awaiting_customer"):
         order.workflow_status = "ready_to_invoice"
+        order.last_status_change_at = now
     await _log(
         db,
         order_id,
@@ -1649,6 +1752,70 @@ async def mark_notifications_sent(
 # ── POST cancel order ─────────────────────────────────────────────────────────
 
 
+async def _reverse_invoice(order: PortalOrder, reason: str, db: DBSession) -> None:
+    """Si el pedido ya se facturó, anula la venta y devuelve el inventario.
+    Mismo patrón que la cancelación del POS (sales.py cancel_order). Idempotente."""
+    if not order.sales_order_id:
+        return
+    from app.models.inventory import Stock, StockLocation, StockMovement
+    from app.models.sales import Order as SalesOrder
+
+    so = (
+        await db.execute(select(SalesOrder).where(SalesOrder.id == order.sales_order_id))
+    ).scalar_one_or_none()
+    if not so or so.status in ("cancelled", "refunded"):
+        return
+    loc = (
+        await db.execute(select(StockLocation).where(StockLocation.is_default == 1).limit(1))
+    ).scalar_one_or_none() or (
+        await db.execute(select(StockLocation).order_by(StockLocation.created_at).limit(1))
+    ).scalar_one_or_none()
+    now = datetime.now(UTC)
+    # Se devuelve exactamente lo que salió al facturar (sus movimientos SALE)
+    sold = (
+        await db.execute(
+            select(StockMovement).where(
+                StockMovement.reference_type == "PORTAL_ORDER",
+                StockMovement.reference_id == order.id,
+                StockMovement.movement_type == "SALE",
+            )
+        )
+    ).scalars().all()
+    for mv in sold:
+        qty = -int(mv.quantity_delta)
+        if qty <= 0:
+            continue
+        stock = (
+            await db.execute(
+                select(Stock)
+                .where(Stock.product_id == mv.product_id, Stock.location_id == mv.location_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if stock:
+            stock.quantity += qty
+        db.add(
+            StockMovement(
+                product_id=mv.product_id,
+                location_id=mv.location_id or (loc.id if loc else None),
+                movement_type="RETURN",
+                quantity_delta=qty,
+                quantity_after=stock.quantity if stock else qty,
+                reference_type="PORTAL_ORDER",
+                reference_id=order.id,
+                occurred_at=now,
+                created_by="admin_portal",
+                notes=f"Cancelación pedido portal #{str(order.id)[:8]} — {reason}",
+            )
+        )
+    so.status = "cancelled"
+    so.metadata_ = {
+        **(so.metadata_ or {}),
+        "cancelled_at": now.isoformat(),
+        "cancel_reason": f"Pedido portal cancelado: {reason}",
+    }
+
+
 @router.post("/orders/{order_id}/cancel", dependencies=[Depends(require_permission("crm:write"))])
 async def cancel_order(order_id: uuid.UUID, payload: CancelOrderPayload, db: DBSession) -> dict:
     order = (
@@ -1660,6 +1827,7 @@ async def cancel_order(order_id: uuid.UUID, payload: CancelOrderPayload, db: DBS
         raise HTTPException(
             400, f"No se puede cancelar un pedido en estado {order.workflow_status}"
         )
+    await _reverse_invoice(order, payload.reason, db)
     order.workflow_status = "cancelled"
     order.status = "cancelled"
     order.last_status_change_at = datetime.now(UTC)

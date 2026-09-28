@@ -1,11 +1,11 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Package, MapPin, MessageCircle, CheckCircle2, Clock, Truck, Star } from 'lucide-react';
 import Image from 'next/image';
 import { orders } from '@/lib/api';
-import { formatCOP } from '@/lib/utils';
+import { formatCOP, WHATSAPP_NUMBER } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 const WORKFLOW_STEPS = [
@@ -36,9 +36,15 @@ export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
+  const qc = useQueryClient();
   const { data: order, isLoading } = useQuery({
     queryKey: ['portal-order-timeline', id],
     queryFn: () => orders.timeline(id),
+  });
+  // El cliente aprueba los cambios aquí mismo, sin tener que escribir (28-sep-2026)
+  const approve = useMutation({
+    mutationFn: () => orders.approveChanges(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['portal-order-timeline', id] }),
   });
 
   if (isLoading) return <LoadingSpinner />;
@@ -94,7 +100,7 @@ export default function OrderDetailPage() {
               </p>
               {isAwaiting && (
                 <p className="text-sm text-amber-700 mt-1">
-                  Revisamos tu pedido y puede haber cambios. Revisa abajo y confirma por WhatsApp.
+                  Revisamos tu pedido y hay cambios. Mira cómo quedó abajo y apruébalo con un toque 👇
                 </p>
               )}
               {order.customer_facing_notes && (
@@ -123,18 +129,35 @@ export default function OrderDetailPage() {
           </div>
         )}
 
-        {/* WhatsApp CTA for awaiting_customer */}
+        {/* Aprobación: en el portal con un toque, o dudas por WhatsApp a la tienda */}
         {isAwaiting && (
-          <a
-            href={`https://wa.me/573111234567?text=${encodeURIComponent('Hola! Quiero confirmar mi pedido.')}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-white"
-            style={{ backgroundColor: '#25D366' }}
-          >
-            <MessageCircle className="h-5 w-5" />
-            Confirmar cambios por WhatsApp
-          </a>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => approve.mutate()}
+              disabled={approve.isPending}
+              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-white bg-teal-600 active:scale-[0.99] transition disabled:opacity-60"
+            >
+              <CheckCircle2 className="h-5 w-5" />
+              {approve.isPending ? 'Aprobando…' : 'Aprobar mi pedido así'}
+            </button>
+            {approve.isError && (
+              <p className="text-center text-xs text-red-600">No pudimos aprobarlo. Intenta de nuevo o escríbenos.</p>
+            )}
+            <a
+              href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`¡Hola! Tengo una duda sobre los cambios de mi pedido #${String(id).slice(0, 8).toUpperCase()}.`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold text-[#128C7E] bg-white border-2 border-[#25D366]"
+            >
+              <MessageCircle className="h-5 w-5" />
+              Tengo una duda — escribir por WhatsApp
+            </a>
+          </div>
+        )}
+        {approve.isSuccess && !isAwaiting && (
+          <div className="rounded-2xl bg-teal-50 border border-teal-200 p-4 text-center text-sm font-semibold text-teal-800">
+            ✅ ¡Listo! Aprobaste tu pedido. Ya lo estamos preparando 🐾
+          </div>
         )}
 
         {/* Items */}

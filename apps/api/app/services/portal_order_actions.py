@@ -107,6 +107,17 @@ async def _order_render_data(order: PortalOrder, db: DBSession) -> dict:
     }
 
 
+def _wa_digits(phone: str | None) -> str:
+    """Dígitos para wa.me: respeta el código de país si viene con '+', y a los
+    celulares colombianos de 10 dígitos les antepone 57 (mismo criterio que
+    apps/admin/src/lib/phone.ts)."""
+    raw = (phone or "").strip()
+    digits = "".join(c for c in raw if c.isdigit())
+    if not digits or raw.startswith("+"):
+        return digits
+    return f"57{digits}" if len(digits) == 10 else digits
+
+
 # ── Helper: renderizar plantilla WhatsApp ─────────────────────────────────────
 
 
@@ -137,7 +148,7 @@ def _render_template(template_code: str, data: dict) -> str:
             f"¡Hola {first}! 🐾 Recibimos tu pedido en *Bigotes y Paticas*.\n\n"
             f"{items_text}\n\n{totals}\n\n"
             f"Revisamos disponibilidad y te confirmamos muy pronto.\n\n"
-            f"📱 Seguí tu pedido en el portal: https://mi.bigotesypaticas.com\n"
+            f"📱 Sigue tu pedido en el portal: https://mi.bigotesypaticas.com\n"
             f"📸 Instagram: @bigotesypaticas"
         )
 
@@ -148,7 +159,7 @@ def _render_template(template_code: str, data: dict) -> str:
         return (
             f"¡Hola {first}! Revisamos tu pedido y tenemos unos cambios 🐾\n\n"
             f"{items_text}\n\n{totals}{note}\n\n"
-            f"Respondé *SÍ* para confirmar o escribinos si tenés alguna duda. ¡Estamos aquí para ayudarte!\n\n"
+            f"Responde *SÍ* para confirmarlo, o apruébalo en tu portal. Si tienes alguna duda, escríbenos. ¡Estamos aquí para ayudarte!\n\n"
             f"📱 Tu portal de clientes: https://mi.bigotesypaticas.com"
         )
 
@@ -158,7 +169,7 @@ def _render_template(template_code: str, data: dict) -> str:
             f"¡Hola {first}! Tu pedido fue facturado ✅ y está siendo preparado con todo el cariño 🐾\n\n"
             f"Pago: {pm}\n\n"
             f"Te avisamos cuando salga a domicilio.\n\n"
-            f"📱 Seguí el estado en tu portal: https://mi.bigotesypaticas.com\n"
+            f"📱 Sigue el estado en tu portal: https://mi.bigotesypaticas.com\n"
             f"🛒 Catálogo completo: https://bigotesypaticas.com"
         )
 
@@ -177,15 +188,15 @@ def _render_template(template_code: str, data: dict) -> str:
         return (
             f"¡Hola {first}! Tu pedido #{short_id} fue entregado con éxito ✅🐾\n\n"
             f"¿Tu mascota ya lo aprobó? 🐶🐱 Esperamos que lo disfrute muchísimo.\n\n"
-            f"⭐ *Calificá tu compra y ganás 20 Puntos Bigotes* (30 si subís foto):\n"
+            f"⭐ *Califica tu compra y gana 20 Puntos Bigotes* (30 si subes foto):\n"
             f"👉 https://mi.bigotesypaticas.com\n\n"
-            f"¿Aún no tenés cuenta en el portal? Registrate gratis en 30 segundos:\n"
+            f"¿Aún no tienes cuenta en el portal? Regístrate gratis en 30 segundos:\n"
             f"👉 https://mi.bigotesypaticas.com/registro\n\n"
-            f"En el portal podés:\n"
+            f"En el portal puedes:\n"
             f"✓ Acumular Puntos Bigotes con cada compra\n"
             f"✓ Llevar el carnet de salud de tu mascota\n"
             f"✓ Pedir domicilio sin llamar\n\n"
-            f"📸 Seguinos en Instagram: @bigotesypaticas\n"
+            f"📸 Síguenos en Instagram: @bigotesypaticas\n"
             f"🛒 Tienda: https://bigotesypaticas.com\n"
             f"📍 Samara Plaza Mall, Local 2 · 320 687 6633\n\n"
             f"¡Gracias por confiar en Bigotes y Paticas! 🏠🐾"
@@ -227,6 +238,8 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
     total = sum(float(i.subtotal or 0) for i in items)
     if not total and order.unit_price:
         total = float(order.unit_price) * (order.quantity or 1)
+    # El descuento que el admin dio en el pedido tiene que llegar a la factura
+    discount = min(float(order.discount_amount or 0), total)
 
     # ── Validar + descontar inventario real ANTES de crear la factura ────────
     # Mismo patrón que el POS (app/api/v1/sales.py): lock de fila + StockMovement.
@@ -303,10 +316,10 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
         order_number=invoice_num,
         channel="PORTAL",
         customer_id=order.customer_id,
-        grand_total=total,
+        grand_total=total - discount,
         subtotal=total,
         tax_total=0,
-        discount_total=0,
+        discount_total=discount,
         shipping_total=0,
         payment_status="Pendiente",
         status="confirmed",
@@ -489,7 +502,10 @@ async def queue_customer_notification(
     if not rendered_message:
         return None
 
-    wa_link = f"https://wa.me/?text={quote(rendered_message)}"
+    # Con el número del cliente: antes iba sin teléfono y WhatsApp pedía elegir el
+    # contacto a mano en cada mensaje (Diego 28-sep-2026).
+    digits = _wa_digits(render_data.get("customer_phone"))
+    wa_link = f"https://wa.me/{digits}?text={quote(rendered_message)}"
 
     notif = PendingNotification(
         portal_order_id=order.id,
