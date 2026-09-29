@@ -136,6 +136,25 @@ async def get_customer(customer_id: uuid.UUID, db: DBSession) -> CustomerOut:
     return CustomerOut.from_orm(c)
 
 
+async def _cedula_libre(db, document_id: str | None, excepto: uuid.UUID | None = None) -> None:
+    """409 claro si la cédula ya es de otro cliente (29-sep-2026: antes era un 500 que el
+    admin mostraba como "No se pudo conectar con el servidor")."""
+    doc = (document_id or "").strip()
+    if not doc:
+        return
+    q = select(Customer).where(Customer.document_id == doc)
+    if excepto:
+        q = q.where(Customer.id != excepto)
+    otro = (await db.execute(q.limit(1))).scalar_one_or_none()
+    if otro:
+        estado = " (está eliminado)" if otro.deleted_at else ""
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ya existe un cliente con la cédula {doc}: {otro.full_name or 'sin nombre'}"
+            f"{', cel. ' + otro.phone if otro.phone else ''}{estado}. Búscalo en Clientes en vez de crearlo de nuevo.",
+        )
+
+
 @router.post(
     "",
     response_model=CustomerOut,
@@ -143,6 +162,7 @@ async def get_customer(customer_id: uuid.UUID, db: DBSession) -> CustomerOut:
     dependencies=[Depends(require_permission("crm:write"))],
 )
 async def create_customer(payload: CustomerCreate, db: DBSession) -> CustomerOut:
+    await _cedula_libre(db, payload.document_id)
     extra: dict[str, str] = {}
     if payload.pet_name:
         extra["pet_name"] = payload.pet_name
@@ -202,6 +222,8 @@ async def update_customer(
     if not c:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     data = payload.model_dump(exclude_unset=True)
+    if data.get("document_id"):
+        await _cedula_libre(db, data["document_id"], excepto=c.id)
     extra = dict(c.extra or {})
 
     for key in ["pet_name", "pet_type", "pet_notes", "pet_birthday", "last_deworming"]:

@@ -117,6 +117,11 @@ function CustomerForm({
                 className="flex-1"
               />
             </div>
+            {phoneDial !== '57' && (
+              <p className="mt-1 text-[11px] font-medium text-amber-700">
+                Ojo: indicativo +{phoneDial} ({PHONE_COUNTRIES.find((c) => c.dial === phoneDial)?.name ?? 'otro país'}), no Colombia.
+              </p>
+            )}
           </div>
           <div>
             <label className="text-xs font-medium mb-1 block">Ciudad</label>

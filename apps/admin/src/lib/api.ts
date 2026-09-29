@@ -102,8 +102,11 @@ export async function api<T = unknown>(
     const msg = isAbort
       ? 'El servidor tardó demasiado. Verificá tu conexión e intentá de nuevo.'
       : 'No se pudo conectar con el servidor. Verificá tu conexión e intentá de nuevo.';
-    // Un reintento automático para errores de red transitorios (API reiniciando)
-    if (!_netRetry) {
+    // Un reintento automático para errores de red transitorios (API reiniciando), SOLO en
+    // lecturas: reintentar un POST/PATCH/DELETE puede duplicar lo que el primero sí guardó
+    // (29-sep-2026).
+    const metodo = (rest.method ?? 'GET').toUpperCase();
+    if (!_netRetry && (metodo === 'GET' || metodo === 'HEAD')) {
       await new Promise((r) => setTimeout(r, 1200));
       return api<T>(path, { ...init, _netRetry: true });
     }

@@ -6,7 +6,10 @@ import os
 from pathlib import Path
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -33,6 +36,22 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(RequestIDMiddleware)
+
+    # 29-sep-2026: un error no controlado salía como 500 SIN cabeceras CORS (lo genera
+    # Starlette por fuera de CORSMiddleware), así que el navegador no podía leerlo y el
+    # admin decía "No se pudo conectar con el servidor" (p. ej. al crear un cliente con
+    # una cédula repetida). Este middleware, dentro de CORS, lo convierte en un 500 legible.
+    class _ErrorLegible(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            try:
+                return await call_next(request)
+            except Exception:  # noqa: BLE001 — ya lo registró RequestIDMiddleware
+                return JSONResponse(
+                    status_code=500,
+                    content={"detail": "Ocurrió un error en el servidor. Intenta de nuevo; si sigue, avísanos."},
+                )
+
+    app.add_middleware(_ErrorLegible)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
@@ -41,6 +60,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["X-Request-ID"],
     )
+
+    @app.exception_handler(IntegrityError)
+    async def _dato_repetido(request: Request, exc: IntegrityError) -> JSONResponse:
+        log.warning("integrity_error", path=request.url.path, error=str(exc.orig)[:300])
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Ese dato ya está registrado (por ejemplo, la cédula o el código). Revisa si ya existe."},
+        )
 
     app.include_router(api_router)
 
