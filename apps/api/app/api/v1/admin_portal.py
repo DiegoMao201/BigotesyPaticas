@@ -823,6 +823,21 @@ async def update_portal_order(
 # o acepta el admin bloquea esas horas en la web y el portal (misma regla: conflictos()).
 
 
+def _ya_empezo(appt: Appointment, accion: str) -> None:
+    """29-sep-2026: una cita reagendada para mañana quedó 'completada' por error (el botón
+    Completar salía junto a Confirmar) y desapareció de la agenda. Completar o marcar
+    'no asistió' solo tiene sentido cuando la hora de la cita ya llegó."""
+    if appt.scheduled_at > datetime.now(UTC):
+        from app.api.v1.portal_appointments import _TZ_CO
+
+        cuando = appt.scheduled_at.astimezone(_TZ_CO).strftime("%d/%m a las %H:%M")
+        raise HTTPException(
+            409,
+            f"No se puede {accion} todavía: la cita es el {cuando}. "
+            "Completar es para cuando el servicio ya se hizo.",
+        )
+
+
 def _origen_cita(notes: str | None) -> str:
     n = notes or ""
     if "Reservó en la web" in n:
@@ -853,7 +868,7 @@ async def agenda_del_dia(db: DBSession, date: str = Query(...)) -> dict:
             .where(
                 Appointment.scheduled_at >= ini - timedelta(hours=8),
                 Appointment.scheduled_at < ini + timedelta(days=1),
-                Appointment.status.in_(["pending", "confirmed"]),
+                Appointment.status.in_(["pending", "confirmed", "completed"]),
             )
             .order_by(Appointment.scheduled_at)
         )
@@ -1027,6 +1042,8 @@ async def update_portal_appointment(
 
     new_status = payload.status
     now = datetime.now(UTC)
+    if new_status == "completed":
+        _ya_empezo(appt, "completar")
 
     if new_status in ("confirmed", "pending") and (payload.duration_min or new_status == "confirmed"):
         from app.api.v1.portal_appointments import conflictos, describir_cruce
@@ -2160,6 +2177,7 @@ async def complete_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
     ).scalar_one_or_none()
     if not appt:
         raise HTTPException(404, "Cita no encontrada")
+    _ya_empezo(appt, "completar")
     appt.status = "completed"
     appt.completed_at = datetime.now(UTC)
     if hasattr(appt, "workflow_status"):
@@ -2177,6 +2195,7 @@ async def no_show_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
     ).scalar_one_or_none()
     if not appt:
         raise HTTPException(404, "Cita no encontrada")
+    _ya_empezo(appt, "marcar que no asistió")
     appt.status = "cancelled"
     if hasattr(appt, "workflow_status"):
         appt.workflow_status = "no_show"

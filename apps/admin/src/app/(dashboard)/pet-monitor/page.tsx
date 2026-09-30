@@ -475,7 +475,8 @@ export default function PetMonitorPage() {
                           </Button>
                         </>
                       )}
-                      {appt.status === 'confirmed' && (
+                      {/* Completar / No asistió solo cuando la hora ya llegó (29-sep-2026) */}
+                      {appt.status === 'confirmed' && new Date(appt.scheduled_at) <= new Date() && (
                         <>
                           <Button
                             size="sm"

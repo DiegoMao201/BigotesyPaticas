@@ -98,7 +98,7 @@ async def compute_slots(db, target_date: date, duration_min: int = _DEFAULT_DURA
                 and_(
                     Appointment.scheduled_at >= day_start - timedelta(hours=6),
                     Appointment.scheduled_at < day_start + timedelta(days=1),
-                    Appointment.status.in_(["pending", "confirmed"]),
+                    Appointment.status.in_(["pending", "confirmed", "completed"]),
                 )
             )
         )
@@ -148,7 +148,8 @@ async def conflictos(db, inicio: datetime, duration_min: int, excluir: uuid.UUID
                 and_(
                     Appointment.scheduled_at < fin,
                     Appointment.scheduled_at >= inicio - timedelta(hours=8),
-                    Appointment.status.in_(["pending", "confirmed"]),
+                    # completada también ocupó ese horario (29-sep-2026)
+                    Appointment.status.in_(["pending", "confirmed", "completed"]),
                 )
             )
         )

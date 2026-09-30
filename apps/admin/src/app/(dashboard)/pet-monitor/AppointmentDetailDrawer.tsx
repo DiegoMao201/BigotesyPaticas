@@ -380,7 +380,10 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
               ) : null}
             </div>
           )}
-          {appt.status === 'confirmed' && (
+          {appt.status === 'confirmed' && dt > new Date() && (
+            <p className="text-center text-xs text-gray-500">Cita confirmada. "Completar" aparece cuando llegue la hora de la cita.</p>
+          )}
+          {appt.status === 'confirmed' && dt <= new Date() && (
             <div className="flex gap-2">
               <button
                 onClick={() => completeMut.mutate()}

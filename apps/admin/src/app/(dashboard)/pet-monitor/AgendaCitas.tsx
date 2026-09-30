@@ -119,12 +119,13 @@ export function AgendaCitas({ onOpenCita }: { onOpenCita: (id: string) => void }
             const top = ((ini - abre) / 30) * FILA_PX;
             const alto = Math.max(((aMin(c.fin) - ini) / 30) * FILA_PX - 3, 24);
             const pendiente = c.status === 'pending';
+            const hecha = c.status === 'completed';
             return (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => onOpenCita(c.id)}
-                className={`absolute left-16 right-1 overflow-hidden rounded-lg border-l-4 px-2 py-1 text-left text-xs shadow-sm transition hover:shadow-md ${pendiente ? 'border-amber-500 bg-amber-50' : 'border-teal-600 bg-teal-50'}`}
+                className={`absolute left-16 right-1 overflow-hidden rounded-lg border-l-4 px-2 py-1 text-left text-xs shadow-sm transition hover:shadow-md ${pendiente ? 'border-amber-500 bg-amber-50' : hecha ? 'border-gray-400 bg-gray-100' : 'border-teal-600 bg-teal-50'}`}
                 style={{ top: top + 1, height: alto }}
               >
                 <div className="flex items-center gap-1.5">
@@ -132,8 +133,8 @@ export function AgendaCitas({ onOpenCita }: { onOpenCita: (id: string) => void }
                   <span className="truncate text-gray-600">· {c.customer_name ?? 'Cliente'}</span>
                   <span className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold ${ORIGEN[c.origen].cls}`}>{ORIGEN[c.origen].label}</span>
                 </div>
-                <div className={pendiente ? 'text-amber-700 font-semibold' : 'text-teal-700'}>
-                  {hora12(c.inicio)} – {hora12(c.fin)} · {pendiente ? 'POR CONFIRMAR' : 'confirmada'}
+                <div className={pendiente ? 'text-amber-700 font-semibold' : hecha ? 'text-gray-500' : 'text-teal-700'}>
+                  {hora12(c.inicio)} – {hora12(c.fin)} · {pendiente ? 'POR CONFIRMAR' : hecha ? 'completada' : 'confirmada'}
                 </div>
               </button>
             );
