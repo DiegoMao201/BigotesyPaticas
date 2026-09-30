@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { OrderDetailDrawer } from './OrderDetailDrawer';
 import { AppointmentDetailDrawer } from './AppointmentDetailDrawer';
+import { AgendaCitas } from './AgendaCitas';
 
 function formatAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -398,6 +399,8 @@ export default function PetMonitorPage() {
       {/* APPOINTMENTS VIEW */}
       {mainTab === 'appointments' && (
         <div className="flex flex-col gap-3">
+          <AgendaCitas onOpenCita={setSelectedApptId} />
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Todas las citas</p>
           {apptLoading ? (
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
@@ -453,10 +456,10 @@ export default function PetMonitorPage() {
                           <Button
                             size="sm"
                             className="bg-green-600 hover:bg-green-700 text-white text-xs gap-1"
-                            onClick={() => updateAppt({ id: appt.id, status: 'confirmed' })}
+                            onClick={() => setSelectedApptId(appt.id)}
                             disabled={updatingAppt}
                           >
-                            <CheckCircle className="h-3 w-3" /> Confirmar
+                            <CheckCircle className="h-3 w-3" /> Confirmar…
                           </Button>
                           <Button
                             size="sm"

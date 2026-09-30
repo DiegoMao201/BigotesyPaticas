@@ -1527,6 +1527,40 @@ export interface PortalAppointment {
   created_at: string;
 }
 
+export interface CitaAgenda {
+  id: string;
+  inicio: string;
+  fin: string;
+  duration_min: number;
+  status: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  pet_name: string | null;
+  species: string | null;
+  origen: 'web' | 'portal' | 'admin';
+  notes: string | null;
+}
+
+export interface AgendaDia {
+  date: string;
+  abre: string;
+  cierra: string;
+  cerrado: boolean;
+  citas: CitaAgenda[];
+}
+
+export interface NuevaCitaAdmin {
+  date: string;
+  time: string;
+  duration_min: number;
+  owner_name: string;
+  phone: string;
+  pet_name: string;
+  species: 'perro' | 'gato';
+  origen: 'tienda' | 'llamada' | 'whatsapp';
+  notes?: string;
+}
+
 export interface AppointmentDetail {
   id: string;
   customer_id: string | null;
@@ -1640,7 +1674,17 @@ export const adminPortal = {
     return api<PortalAppointment[]>(`/v1/admin/portal/appointments?${p}`);
   },
   appointmentDetail: (id: string) => api<AppointmentDetail>(`/v1/admin/portal/appointments/${id}/detail`),
-  updateAppointment: (id: string, body: { status: string; cancel_reason?: string }) =>
+  // Agenda única (29-sep-2026): lo que agenda o acepta el admin bloquea web y portal
+  agendaDia: (date: string) => api<AgendaDia>(`/v1/admin/portal/appointments/agenda?date=${date}`),
+  horasLibres: (date: string, duration: number) =>
+    api<{ date: string; duration: number; starts: string[] }>(
+      `/v1/admin/portal/appointments/free-starts?date=${date}&duration=${duration}`
+    ),
+  crearCita: (body: NuevaCitaAdmin) =>
+    api<{ ok: boolean; id: string; customer_name: string }>(
+      '/v1/admin/portal/appointments', { method: 'POST', body: JSON.stringify(body) }
+    ),
+  updateAppointment: (id: string, body: { status: string; cancel_reason?: string; duration_min?: number }) =>
     api<{ ok: boolean; id: string; status: string }>(
       `/v1/admin/portal/appointments/${id}`, { method: 'PATCH', body: JSON.stringify(body) }
     ),

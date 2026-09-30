@@ -28,8 +28,8 @@ from app.api.v1.portal_appointments import (
     ensure_slot_free,
 )
 from app.deps import DBSession
-from app.models.crm import Customer
-from app.models.portal import Appointment, Pet
+from app.models.portal import Appointment
+from app.services.citas import cliente_por_telefono, limpiar, mascota_de
 
 router = APIRouter(prefix="/public/grooming", tags=["public"])
 
@@ -115,39 +115,10 @@ async def reservar(payload: ReservaIn, request: Request, db: DBSession) -> dict:
     inicio = datetime(f.year, f.month, f.day, h, 0, tzinfo=_TZ_CO)
     await ensure_slot_free(db, inicio, DURACION)
 
-    nombre = re.sub(r"\s+", " ", payload.full_name).strip()
-    mascota = re.sub(r"\s+", " ", payload.pet_name).strip()
-
-    # ¿Ya es cliente? Solo si el número pertenece a UN cliente (sin ambigüedad).
-    digitos = func.regexp_replace(Customer.phone, r"\D", "", "g")
-    candidatos = (
-        await db.execute(
-            select(Customer).where(
-                and_(Customer.deleted_at.is_(None), digitos.in_([tel, "57" + tel]))
-            ).limit(2)
-        )
-    ).scalars().all()
+    nombre = limpiar(payload.full_name)
+    mascota = limpiar(payload.pet_name)
     ahora = datetime.now(_TZ_CO)
-    if len(candidatos) == 1:
-        cliente = candidatos[0]
-        if not cliente.full_name:
-            cliente.full_name = nombre
-        if cliente.data_consent_at is None:
-            cliente.data_consent_at = ahora
-        # autorización comercial (ventana de la web): se guarda con fecha y origen
-        cliente.extra = {**(cliente.extra or {}), "consent_comercial_at": ahora.isoformat(),
-                         "consent_comercial_origen": "reserva_web_peluqueria"}
-    else:
-        cliente = Customer(
-            full_name=nombre,
-            phone=tel,
-            extra={"origen": "reserva_web_peluqueria", "consent_comercial_at": ahora.isoformat(),
-                   "consent_comercial_origen": "reserva_web_peluqueria"},
-            data_consent_at=ahora,
-            consent_version="1.0",
-        )
-        db.add(cliente)
-        await db.flush()
+    cliente = await cliente_por_telefono(db, nombre, tel, "reserva_web_peluqueria", ahora, consentimiento=True)
 
     futuras = (
         await db.execute(
@@ -166,22 +137,7 @@ async def reservar(payload: ReservaIn, request: Request, db: DBSession) -> dict:
             detail="Ya tienes citas pendientes con este número. Escríbenos por WhatsApp y te ayudamos.",
         )
 
-    pet = (
-        await db.execute(
-            select(Pet).where(
-                and_(
-                    Pet.customer_id == cliente.id,
-                    Pet.deleted_at.is_(None),
-                    func.lower(Pet.name) == mascota.lower(),
-                )
-            ).limit(1)
-        )
-    ).scalar_one_or_none()
-    if pet is None:
-        pet = Pet(customer_id=cliente.id, name=mascota, species=payload.species,
-                  color_theme="teal", notes="Registrada desde la reserva web de peluquería")
-        db.add(pet)
-        await db.flush()
+    pet = await mascota_de(db, cliente, mascota, payload.species, "Registrada desde la reserva web de peluquería")
 
     notas = [NOTA_WEB, f"Tel: {tel}", f"{'Perro' if payload.species == 'perro' else 'Gato'}: {mascota}"]
     if payload.notes and payload.notes.strip():

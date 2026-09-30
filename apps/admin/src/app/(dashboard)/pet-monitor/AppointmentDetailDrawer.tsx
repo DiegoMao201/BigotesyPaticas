@@ -10,6 +10,7 @@ import {
 import { adminPortal } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { buildWhatsAppUrl } from '@/lib/phone';
+import { DURACIONES } from './AgendaCitas';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: 'Pendiente', color: 'bg-blue-100 text-blue-700' },
@@ -60,6 +61,7 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [noteText, setNoteText] = useState('');
+  const [duracion, setDuracion] = useState<number | null>(null);
 
   const { data: appt, isLoading } = useQuery({
     queryKey: ['appt-detail', apptId],
@@ -68,11 +70,14 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['appt-detail', apptId] });
+    qc.invalidateQueries({ queryKey: ['admin-agenda'] });
+    qc.invalidateQueries({ queryKey: ['admin-pending-appointments'] });
+    qc.invalidateQueries({ queryKey: ['admin-horas-libres'] });
     onRefreshList();
   };
 
   const statusMut = useMutation({
-    mutationFn: (body: { status: string; cancel_reason?: string }) => adminPortal.updateAppointment(apptId, body),
+    mutationFn: (body: { status: string; cancel_reason?: string; duration_min?: number }) => adminPortal.updateAppointment(apptId, body),
     onSuccess: (_, vars) => {
       toast.success(`Cita → ${STATUS_LABELS[vars.status]?.label ?? vars.status}`);
       setShowCancel(false);
@@ -161,7 +166,7 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b bg-gray-50 shrink-0">
           <div>
-            <p className="text-xs text-gray-500 mb-0.5">{appt.notes?.includes('Reservó en la web') ? 'Cita desde la web (sin cuenta)' : 'Cita del portal'}</p>
+            <p className="text-xs text-gray-500 mb-0.5">{appt.notes?.includes('Reservó en la web') ? 'Cita desde la web (sin cuenta)' : appt.notes?.includes('Agendada por el admin') ? 'Cita agendada por la tienda' : 'Cita del portal'}</p>
             <h2 className="font-bold text-gray-900 flex items-center gap-1.5">
               <User size={14} className="text-gray-400" /> {appt.customer_name ?? 'Cliente'}
             </h2>
@@ -289,14 +294,40 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
 
         {/* Footer acciones */}
         <div className="border-t bg-gray-50 p-4 flex flex-col gap-2 shrink-0">
+          {/* Duración real del servicio: bloquea esas horas en la web y el portal (29-sep-2026) */}
+          {(appt.status === 'pending' || appt.status === 'confirmed') && (
+            <div>
+              <p className="mb-1 text-xs font-semibold text-gray-600">¿Cuánto se demora el servicio?</p>
+              <div className="grid grid-cols-4 gap-1.5">
+                {DURACIONES.map((o) => {
+                  const activo = (duracion ?? appt.duration_min) === o.min;
+                  return (
+                    <button key={o.min} type="button" onClick={() => setDuracion(o.min)}
+                      className={`rounded-lg border py-2 text-sm font-semibold ${activo ? 'border-teal-600 bg-teal-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-teal-400'}`}>
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {appt.status === 'confirmed' && duracion != null && duracion !== appt.duration_min && (
+                <button
+                  onClick={() => statusMut.mutate({ status: 'confirmed', duration_min: duracion }, { onSuccess: () => setDuracion(null) })}
+                  disabled={statusMut.isPending}
+                  className="mt-2 w-full rounded-xl bg-teal-600 py-2 text-sm font-bold text-white disabled:opacity-50"
+                >
+                  Guardar duración ({DURACIONES.find((o) => o.min === duracion)?.label})
+                </button>
+              )}
+            </div>
+          )}
           {appt.status === 'pending' && (
             <div className="flex gap-2">
               <button
-                onClick={() => statusMut.mutate({ status: 'confirmed' })}
+                onClick={() => statusMut.mutate({ status: 'confirmed', duration_min: duracion ?? appt.duration_min })}
                 disabled={statusMut.isPending}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-bold text-white text-sm bg-green-600 disabled:opacity-50"
               >
-                <CheckCircle2 size={15} /> Confirmar
+                <CheckCircle2 size={15} /> Confirmar ({DURACIONES.find((o) => o.min === (duracion ?? appt.duration_min))?.label ?? `${appt.duration_min} min`})
               </button>
               {!showCancel ? (
                 <button onClick={() => setShowCancel(true)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-bold text-red-600 border-2 border-red-200 text-sm">

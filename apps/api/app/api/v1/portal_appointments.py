@@ -137,6 +137,50 @@ async def ensure_slot_free(db, scheduled: datetime, duration_min: int) -> None:
         raise HTTPException(status_code=409, detail=msg)
 
 
+async def conflictos(db, inicio: datetime, duration_min: int, excluir: uuid.UUID | None = None) -> list[Appointment]:
+    """Citas pendientes o confirmadas que se cruzan con [inicio, inicio + duración).
+    Es la regla ÚNICA de la agenda (29-sep-2026): la usan la web, el portal y el admin,
+    así lo que agenda o acepta el admin bloquea esas horas para todos."""
+    fin = inicio + timedelta(minutes=duration_min)
+    rows = (
+        await db.execute(
+            select(Appointment).where(
+                and_(
+                    Appointment.scheduled_at < fin,
+                    Appointment.scheduled_at >= inicio - timedelta(hours=8),
+                    Appointment.status.in_(["pending", "confirmed"]),
+                )
+            )
+        )
+    ).scalars().all()
+    return [
+        a for a in rows
+        if a.id != excluir and a.scheduled_at + timedelta(minutes=a.duration_min or 60) > inicio
+    ]
+
+
+async def horas_libres_admin(db, target_date: date, duration_min: int) -> list[str]:
+    """Para el admin: inicios cada 30 min dentro del horario donde cabe una cita de esa
+    duración sin cruzarse con nada. Hoy, desde la media hora en curso."""
+    day_start = datetime(target_date.year, target_date.month, target_date.day, tzinfo=_TZ_CO)
+    dur = timedelta(minutes=duration_min)
+    ahora = datetime.now(_TZ_CO) - timedelta(minutes=29)
+    out: list[str] = []
+    t = day_start + timedelta(hours=_OPEN_H)
+    while t + dur <= day_start + timedelta(hours=_CLOSE_H):
+        if t >= ahora and len(await conflictos(db, t, duration_min)) < _SLOT_CAP:
+            out.append(t.strftime("%H:%M"))
+        t += timedelta(minutes=30)
+    return out
+
+
+def describir_cruce(citas: list[Appointment]) -> str:
+    a = citas[0]
+    ini = a.scheduled_at.astimezone(_TZ_CO)
+    fin = ini + timedelta(minutes=a.duration_min or 60)
+    return f"Se cruza con otra cita de {ini.strftime('%H:%M')} a {fin.strftime('%H:%M')}"
+
+
 # ── endpoints ─────────────────────────────────────────────────────────
 
 

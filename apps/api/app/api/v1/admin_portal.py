@@ -52,6 +52,9 @@ class OrderStatusUpdate(BaseModel):
 class ApptStatusUpdate(BaseModel):
     status: str
     cancel_reason: str | None = None
+    # Al confirmar, el admin dice cuánto se demora el servicio (1-4 h): esas horas quedan
+    # bloqueadas en la web y el portal (29-sep-2026).
+    duration_min: int | None = Field(default=None, ge=30, le=480)
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -814,6 +817,144 @@ async def update_portal_order(
     return {"ok": True, "id": str(order.id), "status": order.status}
 
 
+# ── Agenda del admin (29-sep-2026) ───────────────────────────────────────────
+# Diego: "el admin no tiene generador de citas… estamos desconectados de la gente que
+# entra por la app y las que agendan en tienda o llaman". Una sola agenda: lo que agenda
+# o acepta el admin bloquea esas horas en la web y el portal (misma regla: conflictos()).
+
+
+def _origen_cita(notes: str | None) -> str:
+    n = notes or ""
+    if "Reservó en la web" in n:
+        return "web"
+    if "Agendada por el admin" in n:
+        return "admin"
+    return "portal"
+
+
+@router.get("/appointments/agenda")
+async def agenda_del_dia(db: DBSession, date: str = Query(...)) -> dict:
+    """Citas pendientes y confirmadas de un día, con su bloque de horas."""
+    from datetime import date as _date
+
+    from app.api.v1.portal_appointments import _CLOSE_H, _OPEN_H, _TZ_CO
+    from app.models.portal import Pet
+
+    try:
+        d = _date.fromisoformat(date)
+    except ValueError as exc:
+        raise HTTPException(422, "Fecha inválida") from exc
+    ini = datetime(d.year, d.month, d.day, tzinfo=_TZ_CO)
+    rows = (
+        await db.execute(
+            select(Appointment, Customer.full_name, Customer.phone, Pet.name, Pet.species)
+            .join(Customer, Appointment.customer_id == Customer.id, isouter=True)
+            .join(Pet, Appointment.pet_id == Pet.id, isouter=True)
+            .where(
+                Appointment.scheduled_at >= ini - timedelta(hours=8),
+                Appointment.scheduled_at < ini + timedelta(days=1),
+                Appointment.status.in_(["pending", "confirmed"]),
+            )
+            .order_by(Appointment.scheduled_at)
+        )
+    ).all()
+    citas = []
+    for a, nombre, tel, mascota, especie in rows:
+        local = a.scheduled_at.astimezone(_TZ_CO)
+        fin = local + timedelta(minutes=a.duration_min or 60)
+        if fin <= ini:
+            continue
+        citas.append({
+            "id": str(a.id),
+            "inicio": local.strftime("%H:%M"),
+            "fin": fin.strftime("%H:%M"),
+            "duration_min": a.duration_min,
+            "status": a.status,
+            "customer_name": nombre,
+            "customer_phone": tel,
+            "pet_name": mascota,
+            "species": especie,
+            "origen": _origen_cita(a.notes),
+            "notes": a.notes,
+        })
+    return {"date": date, "abre": f"{_OPEN_H:02d}:00", "cierra": f"{_CLOSE_H:02d}:00",
+            "cerrado": d.weekday() == 6, "citas": citas}
+
+
+@router.get("/appointments/free-starts")
+async def horas_libres(db: DBSession, date: str = Query(...), duration: int = Query(120, ge=30, le=480)) -> dict:
+    from datetime import date as _date
+
+    from app.api.v1.portal_appointments import horas_libres_admin
+
+    try:
+        d = _date.fromisoformat(date)
+    except ValueError as exc:
+        raise HTTPException(422, "Fecha inválida") from exc
+    return {"date": date, "duration": duration, "starts": await horas_libres_admin(db, d, duration)}
+
+
+class AdminApptCreate(BaseModel):
+    date: str
+    time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    duration_min: int = Field(ge=30, le=480)
+    owner_name: str = Field(min_length=2, max_length=120)
+    phone: str = Field(min_length=7, max_length=20)
+    pet_name: str = Field(min_length=1, max_length=60)
+    species: str = Field(default="perro", pattern="^(perro|gato)$")
+    origen: str = Field(default="tienda", pattern="^(tienda|llamada|whatsapp)$")
+    notes: str | None = Field(default=None, max_length=500)
+
+
+@router.post("/appointments", status_code=201, dependencies=[Depends(require_permission("crm:write"))])
+async def crear_cita_admin(payload: AdminApptCreate, db: DBSession) -> dict:
+    """El admin agenda (en tienda, por llamada o WhatsApp): queda CONFIRMADA y bloquea
+    esas horas para la web y el portal."""
+    from datetime import date as _date
+
+    from app.api.v1.portal_appointments import _TZ_CO, conflictos, describir_cruce
+    from app.services.citas import cliente_por_telefono, digitos_telefono, limpiar, mascota_de
+
+    try:
+        d = _date.fromisoformat(payload.date)
+        hh, mm = (int(x) for x in payload.time.split(":"))
+        inicio = datetime(d.year, d.month, d.day, hh, mm, tzinfo=_TZ_CO)
+    except ValueError as exc:
+        raise HTTPException(422, "Fecha u hora inválida") from exc
+    if inicio < datetime.now(_TZ_CO) - timedelta(minutes=30):
+        raise HTTPException(422, "Esa hora ya pasó")
+    tel = digitos_telefono(payload.phone)
+    if not tel:
+        raise HTTPException(422, "Escribe un celular válido (10 dígitos, p. ej. 311 660 2399)")
+    cruces = await conflictos(db, inicio, payload.duration_min)
+    if cruces:
+        raise HTTPException(409, f"{describir_cruce(cruces)}. Elige otra hora o una duración menor.")
+
+    ahora = datetime.now(_TZ_CO)
+    nombre = limpiar(payload.owner_name)
+    mascota = limpiar(payload.pet_name)
+    cliente = await cliente_por_telefono(db, nombre, tel, f"agenda_admin_{payload.origen}", ahora, consentimiento=False)
+    pet = await mascota_de(db, cliente, mascota, payload.species, "Registrada al agendar en el admin")
+    etiqueta = {"tienda": "en la tienda", "llamada": "por llamada", "whatsapp": "por WhatsApp"}[payload.origen]
+    notas = [f"Agendada por el admin ({etiqueta})", f"Tel: {tel}",
+             f"{'Perro' if payload.species == 'perro' else 'Gato'}: {mascota}"]
+    if payload.notes and payload.notes.strip():
+        notas.append(payload.notes.strip())
+    appt = Appointment(
+        pet_id=pet.id,
+        customer_id=cliente.id,
+        service_type="grooming",
+        scheduled_at=inicio,
+        duration_min=payload.duration_min,
+        status="confirmed",
+        confirmed_at=datetime.now(UTC),
+        notes=" · ".join(notas),
+    )
+    db.add(appt)
+    await db.commit()
+    return {"ok": True, "id": str(appt.id), "customer_name": cliente.full_name}
+
+
 @router.get("/appointments")
 async def list_portal_appointments(
     db: DBSession,
@@ -881,6 +1022,18 @@ async def update_portal_appointment(
 
     new_status = payload.status
     now = datetime.now(UTC)
+
+    if new_status in ("confirmed", "pending") and (payload.duration_min or new_status == "confirmed"):
+        from app.api.v1.portal_appointments import conflictos, describir_cruce
+
+        dur = payload.duration_min or appt.duration_min
+        cruces = await conflictos(db, appt.scheduled_at, dur, excluir=appt.id)
+        if cruces:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{describir_cruce(cruces)}. Cambia la duración o reacomoda el horario.",
+            )
+        appt.duration_min = dur
 
     appt.status = new_status
 
@@ -1970,6 +2123,11 @@ async def confirm_appt_customer_choice(
     if not appt:
         raise HTTPException(404, "Cita no encontrada")
     new_dt = datetime.fromisoformat(payload.chosen_datetime)
+    from app.api.v1.portal_appointments import conflictos, describir_cruce
+
+    cruces = await conflictos(db, new_dt, appt.duration_min, excluir=appt.id)
+    if cruces:
+        raise HTTPException(409, f"{describir_cruce(cruces)}. Elige otra hora.")
     appt.scheduled_at = new_dt
     appt.status = "confirmed"
     appt.confirmed_at = datetime.now(UTC)
