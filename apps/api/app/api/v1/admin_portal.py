@@ -852,7 +852,7 @@ async def agenda_del_dia(db: DBSession, date: str = Query(...)) -> dict:
     """Citas pendientes y confirmadas de un día, con su bloque de horas."""
     from datetime import date as _date
 
-    from app.api.v1.portal_appointments import _CLOSE_H, _OPEN_H, _TZ_CO
+    from app.api.v1.portal_appointments import _CLOSE_H, _OPEN_H, _TZ_CO, bloqueos_entre
     from app.models.portal import Pet
 
     try:
@@ -873,12 +873,14 @@ async def agenda_del_dia(db: DBSession, date: str = Query(...)) -> dict:
             .order_by(Appointment.scheduled_at)
         )
     ).all()
+    bloqueos = await bloqueos_entre(db, ini, ini + timedelta(days=1))
     citas = []
     for a, nombre, tel, mascota, especie in rows:
         local = a.scheduled_at.astimezone(_TZ_CO)
         fin = local + timedelta(minutes=a.duration_min or 60)
         if fin <= ini:
             continue
+        en_bloqueo = a.status != "completed" and any(b.inicio < fin and b.fin > local for b in bloqueos)
         citas.append({
             "id": str(a.id),
             "inicio": local.strftime("%H:%M"),
@@ -891,9 +893,138 @@ async def agenda_del_dia(db: DBSession, date: str = Query(...)) -> dict:
             "species": especie,
             "origen": _origen_cita(a.notes),
             "notes": a.notes,
+            "en_bloqueo": en_bloqueo,
         })
+    fin_dia = ini + timedelta(days=1)
     return {"date": date, "abre": f"{_OPEN_H:02d}:00", "cierra": f"{_CLOSE_H:02d}:00",
-            "cerrado": d.weekday() == 6, "citas": citas}
+            "cerrado": d.weekday() == 6, "citas": citas,
+            "bloqueos": [_bloqueo_out(b, ini, fin_dia) for b in bloqueos]}
+
+
+# ── Bloqueos de agenda (29-sep-2026) ─────────────────────────────────────────
+# "bloquear días… el groomer no está, se va de vacaciones, se enfermó… así el portal y la
+# web no tendrán disponibles esos días o esas horas… y no que por estar bloqueado no me
+# deje moverme en la agenda". La web y el portal los respetan; el admin puede agendar
+# encima. Al bloquear se devuelven las citas afectadas para reagendarlas y avisar.
+
+
+def _bloqueo_out(b, dia_ini: datetime | None = None, dia_fin: datetime | None = None) -> dict:
+    from app.api.v1.portal_appointments import _TZ_CO
+
+    ini = b.inicio.astimezone(_TZ_CO)
+    fin = b.fin.astimezone(_TZ_CO)
+    out = {
+        "id": str(b.id),
+        "inicio": ini.isoformat(),
+        "fin": fin.isoformat(),
+        "motivo": b.motivo,
+        "dia_completo": ini.hour == 0 and ini.minute == 0 and fin.hour == 0 and fin.minute == 0,
+    }
+    if dia_ini is not None and dia_fin is not None:  # recortado al día que se mira
+        out["desde_hora"] = max(ini, dia_ini.astimezone(_TZ_CO)).strftime("%H:%M") if ini > dia_ini else "00:00"
+        out["hasta_hora"] = fin.strftime("%H:%M") if fin < dia_fin else "24:00"
+    return out
+
+
+class BloqueoIn(BaseModel):
+    fecha_desde: str
+    fecha_hasta: str | None = None      # días completos: hasta este día inclusive
+    hora_desde: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")  # solo horas de un día
+    hora_hasta: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    motivo: str | None = Field(default=None, max_length=200)
+
+
+async def _citas_afectadas(db, inicio: datetime, fin: datetime) -> list[dict]:
+    from app.api.v1.portal_appointments import _TZ_CO
+    from app.models.portal import Pet
+
+    rows = (
+        await db.execute(
+            select(Appointment, Customer.full_name, Customer.phone, Pet.name)
+            .join(Customer, Appointment.customer_id == Customer.id, isouter=True)
+            .join(Pet, Appointment.pet_id == Pet.id, isouter=True)
+            .where(
+                Appointment.scheduled_at < fin,
+                Appointment.scheduled_at >= inicio - timedelta(hours=8),
+                Appointment.status.in_(["pending", "confirmed"]),
+            )
+            .order_by(Appointment.scheduled_at)
+        )
+    ).all()
+    out = []
+    for a, nombre, tel, mascota in rows:
+        if a.scheduled_at + timedelta(minutes=a.duration_min or 60) <= inicio:
+            continue
+        local = a.scheduled_at.astimezone(_TZ_CO)
+        out.append({"id": str(a.id), "cuando": local.isoformat(), "status": a.status,
+                    "customer_name": nombre, "customer_phone": tel, "pet_name": mascota})
+    return out
+
+
+@router.get("/appointments/bloqueos")
+async def listar_bloqueos(db: DBSession) -> list[dict]:
+    """Bloqueos vigentes y futuros."""
+    from app.models.portal import AgendaBloqueo
+
+    rows = (
+        await db.execute(
+            select(AgendaBloqueo).where(AgendaBloqueo.fin > datetime.now(UTC)).order_by(AgendaBloqueo.inicio)
+        )
+    ).scalars().all()
+    out = []
+    for b in rows:
+        d = _bloqueo_out(b)
+        d["afectadas"] = await _citas_afectadas(db, b.inicio, b.fin)
+        out.append(d)
+    return out
+
+
+@router.post("/appointments/bloqueos", status_code=201, dependencies=[Depends(require_permission("crm:write"))])
+async def crear_bloqueo(payload: BloqueoIn, db: DBSession) -> dict:
+    from datetime import date as _date
+
+    from app.api.v1.portal_appointments import _TZ_CO
+    from app.models.portal import AgendaBloqueo
+
+    try:
+        d1 = _date.fromisoformat(payload.fecha_desde)
+        d2 = _date.fromisoformat(payload.fecha_hasta) if payload.fecha_hasta else d1
+    except ValueError as exc:
+        raise HTTPException(422, "Fecha inválida") from exc
+    if payload.hora_desde and payload.hora_hasta:
+        h1 = [int(x) for x in payload.hora_desde.split(":")]
+        h2 = [int(x) for x in payload.hora_hasta.split(":")]
+        inicio = datetime(d1.year, d1.month, d1.day, h1[0], h1[1], tzinfo=_TZ_CO)
+        fin = datetime(d1.year, d1.month, d1.day, h2[0], h2[1], tzinfo=_TZ_CO)
+        if fin <= inicio:
+            raise HTTPException(422, "La hora final debe ser después de la inicial")
+    else:
+        if d2 < d1:
+            raise HTTPException(422, "La fecha final debe ser igual o posterior a la inicial")
+        if (d2 - d1).days > 120:
+            raise HTTPException(422, "Bloquea máximo 4 meses de una vez")
+        inicio = datetime(d1.year, d1.month, d1.day, tzinfo=_TZ_CO)
+        fin = datetime(d2.year, d2.month, d2.day, tzinfo=_TZ_CO) + timedelta(days=1)
+    b = AgendaBloqueo(inicio=inicio, fin=fin, motivo=(payload.motivo or "").strip() or None)
+    db.add(b)
+    await db.flush()
+    afectadas = await _citas_afectadas(db, inicio, fin)
+    await db.commit()
+    out = _bloqueo_out(b)
+    out["afectadas"] = afectadas
+    return out
+
+
+@router.delete("/appointments/bloqueos/{bloqueo_id}", dependencies=[Depends(require_permission("crm:write"))])
+async def quitar_bloqueo(bloqueo_id: uuid.UUID, db: DBSession) -> dict:
+    from app.models.portal import AgendaBloqueo
+
+    b = (await db.execute(select(AgendaBloqueo).where(AgendaBloqueo.id == bloqueo_id))).scalar_one_or_none()
+    if not b:
+        raise HTTPException(404, "Bloqueo no encontrado")
+    await db.delete(b)
+    await db.commit()
+    return {"ok": True}
 
 
 @router.get("/appointments/free-starts")
@@ -911,7 +1042,8 @@ async def horas_libres(
         d = _date.fromisoformat(date)
     except ValueError as exc:
         raise HTTPException(422, "Fecha inválida") from exc
-    return {"date": date, "duration": duration, "starts": await horas_libres_admin(db, d, duration, excluir)}
+    libres, bloqueadas = await horas_libres_admin(db, d, duration, excluir)
+    return {"date": date, "duration": duration, "starts": libres, "bloqueadas": bloqueadas}
 
 
 class AdminApptCreate(BaseModel):

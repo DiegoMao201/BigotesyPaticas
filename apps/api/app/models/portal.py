@@ -89,6 +89,19 @@ class HealthRecord(UUIDPKMixin, Base):
     pet: Mapped[Pet] = relationship("Pet", back_populates="health_records")
 
 
+class AgendaBloqueo(UUIDPKMixin, TimestampMixin, Base):
+    """Días u horas sin atención de peluquería (vacaciones, groomer enfermo…). La web y
+    el portal no ofrecen horas que se crucen; el admin sí puede agendar encima."""
+
+    __tablename__ = "agenda_bloqueos"
+    __table_args__ = ({"schema": "portal"},)
+
+    inicio: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    fin: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    motivo: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
 class Appointment(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "appointments"
     __table_args__ = (

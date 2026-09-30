@@ -66,6 +66,8 @@ function ElegirNuevoHorario({ apptId, fechaActual, duracionMin, valor, onElegir 
     queryKey: ['admin-horas-libres', dia, duracionMin, apptId],
     queryFn: () => adminPortal.horasLibres(dia, duracionMin, apptId),
   });
+  const bloqueadas = data?.bloqueadas ?? [];
+  const todas = [...(data?.starts ?? []), ...bloqueadas].sort();
   const hora12 = (t: string) => {
     const [h, m] = t.split(':').map(Number);
     return `${h > 12 ? h - 12 : h}:${String(m).padStart(2, '0')} ${h < 12 ? 'a. m.' : 'p. m.'}`;
@@ -78,16 +80,17 @@ function ElegirNuevoHorario({ apptId, fechaActual, duracionMin, valor, onElegir 
       <label className="text-xs font-semibold text-gray-600 flex items-center gap-2">
         Nueva hora (libres para {duracionMin / 60} h) {isFetching && <span className="text-gray-400">…</span>}
       </label>
-      {data && data.starts.length === 0 ? (
+      {data && todas.length === 0 ? (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">No hay espacio ese día para {duracionMin / 60} h. Prueba otro día.</p>
       ) : (
         <div className="grid grid-cols-4 gap-1.5 max-h-36 overflow-y-auto">
-          {(data?.starts ?? []).map((t) => {
+          {todas.map((t) => {
             const v = `${dia}T${t}`;
+            const bloq = bloqueadas.includes(t);
             return (
-              <button key={t} type="button" onClick={() => onElegir(v)}
-                className={`rounded-md border py-1.5 text-xs font-semibold ${valor === v ? 'border-teal-600 bg-teal-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-teal-400'}`}>
-                {hora12(t)}
+              <button key={t} type="button" onClick={() => onElegir(v)} title={bloq ? 'Bloqueada para la web; tú sí puedes usarla' : undefined}
+                className={`rounded-md border py-1.5 text-xs font-semibold ${valor === v ? 'border-teal-600 bg-teal-600 text-white' : bloq ? 'border-dashed border-gray-400 bg-white text-gray-500' : 'border-gray-300 bg-white text-gray-700 hover:border-teal-400'}`}>
+                {bloq && '🔒 '}{hora12(t)}
               </button>
             );
           })}
@@ -191,14 +194,17 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
     const hola = `¡Hola${firstName ? ' ' + firstName : ''}! Te escribo de Bigotes y Paticas`;
     // El mensaje sigue a lo que hizo el admin: confirmar, reacomodar o cancelar (28-sep-2026)
     const llegada = new Date(dt.getTime() - 20 * 60 * 1000).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' });
-    const msg =
-      appt.status === 'confirmed'
+    const movida = appt.status === 'confirmed' && !!appt.reschedule_reason_category;
+    const msg = movida
+      ? `${hola}. Tuvimos que mover tu cita de ${servicio}${mascota} y te la reprogramamos para el ${fecha} a las ${hora}. Disculpa el cambio 🙏\n\n📍 Te esperamos en la tienda (no hacemos recogida): ${DIRECCION_TIENDA}.\n⏰ Por favor llega 20 minutos antes, a las ${llegada}.\n🗺️ Cómo llegar: ${MAPA_TIENDA}\n\nSi ese horario no te sirve, respóndenos por aquí y buscamos otro. 🐾`
+      : appt.status === 'confirmed'
         ? `${hola}. ✅ Tu cita de ${servicio}${mascota} quedó confirmada para el ${fecha} a las ${hora}.\n\n📍 Trae a tu mascota a la tienda (no hacemos recogida): ${DIRECCION_TIENDA}.\n⏰ Por favor llega 20 minutos antes, a las ${llegada}.\n🗺️ Cómo llegar: ${MAPA_TIENDA}\n\nSi no puedes asistir, avísanos por aquí. ¡Te esperamos! 🐾`
         : appt.status === 'cancelled'
           ? `${hola}. Tuvimos que cancelar tu cita de ${servicio}${mascota} del ${fecha} a las ${hora}${appt.cancel_reason ? ` (${appt.cancel_reason})` : ''}. ¿Te buscamos otro horario?`
           : `${hola}. Recibimos tu solicitud de ${servicio}${mascota} para el ${fecha} a las ${hora}. ¿Nos confirmas que te queda bien ese horario? Te recuerdo que la mascota se trae a la tienda (no hacemos recogida) y que es bueno llegar 20 minutos antes.`;
     return { url: buildWhatsAppUrl(appt.customer_phone, msg), label:
-      appt.status === 'confirmed' ? 'Avisar confirmación por WhatsApp'
+      movida ? 'Avisar el cambio de horario por WhatsApp'
+      : appt.status === 'confirmed' ? 'Avisar confirmación por WhatsApp'
         : appt.status === 'cancelled' ? 'Avisar cancelación por WhatsApp'
           : 'Escribir por WhatsApp para confirmar' };
   })();

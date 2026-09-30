@@ -15,7 +15,7 @@ from app.api.v1.portal_auth import PortalUser
 from app.api.v1.portal_loyalty import POINTS_APPOINTMENT, award_points
 from app.deps import DBSession
 from app.models.crm import Customer
-from app.models.portal import Appointment
+from app.models.portal import AgendaBloqueo, Appointment
 
 _TZ_CO = ZoneInfo("America/Bogota")
 
@@ -103,6 +103,7 @@ async def compute_slots(db, target_date: date, duration_min: int = _DEFAULT_DURA
             )
         )
     ).all()
+    bloqueos = await bloqueos_entre(db, day_start, day_start + timedelta(days=1))
     now = datetime.now(_TZ_CO)
     slots: list[SlotOut] = []
     h = _OPEN_H
@@ -115,6 +116,8 @@ async def compute_slots(db, target_date: date, duration_min: int = _DEFAULT_DURA
         )
         if ini < now + _MIN_LEAD:
             slots.append(SlotOut(time=f"{h:02d}:00", available=False, reason="ya pasó"))
+        elif any(b.inicio < fin and b.fin > ini for b in bloqueos):
+            slots.append(SlotOut(time=f"{h:02d}:00", available=False, reason="no disponible"))
         else:
             ok = cruces < _SLOT_CAP
             slots.append(SlotOut(time=f"{h:02d}:00", available=ok, reason=None if ok else "ocupado"))
@@ -160,19 +163,39 @@ async def conflictos(db, inicio: datetime, duration_min: int, excluir: uuid.UUID
     ]
 
 
-async def horas_libres_admin(db, target_date: date, duration_min: int, excluir: uuid.UUID | None = None) -> list[str]:
-    """Para el admin: inicios cada 30 min dentro del horario donde cabe una cita de esa
-    duración sin cruzarse con nada. Hoy, desde la media hora en curso."""
+async def bloqueos_entre(db, desde: datetime, hasta: datetime) -> list[AgendaBloqueo]:
+    return list(
+        (
+            await db.execute(
+                select(AgendaBloqueo)
+                .where(AgendaBloqueo.inicio < hasta, AgendaBloqueo.fin > desde)
+                .order_by(AgendaBloqueo.inicio)
+            )
+        ).scalars().all()
+    )
+
+
+async def horas_libres_admin(
+    db, target_date: date, duration_min: int, excluir: uuid.UUID | None = None
+) -> tuple[list[str], list[str]]:
+    """Para el admin: inicios cada 30 min donde cabe una cita de esa duración sin cruzarse
+    con otra cita. Devuelve (libres, bloqueadas): las bloqueadas NO salen en la web ni el
+    portal, pero el admin sí puede usarlas si decide atender (29-sep-2026)."""
     day_start = datetime(target_date.year, target_date.month, target_date.day, tzinfo=_TZ_CO)
     dur = timedelta(minutes=duration_min)
     ahora = datetime.now(_TZ_CO) - timedelta(minutes=29)
-    out: list[str] = []
+    bloqueos = await bloqueos_entre(db, day_start, day_start + timedelta(days=1))
+    libres: list[str] = []
+    bloqueadas: list[str] = []
     t = day_start + timedelta(hours=_OPEN_H)
     while t + dur <= day_start + timedelta(hours=_CLOSE_H):
         if t >= ahora and len(await conflictos(db, t, duration_min, excluir=excluir)) < _SLOT_CAP:
-            out.append(t.strftime("%H:%M"))
+            if any(b.inicio < t + dur and b.fin > t for b in bloqueos):
+                bloqueadas.append(t.strftime("%H:%M"))
+            else:
+                libres.append(t.strftime("%H:%M"))
         t += timedelta(minutes=30)
-    return out
+    return libres, bloqueadas
 
 
 def describir_cruce(citas: list[Appointment]) -> str:

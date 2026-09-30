@@ -10,7 +10,8 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, CalendarPlus, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarPlus, Loader2, Lock } from 'lucide-react';
+import { NuevoBloqueo, ProximosBloqueos } from './BloqueosAgenda';
 import { adminPortal, type CitaAgenda, type NuevaCitaAdmin } from '@/lib/api';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,7 @@ const ORIGEN: Record<CitaAgenda['origen'], { label: string; cls: string }> = {
 export function AgendaCitas({ onOpenCita }: { onOpenCita: (id: string) => void }) {
   const [fecha, setFecha] = useState(() => isoLocal(new Date()));
   const [nueva, setNueva] = useState<{ time?: string } | null>(null);
+  const [bloquear, setBloquear] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-agenda', fecha],
@@ -89,7 +91,10 @@ export function AgendaCitas({ onOpenCita }: { onOpenCita: (id: string) => void }
         <span className="text-sm font-semibold text-gray-700 capitalize">
           {d.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
         </span>
-        <Button size="sm" className="ml-auto gap-1.5" onClick={() => setNueva({})}>
+        <Button size="sm" variant="outline" className="ml-auto gap-1.5" onClick={() => setBloquear(true)}>
+          <Lock size={14} /> Bloquear
+        </Button>
+        <Button size="sm" className="gap-1.5" onClick={() => setNueva({})}>
           <CalendarPlus size={15} /> Agendar cita
         </Button>
       </div>
@@ -114,6 +119,21 @@ export function AgendaCitas({ onOpenCita }: { onOpenCita: (id: string) => void }
               <span className="w-16 shrink-0 pl-1 pt-0.5 text-[11px] text-gray-400">{t.endsWith(':00') ? hora12(t) : ''}</span>
             </button>
           ))}
+          {(data?.bloqueos ?? []).map((b) => {
+            const ini = Math.max(aMin(b.desde_hora ?? '00:00'), abre);
+            const fin = Math.min(aMin(b.hasta_hora ?? '24:00'), cierra);
+            if (fin <= ini) return null;
+            return (
+              <div key={b.id}
+                className="pointer-events-none absolute left-16 right-1 rounded-lg border border-dashed border-gray-400"
+                style={{ top: ((ini - abre) / 30) * FILA_PX + 1, height: ((fin - ini) / 30) * FILA_PX - 2,
+                  background: 'repeating-linear-gradient(135deg, rgba(107,114,128,.10) 0 8px, rgba(107,114,128,.02) 8px 16px)' }}>
+                <span className="absolute bottom-1 right-2 z-10 flex items-center gap-1 rounded bg-white/95 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700 shadow-sm">
+                  <Lock size={10} /> Bloqueado{b.motivo ? ` · ${b.motivo}` : ''}
+                </span>
+              </div>
+            );
+          })}
           {(data?.citas ?? []).map((c) => {
             const ini = Math.max(aMin(c.inicio), abre);
             const top = ((ini - abre) / 30) * FILA_PX;
@@ -125,7 +145,7 @@ export function AgendaCitas({ onOpenCita }: { onOpenCita: (id: string) => void }
                 key={c.id}
                 type="button"
                 onClick={() => onOpenCita(c.id)}
-                className={`absolute left-16 right-1 overflow-hidden rounded-lg border-l-4 px-2 py-1 text-left text-xs shadow-sm transition hover:shadow-md ${pendiente ? 'border-amber-500 bg-amber-50' : hecha ? 'border-gray-400 bg-gray-100' : 'border-teal-600 bg-teal-50'}`}
+                className={`absolute left-16 right-1 overflow-hidden rounded-lg border-l-4 px-2 py-1 text-left text-xs shadow-sm transition hover:shadow-md ${c.en_bloqueo ? 'ring-2 ring-red-400 ' : ''}${pendiente ? 'border-amber-500 bg-amber-50' : hecha ? 'border-gray-400 bg-gray-100' : 'border-teal-600 bg-teal-50'}`}
                 style={{ top: top + 1, height: alto }}
               >
                 <div className="flex items-center gap-1.5">
@@ -135,15 +155,20 @@ export function AgendaCitas({ onOpenCita }: { onOpenCita: (id: string) => void }
                 </div>
                 <div className={pendiente ? 'text-amber-700 font-semibold' : hecha ? 'text-gray-500' : 'text-teal-700'}>
                   {hora12(c.inicio)} – {hora12(c.fin)} · {pendiente ? 'POR CONFIRMAR' : hecha ? 'completada' : 'confirmada'}
+                  {c.en_bloqueo && <span className="ml-1 font-bold text-red-600">· ⚠ dentro del bloqueo, reagéndala</span>}
                 </div>
               </button>
             );
           })}
         </div>
       )}
-      <p className="mt-2 text-[11px] text-gray-400">Toca un espacio libre para agendar ahí. Lo que agendas o confirmas aquí se bloquea en la web y el portal.</p>
+      <p className="mt-2 text-[11px] text-gray-400">Toca un espacio libre para agendar ahí. Lo que agendas, confirmas o bloqueas aquí se refleja en la web y el portal.</p>
 
       {nueva && <NuevaCita fecha={fecha} horaInicial={nueva.time} onClose={() => setNueva(null)} />}
+      {bloquear && <NuevoBloqueo fecha={fecha} onClose={() => setBloquear(false)} onOpenCita={onOpenCita} />}
+      <div className="mt-3">
+        <ProximosBloqueos onOpenCita={onOpenCita} />
+      </div>
     </div>
   );
 }
@@ -160,7 +185,9 @@ function NuevaCita({ fecha: fechaInicial, horaInicial, onClose }: { fecha: strin
     queryKey: ['admin-horas-libres', f.date, f.duration_min],
     queryFn: () => adminPortal.horasLibres(f.date, f.duration_min),
   });
-  const horaValida = !!f.time && (libres?.starts ?? []).includes(f.time);
+  const bloqueadas = libres?.bloqueadas ?? [];
+  const todas = [...(libres?.starts ?? []), ...bloqueadas].sort();
+  const horaValida = !!f.time && todas.includes(f.time);
 
   const crear = useMutation({
     mutationFn: () => adminPortal.crearCita({ ...f, notes: f.notes?.trim() || undefined }),
@@ -208,20 +235,26 @@ function NuevaCita({ fecha: fechaInicial, horaInicial, onClose }: { fecha: strin
             <label className="mb-1 flex items-center gap-2 text-xs font-medium">
               Hora de inicio {isFetching && <Loader2 size={12} className="animate-spin" />}
             </label>
-            {libres && libres.starts.length === 0 ? (
+            {libres && todas.length === 0 ? (
               <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">No hay espacio para {f.duration_min / 60} h ese día. Prueba otra duración u otro día.</p>
             ) : (
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 max-h-40 overflow-y-auto">
-                {(libres?.starts ?? []).map((t) => (
-                  <button key={t} type="button" onClick={() => set('time', t)}
-                    className={`rounded-md border py-1.5 text-xs font-semibold ${f.time === t ? 'border-teal-600 bg-teal-600 text-white' : 'hover:border-teal-300'}`}>
-                    {hora12(t)}
-                  </button>
-                ))}
+                {todas.map((t) => {
+                  const bloq = bloqueadas.includes(t);
+                  return (
+                    <button key={t} type="button" onClick={() => set('time', t)} title={bloq ? 'Horario bloqueado (la web no lo ofrece); tú sí puedes agendar' : undefined}
+                      className={`rounded-md border py-1.5 text-xs font-semibold ${f.time === t ? 'border-teal-600 bg-teal-600 text-white' : bloq ? 'border-dashed border-gray-400 text-gray-500' : 'hover:border-teal-300'}`}>
+                      {bloq && '🔒 '}{hora12(t)}
+                    </button>
+                  );
+                })}
               </div>
             )}
             {f.time && !horaValida && libres && (
               <p className="mt-1 text-xs text-red-600">Las {hora12(f.time)} no quedan libres para {f.duration_min / 60} h. Elige otra hora.</p>
+            )}
+            {horaValida && bloqueadas.includes(f.time) && (
+              <p className="mt-1 text-xs text-amber-700">🔒 Esa hora está bloqueada para la web y el portal. Puedes agendarla igual si vas a atender.</p>
             )}
             {horaValida && (
               <p className="mt-1 text-xs text-teal-700">

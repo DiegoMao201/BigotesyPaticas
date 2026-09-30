@@ -1539,6 +1539,27 @@ export interface CitaAgenda {
   species: string | null;
   origen: 'web' | 'portal' | 'admin';
   notes: string | null;
+  en_bloqueo?: boolean;
+}
+
+export interface CitaAfectada {
+  id: string;
+  cuando: string;
+  status: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  pet_name: string | null;
+}
+
+export interface BloqueoAgenda {
+  id: string;
+  inicio: string;
+  fin: string;
+  motivo: string | null;
+  dia_completo: boolean;
+  desde_hora?: string;
+  hasta_hora?: string;
+  afectadas?: CitaAfectada[];
 }
 
 export interface AgendaDia {
@@ -1547,6 +1568,7 @@ export interface AgendaDia {
   cierra: string;
   cerrado: boolean;
   citas: CitaAgenda[];
+  bloqueos: BloqueoAgenda[];
 }
 
 export interface NuevaCitaAdmin {
@@ -1677,9 +1699,14 @@ export const adminPortal = {
   // Agenda única (29-sep-2026): lo que agenda o acepta el admin bloquea web y portal
   agendaDia: (date: string) => api<AgendaDia>(`/v1/admin/portal/appointments/agenda?date=${date}`),
   horasLibres: (date: string, duration: number, excluir?: string) =>
-    api<{ date: string; duration: number; starts: string[] }>(
+    api<{ date: string; duration: number; starts: string[]; bloqueadas?: string[] }>(
       `/v1/admin/portal/appointments/free-starts?date=${date}&duration=${duration}${excluir ? `&excluir=${excluir}` : ''}`
     ),
+  bloqueos: () => api<BloqueoAgenda[]>('/v1/admin/portal/appointments/bloqueos'),
+  crearBloqueo: (body: { fecha_desde: string; fecha_hasta?: string; hora_desde?: string; hora_hasta?: string; motivo?: string }) =>
+    api<BloqueoAgenda>('/v1/admin/portal/appointments/bloqueos', { method: 'POST', body: JSON.stringify(body) }),
+  quitarBloqueo: (id: string) =>
+    api<{ ok: boolean }>(`/v1/admin/portal/appointments/bloqueos/${id}`, { method: 'DELETE' }),
   crearCita: (body: NuevaCitaAdmin) =>
     api<{ ok: boolean; id: string; customer_name: string }>(
       '/v1/admin/portal/appointments', { method: 'POST', body: JSON.stringify(body) }
