@@ -1676,9 +1676,9 @@ export const adminPortal = {
   appointmentDetail: (id: string) => api<AppointmentDetail>(`/v1/admin/portal/appointments/${id}/detail`),
   // Agenda única (29-sep-2026): lo que agenda o acepta el admin bloquea web y portal
   agendaDia: (date: string) => api<AgendaDia>(`/v1/admin/portal/appointments/agenda?date=${date}`),
-  horasLibres: (date: string, duration: number) =>
+  horasLibres: (date: string, duration: number, excluir?: string) =>
     api<{ date: string; duration: number; starts: string[] }>(
-      `/v1/admin/portal/appointments/free-starts?date=${date}&duration=${duration}`
+      `/v1/admin/portal/appointments/free-starts?date=${date}&duration=${duration}${excluir ? `&excluir=${excluir}` : ''}`
     ),
   crearCita: (body: NuevaCitaAdmin) =>
     api<{ ok: boolean; id: string; customer_name: string }>(

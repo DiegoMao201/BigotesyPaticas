@@ -882,7 +882,12 @@ async def agenda_del_dia(db: DBSession, date: str = Query(...)) -> dict:
 
 
 @router.get("/appointments/free-starts")
-async def horas_libres(db: DBSession, date: str = Query(...), duration: int = Query(120, ge=30, le=480)) -> dict:
+async def horas_libres(
+    db: DBSession,
+    date: str = Query(...),
+    duration: int = Query(120, ge=30, le=480),
+    excluir: uuid.UUID | None = Query(None),  # al reagendar, la cita misma no cuenta
+) -> dict:
     from datetime import date as _date
 
     from app.api.v1.portal_appointments import horas_libres_admin
@@ -891,7 +896,7 @@ async def horas_libres(db: DBSession, date: str = Query(...), duration: int = Qu
         d = _date.fromisoformat(date)
     except ValueError as exc:
         raise HTTPException(422, "Fecha inválida") from exc
-    return {"date": date, "duration": duration, "starts": await horas_libres_admin(db, d, duration)}
+    return {"date": date, "duration": duration, "starts": await horas_libres_admin(db, d, duration, excluir)}
 
 
 class AdminApptCreate(BaseModel):

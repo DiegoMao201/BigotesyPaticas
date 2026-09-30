@@ -53,6 +53,50 @@ const SERVICE_LABELS: Record<string, string> = {
   'baño': 'baño',
 };
 
+/** Reagendar (29-sep-2026): día + solo las horas libres para la duración de la cita, sin
+ * contar la cita misma. Sirve igual para citas del portal, la web o la tienda. */
+function ElegirNuevoHorario({ apptId, fechaActual, duracionMin, valor, onElegir }: {
+  apptId: string; fechaActual: string; duracionMin: number; valor: string; onElegir: (v: string) => void;
+}) {
+  const base = new Date(fechaActual);
+  const [dia, setDia] = useState(
+    `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`,
+  );
+  const { data, isFetching } = useQuery({
+    queryKey: ['admin-horas-libres', dia, duracionMin, apptId],
+    queryFn: () => adminPortal.horasLibres(dia, duracionMin, apptId),
+  });
+  const hora12 = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return `${h > 12 ? h - 12 : h}:${String(m).padStart(2, '0')} ${h < 12 ? 'a. m.' : 'p. m.'}`;
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="text-xs font-semibold text-gray-600">Nuevo día</label>
+      <input type="date" value={dia} onChange={(e) => { if (e.target.value) { setDia(e.target.value); onElegir(''); } }}
+        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-800" />
+      <label className="text-xs font-semibold text-gray-600 flex items-center gap-2">
+        Nueva hora (libres para {duracionMin / 60} h) {isFetching && <span className="text-gray-400">…</span>}
+      </label>
+      {data && data.starts.length === 0 ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">No hay espacio ese día para {duracionMin / 60} h. Prueba otro día.</p>
+      ) : (
+        <div className="grid grid-cols-4 gap-1.5 max-h-36 overflow-y-auto">
+          {(data?.starts ?? []).map((t) => {
+            const v = `${dia}T${t}`;
+            return (
+              <button key={t} type="button" onClick={() => onElegir(v)}
+                className={`rounded-md border py-1.5 text-xs font-semibold ${valor === v ? 'border-teal-600 bg-teal-600 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-teal-400'}`}>
+                {hora12(t)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Props) {
   const qc = useQueryClient();
   const [showReschedule, setShowReschedule] = useState(false);
@@ -230,12 +274,12 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
               </button>
             ) : (
               <div className="bg-gray-50 rounded-xl p-3 flex flex-col gap-2">
-                <label className="text-xs font-semibold text-gray-600">Nueva fecha y hora</label>
-                <input
-                  type="datetime-local"
-                  value={newDateTime}
-                  onChange={(e) => setNewDateTime(e.target.value)}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+                <ElegirNuevoHorario
+                  apptId={apptId}
+                  fechaActual={appt.scheduled_at}
+                  duracionMin={appt.duration_min}
+                  valor={newDateTime}
+                  onElegir={setNewDateTime}
                 />
                 <label className="text-xs font-semibold text-gray-600">Motivo</label>
                 <select
@@ -253,7 +297,7 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
                     disabled={!newDateTime || rescheduleMut.isPending}
                     className="bg-teal-600 text-white rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
                   >
-                    Confirmar nuevo horario
+                    Guardar nuevo horario
                   </button>
                   <button onClick={() => setShowReschedule(false)} className="text-sm text-gray-500 underline">Cancelar</button>
                 </div>

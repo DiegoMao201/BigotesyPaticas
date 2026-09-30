@@ -159,7 +159,7 @@ async def conflictos(db, inicio: datetime, duration_min: int, excluir: uuid.UUID
     ]
 
 
-async def horas_libres_admin(db, target_date: date, duration_min: int) -> list[str]:
+async def horas_libres_admin(db, target_date: date, duration_min: int, excluir: uuid.UUID | None = None) -> list[str]:
     """Para el admin: inicios cada 30 min dentro del horario donde cabe una cita de esa
     duración sin cruzarse con nada. Hoy, desde la media hora en curso."""
     day_start = datetime(target_date.year, target_date.month, target_date.day, tzinfo=_TZ_CO)
@@ -168,7 +168,7 @@ async def horas_libres_admin(db, target_date: date, duration_min: int) -> list[s
     out: list[str] = []
     t = day_start + timedelta(hours=_OPEN_H)
     while t + dur <= day_start + timedelta(hours=_CLOSE_H):
-        if t >= ahora and len(await conflictos(db, t, duration_min)) < _SLOT_CAP:
+        if t >= ahora and len(await conflictos(db, t, duration_min, excluir=excluir)) < _SLOT_CAP:
             out.append(t.strftime("%H:%M"))
         t += timedelta(minutes=30)
     return out
