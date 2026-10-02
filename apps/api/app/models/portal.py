@@ -151,6 +151,18 @@ class Appointment(UUIDPKMixin, TimestampMixin, Base):
     compensation_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     proposed_options: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
+    # Google (2-oct-2026). La reserva en la web ya se reporta como lead; la VENTA se
+    # reporta cuando el admin completa la cita y escribe cuánto cobró (price). El
+    # client_id de la cookie _ga es lo que permite atribuir esa venta a la búsqueda o
+    # al anuncio que trajo al cliente; sin él entraría como "(direct)".
+    origen: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    ga_client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ga_session_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    gclid: Mapped[str | None] = mapped_column(Text, nullable=True)
+    purchase_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     pet: Mapped[Pet] = relationship("Pet", back_populates="appointments")
 
 

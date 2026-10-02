@@ -23,6 +23,7 @@ trampa para bots, freno por IP. NUNCA valida stock, igual que el portal: el admi
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 import uuid
@@ -40,6 +41,7 @@ from app.models.catalog import Product
 from app.models.portal import PortalOrder, PortalOrderItem
 from app.services.citas import cliente_por_telefono, limpiar
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/public/orders", tags=["public"])
 
 # Regla de domicilio de la tienda web (27-sep-2026). Está duplicada a propósito:
@@ -52,7 +54,12 @@ TARIFA_LEJOS = Decimal("5000")
 RADIO_MAX_KM = 15.0
 
 MAX_ITEMS = 40
-MAX_POR_IP_HORA = 20
+# El freno es contra bots, no contra clientes. Las peticiones de la tienda pasan por el
+# proxy de Next (apps/store/next.config.mjs reescribe /api/v1/* hacia la API), así que
+# hasta comprobarlo en producción no se sabe si llega la IP real del cliente o la del
+# contenedor. Si llegara la del contenedor, un número bajo le cerraría la puerta a toda
+# la tienda; por eso el tope es alto y la IP detectada se registra en el log.
+MAX_POR_IP_HORA = 60
 
 _por_ip: dict[str, deque] = {}
 
@@ -130,7 +137,9 @@ class PedidoIn(BaseModel):
 async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -> dict:
     if payload.website:  # bot: respondemos "ok" sin guardar nada
         return {"ok": True}
-    _frenar_abuso(_ip(request))
+    ip = _ip(request)
+    log.info("pedido web entrando · ip detectada: %s", ip)
+    _frenar_abuso(ip)
 
     tel = _celular(payload.phone)
     nombre = limpiar(payload.full_name)

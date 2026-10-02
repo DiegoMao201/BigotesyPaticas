@@ -1727,8 +1727,13 @@ export const adminPortal = {
       `/v1/admin/portal/appointments/${id}/confirm-choice`,
       { method: 'PATCH', body: JSON.stringify({ chosen_datetime, customer_confirmed_via }) }
     ),
-  completeAppointment: (id: string) =>
-    api<{ ok: boolean }>(`/v1/admin/portal/appointments/${id}/complete`, { method: 'PATCH', body: '{}' }),
+  /** `price` = lo que se cobró de verdad. Es lo que se le reporta a Google como venta
+   *  de peluquería; si va vacío la cita se completa igual, pero Google no se entera. */
+  completeAppointment: (id: string, price?: number | null) =>
+    api<{ ok: boolean; price: number | null }>(
+      `/v1/admin/portal/appointments/${id}/complete`,
+      { method: 'PATCH', body: JSON.stringify({ price: price ?? null }) }
+    ),
   noShowAppointment: (id: string) =>
     api<{ ok: boolean }>(`/v1/admin/portal/appointments/${id}/no-show`, { method: 'PATCH', body: '{}' }),
   updateApptNotes: (id: string, notes: string) =>

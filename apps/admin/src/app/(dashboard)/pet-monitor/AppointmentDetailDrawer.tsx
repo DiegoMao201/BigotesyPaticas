@@ -109,6 +109,9 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
   const [cancelReason, setCancelReason] = useState('');
   const [noteText, setNoteText] = useState('');
   const [duracion, setDuracion] = useState<number | null>(null);
+  // Cuánto se cobró por la cita. Opcional a propósito: la cita se completa con o sin
+  // precio, pero solo con precio se le puede contar a Google que la peluquería vendió.
+  const [cobrado, setCobrado] = useState('');
 
   const { data: appt, isLoading } = useQuery({
     queryKey: ['appt-detail', apptId],
@@ -134,8 +137,12 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
   });
 
   const completeMut = useMutation({
-    mutationFn: () => adminPortal.completeAppointment(apptId),
-    onSuccess: () => { toast.success('Cita marcada como completada'); invalidate(); },
+    mutationFn: (price: number | null) => adminPortal.completeAppointment(apptId, price),
+    onSuccess: (_, price) => {
+      toast.success(price ? `Cita completada · $${price.toLocaleString('es-CO')}` : 'Cita marcada como completada');
+      setCobrado('');
+      invalidate();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -390,21 +397,49 @@ export function AppointmentDetailDrawer({ apptId, onClose, onRefreshList }: Prop
             <p className="text-center text-xs text-gray-500">Cita confirmada. "Completar" aparece cuando llegue la hora de la cita.</p>
           )}
           {appt.status === 'confirmed' && dt <= new Date() && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => completeMut.mutate()}
-                disabled={completeMut.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm bg-teal-600 disabled:opacity-50"
-              >
-                ✅ Completar
-              </button>
-              <button
-                onClick={() => noShowMut.mutate()}
-                disabled={noShowMut.isPending}
-                className="flex-1 py-2.5 rounded-xl font-bold text-gray-600 border-2 border-gray-200 text-sm disabled:opacity-50"
-              >
-                No asistió
-              </button>
+            <div className="space-y-2">
+              <div>
+                <label htmlFor="cobrado" className="block text-xs font-bold text-gray-600 mb-1">
+                  ¿Cuánto cobraste? (opcional)
+                </label>
+                <div className="flex items-center gap-2 rounded-xl border-2 border-teal-200 bg-teal-50/60 px-3 py-2">
+                  <span className="font-bold text-teal-700">$</span>
+                  <input
+                    id="cobrado"
+                    value={cobrado}
+                    onChange={(e) => setCobrado(e.target.value.replace(/\D/g, ''))}
+                    inputMode="numeric"
+                    maxLength={9}
+                    placeholder="45000"
+                    className="flex-1 bg-transparent text-sm font-bold text-gray-800 outline-none"
+                  />
+                  {cobrado ? (
+                    <span className="text-xs text-teal-700">
+                      ${Number(cobrado).toLocaleString('es-CO')}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Con el valor, Google cuenta la peluquería como venta de la página y aprende qué
+                  búsqueda la trajo. Sin valor la cita se completa igual.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => completeMut.mutate(cobrado ? Number(cobrado) : null)}
+                  disabled={completeMut.isPending}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm bg-teal-600 disabled:opacity-50"
+                >
+                  ✅ Completar
+                </button>
+                <button
+                  onClick={() => noShowMut.mutate()}
+                  disabled={noShowMut.isPending}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-gray-600 border-2 border-gray-200 text-sm disabled:opacity-50"
+                >
+                  No asistió
+                </button>
+              </div>
             </div>
           )}
           {showCancel && (

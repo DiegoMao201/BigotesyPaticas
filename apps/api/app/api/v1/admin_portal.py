@@ -25,7 +25,7 @@ from app.models.portal import (
     PortalOrderItem,
     PortalSession,
 )
-from app.services.ga4 import enviar_purchase
+from app.services.ga4 import enviar_purchase, enviar_purchase_cita
 from app.services.portal_order_actions import (
     InsufficientStockError,
     bridge_to_sales,
@@ -2315,10 +2315,21 @@ async def confirm_appt_customer_choice(
     return {"ok": True}
 
 
+class ApptCompletePayload(BaseModel):
+    """Cuánto se cobró por la cita. Opcional para no romper el admin viejo ni quitarle
+    libertad a Diego: la cita se completa con o sin precio."""
+
+    price: float | None = Field(default=None, ge=0, le=100_000_000)
+
+
 @router.patch(
     "/appointments/{appt_id}/complete", dependencies=[Depends(require_permission("crm:write"))]
 )
-async def complete_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
+async def complete_appointment(
+    appt_id: uuid.UUID,
+    db: DBSession,
+    payload: ApptCompletePayload | None = None,
+) -> dict:
     appt = (
         await db.execute(select(Appointment).where(Appointment.id == appt_id))
     ).scalar_one_or_none()
@@ -2329,8 +2340,19 @@ async def complete_appointment(appt_id: uuid.UUID, db: DBSession) -> dict:
     appt.completed_at = datetime.now(UTC)
     if hasattr(appt, "workflow_status"):
         appt.workflow_status = "completed"
+
+    # Cuánto se cobró. Es opcional: si el admin no lo escribe, la cita se completa igual
+    # (así funcionaba antes y no se le quita libertad), pero entonces Google no se entera
+    # de la venta — ver enviar_purchase_cita, que a propósito no inventa un valor.
+    if payload is not None and payload.price is not None:
+        appt.price = Decimal(str(payload.price))
+
+    # Este es el momento en que la peluquería es plata de verdad. Si Google está caído
+    # esto devuelve False y no estorba: completar una cita nunca puede fallar.
+    await enviar_purchase_cita(db, appt)
+
     await db.commit()
-    return {"ok": True}
+    return {"ok": True, "price": float(appt.price) if appt.price else None}
 
 
 @router.patch(

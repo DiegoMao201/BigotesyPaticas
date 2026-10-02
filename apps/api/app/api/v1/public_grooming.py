@@ -98,6 +98,12 @@ class ReservaIn(BaseModel):
     time: str = Field(pattern=r"^\d{2}:00$")
     notes: str | None = Field(default=None, max_length=500)
     accept_data: bool
+    # La huella de Google de ESTA visita. Cuando el admin complete la cita y escriba
+    # cuánto cobró, esto es lo que permite acreditarle la venta a la búsqueda o al
+    # anuncio que trajo al cliente; sin esto entraría como "(direct)".
+    ga_client_id: str | None = Field(default=None, max_length=64)
+    ga_session_id: str | None = Field(default=None, max_length=32)
+    gclid: str | None = Field(default=None, max_length=500)
     website: str | None = None  # trampa para bots: una persona nunca lo llena
 
 
@@ -150,6 +156,10 @@ async def reservar(payload: ReservaIn, request: Request, db: DBSession) -> dict:
         duration_min=DURACION,
         status="pending",
         notes=" · ".join(notas),
+        origen="web",
+        ga_client_id=payload.ga_client_id or None,
+        ga_session_id=payload.ga_session_id or None,
+        gclid=payload.gclid or None,
     )
     db.add(appt)
     await db.flush()

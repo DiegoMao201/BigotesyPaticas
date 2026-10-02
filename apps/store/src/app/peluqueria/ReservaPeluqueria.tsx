@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Loader2, ShieldCheck, MapPin, AlarmClock, MessageCircle, Store } from 'lucide-react';
-import { trackEvent } from '@/lib/analytics';
+import { trackEvent, huellaGoogle, recordarGclid } from '@/lib/analytics';
 import { BUSINESS_INFO } from '@/lib/business-info';
 
 type Slot = { time: string; available: boolean; reason?: string | null };
@@ -87,6 +87,7 @@ export function ReservaPeluqueria() {
   }
 
   async function reservar() {
+    recordarGclid();
     setPidiendoPermiso(false);
     if (!listo || estado === 'enviando') return;
     setEstado('enviando');
@@ -95,7 +96,7 @@ export function ReservaPeluqueria() {
       const r = await fetch('/api/v1/public/grooming/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, date: dia, time: hora, accept_data: true }),
+        body: JSON.stringify({ ...form, date: dia, time: hora, accept_data: true, ...huellaGoogle() }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) {

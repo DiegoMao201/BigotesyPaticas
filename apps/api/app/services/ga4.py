@@ -136,6 +136,92 @@ async def enviar_purchase(db, order: PortalOrder, *, debug: bool = False) -> boo
         "events": [{"name": "purchase", "params": params}],
     }
 
+    if not await _mandar(cuerpo, f"pedido {order.id}", debug=debug):
+        return False
+
+    order.purchase_sent_at = datetime.now(UTC)
+    log.info(
+        "ga4: purchase enviado · pedido %s · %s %s · client_id %s",
+        order.id,
+        valor,
+        MONEDA,
+        "de la cookie" if order.ga_client_id else "de respaldo (sin cookie _ga)",
+    )
+    return True
+
+
+async def enviar_purchase_cita(db, appt, *, debug: bool = False) -> bool:
+    """Le cuenta a Google la peluquería cobrada. Idempotente. No lanza excepciones.
+
+    La reserva en la web ya se reporta como `generate_lead` desde el navegador; esto es
+    la plata. Se manda cuando el admin completa la cita y escribe cuánto cobró, porque
+    hasta ahí no hay venta: una cita reservada que no llegó no es ingreso.
+
+    Sin precio no se manda nada. Es a propósito: un valor inventado le enseñaría a Google
+    Ads a pujar por un número que no existe, y eso es peor que no medir.
+    """
+    s = get_settings()
+    if not s.ga4_measurement_id or not s.ga4_api_secret:
+        log.warning(
+            "ga4: cita %s completada pero falta GA4_MEASUREMENT_ID o GA4_API_SECRET; "
+            "la venta NO se le contó a Google",
+            appt.id,
+        )
+        return False
+    if getattr(appt, "purchase_sent_at", None) is not None and not debug:
+        log.info("ga4: cita %s ya tenía purchase enviado", appt.id)
+        return False
+
+    valor = float(appt.price or 0)
+    if valor <= 0:
+        log.info(
+            "ga4: cita %s completada sin precio; no se manda purchase (así es a propósito)",
+            appt.id,
+        )
+        return False
+
+    servicio = (appt.service_type or "Peluquería")[:100]
+    params: dict = {
+        "transaction_id": f"cita-{appt.id}",
+        "value": round(valor, 2),
+        "currency": MONEDA,
+        "items": [
+            {
+                "item_id": "servicio-peluqueria",
+                "item_name": servicio,
+                "item_category": "Peluquería",
+                "quantity": 1,
+                "price": round(valor, 2),
+            }
+        ],
+        "engagement_time_msec": 1,
+    }
+    if getattr(appt, "ga_session_id", None):
+        params["session_id"] = appt.ga_session_id
+
+    cuerpo = {
+        "client_id": getattr(appt, "ga_client_id", None) or _client_id_de_respaldo(appt.id),
+        "non_personalized_ads": False,
+        "events": [{"name": "purchase", "params": params}],
+    }
+
+    if not await _mandar(cuerpo, f"cita {appt.id}", debug=debug):
+        return False
+
+    appt.purchase_sent_at = datetime.now(UTC)
+    log.info(
+        "ga4: purchase enviado · cita %s · %s %s · client_id %s",
+        appt.id,
+        valor,
+        MONEDA,
+        "de la cookie" if getattr(appt, "ga_client_id", None) else "de respaldo (sin cookie _ga)",
+    )
+    return True
+
+
+async def _mandar(cuerpo: dict, etiqueta: str, *, debug: bool = False) -> bool:
+    """Hace el POST a Measurement Protocol. Devuelve si Google aceptó el evento."""
+    s = get_settings()
     url = URL_DEBUG if debug else URL
     try:
         async with httpx.AsyncClient(timeout=10) as cli:
@@ -148,29 +234,20 @@ async def enviar_purchase(db, order: PortalOrder, *, debug: bool = False) -> boo
                 json=cuerpo,
             )
     except Exception as e:  # red caída, DNS, timeout
-        log.error("ga4: no se pudo mandar el purchase del pedido %s: %s", order.id, e)
+        log.error("ga4: no se pudo mandar el purchase de %s: %s", etiqueta, e)
         return False
 
     if debug:
-        log.info("ga4 debug %s: %s", r.status_code, r.text[:800])
+        log.info("ga4 debug %s (%s): %s", r.status_code, etiqueta, r.text[:800])
         return r.status_code == 200
 
     # Measurement Protocol responde 204 sin cuerpo cuando acepta el evento.
     if r.status_code not in (200, 204):
         log.error(
-            "ga4: Google respondió %s al purchase del pedido %s: %s",
+            "ga4: Google respondió %s al purchase de %s: %s",
             r.status_code,
-            order.id,
+            etiqueta,
             r.text[:300],
         )
         return False
-
-    order.purchase_sent_at = datetime.now(UTC)
-    log.info(
-        "ga4: purchase enviado · pedido %s · %s %s · client_id %s",
-        order.id,
-        valor,
-        MONEDA,
-        "de la cookie" if order.ga_client_id else "de respaldo (sin cookie _ga)",
-    )
     return True
