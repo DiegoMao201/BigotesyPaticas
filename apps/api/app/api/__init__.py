@@ -29,6 +29,7 @@ from app.api.v1 import (
     partners_public,
     portal_appointments,
     public_grooming,
+    public_orders,
     portal_auth,
     portal_bookings,
     portal_intelligence,
@@ -92,6 +93,9 @@ api_router.include_router(portal_pets.router, prefix="/v1")
 api_router.include_router(portal_orders.router, prefix="/v1")
 api_router.include_router(portal_appointments.router, prefix="/v1")
 api_router.include_router(public_grooming.router, prefix="/v1")
+# Pedido de la tienda web sin cuenta (2-oct-2026): entra al flujo del portal y se
+# le cuenta a Google cuando el admin lo marca entregado.
+api_router.include_router(public_orders.router, prefix="/v1")
 api_router.include_router(portal_loyalty.router, prefix="/v1")
 api_router.include_router(portal_monitor.router, prefix="/v1")
 api_router.include_router(portal_intelligence.router, prefix="/v1")

@@ -88,3 +88,80 @@ export function trackAddToCart(product: {
 export function trackSearch(query: string) {
   trackEvent('search', { search_term: query });
 }
+
+export function trackBeginCheckout(items: { id: string; name: string; price: number; quantity: number }[], value: number) {
+  trackEvent('begin_checkout', {
+    currency: 'COP',
+    value,
+    items: items.map((i) => ({
+      item_id: i.id,
+      item_name: i.name,
+      price: i.price,
+      quantity: i.quantity,
+    })),
+  });
+}
+
+/**
+ * La huella de Google de ESTA visita, para que la compra se le pueda acreditar.
+ *
+ * GA4 no atribuye por teléfono ni por IP: atribuye por el id de la cookie `_ga` del
+ * navegador. La venta de la tienda no se confirma aquí —se confirma cuando el admin
+ * marca el pedido como entregado, horas después, desde otro computador—, así que el
+ * `purchase` lo manda la API. Para que Google sepa que esa compra es de ESTE visitante
+ * hay que guardar su client_id con el pedido; sin eso la venta entra como "(direct)" y
+ * la búsqueda o el anuncio que trajo al cliente no recibe el crédito.
+ *
+ * Cookies de GA4:
+ *   _ga               = "GA1.1.<client_id_1>.<client_id_2>"  → client_id = los dos últimos
+ *   _ga_<ID sin G->   = "GS1.1.<session_id>.<n>.<…>"         → session_id = el 3er campo
+ *
+ * Si el cliente trae las cookies bloqueadas devuelve todo vacío: el pedido se guarda
+ * igual y la API manda la compra con un id de respaldo. Se cuenta la venta aunque no se
+ * pueda atribuir — eso es decisión tomada, es mejor que no contarla.
+ */
+export function huellaGoogle(): { ga_client_id?: string; ga_session_id?: string; gclid?: string } {
+  if (typeof document === 'undefined') return {};
+  const out: { ga_client_id?: string; ga_session_id?: string; gclid?: string } = {};
+  try {
+    const cookies = document.cookie.split(';').map((c) => c.trim());
+
+    const ga = cookies.find((c) => c.startsWith('_ga='));
+    if (ga) {
+      // "_ga=GA1.1.1234567890.1696118400" → "1234567890.1696118400"
+      const partes = ga.slice(4).split('.');
+      if (partes.length >= 4) out.ga_client_id = partes.slice(-2).join('.');
+    }
+
+    const sesion = cookies.find((c) => /^_ga_[A-Z0-9]+=/.test(c));
+    if (sesion) {
+      // "_ga_K46540SJVJ=GS1.1.1696118400.3.1.1696118500.0.0.0" → "1696118400"
+      const partes = sesion.split('=')[1]?.split('.') ?? [];
+      if (partes.length >= 3) out.ga_session_id = partes[2];
+    }
+
+    // El gclid llega en la URL del anuncio y lo guardamos al entrar (ver más abajo).
+    const guardado = sessionStorage.getItem('bp_gclid');
+    const url = new URLSearchParams(window.location.search).get('gclid');
+    if (url) {
+      sessionStorage.setItem('bp_gclid', url);
+      out.gclid = url;
+    } else if (guardado) {
+      out.gclid = guardado;
+    }
+  } catch {
+    // cookies bloqueadas o sessionStorage inaccesible (modo incógnito estricto)
+  }
+  return out;
+}
+
+/** Guarda el gclid en cuanto el visitante entra por un anuncio, antes de que navegue. */
+export function recordarGclid() {
+  if (typeof window === 'undefined') return;
+  try {
+    const g = new URLSearchParams(window.location.search).get('gclid');
+    if (g) sessionStorage.setItem('bp_gclid', g);
+  } catch {
+    // sin sessionStorage: el gclid se pierde, el pedido se guarda igual
+  }
+}

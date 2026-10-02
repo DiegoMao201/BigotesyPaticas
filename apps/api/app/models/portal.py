@@ -218,6 +218,16 @@ class PortalOrder(UUIDPKMixin, TimestampMixin, Base):
     )
     discount_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     total_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    # Pedidos de la tienda web (2-oct-2026). 'origen' distingue el canal; el client_id
+    # de la cookie _ga es lo que le permite a GA4 pegar la compra con la búsqueda o el
+    # anuncio que trajo al cliente — sin él la venta queda como "(direct)".
+    origen: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    ga_client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ga_session_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    gclid: Mapped[str | None] = mapped_column(Text, nullable=True)
+    purchase_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class PortalOrderItem(UUIDPKMixin, Base):

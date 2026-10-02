@@ -25,6 +25,7 @@ from app.models.portal import (
     PortalOrderItem,
     PortalSession,
 )
+from app.services.ga4 import enviar_purchase
 from app.services.portal_order_actions import (
     InsufficientStockError,
     bridge_to_sales,
@@ -674,6 +675,8 @@ async def list_portal_orders(
                 "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
                 "points_awarded": order.points_awarded,
                 "has_stock_issues": _has_stock_issues(order),
+                # 'web' = entró por el checkout de la tienda (sin cuenta); None = portal
+                "origen": order.origen,
             }
         )
     return result
@@ -790,6 +793,12 @@ async def update_portal_order(
         # Usar funciones compartidas (idempotentes)
         points = await credit_loyalty_points(order, db)
         await process_referral_reward(order, db)
+        # Aquí —y solo aquí— la venta es real: se le cuenta a Google como `purchase`.
+        # Vale para los pedidos de la tienda web y para los del portal: son la misma
+        # tabla y el mismo botón. Los de la web traen el client_id de la cookie _ga, así
+        # que además quedan atribuidos a la búsqueda o al anuncio que trajo al cliente.
+        # Nunca tumba la entrega: enviar_purchase() no lanza excepciones.
+        await enviar_purchase(db, order)
         await notify_customer(
             db,
             order.customer_id,
@@ -1639,6 +1648,12 @@ async def change_workflow_status(
     if new == "delivered":
         await credit_loyalty_points(order, db)
         await process_referral_reward(order, db)
+        # Este es el botón "Marcar entregado" del admin, y este es el único momento en
+        # que la venta es real. Aquí se le cuenta a Google como `purchase`: sirve igual
+        # para los pedidos de la tienda web (que traen el client_id de la cookie _ga y
+        # quedan atribuidos a la búsqueda o al anuncio) y para los del portal. Si Google
+        # está caído esto devuelve False y no estorba: entregar nunca puede fallar.
+        await enviar_purchase(db, order)
 
     # Encolar notificación WhatsApp para modal admin (no envía nada automático)
     pending_notif = await queue_customer_notification(order, new, db)

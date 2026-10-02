@@ -1433,6 +1433,8 @@ export interface PortalOrder {
   delivered_at: string | null;
   points_awarded: number;
   has_stock_issues: boolean;
+  /** 'web' = pedido del checkout de la tienda (sin cuenta); null = pedido del portal */
+  origen?: string | null;
 }
 
 export interface PortalOrderItem {

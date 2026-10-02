@@ -356,6 +356,11 @@ export default function PetMonitorPage() {
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${wsInfo.color}`}>
                             {wsInfo.emoji} {wsInfo.label}
                           </span>
+                          {order.origen === 'web' && (
+                            <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                              🌐 Tienda web
+                            </span>
+                          )}
                           {order.has_stock_issues && (
                             <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                               <AlertTriangle size={11} /> Sin stock

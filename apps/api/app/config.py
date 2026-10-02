@@ -68,6 +68,13 @@ class Settings(BaseSettings):
     sheet_url: str = ""
     google_service_account_json: str = ""
 
+    # GA4 Measurement Protocol — le avisa a Google que la tienda vendió, cuando el
+    # admin marca el pedido como entregado. El secreto se crea en GA4:
+    # Administrar → Flujos de datos → Store → Secretos de Measurement Protocol.
+    # Vacío = no se manda nada (y queda anotado en el log, no revienta el pedido).
+    ga4_measurement_id: str = ""
+    ga4_api_secret: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

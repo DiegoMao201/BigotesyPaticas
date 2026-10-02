@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DeliveryLocationPicker } from '@/components/maps/DeliveryLocationPicker';
 import { useUbicacionEntrega, calcularDomicilio, lineasUbicacion, GRATIS_DESDE, REGLA_TEXTO, type Domicilio, type UbicacionEntrega } from '@/lib/delivery';
 import Link from 'next/link';
@@ -12,6 +12,7 @@ import { formatCurrency } from '@/lib/utils';
 import { BUSINESS_INFO } from '@/lib/business-info';
 import { MessageCircle, ArrowLeft, Package, ShoppingBag, CheckCircle } from 'lucide-react';
 import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
+import { trackBeginCheckout, huellaGoogle, recordarGclid } from '@/lib/analytics';
 
 // El mensaje lleva la dirección que dio Google Maps y el enlace con el punto exacto,
 // para que el domiciliario llegue sin preguntar (Diego, 27-sep-2026).
@@ -21,6 +22,7 @@ function buildWhatsAppMessage(
   dom: Domicilio,
   ubicacion: UbicacionEntrega | null,
   name: string,
+  tel: string,
   notes: string,
 ): string {
   const header = `Hola! Quiero hacer un pedido 🐾\n`;
@@ -36,8 +38,9 @@ function buildWhatsAppMessage(
     ? `*TOTAL: ${formatCurrency(subtotal)} + domicilio*`
     : `*TOTAL: ${formatCurrency(subtotal + dom.valor)}*`;
   const customerLine = name ? `\n\n👤 Nombre: ${name}` : '\n';
+  const telLine = tel ? `\n📱 Celular: ${tel}` : '';
   const notesLine = notes ? `\n📝 Notas: ${notes}` : '';
-  return `${header}\n${itemLines}\n\n${subtotalLine}\n${shippingLine}\n${totalLine}${customerLine}${lineasUbicacion(ubicacion)}${notesLine}`;
+  return `${header}\n${itemLines}\n\n${subtotalLine}\n${shippingLine}\n${totalLine}${customerLine}${telLine}${lineasUbicacion(ubicacion)}${notesLine}`;
 }
 
 export default function CheckoutPage() {
@@ -52,8 +55,27 @@ export default function CheckoutPage() {
   const { track } = useMetaPixelEvent();   // antes se llamaba DESPUÉS de un return (regla de hooks)
 
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
   const [pideUbicacion, setPideUbicacion] = useState(false);
+  const [errorTel, setErrorTel] = useState(false);
+  const [errorNombre, setErrorNombre] = useState(false);
+  const yaMedido = useRef(false);
+  const yaGuardado = useRef('');
+
+  // begin_checkout: el paso del embudo que faltaba. Una sola vez por visita a esta
+  // página, y solo cuando el carrito ya se hidrató (antes de eso items está vacío).
+  useEffect(() => {
+    recordarGclid();
+    if (yaMedido.current || !mounted || items.length === 0) return;
+    yaMedido.current = true;
+    trackBeginCheckout(
+      items.map((i) => ({ id: i.productId, name: i.name, price: i.price, quantity: i.quantity })),
+      subtotal + (dom.valor ?? 0),
+    );
+    // subtotal/dom cambian con el carrito; la bandera garantiza un solo evento
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, items.length]);
 
   // el carrito vive en el navegador: hasta montar no se sabe si está vacío (ver use-mounted)
   if (!mounted) return <div className="container-tight py-24 min-h-[60vh]" />;
@@ -71,9 +93,61 @@ export default function CheckoutPage() {
     );
   }
 
-  const phone = (BUSINESS_INFO.whatsapp ?? '573206876633').replace(/\D/g, '');
-  const waMsg = buildWhatsAppMessage(items, subtotal, dom, ubicacion, name, notes);
-  const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(waMsg)}`;
+  // el número de la TIENDA (al que se le escribe); el del cliente es el estado `phone`
+  const telTienda = (BUSINESS_INFO.whatsapp ?? '573206876633').replace(/\D/g, '');
+  const waMsg = buildWhatsAppMessage(items, subtotal, dom, ubicacion, name, phone, notes);
+  const waUrl = `https://wa.me/${telTienda}?text=${encodeURIComponent(waMsg)}`;
+
+  const celularOk = /^3\d{9}$/.test(phone.replace(/\D/g, ''));
+
+  /**
+   * Guarda el pedido en el admin sin estorbarle a la venta.
+   *
+   * Dos decisiones acá, y las dos son a propósito:
+   *
+   * 1. NO se espera la respuesta. En celular, abrir WhatsApp saca al cliente de la
+   *    página, y un `await` antes de `window.open` hace que Safari bloquee la apertura
+   *    por perder el gesto del usuario. `keepalive` deja que la petición termine aunque
+   *    el navegador ya se fue.
+   * 2. Si falla, NO se avisa ni se detiene nada. Perder una venta por un error de
+   *    registro sería mucho peor que no registrarla: el pedido igual llega completo
+   *    al WhatsApp de Diego, que es como ha funcionado siempre.
+   */
+  function guardarPedido() {
+    // Candado: tocar el botón dos veces (o volver a WhatsApp y reintentar) no puede
+    // crear dos pedidos en el admin. Si el carrito o los datos cambian, sí se guarda
+    // de nuevo, porque entonces es un pedido distinto.
+    const firma = JSON.stringify([
+      items.map((i) => [i.productId, i.quantity]),
+      phone.replace(/\D/g, ''),
+      ubicacion?.lat ?? null,
+      ubicacion?.lng ?? null,
+      notes.trim(),
+    ]);
+    if (yaGuardado.current === firma) return;
+    yaGuardado.current = firma;
+
+    try {
+      fetch('/api/v1/public/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({
+          full_name: name.trim(),
+          phone: phone.replace(/\D/g, ''),
+          items: items.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
+          direccion: ubicacion?.direccion ?? null,
+          lat: ubicacion?.lat ?? null,
+          lng: ubicacion?.lng ?? null,
+          km: ubicacion?.km ?? null,
+          notes: notes.trim() || null,
+          ...huellaGoogle(),
+        }),
+      }).catch(() => {});
+    } catch {
+      // nada: el pedido sigue por WhatsApp
+    }
+  }
 
   async function openWhatsApp() {
     // sin ubicación no sale el pedido: es lo que el domiciliario necesita
@@ -82,6 +156,18 @@ export default function CheckoutPage() {
       document.getElementById('entrega')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
+    // Nombre y celular: el celular es por donde se confirma el pedido (Diego, 2-oct-2026)
+    // y sin nombre el pedido no se puede registrar ni entregar.
+    const faltaNombre = name.trim().length < 2;
+    if (faltaNombre || !celularOk) {
+      setErrorNombre(faltaNombre);
+      setErrorTel(!celularOk);
+      document.getElementById(faltaNombre ? 'nombre' : 'celular')?.focus();
+      document.getElementById('entrega')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    guardarPedido();
     track('InitiateCheckout', {
       content_ids: items.map((i) => i.productId),
       value: total,
@@ -168,15 +254,52 @@ export default function CheckoutPage() {
             {pideUbicacion && !ubicacion && (
               <p className="text-sm font-medium text-amber-700">Indícanos dónde entregar para enviar el pedido.</p>
             )}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Tu nombre</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="¿Cómo te llamamos?"
-                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/50"
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="nombre" className="text-xs font-medium text-muted-foreground block mb-1">
+                  Tu nombre
+                </label>
+                <input
+                  id="nombre"
+                  type="text"
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); setErrorNombre(false); }}
+                  placeholder="¿Cómo te llamamos?"
+                  autoComplete="name"
+                  className={`w-full rounded-xl border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${
+                    errorNombre ? 'border-amber-400 ring-2 ring-amber-200' : 'border-border focus:ring-brand/50'
+                  }`}
+                />
+                {errorNombre && (
+                  <p className="text-xs font-medium text-amber-700 mt-1">Escribe tu nombre, por favor.</p>
+                )}
+              </div>
+              {/* El celular es obligatorio: por ahí se confirma el pedido y la entrega. */}
+              <div>
+                <label htmlFor="celular" className="text-xs font-medium text-muted-foreground block mb-1">
+                  Tu celular (WhatsApp)
+                </label>
+                <input
+                  id="celular"
+                  type="tel"
+                  inputMode="numeric"
+                  value={phone}
+                  onChange={(e) => { setPhone(e.target.value); setErrorTel(false); }}
+                  placeholder="320 687 6633"
+                  autoComplete="tel"
+                  maxLength={17}
+                  className={`w-full rounded-xl border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 ${
+                    errorTel ? 'border-amber-400 ring-2 ring-amber-200' : 'border-border focus:ring-brand/50'
+                  }`}
+                />
+                {errorTel ? (
+                  <p className="text-xs font-medium text-amber-700 mt-1">
+                    Escribe un celular de 10 dígitos, por ejemplo 320 687 6633.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground mt-1">Para confirmarte el pedido y la entrega.</p>
+                )}
+              </div>
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1">¿Alguna nota? (sabor, talla, etc.)</label>
