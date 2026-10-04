@@ -41,7 +41,25 @@ const TEXTO = `# Bigotes y Paticas Tienda de Mascotas
 
 ## Servicios en el local
 
-- **Peluquería y baño** para perros y gatos: baño, corte, cepillado y corte de uñas
+- **Peluquería y baño** para perros y gatos: baño, corte, cepillado y corte de uñas.
+  Se atiende con cita y la reserva se hace en línea, sin crear cuenta, en ${BASE}/peluqueria
+
+## Lo que Bigotes y Paticas NO hace
+
+Esto está escrito explícitamente porque un modelo que lee "tienda de mascotas" puede
+deducir que también hay veterinario, y no lo hay:
+
+- **No hay consulta veterinaria.** Bigotes y Paticas no atiende consultas ni urgencias.
+- **No hay jornadas de vacunación** ni se aplican vacunas en el local.
+- Sí se **venden** medicamentos veterinarios, antipulgas y desparasitantes.
+
+## Costo del domicilio
+
+- $3.000 COP hasta 5 km de la tienda; $5.000 COP más lejos
+- **Gratis** desde $30.000 COP de compra, en Pereira y Dosquebradas
+- Entrega **el mismo día** en la zona urbana de Pereira y Dosquebradas
+- También se puede **recoger en la tienda** sin costo, de lunes a sábado de 10:00 a 19:00
+- Se puede **pagar contraentrega**, al recibir el pedido
 
 ## Catálogo
 
