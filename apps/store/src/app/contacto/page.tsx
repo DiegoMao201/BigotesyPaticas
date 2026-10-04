@@ -4,7 +4,8 @@ import { Phone, Mail, MapPin, Clock, ExternalLink } from 'lucide-react';
 import { ContactForm } from './ContactForm';
 import { DeliveryZoneChecker } from '@/components/maps/DeliveryZoneChecker';
 import { StoreMapEmbed } from '@/components/maps/StoreMapEmbed';
-import { BreadcrumbSchema } from '@/components/seo/JsonLd';
+import { BreadcrumbSchema, FAQPageSchema } from '@/components/seo/JsonLd';
+import { FAQS_CONTACTO } from './faqs';
 import { BUSINESS_INFO } from '@/lib/business-info';
 
 export const metadata: Metadata = {
@@ -35,6 +36,7 @@ export default function ContactoPage() {
           { name: 'Contacto', url: 'https://bigotesypaticas.com/contacto' },
         ]}
       />
+      <FAQPageSchema faqs={FAQS_CONTACTO} />
 
       <div className="container-tight py-16 space-y-12">
         {/* Header */}
@@ -146,6 +148,30 @@ export default function ContactoPage() {
           </div>
         </div>
       </div>
+
+      {/* PREGUNTAS FRECUENTES
+          Van con <details> nativo y NO con el acordeon de ProductFAQ: ese monta la
+          respuesta solo cuando esta abierta, asi que el texto no existe en el DOM
+          hasta que alguien hace clic. Con <details> la respuesta SIEMPRE esta en el
+          HTML —solo se ve plegada— que es lo que necesitan tanto Google como
+          "Ask Maps", la IA que desde este anio responde en Maps leyendo el sitio.
+          Ademas no necesita JavaScript y el teclado ya lo maneja el navegador. */}
+      <section className="container-tight pb-16">
+        <h2 className="text-2xl md:text-3xl font-display font-bold text-[#0d4a45] mb-2">
+          Preguntas frecuentes
+        </h2>
+        <p className="text-sm text-muted-foreground mb-6">
+          Lo que más nos preguntan por WhatsApp. Si falta algo, escríbenos y lo resolvemos.
+        </p>
+        <div className="space-y-3">
+          {FAQS_CONTACTO.map((f) => (
+            <details key={f.pregunta} className="rounded-2xl border border-border bg-card p-5 open:shadow-sm">
+              <summary className="cursor-pointer font-semibold text-[#0d4a45]">{f.pregunta}</summary>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.respuesta}</p>
+            </details>
+          ))}
+        </div>
+      </section>
       <FollowUsSection />
     </>
   );
