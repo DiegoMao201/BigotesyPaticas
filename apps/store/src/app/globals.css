@@ -368,11 +368,50 @@
 .brillo-2::after { animation-delay: 0.75s; }
 .brillo-3::after { animation-delay: 1.5s; }
 
+/* ── CINTA DE TEMPORADA (octubre) ───────────────────────────────────────────
+   El naranja de la marca (#FF6B35) YA es el naranja de Halloween: no hay que
+   cambiarle el color al sitio, solo llevarlo hacia el morado. Por eso el
+   degradado va de la marca al morado y vuelve, en vez de pintar la página de
+   un color que no es nuestro.
+
+   El degradado se mueve con `background-position` sobre un fondo del 200 %:
+   no es `transform`, pero tampoco toca layout ni paint del árbol — la capa es
+   una franja de 40 px de alto y el navegador solo repinta esa banda. Un ciclo
+   de 12 s es lento a propósito; la cinta tiene que respirar, no parpadear. */
+.cinta-halloween {
+  background-image: linear-gradient(100deg, #e5541c, #7c3aed, #e5541c);
+  background-size: 200% 100%;
+  animation: cinta-degradado 12s ease-in-out infinite;
+}
+
+@keyframes cinta-degradado {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+/* La calabaza se balancea como colgada de un hilo. Amplitud pequeña (6°) y
+   ciclo largo: lo justo para que el ojo note que está viva al pasar por ahí,
+   no lo suficiente para competir con el texto que tiene al lado. */
+.cinta-calabaza {
+  display: inline-block;
+  animation: calabaza-colgada 4.5s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes calabaza-colgada {
+  0%, 100% { transform: rotate(-6deg); }
+  50%      { transform: rotate(6deg);  }
+}
+
 /* A quien le moleste el movimiento, se le quita. No es negociable: hay gente a
    la que una animación de fondo le produce mareo. */
 @media (prefers-reduced-motion: reduce) {
   .huella-flota { animation: none; }
   .brillo::after { animation: none; opacity: 0; }
+  /* La cinta conserva el color, pierde el vaivén: el degradado se queda quieto
+     en el naranja de la marca y la calabaza deja de colgar. */
+  .cinta-halloween { animation: none; background-position: 0% 50%; }
+  .cinta-calabaza { animation: none; transform: none; }
 }
 
 /* Avisos (sonner 1.7): en pantallas < 600 px la librería fija su propio margen y los

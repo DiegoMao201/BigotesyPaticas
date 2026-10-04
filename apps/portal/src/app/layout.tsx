@@ -5,6 +5,8 @@ import './globals.css';
 import { Providers } from './providers';
 import { PWAInstallBanner } from '@/components/widgets/PWAInstallBanner';
 import { MetaPixel } from '@/components/MetaPixel';
+import { FondoTemporada } from '@/components/brand/FondoTemporada';
+import { CintaTemporada } from '@/components/brand/CintaTemporada';
 
 const fontSans = Inter({
   subsets: ['latin'],
@@ -66,7 +68,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${fontSans.variable} ${fontDisplay.variable}`}>
         <MetaPixel />
-        <Providers>{children}</Providers>
+        <FondoTemporada />
+        <Providers>
+          <CintaTemporada />
+          {children}
+        </Providers>
         <PWAInstallBanner />
         <Toaster
           position="top-center"

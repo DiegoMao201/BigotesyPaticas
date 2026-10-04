@@ -5,6 +5,7 @@ import { Providers } from '@/components/providers';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { HuellasFondo } from '@/components/brand/HuellasFondo';
+import { CintaTemporada } from '@/components/brand/CintaTemporada';
 import { OrganizationSchema, LocalBusinessSchema } from '@/components/seo/JsonLd';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 import { MetaPixel } from '@/components/analytics/MetaPixel';
@@ -123,6 +124,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <LocalBusinessSchema />
         <HuellasFondo />
         <Providers>
+          <CintaTemporada />
           <Header />
           <main className="min-h-[calc(100vh-4rem-1px)]">{children}</main>
           <Footer />
