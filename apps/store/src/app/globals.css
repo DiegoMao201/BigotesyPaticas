@@ -421,3 +421,155 @@
     top: calc(76px + env(safe-area-inset-top)) !important;
   }
 }
+
+/* ── DECORACIÓN DE HALLOWEEN QUE SE VE EN EL CELULAR ────────────────────────
+   Las figuras del fondo viven en los márgenes y se ocultan en pantallas
+   angostas, así que en el teléfono no se veía nada de la temporada salvo la
+   cinta. Esto va por encima del contenido y se ve en todas las pantallas.
+   Ver DecoracionHalloween.tsx. */
+
+/* La araña baja y sube de su hilo. 7 s y 22 px: a esa velocidad se nota que
+   está viva cuando el ojo pasa por ahí, pero no reclama la mirada mientras
+   alguien lee. */
+.arana-cuelga {
+  animation: arana-cuelga 7s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes arana-cuelga {
+  0%, 100% { transform: translateY(0);    }
+  50%      { transform: translateY(22px); }
+}
+
+/* El murciélago cruza la pantalla. `linear` porque es movimiento constante: con
+   una curva de entrada/salida frenaría en los bordes y parecería que lo
+   empujan. El vaivén vertical va en el MISMO keyframe que el cruce, porque las
+   dos cosas son `transform` del mismo elemento y la segunda pisaría a la
+   primera si se separaran. El aleteo sí va aparte, en el hijo. */
+.murcielago-cruza {
+  animation-name: murcielago-cruza;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+@keyframes murcielago-cruza {
+  0%   { transform: translate(-15vw, 0);     }
+  25%  { transform: translate(17vw, -22px);  }
+  50%  { transform: translate(50vw, 10px);   }
+  75%  { transform: translate(83vw, -16px);  }
+  100% { transform: translate(118vw, 0);     }
+}
+
+/* El aleteo: el murciélago se estrecha y se ensancha en horizontal. Es un SVG
+   plano, así que no hay alas que doblar; comprimir el ancho da exactamente la
+   lectura de "está aleteando" y cuesta un solo `transform`. */
+.murcielago-aletea {
+  animation-name: murcielago-aletea;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+@keyframes murcielago-aletea {
+  0%, 100% { transform: scaleX(1);    }
+  50%      { transform: scaleX(0.45); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* La decoración se queda: lo que se va es el movimiento. Los murciélagos se
+     quedan posados en el punto medio de su recorrido en vez de desaparecer. */
+  .arana-cuelga { animation: none; }
+  .murcielago-aletea { animation: none; }
+  .murcielago-cruza {
+    animation: none;
+    transform: translate(50vw, 10px);
+  }
+}
+
+/* ── EL FANTASMA Y EL GATO ──────────────────────────────────────────────────
+   Las dos piezas que de verdad hacen que la página se sienta de Halloween, y
+   las dos están construidas sobre la misma idea: APARECEN Y SE VAN. Un adorno
+   que siempre está deja de verse a los diez segundos; uno que cruza cada medio
+   minuto hace que la gente levante la vista. Por eso los dos ciclos son largos
+   y pasan la mayor parte del tiempo fuera de la pantalla. */
+
+/* El fantasma atraviesa en los primeros 11 s de un ciclo de 34, y los otros 23
+   está fuera y transparente. Entra y sale desvaneciéndose: una aparición que
+   aparece de golpe en el borde parece un error de render, no un fantasma. */
+.fantasma-pasa {
+  /* El `-5s` es un retraso NEGATIVO: la animación arranca ya empezada, con el
+     fantasma entrando por la izquierda, en vez de hacer esperar a quien acaba
+     de abrir la página. Sin esto el ciclo empieza con el fantasma fuera de
+     cuadro y alguien que mire diez segundos no ve nada: medido con capturas a
+     los 6 y 11 s, y en las dos el fantasma todavía no había entrado. */
+  animation: fantasma-pasa 24s linear -5s infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes fantasma-pasa {
+  0%            { transform: translateX(-22vw); opacity: 0;   }
+  6%            { opacity: 0.62; }
+  48%           { opacity: 0.62; }
+  55%, 100%     { transform: translateX(122vw); opacity: 0;   }
+}
+
+/* Dentro del recorrido, el fantasma sube, baja y se ladea. Va en un elemento
+   HIJO porque el padre ya usa `transform` para cruzar, y la segunda regla
+   pisaría a la primera. */
+.fantasma-flota {
+  animation: fantasma-flota 3.4s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes fantasma-flota {
+  0%, 100% { transform: translateY(0)     rotate(-4deg); }
+  50%      { transform: translateY(-26px) rotate(4deg);  }
+}
+
+/* El gato cruza en 16 s de un ciclo de 46. Más lento que el fantasma porque
+   camina: si fuera a la misma velocidad parecería que patina. */
+.gato-pasea {
+  /* Mismo retraso negativo que el fantasma, y por el mismo motivo. El gato
+     entra por el otro lado del ciclo para que los dos no coincidan siempre. */
+  animation: gato-pasea 32s linear -4s infinite;
+  will-change: transform;
+}
+
+@keyframes gato-pasea {
+  0%        { transform: translateX(-18vw); }
+  62%, 100% { transform: translateX(118vw); }
+}
+
+/* El ciclo de paso. Las patas van en dos parejas CRUZADAS —delantera izquierda
+   con trasera derecha— que es como camina un gato; las cuatro a la vez sería un
+   salto. 0,5 s por zancada, que a la velocidad a la que cruza es lo que hace
+   que las patas parezcan tocar el suelo y no arrastrarse. */
+.gato-pata,
+.gato-cola {
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.gato-pata { animation-name: gato-pata; animation-duration: 0.5s; }
+.gato-pata-b { animation-delay: -0.25s; }
+.gato-cola { animation-name: gato-cola; animation-duration: 1.7s; }
+
+@keyframes gato-pata {
+  0%, 100% { transform: rotate(18deg);  }
+  50%      { transform: rotate(-18deg); }
+}
+
+@keyframes gato-cola {
+  0%, 100% { transform: rotate(-9deg); }
+  50%      { transform: rotate(9deg);  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* El fantasma y el gato se quedan quietos a un lado en vez de desaparecer:
+     la decoración sigue puesta, lo que se va es el movimiento. */
+  .fantasma-pasa { animation: none; transform: translateX(78vw); opacity: 0.4; }
+  .fantasma-flota, .gato-pata, .gato-cola { animation: none; }
+  .gato-pasea { animation: none; transform: translateX(8vw); }
+}

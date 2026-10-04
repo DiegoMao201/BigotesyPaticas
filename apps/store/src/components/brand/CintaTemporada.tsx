@@ -19,7 +19,7 @@ import Link from 'next/link';
 import { useTemporada } from '@/lib/temporada';
 
 const MENSAJE = 'Feliz Halloween — domicilio el mismo día en Pereira y Dosquebradas';
-const CTA = { texto: 'Ver catálogo', href: '/categorias' };
+const CTA = { texto: 'Ver catálogo', href: '/categorias/todos' };
 
 export function CintaTemporada() {
   const temporada = useTemporada();
@@ -27,11 +27,11 @@ export function CintaTemporada() {
 
   return (
     <div className="cinta-halloween relative overflow-hidden text-white">
-      <div className="container-wide flex h-10 items-center justify-center gap-2 text-center text-[13px] font-medium sm:text-sm">
-        <span aria-hidden="true" className="cinta-calabaza text-base leading-none">
+      <div className="container-wide flex min-h-10 items-center justify-center gap-2 py-1.5 text-center text-[12.5px] font-medium leading-snug sm:py-0 sm:text-sm">
+        <span aria-hidden="true" className="cinta-calabaza shrink-0 text-base leading-none">
           🎃
         </span>
-        <span className="truncate">{MENSAJE}</span>
+        <span>{MENSAJE}</span>
         <Link
           href={CTA.href}
           className="hidden shrink-0 rounded-full bg-white/20 px-3 py-0.5 text-[12px] font-semibold transition-colors duration-150 hover:bg-white/30 sm:inline-block"

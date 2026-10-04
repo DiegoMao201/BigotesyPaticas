@@ -6,6 +6,7 @@ import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { HuellasFondo } from '@/components/brand/HuellasFondo';
 import { CintaTemporada } from '@/components/brand/CintaTemporada';
+import { DecoracionHalloween } from '@/components/brand/DecoracionHalloween';
 import { OrganizationSchema, LocalBusinessSchema } from '@/components/seo/JsonLd';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 import { MetaPixel } from '@/components/analytics/MetaPixel';
@@ -123,6 +124,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <OrganizationSchema />
         <LocalBusinessSchema />
         <HuellasFondo />
+        <DecoracionHalloween />
         <Providers>
           <CintaTemporada />
           <Header />
