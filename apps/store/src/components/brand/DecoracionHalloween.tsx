@@ -1,40 +1,41 @@
 'use client';
 
 /**
- * La decoración de Halloween que SÍ se ve: telarañas en las esquinas, una araña
- * que baja de su hilo, murciélagos que cruzan aleteando, un fantasma que
- * atraviesa la pantalla ondeando la sábana y un gato negro que camina por el
- * borde de abajo moviendo las patas.
+ * La decoración de Halloween. Diego pidió "infestar", no decorar: *"murciélagos
+ * de esos chiquitos pasando de lado a lado, más fantasmas y más telarañas
+ * colgantes que bajan y suben y desaparecen, y un fondo telarañoso pasando de
+ * lado a lado... unos 3 o 4 fantasmas en diferentes figuras"*.
  *
- * POR QUÉ EXISTE APARTE DE LAS FIGURAS DEL FONDO (4-oct-2026): las figuras de
- * `HuellasFondo` viven en los márgenes, están quietas salvo por un flotar
- * mínimo, y se ocultan en pantallas angostas porque en el celular no hay margen
- * que decorar. Resultado: en el teléfono no se veía nada de la temporada salvo
- * la cinta. Diego: *"esos iconos en los lados se ven estáticos, quietos, no hay
- * un fantasma andando por la pantalla"*. Tenía razón en las dos cosas.
+ * Lo que hay en pantalla a la vez:
  *
- * Esto va POR ENCIMA del contenido, se ve en todas las pantallas, y cada pieza
- * se mueve de verdad:
- *
- * | Pieza | Qué hace | Cada cuánto |
+ * | Pieza | Cuántas | Qué hace |
  * |---|---|---|
- * | Telarañas | marco fijo en las dos esquinas de arriba | siempre |
- * | Araña | baja y sube de su hilo | ciclo de 7 s |
- * | Murciélagos | cruzan en diagonal, aleteando | 22-31 s |
- * | Fantasma | atraviesa ondeando, aparece y se desvanece | cada 34 s |
- * | Gato negro | camina por el borde inferior | cada 46 s |
+ * | Fondo de telaraña | 1 | se desliza de lado a lado, sin fin |
+ * | Telarañas de esquina | 2 | marco fijo, arriba |
+ * | Telarañas colgantes | 6 | bajan, se quedan, suben y se desvanecen |
+ * | Araña del hilo | 1 | baja y sube al lado del logo |
+ * | Murciélagos | 9 | cruzan en las dos direcciones, aleteando |
+ * | Fantasmas | 4 figuras | clásico, gato, perro y chiquito |
+ * | Gato negro | 1 | camina por el borde de abajo |
  *
- * Lo que lo mantiene del lado del adorno y no del estorbo: `pointer-events-none`
- * en todo (jamás se come un clic), `aria-hidden`, nada por encima del menú del
- * celular (que va en z-[70]), solo `transform` y `opacity` —que corren en la GPU
- * y no recalculan la página— y `prefers-reduced-motion` deja la decoración
- * puesta pero quieta, en vez de borrarla.
+ * **Los cuatro fantasmas comparten cuerpo y se distinguen por lo de encima**:
+ * orejas, bigotes, lengua, color y tamaño. Es lo que los hace reconocibles de un
+ * vistazo sin cuadruplicar el código, y lo que permite que la sábana de los
+ * cuatro ondee con la misma animación.
  *
- * Nada de esto pesa en la descarga: son SVG escritos a mano, sin una sola
- * imagen. El icono de 2 MB que costó 11 s de LCP sigue siendo la lección.
+ * Qué lo mantiene del lado del adorno aunque sean dos docenas de piezas:
+ * `pointer-events-none` en todo (jamás se come un clic), `aria-hidden`, nada por
+ * encima del menú del celular (z-[70]), **solo `transform` y `opacity`** —que el
+ * navegador compone en la GPU sin recalcular ni repintar la página— y
+ * `prefers-reduced-motion` deja la decoración puesta y quieta.
+ *
+ * Y nada de esto se descarga: son dibujos escritos a mano, ni una sola imagen.
+ * El icono de 2 MB que costó 11 s de LCP sigue siendo la lección.
  */
 
 import { useTemporada } from '@/lib/temporada';
+
+/* ─── Telarañas ──────────────────────────────────────────────────────────── */
 
 /** Telaraña de esquina: hilos radiales desde el vértice y arcos con comba. */
 function Telarana() {
@@ -54,7 +55,20 @@ function Telarana() {
   );
 }
 
-/** Araña de ocho patas, colgando de su hilo. */
+/** Telaraña redonda, de las que cuelgan de un hilo. */
+function TelaranaColgante() {
+  return (
+    <svg viewBox="0 0 64 64" className="h-full w-full" fill="none">
+      <g stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M32,32L32,2M32,32L53,11M32,32L62,32M32,32L53,53M32,32L32,62M32,32L11,53M32,32L2,32M32,32L11,11" />
+        <path d="M32,12Q27,13 25.8,18.2Q20,20 18.2,25.8Q13,27 12,32Q13,37 18.2,38.2Q20,44 25.8,45.8Q27,51 32,52Q37,51 38.2,45.8Q44,44 45.8,38.2Q51,37 52,32Q51,27 45.8,25.8Q44,20 38.2,18.2Q37,13 32,12Z" />
+        <path d="M32,2Q23,4 20.5,11.5Q13,14 11,22.5Q4,25 2,32Q4,39 11,41.5Q13,50 20.5,52.5Q23,60 32,62Q41,60 43.5,52.5Q51,50 53,41.5Q60,39 62,32Q60,25 53,22.5Q51,14 43.5,11.5Q41,4 32,2Z" />
+      </g>
+    </svg>
+  );
+}
+
+/** Araña de ocho patas. */
 function Arana() {
   return (
     <svg viewBox="0 0 40 34" className="h-full w-full" fill="currentColor">
@@ -70,7 +84,9 @@ function Arana() {
   );
 }
 
-/** Murciélago de perfil: plano a propósito, para que el aleteo lo estreche. */
+/* ─── Murciélago ─────────────────────────────────────────────────────────── */
+
+/** Plano a propósito: el aleteo lo estrecha en horizontal. */
 function MurcielagoVuelo() {
   return (
     <svg viewBox="0 0 64 34" className="h-full w-full" fill="currentColor">
@@ -85,12 +101,12 @@ function MurcielagoVuelo() {
   );
 }
 
+/* ─── Fantasmas ──────────────────────────────────────────────────────────── */
+
 /**
- * Los tres estados del borde de la sábana. Tienen EXACTAMENTE la misma
- * estructura de comandos —solo cambian las alturas de los picos— porque SMIL
- * interpola punto por punto: si un estado tuviera una curva de más, el fantasma
- * daría un salto en vez de ondear. La onda recorre la tela de izquierda a
- * derecha y vuelve.
+ * Los tres estados del borde de la sábana. Misma estructura de comandos en los
+ * tres —solo cambian las alturas de los picos— porque SMIL interpola punto por
+ * punto: con una curva de más, el fantasma daría un salto en vez de ondear.
  */
 const SABANA = [
   'M35,4C50,4,58,15,58,30v33c0,4-4,5-6.5,2l-4.5,-8.5l-4,5c-1.6,2-4,2-5.6,0l-3.4,-1.2l-3.4,7.2c-1.6,2-4,2-5.6,0l-4,-8l-4.5,5.5C13,69,12,68,12,64V30C12,15,20,4,35,4Z',
@@ -98,32 +114,86 @@ const SABANA = [
   'M35,4C50,4,58,15,58,30v33c0,4-4,5-6.5,2l-4.5,-8.5l-4,5c-1.6,2-4,2-5.6,0l-3.4,-1.2l-3.4,7.2c-1.6,2-4,2-5.6,0l-4,-8l-4.5,5.5C13,69,12,68,12,64V30C12,15,20,4,35,4Z',
 ].join(';');
 
-/** Fantasma con la sábana ondeando. La onda va en SMIL, no en CSS: CSS no sabe
- *  interpolar la `d` de un path, y es justo lo que hace falta aquí. */
-function Fantasma() {
+type Piel = { relleno: string; trazo: string; cara: string };
+
+/** El cuerpo con la sábana ondeando. Lo que va encima llega por `children`. */
+function Cuerpo({ piel, children }: { piel: Piel; children?: React.ReactNode }) {
   return (
     <svg viewBox="0 0 70 92" className="h-full w-full">
-      <path fill="#f6f2ff" stroke="#6d28d9" strokeWidth="2" d={SABANA.split(';')[0]}>
+      <path fill={piel.relleno} stroke={piel.trazo} strokeWidth="2" d={SABANA.split(';')[0]}>
         <animate attributeName="d" values={SABANA} dur="1.6s" repeatCount="indefinite" />
       </path>
-      {/* bracitos */}
-      <path fill="#f6f2ff" stroke="#6d28d9" strokeWidth="2" d="M11,34c-4,1-6,4-5,7c1,2.6,4,3,6,1z" />
-      <path fill="#f6f2ff" stroke="#6d28d9" strokeWidth="2" d="M59,34c4,1,6,4,5,7c-1,2.6-4,3-6,1z" />
-      {/* cara */}
-      <ellipse cx="27" cy="28" rx="4.4" ry="5.8" fill="#4c1d95" />
-      <ellipse cx="43" cy="28" rx="4.4" ry="5.8" fill="#4c1d95" />
-      <path d="M30,41c1.6,3.4,8.4,3.4,10,0c-1.6,5-8.4,5-10,0z" fill="#4c1d95" />
+      {children}
     </svg>
   );
 }
 
+const LILA: Piel = { relleno: '#f6f2ff', trazo: '#6d28d9', cara: '#4c1d95' };
+const MENTA: Piel = { relleno: '#eefcfa', trazo: '#0d9488', cara: '#115e59' };
+const DURAZNO: Piel = { relleno: '#fff4ec', trazo: '#c2410c', cara: '#7c2d12' };
+const MIEL: Piel = { relleno: '#fffbe8', trazo: '#b45309', cara: '#78350f' };
+
+/** El de siempre: bracitos y boca de sorpresa. */
+function FantasmaClasico() {
+  return (
+    <Cuerpo piel={LILA}>
+      <path fill={LILA.relleno} stroke={LILA.trazo} strokeWidth="2" d="M11,34c-4,1-6,4-5,7c1,2.6,4,3,6,1z" />
+      <path fill={LILA.relleno} stroke={LILA.trazo} strokeWidth="2" d="M59,34c4,1,6,4,5,7c-1,2.6-4,3-6,1z" />
+      <ellipse cx="27" cy="28" rx="4.4" ry="5.8" fill={LILA.cara} />
+      <ellipse cx="43" cy="28" rx="4.4" ry="5.8" fill={LILA.cara} />
+      <path d="M30,41c1.6,3.4,8.4,3.4,10,0c-1.6,5-8.4,5-10,0z" fill={LILA.cara} />
+    </Cuerpo>
+  );
+}
+
+/** Gato fantasma: orejas en punta y bigotes. */
+function FantasmaGato() {
+  return (
+    <Cuerpo piel={MENTA}>
+      <path fill={MENTA.relleno} stroke={MENTA.trazo} strokeWidth="2" d="M18,14l-1-12l12,7zM52,14l1-12l-12,7z" />
+      <ellipse cx="27" cy="28" rx="3" ry="6" fill={MENTA.cara} />
+      <ellipse cx="43" cy="28" rx="3" ry="6" fill={MENTA.cara} />
+      <path d="M32,38q3,3 6,0" stroke={MENTA.cara} strokeWidth="2" fill="none" />
+      <g stroke={MENTA.cara} strokeWidth="1.4">
+        <path d="M20,36h-8M20,39h-8M50,36h8M50,39h8" />
+      </g>
+    </Cuerpo>
+  );
+}
+
+/** Perro fantasma: orejas caídas y la lengua afuera. */
+function FantasmaPerro() {
+  return (
+    <Cuerpo piel={DURAZNO}>
+      <path fill={DURAZNO.relleno} stroke={DURAZNO.trazo} strokeWidth="2" d="M14,16c-6,2-8,12-5,20c3,5,8,3,8-3z" />
+      <path fill={DURAZNO.relleno} stroke={DURAZNO.trazo} strokeWidth="2" d="M56,16c6,2,8,12,5,20c-3,5-8,3-8-3z" />
+      <ellipse cx="28" cy="29" rx="3.6" ry="5" fill={DURAZNO.cara} />
+      <ellipse cx="42" cy="29" rx="3.6" ry="5" fill={DURAZNO.cara} />
+      <ellipse cx="35" cy="39" rx="3.4" ry="2.6" fill={DURAZNO.cara} />
+      <path d="M33,43q2,6 4,0" fill="#fb7185" />
+    </Cuerpo>
+  );
+}
+
+/** El pequeño: sin apéndices, todo ojos. */
+function FantasmaChiquito() {
+  return (
+    <Cuerpo piel={MIEL}>
+      <ellipse cx="28" cy="27" rx="4.6" ry="6" fill={MIEL.cara} />
+      <ellipse cx="44" cy="27" rx="4.6" ry="6" fill={MIEL.cara} />
+      <ellipse cx="36" cy="40" rx="3.6" ry="4.6" fill={MIEL.cara} />
+    </Cuerpo>
+  );
+}
+
+/* ─── Gato que camina ────────────────────────────────────────────────────── */
+
 /**
- * Gato negro caminando. Las cuatro patas giran desde donde se unen al cuerpo,
- * en dos parejas cruzadas —delantera izquierda con trasera derecha— que es como
- * camina un gato de verdad; si las cuatro fueran a la vez, saltaría.
- * `transformBox: 'view-box'` para poder dar el centro de giro en coordenadas del
- * dibujo: con el `fill-box` por defecto, el eje de una pata inclinada cae en la
- * esquina de su caja y la pata gira desde el aire.
+ * Las cuatro patas giran desde donde se unen al cuerpo, en dos parejas CRUZADAS
+ * —delantera izquierda con trasera derecha—, que es como camina un gato; las
+ * cuatro a la vez sería un salto. `transformBox: 'view-box'` para dar el eje en
+ * coordenadas del dibujo: con el `fill-box` por defecto, el eje de una pata
+ * inclinada cae en la esquina de su caja y la pata gira desde el aire.
  */
 function GatoCamina() {
   const eje = (x: number, y: number) => ({
@@ -132,13 +202,7 @@ function GatoCamina() {
   });
   return (
     <svg viewBox="0 0 120 64" className="h-full w-full">
-      {/* cola: se mueve aparte, con su propio ritmo */}
-      <path
-        className="gato-cola"
-        d="M28,32c-10-2-16-12-13-22c1,8,7,14,14,15z"
-        fill="currentColor"
-        style={eje(30, 33)}
-      />
+      <path className="gato-cola" d="M28,32c-10-2-16-12-13-22c1,8,7,14,14,15z" fill="currentColor" style={eje(30, 33)} />
       <g fill="currentColor">
         <ellipse cx="58" cy="34" rx="30" ry="14" />
         <circle cx="90" cy="24" r="12" />
@@ -150,17 +214,43 @@ function GatoCamina() {
         <path className="gato-pata gato-pata-b" d="M70,45L66,60" style={eje(70, 45)} />
         <path className="gato-pata" d="M78,44L82,60" style={eje(78, 44)} />
       </g>
-      {/* el ojo ámbar: lo único que no es negro, y es lo que le da la mirada */}
       <circle cx="95" cy="22" r="2.2" fill="#f5a641" />
     </svg>
   );
 }
 
-/** Dónde cruza cada murciélago, cuánto tarda y cuándo entra. */
-const VUELOS = [
-  { arriba: '13%', tam: 40, dur: 22, retraso: 3, aleteo: 0.42, op: 0.4 },
-  { arriba: '37%', tam: 28, dur: 31, retraso: 14, aleteo: 0.52, op: 0.32 },
-  { arriba: '64%', tam: 34, dur: 26, retraso: 25, aleteo: 0.46, op: 0.28 },
+/* ─── El reparto ─────────────────────────────────────────────────────────── */
+
+/** `rev` = cruza de derecha a izquierda. Mezclar las dos direcciones es lo que
+ *  hace que parezca una bandada y no una fila. */
+const MURCIELAGOS = [
+  { arriba: '7%', tam: 26, dur: 17, retraso: -2, aleteo: 0.36, op: 0.42, rev: false },
+  { arriba: '15%', tam: 18, dur: 23, retraso: -9, aleteo: 0.3, op: 0.3, rev: true },
+  { arriba: '24%', tam: 32, dur: 20, retraso: -14, aleteo: 0.44, op: 0.38, rev: false },
+  { arriba: '33%', tam: 20, dur: 28, retraso: -4, aleteo: 0.32, op: 0.28, rev: true },
+  { arriba: '45%', tam: 24, dur: 19, retraso: -11, aleteo: 0.38, op: 0.34, rev: false },
+  { arriba: '56%', tam: 16, dur: 25, retraso: -17, aleteo: 0.28, op: 0.26, rev: true },
+  { arriba: '66%', tam: 30, dur: 22, retraso: -6, aleteo: 0.42, op: 0.36, rev: false },
+  { arriba: '77%', tam: 19, dur: 30, retraso: -21, aleteo: 0.34, op: 0.27, rev: true },
+  { arriba: '87%', tam: 23, dur: 18, retraso: -13, aleteo: 0.4, op: 0.3, rev: false },
+];
+
+/** Alturas, tamaños y ritmos repartidos para que nunca crucen dos a la vez. */
+const FANTASMAS = [
+  { Comp: FantasmaClasico, arriba: '30%', ancho: 78, dur: 24, retraso: -5, op: 0.62, rev: false },
+  { Comp: FantasmaGato, arriba: '58%', ancho: 64, dur: 31, retraso: -19, op: 0.55, rev: true },
+  { Comp: FantasmaPerro, arriba: '12%', ancho: 70, dur: 28, retraso: -12, op: 0.5, rev: false },
+  { Comp: FantasmaChiquito, arriba: '73%', ancho: 46, dur: 21, retraso: -2, op: 0.58, rev: true },
+];
+
+/** Las colgantes van repartidas a lo ancho y cada una con su propio compás. */
+const COLGANTES = [
+  { izq: '26%', tam: 30, hilo: 30, dur: 13, retraso: 0 },
+  { izq: '41%', tam: 22, hilo: 54, dur: 17, retraso: -5 },
+  { izq: '57%', tam: 34, hilo: 24, dur: 15, retraso: -9 },
+  { izq: '69%', tam: 20, hilo: 66, dur: 19, retraso: -3 },
+  { izq: '83%', tam: 27, hilo: 40, dur: 14, retraso: -11 },
+  { izq: '92%', tam: 18, hilo: 72, dur: 21, retraso: -7 },
 ];
 
 export function DecoracionHalloween() {
@@ -169,8 +259,14 @@ export function DecoracionHalloween() {
 
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[55] overflow-hidden">
-      {/* TELARAÑAS — marco fijo, por encima del encabezado y por debajo del
-          menú del celular, que va en z-[70]. */}
+      {/* FONDO DE TELARAÑA — una banda del doble de ancho que se desliza media
+          anchura y vuelve a empezar: como el patrón se repite, el salto no se
+          ve y el deslizamiento parece infinito. Va con `transform`, no con
+          `background-position`, para que lo mueva la GPU sin repintar. */}
+      <div className="telarana-fondo absolute -left-1/2 top-0 h-full w-[200%]" />
+
+      {/* TELARAÑAS DE ESQUINA — marco fijo, por encima del encabezado y por
+          debajo del menú del celular, que va en z-[70]. */}
       <div className="absolute left-0 top-0 h-24 w-24 text-ink/35 sm:h-36 sm:w-36 lg:h-44 lg:w-44">
         <Telarana />
       </div>
@@ -178,8 +274,21 @@ export function DecoracionHalloween() {
         <Telarana />
       </div>
 
-      {/* ARAÑA — arranca por encima del borde para que el hilo nunca deje hueco
-          al bajar. */}
+      {/* TELARAÑAS COLGANTES — bajan, se quedan un momento, suben y se van. */}
+      {COLGANTES.map((c, i) => (
+        <div
+          key={i}
+          className="colgante absolute top-0 flex flex-col items-center"
+          style={{ left: c.izq, animationDuration: `${c.dur}s`, animationDelay: `${c.retraso}s` }}
+        >
+          <span className="block w-px bg-ink/25" style={{ height: c.hilo }} />
+          <span className="block text-ink/30" style={{ width: c.tam, height: c.tam }}>
+            <TelaranaColgante />
+          </span>
+        </div>
+      ))}
+
+      {/* ARAÑA — arranca por encima del borde para que el hilo no deje hueco. */}
       <div className="arana-cuelga absolute -top-7 left-[17%] flex flex-col items-center sm:left-[12%]">
         <span className="block w-px bg-ink/30" style={{ height: 'clamp(42px, 8vw, 80px)' }} />
         <span className="block h-5 w-6 text-ink/55 sm:h-7 sm:w-8">
@@ -188,10 +297,10 @@ export function DecoracionHalloween() {
       </div>
 
       {/* MURCIÉLAGOS */}
-      {VUELOS.map((v, i) => (
+      {MURCIELAGOS.map((v, i) => (
         <span
           key={i}
-          className="murcielago-cruza absolute text-ink"
+          className={`${v.rev ? 'murcielago-cruza-rev' : 'murcielago-cruza'} absolute text-ink`}
           style={{
             top: v.arriba,
             opacity: v.op,
@@ -208,23 +317,37 @@ export function DecoracionHalloween() {
         </span>
       ))}
 
-      {/* FANTASMA — atraviesa la pantalla por la mitad. Entra y sale
-          desvaneciéndose, y pasa la mayor parte del ciclo invisible: si
-          estuviera siempre ahí dejaría de ser una aparición. */}
-      <span
-        className="fantasma-pasa absolute"
-        style={{ top: '32%', width: 'clamp(74px, 8vw, 104px)', height: 'clamp(97px, 10.5vw, 137px)' }}
-      >
-        <span className="fantasma-flota block h-full w-full">
-          <Fantasma />
+      {/* FANTASMAS — la posición y el tamaño van en `style` y no en clases
+          arbitrarias: `top-[30%]` no llegó a generarse en el CSS servido y el
+          fantasma se quedó sin `top`, aunque `w-[4.6rem]` del mismo archivo sí
+          estaba. Para algo que debe aparecer sí o sí, `style` no falla. */}
+      {FANTASMAS.map(({ Comp, arriba, ancho, dur, retraso, op, rev }, i) => (
+        <span
+          key={i}
+          className={rev ? 'fantasma-pasa-rev absolute' : 'fantasma-pasa absolute'}
+          style={{
+            top: arriba,
+            width: `clamp(${ancho * 0.66}px, ${ancho / 13}vw, ${ancho}px)`,
+            height: `clamp(${ancho * 0.87}px, ${ancho / 9.9}vw, ${ancho * 1.31}px)`,
+            animationDuration: `${dur}s`,
+            animationDelay: `${retraso}s`,
+            ['--op' as string]: op,
+          }}
+        >
+          <span className="fantasma-flota block h-full w-full">
+            <Comp />
+          </span>
         </span>
-      </span>
+      ))}
 
-      {/* GATO — camina por el borde de abajo. Se para sobre el borde inferior
-          del viewport, que es donde el ojo espera que esté el suelo. */}
+      {/* GATO — camina por el borde de abajo, que es donde el ojo espera el suelo. */}
       <span
         className="gato-pasea absolute bottom-0"
-        style={{ width: 'clamp(92px, 11vw, 150px)', height: 'clamp(49px, 5.9vw, 80px)', color: 'rgba(28,27,34,0.82)' }}
+        style={{
+          width: 'clamp(92px, 11vw, 150px)',
+          height: 'clamp(49px, 5.9vw, 80px)',
+          color: 'rgba(28,27,34,0.82)',
+        }}
       >
         <GatoCamina />
       </span>

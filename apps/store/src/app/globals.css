@@ -503,15 +503,17 @@
      de abrir la página. Sin esto el ciclo empieza con el fantasma fuera de
      cuadro y alguien que mire diez segundos no ve nada: medido con capturas a
      los 6 y 11 s, y en las dos el fantasma todavía no había entrado. */
-  animation: fantasma-pasa 24s linear -5s infinite;
+  animation-name: fantasma-pasa;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
   will-change: transform, opacity;
 }
 
 @keyframes fantasma-pasa {
-  0%            { transform: translateX(-22vw); opacity: 0;   }
-  6%            { opacity: 0.62; }
-  48%           { opacity: 0.62; }
-  55%, 100%     { transform: translateX(122vw); opacity: 0;   }
+  0%            { transform: translateX(-24vw); opacity: 0;          }
+  6%            { opacity: var(--op, 0.6); }
+  48%           { opacity: var(--op, 0.6); }
+  55%, 100%     { transform: translateX(124vw); opacity: 0;          }
 }
 
 /* Dentro del recorrido, el fantasma sube, baja y se ladea. Va en un elemento
@@ -572,4 +574,94 @@
   .fantasma-pasa { animation: none; transform: translateX(78vw); opacity: 0.4; }
   .fantasma-flota, .gato-pata, .gato-cola { animation: none; }
   .gato-pasea { animation: none; transform: translateX(8vw); }
+}
+
+/* ── INFESTACIÓN ────────────────────────────────────────────────────────────
+   Diego: "infestar de halloween, no tan tímido". Lo que sigue multiplica las
+   piezas y añade las dos que faltaban: telarañas que cuelgan y un fondo
+   telarañoso deslizándose. Ver DecoracionHalloween.tsx. */
+
+/* El fondo. El patrón es una telaraña anclada en las esquinas del mosaico, así
+   que al repetirse los hilos de un mosaico continúan en el siguiente y no se
+   ven costuras. La banda mide el doble del ancho y se desliza exactamente media
+   anchura: al terminar está idéntica a como empezó, y el salto es invisible.
+   Va con `transform` —no con `background-position`— para que lo mueva la GPU.
+   Opacidad al ras: tiene que sentirse la textura, no leerse el dibujo. */
+.telarana-fondo {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Cg fill='none' stroke='%23262730' stroke-width='1.1' stroke-opacity='0.5'%3E%3Cpath d='M0,0L150,30M0,0L106,106M0,0L30,150'/%3E%3Cpath d='M48,9Q38,31 31,31Q31,38 9,48'/%3E%3Cpath d='M96,19Q74,61 61,61Q61,74 19,96'/%3E%3Cpath d='M144,29Q111,92 92,92Q92,111 29,144'/%3E%3Cpath d='M150,150L0,120M150,150L44,44M150,150L120,0'/%3E%3Cpath d='M102,141Q112,119 119,119Q119,112 141,102'/%3E%3Cpath d='M54,131Q76,89 89,89Q89,76 131,54'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 150px 150px;
+  background-repeat: repeat;
+  /* 0,15 y no más. A 0,5 —que fue el primer intento— los hilos cruzaban los
+     párrafos y había que esforzarse para leer: la tienda dejaba de ser legible
+     para parecer de Halloween, que es exactamente el cambio que no vale la
+     pena. A 0,15 se siente la textura en los espacios en blanco y el texto se
+     lee como si no hubiera nada detrás. */
+  opacity: 0.15;
+  animation: telarana-fondo 90s linear infinite;
+  will-change: transform;
+}
+
+@keyframes telarana-fondo {
+  0%   { transform: translateX(0);    }
+  100% { transform: translateX(-50%); }
+}
+
+/* Las telarañas colgantes: bajan, se quedan un momento meciéndose, suben y se
+   desvanecen. El ciclo entero sube y baja el bloque ENTERO (hilo incluido), por
+   eso cada una arranca con `translateY(-100%)`: desaparece por arriba del
+   borde, no se encoge. */
+.colgante {
+  animation-name: colgante;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes colgante {
+  0%        { transform: translateY(-110%); opacity: 0;   }
+  14%       { transform: translateY(0);     opacity: 1;   }
+  42%       { transform: translateY(16px);  opacity: 1;   }
+  64%       { transform: translateY(0);     opacity: 0.85; }
+  82%, 100% { transform: translateY(-110%); opacity: 0;   }
+}
+
+/* Las vueltas de regreso. Mezclar las dos direcciones es lo que convierte una
+   fila de murciélagos en una bandada: si todos van al mismo lado, el ojo lee
+   una cinta transportadora. */
+.murcielago-cruza-rev {
+  animation-name: murcielago-cruza-rev;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+@keyframes murcielago-cruza-rev {
+  0%   { transform: translate(118vw, 0)   scaleX(-1); }
+  25%  { transform: translate(83vw, -20px) scaleX(-1); }
+  50%  { transform: translate(50vw, 12px)  scaleX(-1); }
+  75%  { transform: translate(17vw, -15px) scaleX(-1); }
+  100% { transform: translate(-15vw, 0)   scaleX(-1); }
+}
+
+.fantasma-pasa-rev {
+  animation-name: fantasma-pasa-rev;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes fantasma-pasa-rev {
+  0%            { transform: translateX(124vw); opacity: 0;          }
+  6%            { opacity: var(--op, 0.6); }
+  48%           { opacity: var(--op, 0.6); }
+  55%, 100%     { transform: translateX(-24vw); opacity: 0;          }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Todo se queda puesto y quieto. Los que cruzan se detienen repartidos a lo
+     ancho en vez de amontonarse en el mismo punto. */
+  .telarana-fondo, .colgante, .murcielago-cruza-rev { animation: none; }
+  .colgante { transform: translateY(0); opacity: 1; }
+  .murcielago-cruza-rev { transform: translate(62vw, 0) scaleX(-1); }
+  .fantasma-pasa-rev { animation: none; transform: translateX(22vw); opacity: 0.4; }
 }
