@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, ClassVar
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -237,6 +238,26 @@ class PortalOrder(UUIDPKMixin, TimestampMixin, Base):
     ga_client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ga_session_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     gclid: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Pago en línea con Bold (4-oct-2026). El pago es un ESTADO MÁS de este pedido,
+    # no un pedido distinto: así hereda el puente a sales, los puntos, las
+    # notificaciones y la vista del admin que ya funcionan. Ver la migración 0046.
+    #
+    # `payment_method` ya existía arriba y en producción vale 'cash', 'transfer' o
+    # 'nequi'. Se le suma 'bold' en minúscula, para no partir el vocabulario en dos.
+    #
+    # `bold_amount` es el entero EXACTO que se firmó y se le mandó a Bold: pesos sin
+    # decimales ni separadores (76000, nunca 76.000 ni 76000.00). Va aparte de
+    # `total_amount` porque es el valor contra el que se compara lo que devuelve el
+    # webhook; recalcularlo desde el Numeric al validar arriesga que un redondeo
+    # distinto nos haga rechazar un pago bueno.
+    order_reference: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    payment_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    bold_amount: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    bold_payment_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payment_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     purchase_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -433,4 +454,38 @@ class PortalReferral(Base):
     )
     referred: Mapped[Customer] = relationship(  # type: ignore[name-defined]
         "Customer", foreign_keys=[referred_customer_id]
+    )
+
+
+class PaymentEvent(UUIDPKMixin, Base):
+    """Bitácora de todo lo que llega de Bold, válido o no.
+
+    Hace tres trabajos y por eso vale una tabla propia:
+
+    1. **Idempotencia.** `bold_payment_id` es UNIQUE, así que el procesamiento
+       empieza con `INSERT ... ON CONFLICT DO NOTHING`: si no insertó nada, ese pago
+       ya se procesó y se responde 200 sin tocar el pedido. Bold reintenta el webhook
+       hasta cinco veces (15 min, 1 h, 4 h, 8 h, 24 h) y esos reintentos son
+       funcionamiento normal, no un error. El candado vive en la base y no en una
+       comprobación previa, que es lo que lo hace resistir dos reintentos a la vez.
+    2. **Auditoría.** Una discrepancia entre lo que cobró Bold y lo que guardamos
+       queda escrita con su `raw_payload`, que es la única forma de investigarla.
+    3. **Depuración.** Los intentos con firma inválida se guardan IGUAL, con
+       `signature_valid = False`. Sin eso, una integración que falla por la firma
+       obliga a reproducir el pago para poder verla.
+    """
+
+    __tablename__ = "payment_events"
+    __table_args__: ClassVar = {"schema": "portal"}
+
+    bold_payment_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    event_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    order_reference: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
+    raw_payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    signature_valid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    amount: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
