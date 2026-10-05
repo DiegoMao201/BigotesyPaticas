@@ -16,6 +16,7 @@ la base.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -339,40 +340,43 @@ async def _avisar_pago(db: DBSession, pedido: PortalOrder, monto: int | None) ->
     # Separarlas arregla eso de raíz: lo que Diego TIENE que ver queda escrito en la
     # base pase lo que pase, y el empujón por Redis es un extra que puede fallar sin
     # llevarse nada por delante.
-    try:
-        from app.models.portal import PortalNotification
+    # EL AVISO VA EN SU PROPIA SESIÓN, no en la que viene arrastrada.
+    #
+    # Probando el 5-oct-2026: el log de entrada salía, y después nada — ni el de
+    # éxito, ni el de error, ni la fila en la base. La sesión que llega hasta aquí ya
+    # hizo tres commits (marcar el pago, cerrar el evento) y se quedaba colgada en el
+    # siguiente, sin lanzar nada que el `except` pudiera atrapar.
+    #
+    # Una sesión nueva y corta no arrastra ese estado. Y el `wait_for` garantiza que,
+    # pase lo que pase, esto termina: una tarea de fondo bloqueada para siempre es
+    # peor que un aviso perdido, porque se lleva todo lo que venga detrás.
+    from app.db import AsyncSessionLocal
 
-        db.add(
-            PortalNotification(
-                customer_id=None,
-                is_admin=True,
-                type="web_order_paid",
-                title=titulo,
-                body=cuerpo,
-                data=datos,
-            )
-        )
-        await db.commit()
+    try:
+        async with asyncio.timeout(15):
+            async with AsyncSessionLocal() as db2:
+                from app.models.portal import PortalNotification
+
+                db2.add(
+                    PortalNotification(
+                        customer_id=None,
+                        is_admin=True,
+                        type="web_order_paid",
+                        title=titulo,
+                        body=cuerpo,
+                        data=datos,
+                    )
+                )
+                await db2.commit()
         log.info("BOLD · aviso guardado para %s", pedido.order_reference)
     except Exception:
         log.exception("BOLD · FALLO EL AVISO AL PANEL de %s", pedido.order_reference)
-        await db.rollback()
 
-    # El empujón en vivo, aparte y sin que su fallo arrastre nada.
-    try:
-        from app.api.v1.portal_notifications import notify_admins
-
-        await notify_admins(
-            db, notif_type="web_order_paid", title=titulo, body=cuerpo, data=datos
-        )
-        await db.commit()
-    except Exception:
-        log.warning("BOLD · no se pudo publicar el aviso en vivo (el de la base sí quedó)")
-        await db.rollback()
+    # Nota: no se publica aparte en Redis. `notify_admins()` escribiría una SEGUNDA
+    # fila, y el panel mostraría el mismo pago dos veces. El aviso en vivo llegará
+    # cuando el panel lea de la base, que es de donde lee hoy.
 
     try:
-        import asyncio
-
         from app.services.email import STORE_EMAIL, send_email
 
         html = (
