@@ -10,6 +10,10 @@ import { auth, orders } from '@/lib/api';
 import { formatCOP } from '@/lib/utils';
 
 const PAYMENT_METHODS = [
+  // Primero el que cierra la venta al momento. Los demás siguen ahí, completos:
+  // esconderlos los haría parecer un castigo, y son como ha vendido esta tienda
+  // desde siempre.
+  { value: 'bold', label: '⚡ Pagar ahora en línea', nota: 'Tarjeta, PSE, Nequi o Daviplata' },
   { value: 'cash', label: '💵 Efectivo contra entrega' },
   { value: 'card', label: '💳 Tarjeta al recibir' },
   { value: 'nequi', label: '📱 Nequi' },
@@ -51,6 +55,17 @@ export default function PedidoPage() {
     mutationFn: (payload: Parameters<typeof orders.createMulti>[0]) =>
       orders.createMulti(payload),
     onSuccess: (order) => {
+      // Si eligió pagar en línea, la API devuelve a dónde mandarlo: la misma
+      // página de pago de la tienda. Un solo sitio donde se paga, venga el cliente
+      // del portal, del checkout o de un enlace por WhatsApp.
+      const pagarEn = (order as { pagar_en?: string }).pagar_en;
+      if (pagarEn) {
+        // El carrito NO se vacía todavía: si se arrepiente a medio pagar, volver y
+        // encontrarlo vacío sería perder la venta por un detalle.
+        toast.success('Te llevamos a pagar 🔒');
+        window.location.href = pagarEn;
+        return;
+      }
       clearCart();
       toast.success('¡Pedido confirmado! 🎉');
       router.push(`/orders/${order.id}`);
@@ -157,6 +172,14 @@ export default function PedidoPage() {
         {/* Sección 3: Método de pago */}
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <h2 className="font-bold text-base mb-3">💳 Método de pago</h2>
+          {/* La cobertura, dicha antes de elegir. Diego: "no quiero tener problemas
+              por falta de información para el cliente". */}
+          <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+            Entregamos en la zona urbana de <strong>Pereira y Dosquebradas</strong>, el
+            mismo día. En el portal el <strong>domicilio es gratis siempre</strong>, sin
+            mínimo de compra. Si estás fuera de esa zona, escríbenos por WhatsApp y
+            coordinamos el envío antes de cobrarte.
+          </p>
           <div className="space-y-2">
             {PAYMENT_METHODS.map((pm) => (
               <label
@@ -171,7 +194,12 @@ export default function PedidoPage() {
                   onChange={() => setPaymentMethod(pm.value)}
                   className="accent-teal-600"
                 />
-                <span className="text-sm font-medium">{pm.label}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{pm.label}</span>
+                  {'nota' in pm && pm.nota && (
+                    <span className="block text-xs text-gray-500">{pm.nota}</span>
+                  )}
+                </span>
               </label>
             ))}
           </div>
