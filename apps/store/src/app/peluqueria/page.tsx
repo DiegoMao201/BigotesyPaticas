@@ -8,17 +8,24 @@ import { ReservaPeluqueria } from './ReservaPeluqueria';
  * Peluquería canina y felina (28-sep-2026). Destino del anuncio de Google Ads y página para
  * posicionar "peluquería canina Dosquebradas/Pereira" (0 de 21 puntos en el mapa ese día).
  * Reserva sin cuenta. Solo datos confirmados: servicios, horario, 10% en línea, reseñas.
- * Sin precios hasta que Diego los confirme: se dicen por WhatsApp según tamaño y pelaje.
+ * Precio: Diego lo confirmó el 5-oct-2026 — **desde $40.000, según el pelo y el tamaño**.
+ * Antes la página no decía cuánto costaba en ninguna parte: el único rastro era una
+ * pregunta frecuente que remitía al WhatsApp. 44 clics del anuncio, 0 reservas. Quien
+ * busca peluquería quiere saber el precio ANTES de dejar su celular.
  */
 
 const BASE = 'https://bigotesypaticas.com';
 const URL = `${BASE}/peluqueria`;
 const WA_TXT = encodeURIComponent('Hola, quiero información de la peluquería para mi mascota 🐾');
 
+/** Precio mínimo, confirmado por Diego el 5-oct-2026. Un solo sitio: si sube, sube aquí. */
+const DESDE = 40000;
+const DESDE_TXT = `$${DESDE.toLocaleString('es-CO')}`;
+
 export const metadata: Metadata = {
   title: { absolute: 'Peluquería Canina y Felina en Dosquebradas y Pereira' },
   description:
-    'Baño, corte, cepillado y corte de uñas para perros y gatos en Samara Plaza Mall, Dosquebradas. Reserva en línea sin registrarte y recibe 10% de descuento.',
+    `Baño, corte, cepillado y corte de uñas para perros y gatos en Samara Plaza Mall, Dosquebradas. Desde ${DESDE_TXT} según el tamaño y el pelo. Reserva en línea sin registrarte y recibe 10% de descuento.`,
   alternates: { canonical: URL },
   openGraph: {
     title: 'Peluquería canina y felina · Bigotes y Paticas',
@@ -71,7 +78,7 @@ const FAQS = [
   {
     pregunta: '¿Cuánto cuesta el baño?',
     respuesta:
-      'Depende del tamaño y del tipo de pelo de tu mascota. Cuando reservas te escribimos por WhatsApp con el precio exacto antes de la cita, y por reservar en línea tienes 10% de descuento.',
+      `Desde ${DESDE_TXT}. El precio final depende del tamaño y del tipo de pelo de tu mascota: cuando reservas te escribimos por WhatsApp con el precio exacto antes de la cita, y por reservar en línea tienes 10% de descuento.`,
   },
   {
     pregunta: '¿Tengo que registrarme para reservar?',
@@ -96,6 +103,17 @@ export default function PeluqueriaPage() {
             description: 'Baño, corte, cepillado y corte de uñas para perros y gatos.',
             url: URL,
             areaServed: BUSINESS_INFO.areaServed.map((c) => ({ '@type': 'City', name: c })),
+            offers: {
+              '@type': 'Offer',
+              url: URL,
+              availability: 'https://schema.org/InStock',
+              priceSpecification: {
+                '@type': 'PriceSpecification',
+                priceCurrency: 'COP',
+                minPrice: DESDE,
+                valueAddedTaxIncluded: true,
+              },
+            },
             provider: {
               '@type': 'PetStore',
               name: BUSINESS_INFO.name,
@@ -118,9 +136,16 @@ export default function PeluqueriaPage() {
             <p className="mt-4 text-lg text-white/90">
               Baño, corte, cepillado y corte de uñas para tu perro o tu gato, a pocos minutos de Pereira.
             </p>
-            <div className="mt-5 inline-flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 backdrop-blur">
-              <span className="text-4xl font-black text-[#F5A641] leading-none">10%</span>
-              <span className="text-sm leading-snug">de descuento<br />reservando en línea</span>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Baño y peluquería</p>
+                <p className="text-3xl font-black leading-none text-[#F5A641]">desde {DESDE_TXT}</p>
+                <p className="mt-1 text-sm text-white/90">según el tamaño y el tipo de pelo</p>
+              </div>
+              <div className="inline-flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 backdrop-blur">
+                <span className="text-4xl font-black leading-none text-[#F5A641]">10%</span>
+                <span className="text-sm leading-snug">de descuento<br />reservando en línea</span>
+              </div>
             </div>
             <ul className="mt-6 space-y-2 text-white/90">
               <li className="flex items-center gap-2"><Clock className="h-5 w-5 text-[#B2FF59]" /> Lunes a sábado · 10 a. m. a 7 p. m.</li>
