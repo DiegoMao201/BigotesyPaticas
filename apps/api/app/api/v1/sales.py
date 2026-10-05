@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 
 from app.deps import CurrentUser, DBSession, require_permission
@@ -478,6 +478,112 @@ async def cancel_order(
     }
     await db.commit()
     return {"ok": True, "order_number": o.order_number}
+
+
+class MarkPendingPayload(BaseModel):
+    """Por qué se revierte. Obligatorio: un cambio de estado sin motivo es un
+    cambio que nadie puede explicar tres semanas después."""
+
+    motivo: str = Field(min_length=3, max_length=300)
+
+
+@router.post(
+    "/orders/{order_id}/mark-pending",
+    dependencies=[Depends(require_permission("sales:write"))],
+)
+async def mark_order_pending(
+    order_id: uuid.UUID,
+    payload: MarkPendingPayload,
+    db: DBSession,
+    user: CurrentUser,
+):
+    """Devuelve una orden a PENDIENTE. El camino de vuelta que faltaba.
+
+    Diego (5-oct-2026): *"muchas veces tengo que cambiar el estado pero no me deja
+    ni de pagada a pendiente para poder llevar un mejor control"*.
+
+    Solo existía `mark-paid`. Marcar pagada una orden por error —el dedo resbala en
+    una lista— no tenía arreglo desde el panel, y la única salida era dejar el dato
+    mal o entrar a la base. Un sistema que no deja corregir un error humano obliga a
+    convivir con él.
+
+    **LO QUE SÍ SE REVIERTE Y LO QUE NO**
+
+    Se revierten los pagos registrados *a mano* desde el panel. **No se toca un pago
+    cobrado por Bold**: ahí el dinero entró de verdad, en la cuenta, y marcarlo
+    pendiente no lo devuelve — solo haría que el sistema mienta sobre algo que el
+    banco sí tiene registrado. Para esos, el camino es anular en Bold y que el
+    webhook lo refleje.
+
+    Los abonos parciales se conservan: si el cliente había abonado $20.000 de
+    $50.000, al revertir queda en «Parcial» debiendo $30.000, no en cero. Borrar sus
+    abonos sería perder plata que sí pagó.
+
+    Queda rastro de quién revirtió, cuándo y por qué.
+    """
+    o = (await db.execute(select(Order).where(Order.id == order_id))).scalar_one_or_none()
+    if o is None:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if o.status == "cancelled":
+        raise HTTPException(status_code=409, detail="La orden está anulada")
+
+    # Un cobro de Bold no se revierte desde aquí: el dinero está en la cuenta.
+    meta = o.metadata_ or {}
+    if meta.get("bold_payment_id") or (o.payment_method or "").lower() == "bold":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Esta venta se cobró en línea con Bold y el dinero ya está en la "
+                "cuenta. Para devolverlo hay que anular la transacción en Bold; "
+                "marcarla pendiente aquí solo haría que el sistema diga algo "
+                "distinto de lo que pasó."
+            ),
+        )
+
+    # Se borran los pagos que creó `mark-paid`. Los abonos que el cliente hizo de
+    # verdad se quedan: revertir un error de registro no puede borrar plata cobrada.
+    pagos = (
+        await db.execute(select(Payment).where(Payment.order_id == o.id))
+    ).scalars().all()
+    marcado_en = meta.get("marked_paid_at")
+    borrados = Decimal("0")
+    for pg in pagos:
+        es_de_mark_paid = (
+            marcado_en is not None
+            and pg.received_at is not None
+            and abs((pg.received_at - datetime.fromisoformat(marcado_en)).total_seconds()) < 90
+        )
+        if es_de_mark_paid:
+            borrados += Decimal(str(pg.amount or 0))
+            await db.delete(pg)
+
+    total = Decimal(str(o.grand_total or 0))
+    pagado = Decimal(str(o.paid_amount or 0)) - borrados
+    if pagado < 0:
+        pagado = Decimal("0")
+
+    o.paid_amount = pagado
+    o.balance_due = total - pagado
+    # Si quedan abonos, el estado honesto es «Parcial», no «Pendiente».
+    o.payment_status = "Parcial" if pagado > 0 else "Pendiente"
+    o.metadata_ = {
+        **meta,
+        "marked_paid_at": None,
+        "marked_paid_by": None,
+        "reverted_at": datetime.now(UTC).isoformat(),
+        "reverted_by": user.email,
+        "revert_reason": payload.motivo,
+    }
+    o.updated_by = user.email
+    await db.commit()
+
+    return {
+        "ok": True,
+        "order_number": o.order_number,
+        "payment_status": o.payment_status,
+        "balance_due": float(o.balance_due),
+        "payments_removed": float(borrados),
+    }
 
 
 @router.post(

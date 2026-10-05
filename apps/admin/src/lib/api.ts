@@ -329,6 +329,13 @@ export const sales = {
     return api<OrdersListResponse>(`/v1/sales/orders?${qs.toString()}`);
   },
   get: (id: string) => api<Order>(`/v1/sales/orders/${id}`),
+  /** Devuelve una venta a pendiente. Pide motivo: un cambio de estado sin
+   *  explicación es un cambio que nadie puede justificar tres semanas después. */
+  markPending: (id: string, motivo: string) =>
+    api<{ ok: boolean; order_number: string; payment_status: string; balance_due: number; payments_removed: number }>(
+      `/v1/sales/orders/${id}/mark-pending`,
+      { method: 'POST', body: JSON.stringify({ motivo }) },
+    ),
   markPaid: (id: string, payload: { method?: string; reference?: string; notes?: string } = {}) =>
     api<{ ok: boolean; order_number: string; amount_applied: number; payment_status: string }>(`/v1/sales/orders/${id}/mark-paid`, {
       method: 'POST',

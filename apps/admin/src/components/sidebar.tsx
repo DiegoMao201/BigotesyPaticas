@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Boxes, Users, BarChart3,
   Settings, LogOut, AlertTriangle, TrendingUp, CreditCard, Tag,
   Building2, ChevronRight, ShoppingBag, Wallet, Truck, ReceiptText, Brain, PawPrint, Star, CalendarDays, Film, Share2,
-  Handshake, LifeBuoy, Heart, Music2, Search, MessageSquare,
+  Handshake, LifeBuoy, Heart, Music2, Search, MessageSquare, Calculator,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
@@ -54,6 +54,7 @@ const NAV_GROUPS = [
     items: [
       { href: '/finance', label: 'P&L y Cash Flow', icon: TrendingUp },
       { href: '/expenses', label: 'Gastos', icon: Wallet },
+      { href: '/equilibrio', label: 'Punto de equilibrio', icon: Calculator },
       { href: '/cash-closings', label: 'Cierres de Caja', icon: ReceiptText },
     ],
   },

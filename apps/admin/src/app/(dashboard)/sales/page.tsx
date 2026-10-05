@@ -59,6 +59,27 @@ function OrderDetailModal({ order, onClose, onCancelDone, onPaymentDone }: { ord
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // EL CAMINO DE VUELTA. Solo existía "marcar como pagada": un dedo que resbala en
+  // la lista dejaba el dato mal para siempre, sin más salida que entrar a la base.
+  // Un sistema que no deja corregir un error humano obliga a convivir con él.
+  const markPendingMut = useMutation({
+    mutationFn: (motivo: string) => sales.markPending(order.id, motivo),
+    onSuccess: (res) => {
+      toast.success(
+        res.payments_removed > 0
+          ? `Volvió a ${res.payment_status}. Se quitó ${formatCurrency(res.payments_removed)}`
+          : `Volvió a ${res.payment_status}`,
+      );
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['pos-history'] });
+      qc.invalidateQueries({ queryKey: ['cash-closing-today'] });
+      qc.invalidateQueries({ queryKey: ['cash-closings'] });
+      onPaymentDone();
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const markPaidMut = useMutation({
     mutationFn: () => sales.markPaid(order.id, { method: order.payment_method || 'Efectivo', notes: 'Marcada como pagada desde Admin' }),
     onSuccess: (res) => {
@@ -199,6 +220,26 @@ function OrderDetailModal({ order, onClose, onCancelDone, onPaymentDone }: { ord
                 className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 mr-2"
               >
                 {markPaidMut.isPending ? 'Aplicando pago…' : 'Marcar como pagada'}
+              </Button>
+            )}
+            {/* Volver a pendiente. Aparece solo si hay algo que revertir, y pide el
+                motivo antes de tocar nada: el rastro de POR QUÉ se revirtió es lo
+                que hace que el cambio sea control y no un parche. */}
+            {order.status !== 'cancelled' && order.payment_status === 'Pagado' && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={markPendingMut.isPending}
+                onClick={() => {
+                  const motivo = window.prompt(
+                    '¿Por qué vuelve a pendiente?\n(Ej: se marcó por error, el cliente no alcanzó a pagar)',
+                  );
+                  if (motivo && motivo.trim().length >= 3) markPendingMut.mutate(motivo.trim());
+                  else if (motivo !== null) toast.error('Escribe el motivo (mínimo 3 letras)');
+                }}
+                className="text-amber-700 border-amber-300 hover:bg-amber-50 mr-2"
+              >
+                {markPendingMut.isPending ? 'Revirtiendo…' : 'Volver a pendiente'}
               </Button>
             )}
             {order.status !== 'cancelled' && (
