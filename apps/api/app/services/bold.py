@@ -38,9 +38,13 @@ log = logging.getLogger(__name__)
 BOLD_ENV = os.getenv("BOLD_ENV", "sandbox").strip().lower()
 IDENTITY_KEY = os.getenv("BOLD_IDENTITY_KEY", "").strip()
 SECRET_KEY = os.getenv("BOLD_SECRET_KEY", "").strip()
-# Cuál de las dos llaves firma el webhook está SIN CONFIRMAR: la documentación de
-# Bold se contradice entre secciones. Se deja configurable y `verificar_webhook`
-# averigua cuál es en la primera transacción real. Ver la nota de abajo.
+# CONFIRMADO en la documentación oficial (developers.bold.co/webhook, 4-oct-2026):
+# el webhook lo firma la **llave secreta** de las llaves de integración, no la de
+# identidad. Por eso aquí el valor por defecto es SECRET_KEY y no una cadena vacía.
+#
+# Se mantiene configurable y se siguen probando varias candidatas porque la propia
+# documentación añade que "Bold selecciona la llave según la prioridad del método de
+# pago" — una frase lo bastante vaga como para no jugársela a una sola.
 WEBHOOK_SECRET = os.getenv("BOLD_WEBHOOK_SECRET", "").strip()
 
 API_BASE = "https://payments.api.bold.co"
@@ -103,19 +107,21 @@ def _firma_webhook(raw_body: bytes, llave: str) -> str:
 def verificar_webhook(raw_body: bytes, firma_recibida: str) -> tuple[bool, str]:
     """¿El webhook viene de Bold? Devuelve `(es_valido, con_qué_llave)`.
 
-    **AQUÍ SE RESUELVE LA AMBIGÜEDAD DE LA DOCUMENTACIÓN.** Bold dice en un sitio que
-    el webhook se firma con la llave secreta y en otro que con la de identidad. En
-    vez de adivinar —y de dejar la integración a merced de haber acertado—, se
-    prueban las candidatas en orden y se devuelve CUÁL funcionó. La primera
-    transacción real en sandbox deja la respuesta escrita en el log, y de ahí pasa a
-    `BOLD_WEBHOOK_SECRET` y a docs/BOLD_INTEGRATION.md.
+    El algoritmo está tomado literal de la documentación oficial: base64 del cuerpo
+    crudo → HMAC-SHA256 con la llave → hexadecimal → comparar con `x-bold-signature`.
 
-    Probar varias llaves no debilita nada: una firma falsa no coincide con ninguna.
-    Lo que sería inseguro es aceptar sin comprobar, no comprobar de más.
+    **Qué llave:** la documentación dice que firma la **llave secreta**, y por eso es
+    la primera candidata. Pero añade que "Bold selecciona la llave según la prioridad
+    del método de pago", así que se siguen probando varias y se devuelve cuál
+    funcionó: con una frase así, apostar a una sola sería construir sobre arena.
 
-    En **sandbox Bold firma con cadena vacía**, así que esa también es candidata —y
-    solo fuera de producción, porque en producción aceptar una firma hecha con
-    llave vacía sería dejar la puerta abierta.
+    Probar varias no debilita nada: una firma falsa no coincide con ninguna. Lo
+    inseguro sería aceptar sin comprobar, no comprobar de más.
+
+    **En modo pruebas Bold firma con la clave vacía**, tal cual lo dice la
+    documentación, así que esa también es candidata — y solo fuera de producción,
+    porque en producción aceptar una firma hecha con llave vacía sería dejar la
+    puerta abierta de par en par.
     """
     if not firma_recibida:
         return False, "sin-firma"
@@ -123,6 +129,7 @@ def verificar_webhook(raw_body: bytes, firma_recibida: str) -> tuple[bool, str]:
     candidatas: list[tuple[str, str]] = []
     if WEBHOOK_SECRET:
         candidatas.append(("configurada", WEBHOOK_SECRET))
+    # La documentada. Va primero para que el caso normal acierte al primer intento.
     candidatas.append(("secreta", SECRET_KEY))
     candidatas.append(("identidad", IDENTITY_KEY))
     if BOLD_ENV != "production":

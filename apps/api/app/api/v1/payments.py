@@ -28,7 +28,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.deps import DBSession
-from app.models.portal import PaymentEvent, PortalOrder
+from app.models.portal import PaymentEvent, PortalOrder, PortalOrderItem
 from app.services import bold
 
 log = logging.getLogger(__name__)
@@ -85,7 +85,11 @@ async def webhook_bold(request: Request, db: DBSession, tareas: BackgroundTasks)
 
     datos = cuerpo.get("data") or {}
     tipo = str(cuerpo.get("type") or "DESCONOCIDO")
-    payment_id = str(datos.get("payment_id") or cuerpo.get("id") or "")
+    # CloudEvents: el id del pago está en `data.payment_id` y repetido en `subject`.
+    # Se usa el segundo como respaldo; `id` (el del EVENTO, no el del pago) solo como
+    # último recurso, porque dos eventos del mismo pago traen `id` distinto y
+    # confundirlos rompería la idempotencia.
+    payment_id = str(datos.get("payment_id") or cuerpo.get("subject") or cuerpo.get("id") or "")
     referencia = str((datos.get("metadata") or {}).get("reference") or "")
     monto = (datos.get("amount") or {}).get("total")
     monto = int(monto) if isinstance(monto, (int, float)) and monto > 0 else None
@@ -184,6 +188,12 @@ async def _procesar(payment_id: str, tipo: str, referencia: str, monto: int | No
         elif tipo == "SALE_REJECTED":
             await _marcar(db, pedido, "failed", payment_id)
             log.info("BOLD · pago rechazado · %s", referencia)
+            await _cerrar_evento(db, payment_id)
+        elif tipo == "VOID_REJECTED":
+            # Se intentó anular y el intento falló: el pago SIGUE siendo válido y el
+            # pedido no se toca. Queda escrito porque un intento de anulación es algo
+            # que conviene poder mirar después.
+            log.warning("BOLD · intento de anulación RECHAZADO en %s", referencia)
             await _cerrar_evento(db, payment_id)
         elif tipo == "VOID_APPROVED":
             await _marcar(db, pedido, "voided", payment_id)
@@ -368,6 +378,15 @@ _MAX_CONSULTAS = 60
 _VENTANA_S = 60.0
 
 
+def _ip_de(request: Request) -> str:
+    """La IP del cliente. Las peticiones llegan por el proxy de Next, así que la real
+    viene en la cabecera; si no está, se usa la de la conexión."""
+    return (
+        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or (request.client.host if request.client else "?")
+    )
+
+
 def _frenar_consultas(ip: str) -> None:
     """Tope de consultas de estado por IP y minuto.
 
@@ -388,6 +407,72 @@ def _frenar_consultas(ip: str) -> None:
             _CONSULTAS.pop(k, None)
 
 
+@router.get("/payments/{referencia}/cobro")
+async def datos_de_cobro(referencia: str, request: Request, db: DBSession) -> dict:
+    """Lo que necesita la página de pago para abrir el checkout de Bold.
+
+    Es lo que convierte un enlace en una forma de cobrar: con esto, `/pagar/{ref}`
+    funciona igual si el cliente viene del checkout, del portal, o de un enlace que
+    Diego le mandó por WhatsApp. Un solo sitio donde se paga.
+
+    **LA FIRMA NO SE CALCULA AQUÍ: SE DEVUELVE LA QUE SE GUARDÓ AL CREAR EL PEDIDO.**
+    Volver a firmar en cada consulta parece inofensivo y no lo es: si entre medias
+    cambiara el precio del producto, saldría una firma para un monto distinto del que
+    se le prometió al cliente. Lo que se firmó una vez es lo que se cobra.
+
+    Qué NO sale de aquí: teléfono, dirección, nombre ni nada del cliente. La
+    referencia viaja en un enlace y hay que asumir que puede acabar en manos de
+    alguien más; que pueda pagar es el objetivo, que pueda husmear no.
+    """
+    _frenar_consultas(_ip_de(request))
+    if not _REFERENCIA_OK.match(referencia):
+        return {"ok": False, "motivo": "referencia inválida"}
+
+    pedido = (
+        await db.execute(select(PortalOrder).where(PortalOrder.order_reference == referencia))
+    ).scalar_one_or_none()
+    if pedido is None:
+        return {"ok": False, "motivo": "no existe"}
+
+    estado = pedido.payment_status or "pending"
+    if estado != "pending":
+        # Ya está resuelto: la página lo dirá, pero no se le da con qué volver a pagar.
+        return {"ok": False, "motivo": estado, "estado": estado, "referencia": referencia}
+
+    vencido = bool(
+        pedido.payment_expires_at
+        and pedido.payment_expires_at < datetime.now(UTC)
+    )
+
+    items = (
+        (
+            await db.execute(
+                select(PortalOrderItem).where(PortalOrderItem.portal_order_id == pedido.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    return {
+        "ok": not vencido,
+        "motivo": "vencido" if vencido else None,
+        "estado": estado,
+        "referencia": referencia,
+        "amount": pedido.bold_amount,
+        "currency": "COP",
+        "integrity_signature": bold.firma_integridad(referencia, pedido.bold_amount)
+        if pedido.bold_amount
+        else None,
+        "identity_key": bold.IDENTITY_KEY,
+        "expira": pedido.payment_expires_at.isoformat() if pedido.payment_expires_at else None,
+        "items": [
+            {"nombre": i.name, "cantidad": i.quantity, "subtotal": float(i.subtotal or 0)}
+            for i in items
+        ],
+    }
+
+
 @router.get("/payments/{referencia}/estado")
 async def estado_pago(referencia: str, request: Request, db: DBSession) -> dict:
     """Estado real del pago, para la página de confirmación.
@@ -396,8 +481,7 @@ async def estado_pago(referencia: str, request: Request, db: DBSession) -> dict:
     que hay que asumir que alguien que no es el dueño puede llegar a verla: aquí no
     salen teléfono, dirección ni datos del cliente.
     """
-    _frenar_consultas(request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-                      or (request.client.host if request.client else "?"))
+    _frenar_consultas(_ip_de(request))
 
     # Se valida el formato ANTES de ir a la base: una referencia que no tiene nuestra
     # forma no puede existir, y así no se gasta una consulta por cada intento.

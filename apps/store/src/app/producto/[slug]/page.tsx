@@ -34,7 +34,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const priceStr = Number(product.price).toLocaleString('es-CO');
 
   return {
-    title: seo?.meta_title || `${product.name} — $${priceStr}`,
+    // TITULO DUPLICADO (4-oct-2026). En produccion salia:
+    //   "Pro Plan EN Gastrointestinal 7.5Kg Perro | Bigotes y Paticas | Bigotes y Paticas"
+    // porque `seo.meta_title` ya trae la marca y el `template` del layout
+    // ('%s | Bigotes y Paticas') se la volvia a pegar. Google corta hacia los 60
+    // caracteres, asi que el nombre del producto —lo unico por lo que alguien busca—
+    // se perdia detras de la marca repetida.
+    //
+    // Con `absolute` el template NO se aplica: lo que se escribe aqui es el titulo
+    // final. Si el meta_title ya trae la marca se usa tal cual; si no, se le anade
+    // una sola vez.
+    title: seo?.meta_title
+      ? { absolute: seo.meta_title }
+      : { absolute: `${product.name} — $${priceStr} | Bigotes y Paticas` },
     description:
       seo?.meta_description ||
       enrichedDesc ||

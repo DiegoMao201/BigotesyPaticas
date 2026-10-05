@@ -10,7 +10,7 @@ import { useMounted } from '@/lib/use-mounted';
 import { useCart } from '@/lib/cart-store';
 import { formatCurrency } from '@/lib/utils';
 import { BUSINESS_INFO } from '@/lib/business-info';
-import { MessageCircle, ArrowLeft, Package, ShoppingBag, CheckCircle } from 'lucide-react';
+import { MessageCircle, ArrowLeft, Package, ShoppingBag, CheckCircle, ShieldCheck } from 'lucide-react';
 import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
 import { trackBeginCheckout, huellaGoogle, recordarGclid } from '@/lib/analytics';
 
@@ -62,6 +62,12 @@ export default function CheckoutPage() {
   const [errorNombre, setErrorNombre] = useState(false);
   const yaMedido = useRef(false);
   const yaGuardado = useRef('');
+  // Como quiere pagar. Arranca en 'bold' porque cobrar al momento es lo que de
+  // verdad cambia el negocio: hasta hoy TODO era contraentrega y la venta no se
+  // cerraba hasta que alguien contestaba el WhatsApp. Contraentrega sigue ahi,
+  // completa, a un toque — pero deja de ser la unica salida.
+  const [metodoPago, setMetodoPago] = useState<'bold' | 'cash'>('bold');
+  const [enviando, setEnviando] = useState(false);
 
   // begin_checkout: el paso del embudo que faltaba. Una sola vez por visita a esta
   // página, y solo cuando el carrito ya se hidrató (antes de eso items está vacío).
@@ -147,6 +153,78 @@ export default function CheckoutPage() {
     } catch {
       // nada: el pedido sigue por WhatsApp
     }
+  }
+
+  /** Crea el pedido y lleva a la pagina de pago. */
+  async function pagarEnLinea() {
+    if (!validarDatos()) return;
+    setEnviando(true);
+    try {
+      const r = await fetch('/api/v1/public/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...cuerpoPedido(), payment_method: 'bold' }),
+      });
+      const d = await r.json();
+      const ref = d?.bold?.order_reference;
+      if (!r.ok || !ref) throw new Error('sin referencia');
+
+      track('InitiateCheckout', {
+        content_ids: items.map((i) => i.productId),
+        value: total,
+        currency: 'COP',
+        num_items: items.length,
+      });
+      // A la pagina de pago. El carrito NO se vacia todavia: si el cliente se
+      // arrepiente a medio pagar, volver y encontrar el carrito vacio seria perder
+      // la venta por un detalle. Se vacia cuando el pago se confirma.
+      router.push(`/pagar/${ref}`);
+    } catch {
+      // Si algo falla, no se deja al cliente sin salida: se cae al flujo de
+      // siempre, que es el que nunca ha dejado de funcionar.
+      setEnviando(false);
+      setMetodoPago('cash');
+      openWhatsApp();
+    }
+  }
+
+  /** Los datos del pedido, iguales para los dos metodos de pago. */
+  function cuerpoPedido() {
+    return {
+      full_name: name.trim(),
+      phone: phone.replace(/\D/g, ''),
+      items: items.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
+      direccion: ubicacion?.direccion ?? null,
+      lat: ubicacion?.lat ?? null,
+      lng: ubicacion?.lng ?? null,
+      km: ubicacion?.km ?? null,
+      notes: notes.trim() || null,
+      ...huellaGoogle(),
+    };
+  }
+
+  /** Ubicacion, nombre y celular: sin esto el pedido no se puede entregar. */
+  function validarDatos(): boolean {
+    if (!ubicacion) {
+      setPideUbicacion(true);
+      document.getElementById('entrega')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return false;
+    }
+    const faltaNombre = name.trim().length < 2;
+    if (faltaNombre || !celularOk) {
+      setErrorNombre(faltaNombre);
+      setErrorTel(!celularOk);
+      document.getElementById(faltaNombre ? 'nombre' : 'celular')?.focus();
+      document.getElementById('entrega')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return false;
+    }
+    return true;
+  }
+
+  /** El boton unico: cobra en linea o manda a WhatsApp, segun lo elegido. */
+  function confirmarPedido() {
+    if (metodoPago === 'bold') void pagarEnLinea();
+    else void openWhatsApp();
   }
 
   async function openWhatsApp() {
@@ -362,18 +440,86 @@ export default function CheckoutPage() {
               <span className="text-gradient">{formatCurrency(total)}</span>
             </div>
 
+            {/* COMO PAGA. Las dos opciones se ven completas: esconder la
+                contraentrega detras de un desplegable la haria parecer un castigo,
+                y es la forma en que esta tienda ha vendido siempre. */}
+            <div className="mb-5 space-y-2">
+              <p className="text-sm font-semibold">¿Cómo quieres pagar?</p>
+              <button
+                type="button"
+                onClick={() => setMetodoPago('bold')}
+                aria-pressed={metodoPago === 'bold'}
+                className={`w-full rounded-2xl border-2 p-4 text-left transition-colors ${
+                  metodoPago === 'bold'
+                    ? 'border-[#187f77] bg-[#187f77]/5'
+                    : 'border-border hover:border-[#187f77]/40'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold">Pagar ahora en línea</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Tarjeta, PSE, Nequi o Daviplata · lo alistamos de inmediato
+                    </p>
+                  </div>
+                  <CheckCircle
+                    className={`h-5 w-5 shrink-0 ${
+                      metodoPago === 'bold' ? 'text-[#187f77]' : 'text-transparent'
+                    }`}
+                  />
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMetodoPago('cash')}
+                aria-pressed={metodoPago === 'cash'}
+                className={`w-full rounded-2xl border-2 p-4 text-left transition-colors ${
+                  metodoPago === 'cash'
+                    ? 'border-[#187f77] bg-[#187f77]/5'
+                    : 'border-border hover:border-[#187f77]/40'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold">Pagar al recibir</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Contraentrega · coordinamos por WhatsApp
+                    </p>
+                  </div>
+                  <CheckCircle
+                    className={`h-5 w-5 shrink-0 ${
+                      metodoPago === 'cash' ? 'text-[#187f77]' : 'text-transparent'
+                    }`}
+                  />
+                </div>
+              </button>
+            </div>
+
             {/* THE BIG BUTTON */}
             <button
-              onClick={openWhatsApp}
-              className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-bold text-white text-lg shadow-lg hover:opacity-90 active:scale-95 transition-all"
-              style={{ backgroundColor: '#25D366' }}
+              onClick={confirmarPedido}
+              disabled={enviando}
+              className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-bold text-white text-lg shadow-lg hover:opacity-90 active:scale-95 transition-all disabled:opacity-60"
+              style={{ backgroundColor: metodoPago === 'bold' ? '#187f77' : '#25D366' }}
             >
-              <MessageCircle className="h-6 w-6" />
-              {ubicacion ? 'Pedir por WhatsApp' : 'Indica dónde entregamos'}
+              {metodoPago === 'bold' ? (
+                <ShieldCheck className="h-6 w-6" />
+              ) : (
+                <MessageCircle className="h-6 w-6" />
+              )}
+              {!ubicacion
+                ? 'Indica dónde entregamos'
+                : enviando
+                  ? 'Preparando tu pago…'
+                  : metodoPago === 'bold'
+                    ? `Pagar ${formatCurrency(total)}`
+                    : 'Pedir por WhatsApp'}
             </button>
 
             <p className="text-xs text-center text-muted-foreground mt-3">
-              Te enviaremos el resumen del pedido por WhatsApp y coordinaremos la entrega contigo.
+              {metodoPago === 'bold'
+                ? 'Te llevamos a una página segura para pagar. El cobro lo procesa Bold.'
+                : 'Te enviaremos el resumen del pedido por WhatsApp y coordinaremos la entrega contigo.'}
             </p>
           </div>
 
@@ -403,12 +549,23 @@ export default function CheckoutPage() {
             <p className="font-bold text-lg leading-tight">{formatCurrency(total)}</p>
           </div>
           <button
-            onClick={openWhatsApp}
-            className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl font-bold text-white active:scale-[0.98] transition-all"
-            style={{ backgroundColor: '#25D366' }}
+            onClick={confirmarPedido}
+            disabled={enviando}
+            className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl font-bold text-white active:scale-[0.98] transition-all disabled:opacity-60"
+            style={{ backgroundColor: metodoPago === 'bold' ? '#187f77' : '#25D366' }}
           >
-            <MessageCircle className="h-5 w-5" />
-            {ubicacion ? 'Pedir por WhatsApp' : 'Indica dónde entregamos'}
+            {metodoPago === 'bold' ? (
+              <ShieldCheck className="h-5 w-5" />
+            ) : (
+              <MessageCircle className="h-5 w-5" />
+            )}
+            {!ubicacion
+              ? 'Indica dónde entregamos'
+              : enviando
+                ? 'Preparando…'
+                : metodoPago === 'bold'
+                  ? 'Pagar ahora'
+                  : 'Pedir por WhatsApp'}
           </button>
         </div>
       </div>

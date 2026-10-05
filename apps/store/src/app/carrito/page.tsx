@@ -269,6 +269,11 @@ export default function CartPage() {
       <div className="py-12 border-t border-border">
         <h3 className="text-lg font-display font-semibold mb-4 text-center">Métodos de pago aceptados</h3>
         <div className="flex flex-wrap justify-center gap-3 mb-4">
+          {/* Hasta el 4-oct-2026 esta lista era una PROMESA FALSA: anunciaba tarjetas
+              y PSE sin que existiera ninguna transaccion en linea (el checkout
+              terminaba en WhatsApp), y ademas es de las cosas que reprueba la
+              revision de Google Merchant Center. Con Bold conectado, cada medio de
+              esta lista se puede pagar de verdad. */}
           {['💵 Efectivo', '💳 Visa', '💳 Mastercard', '📱 Nequi', '📱 Daviplata', '🏦 PSE'].map((m) => (
             <span key={m} className="px-4 py-2 rounded-xl border border-border bg-card text-sm font-medium">{m}</span>
           ))}
