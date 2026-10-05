@@ -243,6 +243,22 @@ async def _aprobar(db: DBSession, pedido: PortalOrder, payment_id: str, monto: i
         await _cerrar_evento(db, payment_id)
         return
 
+    # PAGO SOBRE UN PEDIDO YA CANCELADO. Pasó en la primera prueba real de Diego: el
+    # admin canceló el pedido a las 05:08 y el pago entró a las 05:18. Es un caso
+    # normal, no raro: entre que alguien abre el checkout y teclea su tarjeta pasan
+    # minutos, y en esos minutos el pedido puede cancelarse por otra vía.
+    #
+    # El pago SE ACEPTA —el dinero entró y hacer como que no sería quedárselo— pero
+    # el aviso lo dice bien claro, porque aquí hace falta una decisión humana:
+    # reactivar el pedido o devolverle la plata al cliente. Lo que no puede pasar es
+    # que quede registrado como una venta normal y nadie se entere.
+    cancelado = (pedido.workflow_status or pedido.status or "") == "cancelled"
+    if cancelado:
+        log.warning(
+            "BOLD · ⚠️ PAGO SOBRE PEDIDO CANCELADO %s — hay que decidir: reactivar o devolver",
+            pedido.order_reference,
+        )
+
     if pedido.payment_status == "expired":
         # Pagó tarde. **Se acepta igual**: el dinero entró, y rechazarlo sería
         # quedarnos con el cobro sin entregar nada. Pero se avisa fuerte, porque
@@ -297,10 +313,12 @@ async def _aprobar(db: DBSession, pedido: PortalOrder, payment_id: str, monto: i
     # procesar" para siempre — que fue exactamente lo que pasó en la primera prueba
     # real del 5-oct-2026.
     await _cerrar_evento(db, payment_id)
-    await _avisar_pago(db, pedido, monto)
+    await _avisar_pago(db, pedido, monto, cancelado=cancelado)
 
 
-async def _avisar_pago(db: DBSession, pedido: PortalOrder, monto: int | None) -> None:
+async def _avisar_pago(
+    db: DBSession, pedido: PortalOrder, monto: int | None, cancelado: bool = False
+) -> None:
     """Avisa de un pedido PAGADO: al panel y al correo de la tienda.
 
     Un pedido pagado no es un pedido más. Hasta hoy todos entraban sin pagar y
@@ -319,6 +337,14 @@ async def _avisar_pago(db: DBSession, pedido: PortalOrder, monto: int | None) ->
     total = monto if monto is not None else int(pedido.total_amount or 0)
     titulo = f"💳 Pedido PAGADO · ${total:,.0f}".replace(",", ".")
     cuerpo = f"{pedido.product_name} · pagado en línea desde {canal}"
+    if cancelado:
+        # El aviso tiene que gritar. Un pago sobre un pedido cancelado necesita que
+        # alguien decida, y si se ve igual que una venta normal nadie decidirá nada.
+        titulo = f"⚠️ PAGO SOBRE PEDIDO CANCELADO · ${total:,.0f}".replace(",", ".")
+        cuerpo = (
+            f"{pedido.product_name} · el cliente pagó un pedido que ya estaba "
+            f"cancelado. Hay que reactivarlo o devolverle el dinero."
+        )
 
     log.info("BOLD · avisando del pago de %s", pedido.order_reference)
     datos = {
@@ -327,6 +353,7 @@ async def _avisar_pago(db: DBSession, pedido: PortalOrder, monto: int | None) ->
         "total": total,
         "canal": canal,
         "pagado": True,
+        "sobre_cancelado": cancelado,
     }
 
     # LA NOTIFICACIÓN SE INSERTA A MANO, NO POR notify_admins().
