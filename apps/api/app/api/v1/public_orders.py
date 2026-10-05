@@ -114,6 +114,38 @@ def _domicilio(subtotal: Decimal, km: float | None) -> tuple[Decimal, str]:
     return valor, f"Domicilio ${int(valor):,}".replace(",", ".") + f" (a {km:.1f} km)"
 
 
+def _puede_pagar_en_linea(km: float | None) -> tuple[bool, str]:
+    """¿Se le puede cobrar por adelantado? Devuelve (sí/no, motivo).
+
+    COBRAR SIN PODER ENTREGAR ES EL PEOR FALLO POSIBLE de esta integración. Peor que
+    no vender: el cliente paga, espera, y hay que devolverle el dinero y explicarle
+    por qué. La confianza no se recupera con un reembolso.
+
+    Dos casos la bloquean:
+
+    - **Sin ubicación.** No se sabe si se puede llegar. Antes esto daba domicilio
+      $0 y dejaba pagar: se cobraba a ciegas.
+    - **Fuera del radio de reparto.** Más allá de 15 km ya no es la zona urbana de
+      Pereira y Dosquebradas. Hay que coordinar el envío, acordar el costo y a veces
+      decir que no — y nada de eso se puede hacer con el dinero ya cobrado.
+
+    El pedido NO se rechaza: entra igual y se cierra por WhatsApp, que es como se ha
+    hecho siempre. Lo único que se niega es el cobro anticipado.
+    """
+    if km is None:
+        return False, (
+            "Necesitamos tu ubicación para poder cobrarte el domicilio correcto. "
+            "Escríbenos por WhatsApp y lo coordinamos."
+        )
+    if km > RADIO_MAX_KM:
+        return False, (
+            f"Tu dirección está a {km:.1f} km del local, fuera de nuestra zona de "
+            "reparto en Pereira y Dosquebradas. Escríbenos por WhatsApp: coordinamos "
+            "el envío contigo y te decimos el costo antes de cobrarte."
+        )
+    return True, ""
+
+
 class ItemIn(BaseModel):
     product_id: str
     quantity: int = Field(ge=1, le=99)
@@ -254,7 +286,13 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
     #
     # `int(total)` sin decimales es obligatorio: Bold exige 76000, nunca 76.000 ni
     # 76000.00, y un error aqui no da mensaje — rechaza el cobro en silencio.
-    paga_en_linea = payload.payment_method == "bold" and bold.esta_configurado()
+    # El cobro anticipado solo se permite dentro de la zona de reparto. Si no, el
+    # pedido entra igual pero como contraentrega/WhatsApp, y la respuesta dice POR QUE
+    # —el front necesita el motivo para explicárselo al cliente en sus palabras.
+    en_zona, motivo_sin_pago = _puede_pagar_en_linea(payload.km)
+    paga_en_linea = (
+        payload.payment_method == "bold" and bold.esta_configurado() and en_zona
+    )
     referencia = bold.nueva_referencia("web", ahora) if paga_en_linea else None
     monto_bold = int(total) if paga_en_linea else None
     firma = bold.firma_integridad(referencia, monto_bold) if paga_en_linea else None
@@ -344,6 +382,15 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
         "envio": float(envio),
         "total": float(total),
         "payment_method": "bold" if paga_en_linea else "cash",
+        # Si pidió pagar en línea y no se pudo, aquí va el motivo en palabras del
+        # cliente. Sin esto el front solo sabría que "no se pudo", que es justo la
+        # clase de silencio que genera desconfianza.
+        "pago_en_linea_bloqueado": (
+            motivo_sin_pago if (payload.payment_method == "bold" and not paga_en_linea) else None
+        ),
+        "fuera_de_zona": payload.km is not None and payload.km > RADIO_MAX_KM,
+        # Desglose, para que el cliente vea de dónde sale cada peso.
+        "envio_texto": envio_texto,
     }
     if paga_en_linea:
         respuesta["bold"] = {

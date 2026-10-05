@@ -32,6 +32,8 @@ type Cobro = {
   identity_key?: string;
   expira?: string | null;
   items?: { nombre: string; cantidad: number; subtotal: number }[];
+  subtotal?: number;
+  envio?: number;
 };
 
 export function PaginaDePago({ referencia }: { referencia: string }) {
@@ -109,17 +111,35 @@ export function PaginaDePago({ referencia }: { referencia: string }) {
               </li>
             ))}
           </ul>
-          <div className="mt-4 flex items-end justify-between border-t border-border pt-4">
+          {/* EL DESGLOSE, NO SOLO EL TOTAL. Un total a secas obliga a confiar;
+              un desglose se puede comprobar. Y el domicilio es justo el número
+              que la gente quiere ver antes de teclear la tarjeta. */}
+          <div className="mt-4 space-y-1.5 border-t border-border pt-4 text-sm">
+            <div className="flex justify-between text-muted-foreground">
+              <span>Productos</span>
+              <span className="tabular-nums">{formatCurrency(cobro.subtotal ?? 0)}</span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>Domicilio</span>
+              <span className="tabular-nums">
+                {(cobro.envio ?? 0) > 0 ? (
+                  formatCurrency(cobro.envio ?? 0)
+                ) : (
+                  <span className="font-semibold text-[#187f77]">Gratis 🎉</span>
+                )}
+              </span>
+            </div>
+          </div>
+          <div className="mt-3 flex items-end justify-between border-t border-border pt-3">
             <span className="font-semibold">Total a pagar</span>
             <span className="font-display text-2xl font-bold tabular-nums text-[#187f77]">
               {formatCurrency(cobro.amount ?? 0)}
             </span>
           </div>
-          {cobro.items && cobro.items.length > 0 && (
-            <p className="mt-1 text-right text-xs text-muted-foreground">
-              Incluye el domicilio
-            </p>
-          )}
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            Entrega en Pereira y Dosquebradas, el mismo día. No hay cobros
+            adicionales: este es el valor final.
+          </p>
 
           <div className="mt-6">
             <BotonBold

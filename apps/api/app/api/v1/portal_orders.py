@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import uuid
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, func, select
 
+from app.api.v1.portal_appointments import _TZ_CO
 from app.api.v1.portal_auth import PortalUser
 from app.api.v1.portal_loyalty import award_points
 from app.deps import DBSession
@@ -15,6 +19,7 @@ from app.models.catalog import Product
 from app.models.crm import Customer
 from app.models.portal import ActivityLog, PortalOrder, PortalOrderItem
 from app.models.sales import Order as SalesOrder
+from app.services import bold
 from app.models.sales import OrderItem as SalesOrderItem
 from app.services import meta_conversion_api as capi
 
@@ -175,6 +180,8 @@ class MultiOrderItemIn(BaseModel):
 class MultiOrderIn(BaseModel):
     items: list[MultiOrderItemIn]
     shipping_address: str
+    # 'bold' = pagar en línea ahora; cualquier otro (cash, transfer, nequi…) = el
+    # flujo de siempre, que se cierra con el admin.
     payment_method: str
     general_notes: str | None = None
 
@@ -253,16 +260,60 @@ async def create_multi_order(
             )
         )
 
+    # ── PAGO EN LÍNEA DESDE EL PORTAL ───────────────────────────────────────
+    # Mismo motor que la tienda y la MISMA página de pago: la referencia solo
+    # cambia de prefijo (BPP- en vez de BPW-). Diego pidió que web y portal
+    # "hablen el mismo idioma", y hablarlo de verdad significa compartir el
+    # código, no tener dos que se parezcan.
+    #
+    # El monto se firma con `_total`, que acaba de calcular ESTE servidor con los
+    # precios de la base. En el portal el domicilio es gratis siempre, así que el
+    # total es el subtotal — pero se firma el total igual, para que el día que eso
+    # cambie no haya que acordarse de nada.
+    paga_en_linea = payload.payment_method == "bold" and bold.esta_configurado()
+    if paga_en_linea:
+        ahora_co = datetime.now(_TZ_CO)
+        order.order_reference = bold.nueva_referencia("portal", ahora_co)
+        order.payment_status = "pending"
+        order.payment_method = "bold"
+        order.bold_amount = int(_total)
+        order.payment_expires_at = ahora_co + timedelta(minutes=bold.MINUTOS_PARA_PAGAR)
+
     await db.commit()
     await db.refresh(order)
 
     import contextlib
 
+    # LOS PUNTOS SE ACREDITAN AL ENTREGAR, NO AL PEDIR — y menos aún al "ir a
+    # pagar". Si el pedido va a pagarse en línea y el cliente abandona el checkout,
+    # habríamos regalado puntos por una compra que nunca ocurrió. Para el resto de
+    # métodos se mantiene el comportamiento de siempre.
     points_earned = 0
-    with contextlib.suppress(Exception):
-        points_earned = await award_points(db, customer.id, order.id, points_to_earn)
+    if not paga_en_linea:
+        with contextlib.suppress(Exception):
+            points_earned = await award_points(db, customer.id, order.id, points_to_earn)
 
-    return _order_out(order, points=points_earned or None)
+    salida = _order_out(order, points=points_earned or None)
+    if paga_en_linea:
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED,
+            content={
+                **json.loads(salida.model_dump_json()),
+                "bold": {
+                    "order_reference": order.order_reference,
+                    "amount": order.bold_amount,
+                    "currency": "COP",
+                    "integrity_signature": bold.firma_integridad(
+                        order.order_reference, order.bold_amount
+                    ),
+                    # Pública por diseño: va en el botón. La secreta nunca sale.
+                    "identity_key": bold.IDENTITY_KEY,
+                },
+                # A dónde mandar al cliente: la MISMA página de pago de la tienda.
+                "pagar_en": f"https://bigotesypaticas.com/pagar/{order.order_reference}",
+            },
+        )
+    return salida
 
 
 @router.get("/{order_id}", response_model=OrderOut)

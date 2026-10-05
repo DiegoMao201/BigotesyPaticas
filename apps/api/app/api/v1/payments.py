@@ -554,6 +554,18 @@ async def datos_de_cobro(referencia: str, request: Request, db: DBSession) -> di
             {"nombre": i.name, "cantidad": i.quantity, "subtotal": float(i.subtotal or 0)}
             for i in items
         ],
+        # DESGLOSE. Diego: "el cobro del domicilio en el pago... no quiero tener
+        # problemas por falta de información para el cliente".
+        #
+        # Un total a secas obliga a confiar; un desglose se puede comprobar. El
+        # domicilio sale de RESTAR —total menos la suma de los productos— y no de
+        # recalcular la tarifa aquí: lo que se cobra es lo que se firmó, y volver a
+        # calcularlo abriría la puerta a que el desglose y el cobro no cuadren.
+        "subtotal": sum(float(i.subtotal or 0) for i in items),
+        "envio": max(
+            0.0,
+            float(pedido.bold_amount or 0) - sum(float(i.subtotal or 0) for i in items),
+        ),
     }
 
 

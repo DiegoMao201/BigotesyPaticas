@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { DeliveryLocationPicker } from '@/components/maps/DeliveryLocationPicker';
-import { useUbicacionEntrega, calcularDomicilio, lineasUbicacion, GRATIS_DESDE, REGLA_TEXTO, type Domicilio, type UbicacionEntrega } from '@/lib/delivery';
+import { useUbicacionEntrega, calcularDomicilio, lineasUbicacion, GRATIS_DESDE, RADIO_MAX_KM, REGLA_TEXTO, type Domicilio, type UbicacionEntrega } from '@/lib/delivery';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -83,6 +83,16 @@ export default function CheckoutPage() {
     // subtotal/dom cambian con el carrito; la bandera garantiza un solo evento
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, items.length]);
+
+  // ¿SE LE PUEDE COBRAR POR ADELANTADO? Misma regla que el servidor, que es quien
+  // manda: aquí solo sirve para no ofrecerle al cliente algo que luego se le va a
+  // negar. Cobrar sin poder entregar es el peor fallo posible — peor que no vender,
+  // porque el cliente paga, espera, y hay que devolverle el dinero explicándole por
+  // qué. La confianza no se recupera con un reembolso.
+  const km = ubicacion?.km ?? null;
+  const sinUbicacion = km == null;
+  const fueraDeZona = km != null && km > RADIO_MAX_KM;
+  const puedePagarEnLinea = !sinUbicacion && !fueraDeZona;
 
   // el carrito vive en el navegador: hasta montar no se sabe si está vacío (ver use-mounted)
   if (!mounted) return <div className="container-tight py-24 min-h-[60vh]" />;
@@ -232,7 +242,9 @@ export default function CheckoutPage() {
 
   /** El boton unico: cobra en linea o manda a WhatsApp, segun lo elegido. */
   function confirmarPedido() {
-    if (metodoPago === 'bold') void pagarEnLinea();
+    // Guarda final: si entre que eligió y confirmó cambió la ubicación, no se
+    // intenta cobrar. El servidor lo rechazaría igual, pero es mejor no prometerlo.
+    if (metodoPago === 'bold' && puedePagarEnLinea) void pagarEnLinea();
     else void openWhatsApp();
   }
 
@@ -456,28 +468,52 @@ export default function CheckoutPage() {
               <p className="text-sm font-semibold">¿Cómo quieres pagar?</p>
               <button
                 type="button"
+                disabled={!puedePagarEnLinea}
                 onClick={() => setMetodoPago('bold')}
                 aria-pressed={metodoPago === 'bold'}
                 className={`w-full rounded-2xl border-2 p-4 text-left transition-colors ${
-                  metodoPago === 'bold'
-                    ? 'border-[#187f77] bg-[#187f77]/5'
-                    : 'border-border hover:border-[#187f77]/40'
+                  !puedePagarEnLinea
+                    ? 'cursor-not-allowed border-border bg-muted/40 opacity-70'
+                    : metodoPago === 'bold'
+                      ? 'border-[#187f77] bg-[#187f77]/5'
+                      : 'border-border hover:border-[#187f77]/40'
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold">Pagar ahora en línea</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Tarjeta, PSE, Nequi o Daviplata · lo alistamos de inmediato
+                      {sinUbicacion
+                        ? 'Dinos primero dónde entregamos para calcular el domicilio'
+                        : fueraDeZona
+                          ? `Tu dirección está a ${km!.toFixed(1)} km, fuera de nuestra zona de reparto`
+                          : 'Tarjeta, PSE, Nequi o Daviplata · lo alistamos de inmediato'}
                     </p>
                   </div>
                   <CheckCircle
                     className={`h-5 w-5 shrink-0 ${
-                      metodoPago === 'bold' ? 'text-[#187f77]' : 'text-transparent'
+                      metodoPago === 'bold' && puedePagarEnLinea
+                        ? 'text-[#187f77]'
+                        : 'text-transparent'
                     }`}
                   />
                 </div>
               </button>
+
+              {/* FUERA DE COBERTURA: se explica y se ofrece la salida real. No se
+                  deja pagar porque no habría forma de entregar, y cobrar primero y
+                  avisar después sería lo peor que podríamos hacer. */}
+              {fueraDeZona && (
+                <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                  <p className="font-semibold">Estás fuera de nuestra zona de reparto</p>
+                  <p className="mt-1 leading-relaxed">
+                    Llegamos a la zona urbana de Pereira y Dosquebradas. Tu dirección
+                    está a {km!.toFixed(1)} km del local, así que el envío hay que
+                    coordinarlo aparte: escríbenos y te decimos el costo y el tiempo
+                    <strong> antes de cobrarte nada</strong>.
+                  </p>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setMetodoPago('cash')}
@@ -522,7 +558,7 @@ export default function CheckoutPage() {
               onClick={confirmarPedido}
               disabled={enviando}
               className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-bold text-white text-lg shadow-lg hover:opacity-90 active:scale-95 transition-all disabled:opacity-60"
-              style={{ backgroundColor: metodoPago === 'bold' ? '#187f77' : '#25D366' }}
+              style={{ backgroundColor: metodoPago === 'bold' && puedePagarEnLinea ? '#187f77' : '#25D366' }}
             >
               {metodoPago === 'bold' ? (
                 <ShieldCheck className="h-6 w-6" />
@@ -533,7 +569,7 @@ export default function CheckoutPage() {
                 ? 'Indica dónde entregamos'
                 : enviando
                   ? 'Preparando tu pago…'
-                  : metodoPago === 'bold'
+                  : metodoPago === 'bold' && puedePagarEnLinea
                     ? `Pagar ${formatCurrency(total)}`
                     : 'Pedir por WhatsApp'}
             </button>
@@ -574,7 +610,7 @@ export default function CheckoutPage() {
             onClick={confirmarPedido}
             disabled={enviando}
             className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl font-bold text-white active:scale-[0.98] transition-all disabled:opacity-60"
-            style={{ backgroundColor: metodoPago === 'bold' ? '#187f77' : '#25D366' }}
+            style={{ backgroundColor: metodoPago === 'bold' && puedePagarEnLinea ? '#187f77' : '#25D366' }}
           >
             {metodoPago === 'bold' ? (
               <ShieldCheck className="h-5 w-5" />
@@ -585,7 +621,7 @@ export default function CheckoutPage() {
               ? 'Indica dónde entregamos'
               : enviando
                 ? 'Preparando…'
-                : metodoPago === 'bold'
+                : metodoPago === 'bold' && puedePagarEnLinea
                   ? 'Pagar ahora'
                   : 'Pedir por WhatsApp'}
           </button>
