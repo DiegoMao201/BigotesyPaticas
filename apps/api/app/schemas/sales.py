@@ -64,6 +64,12 @@ class OrderOut(BaseModel):
     customer_id: uuid.UUID | None = None
     customer_name: str | None = None
     customer_phone: str | None = None
+    # Diego (5-oct-2026): "ver el número del documento no me dice nada si no puedo
+    # ver el cliente, quién me compró, su dirección, su teléfono". Un listado de
+    # ventas donde solo se ve BP-20261005-0007 obliga a abrir cada una para saber
+    # de qué se trata, y así no se puede leer el día de un vistazo.
+    customer_address: str | None = None
+    customer_city: str | None = None
     subtotal: Decimal
     discount_total: Decimal
     tax_total: Decimal

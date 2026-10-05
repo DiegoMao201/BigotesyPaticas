@@ -382,9 +382,13 @@ async def list_orders(
     if customer_ids:
         cust_rows = (
             await db.execute(
-                select(CRMCustomer.id, CRMCustomer.full_name, CRMCustomer.phone).where(
-                    CRMCustomer.id.in_(customer_ids)
-                )
+                select(
+                    CRMCustomer.id,
+                    CRMCustomer.full_name,
+                    CRMCustomer.phone,
+                    CRMCustomer.address,
+                    CRMCustomer.city,
+                ).where(CRMCustomer.id.in_(customer_ids))
             )
         ).all()
         customers_map = {c.id: c for c in cust_rows}
@@ -396,6 +400,8 @@ async def list_orders(
             cust = customers_map[o.customer_id]
             out.customer_name = cust.full_name
             out.customer_phone = cust.phone
+            out.customer_address = cust.address
+            out.customer_city = cust.city
         items.append(out)
 
     return {

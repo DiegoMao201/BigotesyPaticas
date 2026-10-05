@@ -285,6 +285,8 @@ export interface Order {
   customer_id: string | null;
   customer_name: string | null;
   customer_phone: string | null;
+  customer_address: string | null;
+  customer_city: string | null;
   subtotal: string;
   discount_total: string;
   tax_total: string;

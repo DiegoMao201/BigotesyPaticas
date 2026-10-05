@@ -396,7 +396,7 @@ export default function SalesPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
               <tr>
-                <th className="text-left px-4 py-3">Orden</th>
+                <th className="text-left px-4 py-3">Cliente / Orden</th>
                 <th className="text-left px-4 py-3 hidden sm:table-cell">Canal</th>
                 <th className="text-left px-4 py-3">Fecha</th>
                 <th className="text-right px-4 py-3">Total</th>
@@ -416,7 +416,28 @@ export default function SalesPage() {
                 </td></tr>
               ) : data?.items.map((o) => (
                 <tr key={o.id} className="border-t border-border hover:bg-muted/20 cursor-pointer" onClick={() => setDetailOrder(o)}>
-                  <td className="px-4 py-3 font-mono text-xs font-bold text-brand-700">{o.order_number}</td>
+                  {/* EL DOCUMENTO SOLO NO DICE NADA. Diego: "ver el número del
+                      documento no me dice nada si no puedo ver el cliente, quién me
+                      compró, su dirección, su teléfono". Un listado de
+                      BP-20261005-0007 obliga a abrir cada venta para saber de qué
+                      se trata; con el nombre al lado, el día se lee de un vistazo.
+                      El número sigue ahí, en pequeño, porque es lo que se busca
+                      cuando hace falta cuadrar algo. */}
+                  <td className="px-4 py-3">
+                    <div className="font-semibold text-sm leading-tight">
+                      {o.customer_name ?? <span className="text-muted-foreground font-normal">Sin cliente</span>}
+                    </div>
+                    <div className="font-mono text-[11px] text-brand-700">{o.order_number}</div>
+                    {(o.customer_phone || o.customer_address) && (
+                      <div className="mt-0.5 text-[11px] text-muted-foreground leading-tight">
+                        {o.customer_phone && <span className="whitespace-nowrap">📱 {o.customer_phone}</span>}
+                        {o.customer_phone && o.customer_address && ' · '}
+                        {o.customer_address && (
+                          <span>📍 {o.customer_address}{o.customer_city ? `, ${o.customer_city}` : ''}</span>
+                        )}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-xs hidden sm:table-cell">{o.channel}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(o.occurred_at)}</td>
                   <td className="px-4 py-3 text-right font-semibold">{formatCurrency(Number(o.grand_total))}</td>
