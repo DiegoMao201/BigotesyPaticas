@@ -318,6 +318,35 @@ async def _aprobar(db: DBSession, pedido: PortalOrder, payment_id: str, monto: i
     # procesar" para siempre — que fue exactamente lo que pasó en la primera prueba
     # real del 5-oct-2026.
     await _cerrar_evento(db, payment_id)
+
+    # SE LE CUENTA A GOOGLE AHORA, NO AL ENTREGAR.
+    #
+    # Hasta hoy el `purchase` salía al marcar el pedido como entregado, y era lo
+    # correcto cuando TODO era contraentrega: la venta no era segura hasta que el
+    # cliente abría la puerta y pagaba. Un pago en línea cambia eso: el dinero ya
+    # está, la venta ya ocurrió.
+    #
+    # Esperar a la entrega para avisarle a Google cuesta dos cosas:
+    #  - **Ads aprende días tarde.** Optimiza la puja con lo que sabe; si la compra
+    #    le llega 48 horas después, 48 horas de presupuesto se gastaron a ciegas.
+    #  - **La atribución se desdibuja.** Cuanto más lejos del clic llega la
+    #    conversión, menos fiable es el vínculo con la búsqueda o el anuncio que la
+    #    trajo — que es justo lo que queremos medir.
+    #
+    # Para los pedidos contraentrega NO cambia nada: siguen contándose al entregar,
+    # porque ahí la venta de verdad puede caerse en la puerta.
+    #
+    # `enviar_purchase` es idempotente (mira `purchase_sent_at`) y no lanza
+    # excepciones, así que al entregar no se duplica ni rompe nada.
+    if not cancelado:
+        try:
+            from app.services.ga4 import enviar_purchase
+
+            await enviar_purchase(db, pedido)
+        except Exception:
+            # Que Google no se entere no puede afectar a un cobro ya hecho.
+            log.exception("BOLD · pago OK pero falló el purchase de %s", pedido.order_reference)
+
     await _avisar_pago(db, pedido, monto, cancelado=cancelado)
 
 
