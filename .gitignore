@@ -85,3 +85,6 @@ apps/*/tsconfig.tsbuildinfo
 # Contienen secretos hardcodeados en texto plano — nunca deben entrar al repo
 estrategiaredes.md
 secrets.md
+
+# grafo de conocimiento local (graphify) — no va al repo
+graphify-out/
