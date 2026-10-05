@@ -68,6 +68,7 @@ export default function CheckoutPage() {
   // completa, a un toque — pero deja de ser la unica salida.
   const [metodoPago, setMetodoPago] = useState<'bold' | 'cash'>('bold');
   const [enviando, setEnviando] = useState(false);
+  const [errorPago, setErrorPago] = useState('');
 
   // begin_checkout: el paso del embudo que faltaba. Una sola vez por visita a esta
   // página, y solo cuando el carrito ya se hidrató (antes de eso items está vacío).
@@ -158,6 +159,7 @@ export default function CheckoutPage() {
   /** Crea el pedido y lleva a la pagina de pago. */
   async function pagarEnLinea() {
     if (!validarDatos()) return;
+    setErrorPago('');
     setEnviando(true);
     try {
       const r = await fetch('/api/v1/public/orders', {
@@ -179,12 +181,19 @@ export default function CheckoutPage() {
       // arrepiente a medio pagar, volver y encontrar el carrito vacio seria perder
       // la venta por un detalle. Se vacia cuando el pago se confirma.
       router.push(`/pagar/${ref}`);
-    } catch {
-      // Si algo falla, no se deja al cliente sin salida: se cae al flujo de
-      // siempre, que es el que nunca ha dejado de funcionar.
+    } catch (e) {
+      // ANTES ESTO SALTABA A WHATSAPP EN SILENCIO, y fue justo lo que confundió a
+      // Diego en la primera prueba real: tocó "Pagar" y se vio en WhatsApp sin
+      // entender por qué. Un fallback que no se explica no es una red de seguridad,
+      // es un misterio.
+      //
+      // Ahora se dice lo que pasó y se deja que decida. El detalle va a la consola
+      // para poder diagnosticarlo sin tener que reproducirlo.
+      console.error('[pago] no se pudo preparar el cobro:', e);
       setEnviando(false);
-      setMetodoPago('cash');
-      openWhatsApp();
+      setErrorPago(
+        'No pudimos preparar el pago en línea. Puedes intentar de nuevo o pedir contraentrega por WhatsApp.',
+      );
     }
   }
 
@@ -494,6 +503,19 @@ export default function CheckoutPage() {
                 </div>
               </button>
             </div>
+
+            {errorPago && (
+              <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                <p>{errorPago}</p>
+                <button
+                  type="button"
+                  onClick={() => { setErrorPago(''); setMetodoPago('cash'); }}
+                  className="mt-2 font-semibold underline"
+                >
+                  Pedir contraentrega por WhatsApp
+                </button>
+              </div>
+            )}
 
             {/* THE BIG BUTTON */}
             <button

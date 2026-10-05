@@ -290,8 +290,13 @@ async def _aprobar(db: DBSession, pedido: PortalOrder, payment_id: str, monto: i
     #
     # Pagar NO es haber recibido. El pago solo cambia el estado de pago; el resto del
     # recorrido sigue exactamente igual que hasta hoy, y es el admin quien lo mueve.
-    await _avisar_pago(db, pedido, monto)
+    # Se cierra el evento AQUI, antes de avisar. El pago ya esta registrado y el
+    # pedido marcado: eso es lo que el evento tenia que lograr. Si se cerrara despues
+    # de los avisos, cualquier cosa que colgara el correo dejaria el evento como "sin
+    # procesar" para siempre — que fue exactamente lo que pasó en la primera prueba
+    # real del 5-oct-2026.
     await _cerrar_evento(db, payment_id)
+    await _avisar_pago(db, pedido, monto)
 
 
 async def _avisar_pago(db: DBSession, pedido: PortalOrder, monto: int | None) -> None:
@@ -332,7 +337,7 @@ async def _avisar_pago(db: DBSession, pedido: PortalOrder, monto: int | None) ->
         )
         await db.commit()
     except Exception:
-        log.exception("BOLD · no se pudo avisar al panel de %s", pedido.order_reference)
+        log.exception("BOLD · FALLO EL AVISO AL PANEL de %s", pedido.order_reference)
 
     try:
         import asyncio
@@ -347,8 +352,12 @@ async def _avisar_pago(db: DBSession, pedido: PortalOrder, monto: int | None) ->
             f"<b>Entrega:</b> {pedido.shipping_address or 'sin dirección'}</p>"
             f"<p style='color:#555'>Ya está pagado. Entra al panel para alistarlo.</p>"
         )
-        # send_email es síncrono y haría esperar al event loop: va a un hilo.
-        await asyncio.to_thread(send_email, STORE_EMAIL, titulo, html)
+        # send_email es síncrono y haría esperar al event loop: va a un hilo. Y con
+        # TOPE: un SMTP que no contesta dejaría la tarea colgada indefinidamente, y
+        # con ella todo lo que viniera después.
+        await asyncio.wait_for(
+            asyncio.to_thread(send_email, STORE_EMAIL, titulo, html), timeout=20
+        )
     except Exception:
         log.exception("BOLD · no se pudo enviar el correo de %s", pedido.order_reference)
 
