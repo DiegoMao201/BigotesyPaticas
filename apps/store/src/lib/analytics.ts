@@ -135,9 +135,20 @@ export function huellaGoogle(): { ga_client_id?: string; ga_session_id?: string;
 
     const sesion = cookies.find((c) => /^_ga_[A-Z0-9]+=/.test(c));
     if (sesion) {
-      // "_ga_K46540SJVJ=GS1.1.1696118400.3.1.1696118500.0.0.0" → "1696118400"
+      // El formato de esta cookie CAMBIÓ y nos costó tres días de pedidos perdidos.
+      //   GS1 (viejo): "GS1.1.1696118400.3.1.1696118500.0.0.0"       → partes[2] = "1696118400"
+      //   GS2 (nuevo): "GS2.1.s1759600000$o5$g1$t1759600123$j60$l0$h0" → partes[2] = todo ese bloque
+      // Con GS2, partes[2] trae 39 caracteres y la API lo rechazaba con 422: el
+      // pedido ENTERO se perdía por un dato de medición. El id de sesión es el
+      // número que sigue a la "s", antes del primer "$".
       const partes = sesion.split('=')[1]?.split('.') ?? [];
-      if (partes.length >= 3) out.ga_session_id = partes[2];
+      if (partes.length >= 3) {
+        const bruto = partes[2] ?? '';
+        const gs2 = /^s(\d+)/.exec(bruto);
+        const id = gs2 ? gs2[1] : bruto;
+        // El recorte es el último seguro: la columna es varchar(32).
+        if (id) out.ga_session_id = id.slice(0, 32);
+      }
     }
 
     // El gclid llega en la URL del anuncio y lo guardamos al entrar (ver más abajo).

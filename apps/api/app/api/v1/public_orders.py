@@ -33,7 +33,7 @@ from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app.api.v1.portal_appointments import _TZ_CO
@@ -119,6 +119,20 @@ class ItemIn(BaseModel):
     quantity: int = Field(ge=1, le=99)
 
 
+def _recortar(valor: object, tope: int) -> str | None:
+    """Recorta un dato de analítica al tamaño de SU columna. Nunca lanza.
+
+    El tope no es decorativo: tiene que ser el de la columna real
+    (`ga_client_id` varchar(64), `ga_session_id` varchar(32)). Recortar a un
+    número mayor cambiaría el 422 de Pydantic por un error de base al insertar,
+    que es el mismo pedido perdido con peor mensaje.
+    """
+    if valor is None:
+        return None
+    texto = str(valor).strip()[:tope]
+    return texto or None
+
+
 class PedidoIn(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
     phone: str = Field(min_length=7, max_length=20)
@@ -129,9 +143,39 @@ class PedidoIn(BaseModel):
     km: float | None = None
     notes: str | None = Field(default=None, max_length=500)
     # La huella de Google de ESTA visita. Sin esto la compra entra como "(direct)".
-    ga_client_id: str | None = Field(default=None, max_length=64)
-    ga_session_id: str | None = Field(default=None, max_length=32)
-    gclid: str | None = Field(default=None, max_length=500)
+    #
+    # ⚠️ ESTOS TRES CAMPOS NO PUEDEN RECHAZAR UN PEDIDO. NUNCA.
+    #
+    # Tenían `max_length` y el 5-oct-2026 se descubrió lo que costaba: Google cambió
+    # el formato de su cookie de sesión (GS1 → GS2) y el valor que extraemos pasó de
+    # ser un número corto a `s1759600000$o5$g1$t1759600123$j60$l0$h0`, de 39
+    # caracteres. Pydantic devolvía 422 y el pedido ENTERO se perdía.
+    #
+    # Llevaba así desde el 2 de octubre y nadie lo vio, porque el checkout guardaba
+    # con `.catch(() => {})`: cada pedido de la tienda se caía en silencio. En la base
+    # no hay un solo registro con origen='web'.
+    #
+    # Son datos de MEDICIÓN. Perder la atribución de una venta es molesto; perder la
+    # venta es grave. Por eso ahora se recortan en vez de rechazar: entre medir mal y
+    # no vender, se mide mal.
+    ga_client_id: str | None = None
+    ga_session_id: str | None = None
+    gclid: str | None = None
+
+    @field_validator("ga_client_id", mode="before")
+    @classmethod
+    def _recortar_client_id(cls, v: object) -> str | None:
+        return _recortar(v, 64)
+
+    @field_validator("ga_session_id", mode="before")
+    @classmethod
+    def _recortar_session_id(cls, v: object) -> str | None:
+        return _recortar(v, 32)
+
+    @field_validator("gclid", mode="before")
+    @classmethod
+    def _recortar_gclid(cls, v: object) -> str | None:
+        return _recortar(v, 500)
     # Como quiere pagar. 'bold' = en linea con tarjeta/PSE/Nequi; 'cash' =
     # contraentrega, el flujo de siempre. Es lo UNICO que el navegador decide sobre
     # el pago: el monto se calcula abajo, contra la base, y se firma en el servidor.
