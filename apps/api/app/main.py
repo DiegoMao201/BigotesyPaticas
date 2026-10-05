@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -83,6 +84,27 @@ def create_app() -> FastAPI:
             version=__version__,
             environment=settings.environment,
         )
+        # Conciliación de pagos de Bold: rescata los pagos cuyo webhook se perdió.
+        # Se guarda la referencia a la tarea porque asyncio solo mantiene una
+        # referencia débil a las tareas sueltas y el recolector puede llevársela a
+        # media ejecución — la tarea desaparecería sin un solo mensaje de error.
+        #
+        # Si algún día la API corre con varias réplicas, este bucle correrá en cada
+        # una. No rompe nada (todo el camino es idempotente y la base arbitra), pero
+        # multiplica las consultas a Bold; entonces convendría moverlo a un cron.
+        from app.services import bold
+        from app.services.conciliacion_bold import bucle_conciliacion
+
+        if bold.esta_configurado():
+            app.state.tarea_conciliacion = asyncio.create_task(bucle_conciliacion())
+        else:
+            log.info("bold_sin_configurar · conciliación no se inicia")
+
+    @app.on_event("shutdown")
+    async def _shutdown() -> None:
+        tarea = getattr(app.state, "tarea_conciliacion", None)
+        if tarea is not None:
+            tarea.cancel()
 
     @app.get("/", include_in_schema=False)
     async def root() -> dict:

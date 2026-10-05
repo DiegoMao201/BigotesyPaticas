@@ -28,8 +28,9 @@ import re
 import time
 import uuid
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -39,6 +40,7 @@ from app.api.v1.portal_appointments import _TZ_CO
 from app.deps import DBSession
 from app.models.catalog import Product
 from app.models.portal import PortalOrder, PortalOrderItem
+from app.services import bold
 from app.services.citas import cliente_por_telefono, limpiar
 
 log = logging.getLogger(__name__)
@@ -130,6 +132,10 @@ class PedidoIn(BaseModel):
     ga_client_id: str | None = Field(default=None, max_length=64)
     ga_session_id: str | None = Field(default=None, max_length=32)
     gclid: str | None = Field(default=None, max_length=500)
+    # Como quiere pagar. 'bold' = en linea con tarjeta/PSE/Nequi; 'cash' =
+    # contraentrega, el flujo de siempre. Es lo UNICO que el navegador decide sobre
+    # el pago: el monto se calcula abajo, contra la base, y se firma en el servidor.
+    payment_method: Literal["bold", "cash"] = "cash"
     website: str | None = None  # trampa para bots: una persona nunca lo llena
 
 
@@ -197,6 +203,17 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
 
     primero = productos[uuid.UUID(payload.items[0].product_id)]
     n = len(payload.items)
+
+    # ── PAGO EN LINEA ────────────────────────────────────────────────────────
+    # El monto que se firma es el que acaba de calcular ESTE servidor a partir de
+    # los precios de la base. El navegador solo dijo que productos y cuantos.
+    #
+    # `int(total)` sin decimales es obligatorio: Bold exige 76000, nunca 76.000 ni
+    # 76000.00, y un error aqui no da mensaje — rechaza el cobro en silencio.
+    paga_en_linea = payload.payment_method == "bold" and bold.esta_configurado()
+    referencia = bold.nueva_referencia("web", ahora) if paga_en_linea else None
+    monto_bold = int(total) if paga_en_linea else None
+    firma = bold.firma_integridad(referencia, monto_bold) if paga_en_linea else None
     order = PortalOrder(
         customer_id=cliente.id,
         product_id=primero.id,
@@ -211,6 +228,13 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
         status="received",
         workflow_status="received",
         origen="web",
+        payment_method="bold" if paga_en_linea else "cash",
+        order_reference=referencia,
+        payment_status="pending" if paga_en_linea else None,
+        bold_amount=monto_bold,
+        payment_expires_at=(
+            ahora + timedelta(minutes=bold.MINUTOS_PARA_PAGAR) if paga_en_linea else None
+        ),
         ga_client_id=payload.ga_client_id or None,
         ga_session_id=payload.ga_session_id or None,
         gclid=payload.gclid or None,
@@ -240,7 +264,11 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
         await notify_admins(
             db,
             notif_type="new_order",
-            title="Nuevo pedido desde la tienda web",
+            title=(
+                "Pedido web esperando pago"
+                if paga_en_linea
+                else "Nuevo pedido desde la tienda web"
+            ),
             body=f"{nombre} ({tel}) pidió {n} producto(s) por ${int(total):,}".replace(",", ".")
             + " 🛒",
             data={"order_id": str(order.id), "customer_id": str(cliente.id), "origen": "web"},
@@ -249,10 +277,22 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
         pass
 
     await db.commit()
-    return {
+    respuesta = {
         "ok": True,
         "order_id": str(order.id),
         "subtotal": float(subtotal),
         "envio": float(envio),
         "total": float(total),
+        "payment_method": "bold" if paga_en_linea else "cash",
     }
+    if paga_en_linea:
+        respuesta["bold"] = {
+            "order_reference": referencia,
+            # Entero, sin decimales: es lo que se firmo y lo que Bold debe cobrar.
+            "amount": monto_bold,
+            "currency": "COP",
+            "integrity_signature": firma,
+            # Publica por diseno: va en el boton. La secreta NUNCA sale del servidor.
+            "identity_key": bold.IDENTITY_KEY,
+        }
+    return respuesta
