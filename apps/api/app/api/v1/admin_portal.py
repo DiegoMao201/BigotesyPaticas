@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy import update as sa_update
 
 from app.api.v1.portal_notifications import notify_customer
@@ -603,6 +603,28 @@ async def list_portal_orders(
         )
         .join(Customer, PortalOrder.customer_id == Customer.id, isouter=True)
         .join(Pet, PortalOrder.pet_id == Pet.id, isouter=True)
+        # AL ADMIN NO LE LLEGA LA INTENCIÓN DE COMPRA, SOLO LA COMPRA.
+        #
+        # Diego (5-oct-2026): "al admin no puede llegar la intención de compra, solo
+        # llega el pedido pagado... o por el contrario llega el pedido contraentrega
+        # que no usa Bold".
+        #
+        # Quien elige pagar en línea y aún no ha pagado tiene el pedido en
+        # `payment_status='pending'`: abrió el checkout y puede no volver nunca. Si
+        # esos aparecieran, el panel se llenaría de pedidos fantasma y el de verdad
+        # —el que ya tiene el dinero— se perdería entre ellos.
+        #
+        # Los de contraentrega entran como siempre: ahí no hay nada que esperar, el
+        # compromiso del cliente es el pedido mismo.
+        #
+        # Si nunca paga, la conciliación lo marca 'expired' a la media hora y se
+        # queda en la base para los números, sin molestar a nadie.
+        .where(
+            or_(
+                PortalOrder.payment_status.is_(None),
+                PortalOrder.payment_status != "pending",
+            )
+        )
         .order_by(PortalOrder.created_at.desc())
         .limit(limit)
     )

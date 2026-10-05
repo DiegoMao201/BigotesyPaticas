@@ -302,23 +302,39 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
             )
         )
 
-    try:
-        from app.api.v1.portal_notifications import notify_admins
+    # AL ADMIN SOLO LE LLEGA LA COMPRA, NUNCA LA INTENCIÓN.
+    #
+    # Diego (5-oct-2026): "al admin no puede llegar la intención de compra, solo
+    # llega el pedido pagado... o por el contrario llega el pedido contraentrega que
+    # no usa Bold".
+    #
+    # Si va a pagar en línea, aquí todavía no hay nada que avisar: abrió el checkout
+    # y puede no volver nunca. El aviso sale cuando el pago se confirma, desde el
+    # webhook, y entonces dice "💳 Pedido PAGADO". Un panel que suena cada vez que
+    # alguien MIRA el checkout deja de servir para avisar.
+    #
+    # El de contraentrega sí avisa aquí: ahí no hay nada que esperar.
+    if not paga_en_linea:
+        try:
+            from app.api.v1.portal_notifications import notify_admins
 
-        await notify_admins(
-            db,
-            notif_type="new_order",
-            title=(
-                "Pedido web esperando pago"
-                if paga_en_linea
-                else "Nuevo pedido desde la tienda web"
-            ),
-            body=f"{nombre} ({tel}) pidió {n} producto(s) por ${int(total):,}".replace(",", ".")
-            + " 🛒",
-            data={"order_id": str(order.id), "customer_id": str(cliente.id), "origen": "web"},
-        )
-    except Exception:
-        pass
+            await notify_admins(
+                db,
+                notif_type="new_order",
+                title="Nuevo pedido desde la tienda web",
+                body=f"{nombre} ({tel}) pidió {n} producto(s) por ${int(total):,}".replace(
+                    ",", "."
+                )
+                + " 🛒",
+                data={
+                    "order_id": str(order.id),
+                    "customer_id": str(cliente.id),
+                    "origen": "web",
+                },
+            )
+        except Exception:
+            # Un fallo de aviso no puede tumbar un pedido ya guardado.
+            log.exception("no se pudo avisar del pedido web %s", order.id)
 
     await db.commit()
     respuesta = {
