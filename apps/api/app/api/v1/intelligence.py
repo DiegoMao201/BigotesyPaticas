@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 from app.deps import DBSession, require_permission
 from app.models.catalog import Product
 from app.models.crm import Customer
-from app.models.inventory import Stock
+from app.models.inventory import Stock, StockMovement
 from app.models.purchasing import Supplier, SupplierSkuMap
 from app.models.sales import Order, OrderItem
 
@@ -100,6 +100,11 @@ class IntelSummary(BaseModel):
     at_risk_value: float
     dead_stock_count: int
     trapped_capital: float
+    #: Con existencias pero sin venta NI entrada registrada: no hay con qué medir su
+    #: antigüedad. Se cuentan aparte en vez de darlos por muertos, que es lo que
+    #: inflaba la cifra. Si este número crece, hay movimientos de inventario sin
+    #: registrar y eso es lo que habría que mirar.
+    sin_historial: int = 0
 
 
 class IntelligenceOut(BaseModel):
@@ -283,6 +288,33 @@ async def intelligence_overview(
     at_risk = at_risk[:100]
 
     # ── Capital atrapado: stock con costo que no rota ──
+    #
+    # CUANDO UN PRODUCTO NUNCA SE HA VENDIDO, HAY QUE MIRAR CUANDO ENTRO.
+    #
+    # Diego (5-oct-2026): "los productos que recién ingresan al inventario los
+    # muestra como stock muerto y eso está mal analizado; el stock muerto es stock
+    # con más de 90 días en el inventario sin venta".
+    #
+    # Tenía razón y el error era caro: la versión anterior daba por muerto todo lo
+    # que no tuviera una venta registrada, sin preguntarse si llevaba un día o un
+    # año en la bodega. Medido antes de corregir: 204 productos y $7.935.684 de
+    # capital "atrapado", contra 76 productos y $2.809.031 reales. **$5,1 millones
+    # de más** — un número con el que se liquida mercancía nueva con descuento
+    # creyendo que lleva meses parada.
+    #
+    # La fecha de entrada sale del primer movimiento que SUMÓ existencias
+    # (PURCHASE, o un ajuste positivo), que es el momento en que el producto empezó
+    # de verdad a ocupar capital.
+    first_in_sub = (
+        select(
+            StockMovement.product_id.label("pid"),
+            func.min(StockMovement.occurred_at).label("first_in"),
+        )
+        .where(StockMovement.movement_type.in_(("PURCHASE", "ADJUSTMENT", "COUNT_ADJUST")))
+        .where(StockMovement.quantity_delta > 0)
+        .group_by(StockMovement.product_id)
+        .subquery()
+    )
     last_sale_sub = (
         select(
             OrderItem.product_id.label("pid"),
@@ -302,19 +334,27 @@ async def intelligence_overview(
                 func.coalesce(Product.cost, 0).label("cost"),
                 func.coalesce(func.sum(Stock.quantity - Stock.reserved), 0).label("available"),
                 last_sale_sub.c.last_sale,
+                first_in_sub.c.first_in,
             )
             .join(Stock, Stock.product_id == Product.id)
             .join(last_sale_sub, last_sale_sub.c.pid == Product.id, isouter=True)
+            .join(first_in_sub, first_in_sub.c.pid == Product.id, isouter=True)
             .where(Product.is_active == True)  # noqa: E712
             .where(Product.deleted_at == None)  # noqa: E711
             .group_by(
-                Product.id, Product.sku, Product.name, Product.cost, last_sale_sub.c.last_sale
+                Product.id,
+                Product.sku,
+                Product.name,
+                Product.cost,
+                last_sale_sub.c.last_sale,
+                first_in_sub.c.first_in,
             )
         )
     ).all()
 
     dead_stock: list[DeadStockItem] = []
     trapped_capital = 0.0
+    sin_historial = 0  # con stock pero sin venta NI entrada registrada
     for r in stock_rows:
         available = int(r.available or 0)
         if available <= 0:
@@ -322,8 +362,26 @@ async def intelligence_overview(
         last_sale = r.last_sale
         if last_sale is not None and last_sale.tzinfo is None:
             last_sale = last_sale.replace(tzinfo=UTC)
-        days_no_sale = (now - last_sale).days if last_sale is not None else None
-        is_dead = days_no_sale is None or days_no_sale >= dead_stock_days
+        first_in = r.first_in
+        if first_in is not None and first_in.tzinfo is None:
+            first_in = first_in.replace(tzinfo=UTC)
+
+        if last_sale is not None:
+            # Se vendió alguna vez: el reloj corre desde la última venta.
+            days_no_sale = (now - last_sale).days
+            is_dead = days_no_sale >= dead_stock_days
+        elif first_in is not None:
+            # Nunca se vendió: el reloj corre desde que ENTRÓ. Un producto que
+            # llegó ayer no es capital atrapado, es inventario nuevo.
+            days_no_sale = (now - first_in).days
+            is_dead = days_no_sale >= dead_stock_days
+        else:
+            # Ni venta ni entrada registrada: no hay con qué medir la antigüedad.
+            # Se deja FUERA en vez de darlo por muerto — inventar un diagnóstico es
+            # peor que admitir que falta el dato, y era justo lo que inflaba la
+            # cifra. Sale en `sin_historial` para que se pueda revisar aparte.
+            sin_historial += 1
+            continue
         if not is_dead:
             continue
         cost = float(r.cost or 0)
@@ -363,6 +421,7 @@ async def intelligence_overview(
             at_risk_value=round(at_risk_value, 2),
             dead_stock_count=dead_stock_full_count,
             trapped_capital=round(trapped_capital, 2),
+            sin_historial=sin_historial,
         ),
         repurchase=repurchase,
         at_risk=at_risk,
