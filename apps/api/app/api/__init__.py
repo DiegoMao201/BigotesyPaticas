@@ -29,6 +29,7 @@ from app.api.v1 import (
     partners_public,
     portal_appointments,
     public_grooming,
+    payment_links,
     payments,
     public_orders,
     portal_auth,
@@ -116,6 +117,10 @@ api_router.include_router(payments.router, prefix="/v1")
 # Aceptar las dos rutas cuesta una línea y elimina de raíz una clase entera de
 # fallo: la de la URL mal escrita en un panel que no es nuestro.
 api_router.include_router(payments.router, prefix="/api/v1")
+# Enlaces de cobro que crea el admin para ventas que no nacen en la web.
+api_router.include_router(payment_links.router, prefix="/v1")
+# Pago libre: el cliente arma su propio cobro, sin pedido detrás (abonos, saldos).
+api_router.include_router(payment_links.publico, prefix="/v1")
 api_router.include_router(portal_loyalty.router, prefix="/v1")
 api_router.include_router(portal_monitor.router, prefix="/v1")
 api_router.include_router(portal_intelligence.router, prefix="/v1")

@@ -38,9 +38,14 @@ router = APIRouter(tags=["pagos"])
 #: Más de esto no es un webhook de Bold, es alguien probando suerte.
 MAX_CUERPO = 256 * 1024
 
-#: BPW-20261005-a3f9c201 o BPP-…. Validar la forma evita ir a la base por cada
-#: cadena suelta que alguien escriba en la URL.
-_REFERENCIA_OK = re.compile(r"^BP[WP]-\d{8}-[0-9a-f]{8}$")
+#: Cuatro canales, un solo formato: BPW- la tienda, BPP- el portal, BPL- los enlaces
+#: de cobro que crea el admin, BPX- los pagos libres que arma el propio cliente.
+#: Validar la forma evita ir a la base por cada cadena suelta en la URL.
+#:
+#: Al añadir un canal hay que tocar ESTO. Si no, la página de pago rechaza sus
+#: referencias con "referencia inválida" y el fallo solo se descubre cuando ya le
+#: mandaste el primer enlace a un cliente.
+_REFERENCIA_OK = re.compile(r"^BP[WPLX]-\d{8}-[0-9a-f]{8}$")
 
 
 @router.post("/webhooks/bold", status_code=status.HTTP_200_OK)
