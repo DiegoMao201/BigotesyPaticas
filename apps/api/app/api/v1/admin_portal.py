@@ -677,6 +677,13 @@ async def list_portal_orders(
                 "has_stock_issues": _has_stock_issues(order),
                 # 'web' = entró por el checkout de la tienda (sin cuenta); None = portal
                 "origen": order.origen,
+                # Pago en línea (5-oct-2026). Sin esto, en la lista un pedido YA
+                # COBRADO se ve igual que uno que todavía puede no pagarse nunca, y
+                # son dos cosas muy distintas: uno hay que alistarlo ya, el otro no.
+                "payment_status": order.payment_status,
+                "payment_method": order.payment_method,
+                "order_reference": order.order_reference,
+                "paid_at": order.paid_at.isoformat() if order.paid_at else None,
             }
         )
     return result

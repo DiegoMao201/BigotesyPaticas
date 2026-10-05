@@ -1435,6 +1435,12 @@ export interface PortalOrder {
   has_stock_issues: boolean;
   /** 'web' = pedido del checkout de la tienda (sin cuenta); null = pedido del portal */
   origen?: string | null;
+  // Pago en línea con Bold. 'paid' = el dinero YA está; 'pending' = el cliente
+  // abrió el checkout y todavía puede no pagar nunca.
+  payment_status?: string | null;
+  payment_method?: string | null;
+  order_reference?: string | null;
+  paid_at?: string | null;
 }
 
 export interface PortalOrderItem {

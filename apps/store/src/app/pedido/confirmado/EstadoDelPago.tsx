@@ -164,6 +164,14 @@ function Mensaje({
   referencia?: string;
   tono?: 'bien' | 'mal';
 }) {
+  // El mensaje llega ESCRITO con la referencia. Quien escribe desde aquí lo hace
+  // porque algo de su pago le preocupa; obligarle a teclear un código que no tiene
+  // a mano es ponerle un obstáculo justo en ese momento. Y a quien atiende le llega
+  // la pregunta con el dato que necesita para responder.
+  const texto_wa = referencia
+    ? `Hola! Acabo de pagar en la página. Mi pedido es ${referencia} 🐾`
+    : 'Hola! Tengo una pregunta sobre mi pedido 🐾';
+  const waUrl = `https://wa.me/573206876633?text=${encodeURIComponent(texto_wa)}`;
   const borde =
     tono === 'bien' ? 'border-teal-200 bg-teal-50' : tono === 'mal' ? 'border-red-200 bg-red-50' : 'border-border bg-card';
   return (
@@ -186,7 +194,7 @@ function Mensaje({
           Seguir comprando
         </Link>
         <a
-          href="https://wa.me/573206876633"
+          href={waUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="rounded-xl border border-border px-5 py-3 text-sm font-semibold transition-colors hover:bg-muted"

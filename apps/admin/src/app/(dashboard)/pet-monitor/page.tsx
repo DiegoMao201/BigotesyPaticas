@@ -361,6 +361,25 @@ export default function PetMonitorPage() {
                               🌐 Tienda web
                             </span>
                           )}
+                          {/* PAGADO vs ESPERANDO PAGO. Es la diferencia entre un
+                              pedido con el dinero encima —que hay que alistar ya— y
+                              uno que todavía puede no pagarse nunca. Sin esto los
+                              dos se ven igual en la lista. */}
+                          {order.payment_status === 'paid' && (
+                            <span className="text-xs bg-teal-600 text-white px-2 py-0.5 rounded-full font-bold">
+                              💳 PAGADO
+                            </span>
+                          )}
+                          {order.payment_status === 'pending' && (
+                            <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
+                              ⏳ Esperando pago
+                            </span>
+                          )}
+                          {order.payment_status === 'failed' && (
+                            <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full font-bold">
+                              Pago rechazado
+                            </span>
+                          )}
                           {order.has_stock_issues && (
                             <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                               <AlertTriangle size={11} /> Sin stock
