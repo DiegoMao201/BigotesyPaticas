@@ -304,12 +304,26 @@ export default function CheckoutPage() {
               ¿Cómo funciona el pedido?
             </p>
             <div className="flex flex-col gap-2">
-              {[
-                { step: '1', text: 'Revisa tu pedido aquí abajo' },
-                { step: '2', text: 'Dinos dónde entregamos: tu ubicación o tu dirección en Google Maps' },
-                { step: '3', text: 'Toca "Pedir por WhatsApp" — te enviaremos el resumen con el total' },
-                { step: '4', text: 'Confirmamos disponibilidad y coordinamos la entrega' },
-              ].map((item) => (
+              {/* LOS PASOS CAMBIAN SEGÚN CÓMO VAYA A PAGAR. Este bloque se quedó
+                  describiendo el flujo viejo —"Toca Pedir por WhatsApp"— después de
+                  conectar el pago en línea, y un texto que contradice lo que hace el
+                  botón de al lado no es solo descuido: Google Merchant Center revisa
+                  estas páginas a mano, y una instrucción que no cuadra con el flujo
+                  es motivo de rechazo. */}
+              {(metodoPago === 'bold' && puedePagarEnLinea
+                ? [
+                    { step: '1', text: 'Revisa tu pedido aquí abajo' },
+                    { step: '2', text: 'Dinos dónde entregamos: tu ubicación o tu dirección en Google Maps' },
+                    { step: '3', text: 'Paga en línea de forma segura — tarjeta, PSE, Nequi o Daviplata' },
+                    { step: '4', text: 'Alistamos tu pedido de inmediato y te avisamos por WhatsApp cuando salga' },
+                  ]
+                : [
+                    { step: '1', text: 'Revisa tu pedido aquí abajo' },
+                    { step: '2', text: 'Dinos dónde entregamos: tu ubicación o tu dirección en Google Maps' },
+                    { step: '3', text: 'Toca "Pedir por WhatsApp" — te enviaremos el resumen con el total' },
+                    { step: '4', text: 'Confirmamos disponibilidad y coordinamos la entrega. Pagas al recibir' },
+                  ]
+              ).map((item) => (
                 <div key={item.step} className="flex items-start gap-3">
                   <div className="h-6 w-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
                     {item.step}
@@ -586,7 +600,13 @@ export default function CheckoutPage() {
             {[
               { icon: '🚚', text: 'Entrega en Pereira y Dosquebradas' },
               { icon: '⏱️', text: 'Respuesta en menos de 30 min en horario de atención' },
-              { icon: '🔒', text: 'Pago contraentrega — pagas al recibir' },
+              // El sello decía "pago contraentrega" incluso con el pago en línea
+              // elegido. Prometer una forma de pago y cobrar otra es justo lo que
+              // revisa Merchant Center, y para el cliente es peor: contradice lo que
+              // acaba de elegir tres dedos más arriba.
+              metodoPago === 'bold' && puedePagarEnLinea
+                ? { icon: '🔒', text: 'Pago seguro en línea — procesado por Bold' }
+                : { icon: '🔒', text: 'Pago contraentrega — pagas al recibir' },
             ].map((item) => (
               <div key={item.text} className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>{item.icon}</span>
