@@ -16,11 +16,15 @@ la base.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
+import time
+from collections import deque
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, BackgroundTasks, Request, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, status
+from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.deps import DBSession
@@ -32,6 +36,10 @@ router = APIRouter(tags=["pagos"])
 
 #: Más de esto no es un webhook de Bold, es alguien probando suerte.
 MAX_CUERPO = 256 * 1024
+
+#: BPW-20261005-a3f9c201 o BPP-…. Validar la forma evita ir a la base por cada
+#: cadena suelta que alguien escriba en la URL.
+_REFERENCIA_OK = re.compile(r"^BP[WP]-\d{8}-[0-9a-f]{8}$")
 
 
 @router.post("/webhooks/bold", status_code=status.HTTP_200_OK)
@@ -89,9 +97,12 @@ async def webhook_bold(request: Request, db: DBSession, tareas: BackgroundTasks)
             "BOLD · firma INVÁLIDA · tipo=%s ref=%s firma=%s",
             tipo, referencia, bold.enmascarar(firma),
         )
+        # La clave es el HASH DEL CUERPO, no el reloj: así el mismo intento
+        # repetido choca contra el UNIQUE y no inserta. Con un id basado en la hora,
+        # quien repitiera la petición llenaría la tabla sin tope — un DoS barato.
+        clave = payment_id or f"invalida:{hashlib.sha256(raw).hexdigest()[:40]}"
         await _registrar_evento(
-            db, payment_id or f"invalida-{datetime.now(UTC).timestamp()}",
-            tipo, referencia, cuerpo, False, monto, error="firma inválida",
+            db, clave, tipo, referencia, cuerpo, False, monto, error="firma inválida",
         )
         return Response(status_code=status.HTTP_401_UNAUTHORIZED)
 
@@ -208,25 +219,115 @@ async def _aprobar(db: DBSession, pedido: PortalOrder, payment_id: str, monto: i
         await _cerrar_evento(db, payment_id)
         return
 
-    pedido.payment_status = "paid"
-    pedido.bold_payment_id = payment_id
-    pedido.paid_at = datetime.now(UTC)
+    if pedido.payment_status == "expired":
+        # Pagó tarde. **Se acepta igual**: el dinero entró, y rechazarlo sería
+        # quedarnos con el cobro sin entregar nada. Pero se avisa fuerte, porque
+        # entre el vencimiento y el pago el stock pudo haberse vendido a otro.
+        log.warning(
+            "BOLD · %s estaba VENCIDO y entró el pago igual — revisar existencias",
+            pedido.order_reference,
+        )
+
+    # La transición se hace con un UPDATE CONDICIONADO por el estado anterior, no
+    # leyendo y escribiendo. Entre el `if` de arriba y este commit caben milisegundos,
+    # y en esos milisegundos puede entrar la conciliación con el mismo pago: si los
+    # dos escribieran, se dispararía dos veces todo lo que viene después. Con el
+    # WHERE en el UPDATE, solo uno de los dos toca filas y el otro se entera.
+    marcado = await db.execute(
+        update(PortalOrder)
+        .where(
+            PortalOrder.id == pedido.id,
+            or_(PortalOrder.payment_status != "paid", PortalOrder.payment_status.is_(None)),
+        )
+        .values(
+            payment_status="paid",
+            bold_payment_id=payment_id,
+            paid_at=datetime.now(UTC),
+        )
+    )
     await db.commit()
+    if marcado.rowcount == 0:
+        log.info("BOLD · %s ya lo había marcado otro proceso", pedido.order_reference)
+        await _cerrar_evento(db, payment_id)
+        return
+
     log.info("BOLD · PAGADO %s · %s pesos", pedido.order_reference, monto)
 
-    # La cadena de siempre: puente a sales, puntos, referidos y avisos. Se reutiliza
-    # tal cual la del portal, que ya es idempotente, en vez de escribir una paralela.
-    from app.services.portal_order_actions import credit_loyalty_points
+    # AQUÍ NO SE ACREDITAN PUNTOS NI SE CREA LA VENTA, Y ES A PROPÓSITO.
+    #
+    # El encargo pedía ejecutar al pagar "la misma cadena que ya corre el portal".
+    # Mirando cómo funciona de verdad (admin_portal.py), esa cadena NO cuelga del
+    # pago sino del avance del pedido: `bridge_to_sales()` corre al FACTURAR y
+    # `credit_loyalty_points()` + el `purchase` a Google corren al ENTREGAR.
+    #
+    # Engancharlas al pago rompería el negocio en dos sitios: le daríamos puntos a
+    # alguien por algo que todavía no ha recibido —y como la función es idempotente,
+    # al entregar ya no se los daría, así que el error quedaría escondido—, y le
+    # contaríamos a Google una compra que aún puede cancelarse o devolverse.
+    #
+    # Pagar NO es haber recibido. El pago solo cambia el estado de pago; el resto del
+    # recorrido sigue exactamente igual que hasta hoy, y es el admin quien lo mueve.
+    await _avisar_pago(db, pedido, monto)
+    await _cerrar_evento(db, payment_id)
+
+
+async def _avisar_pago(db: DBSession, pedido: PortalOrder, monto: int | None) -> None:
+    """Avisa de un pedido PAGADO: al panel y al correo de la tienda.
+
+    Un pedido pagado no es un pedido más. Hasta hoy todos entraban sin pagar y
+    podían esperar; este ya tiene el dinero y al cliente hay que responderle. Por eso
+    lleva su propio tipo de notificación y su propio correo, en vez de confundirse
+    con los demás en la misma lista.
+
+    Se reutiliza `notify_admins()`, que ya inserta en `portal.notifications` y
+    publica en el canal de Redis, en vez de escribir un camino paralelo.
+
+    **Ningún fallo de aviso puede tumbar un pago ya cobrado.** El dinero ya entró y
+    el pedido ya está marcado; si el correo no sale, se registra y se sigue. Perder
+    el aviso es molesto, perder la venta es grave.
+    """
+    canal = "la tienda web" if (pedido.order_reference or "").startswith("BPW") else "el portal"
+    total = monto if monto is not None else int(pedido.total_amount or 0)
+    titulo = f"💳 Pedido PAGADO · ${total:,.0f}".replace(",", ".")
+    cuerpo = f"{pedido.product_name} · pagado en línea desde {canal}"
 
     try:
-        await credit_loyalty_points(pedido, db)
+        from app.api.v1.portal_notifications import notify_admins
+
+        await notify_admins(
+            db,
+            notif_type="web_order_paid",
+            title=titulo,
+            body=cuerpo,
+            data={
+                "order_id": str(pedido.id),
+                "order_reference": pedido.order_reference,
+                "total": total,
+                "canal": canal,
+                "pagado": True,
+            },
+        )
         await db.commit()
     except Exception:
-        # Un fallo acreditando puntos NO puede desandar un pago cobrado. Se registra
-        # y se sigue: el pedido está pagado y eso es lo que no se puede perder.
-        log.exception("BOLD · pago OK pero fallaron los puntos de %s", pedido.order_reference)
+        log.exception("BOLD · no se pudo avisar al panel de %s", pedido.order_reference)
 
-    await _cerrar_evento(db, payment_id)
+    try:
+        import asyncio
+
+        from app.services.email import STORE_EMAIL, send_email
+
+        html = (
+            f"<h2 style='color:#187f77'>Pedido pagado en línea</h2>"
+            f"<p><b>Referencia:</b> {pedido.order_reference}<br>"
+            f"<b>Total:</b> ${total:,.0f}".replace(",", ".") + "<br>"
+            f"<b>Origen:</b> {canal}<br>"
+            f"<b>Entrega:</b> {pedido.shipping_address or 'sin dirección'}</p>"
+            f"<p style='color:#555'>Ya está pagado. Entra al panel para alistarlo.</p>"
+        )
+        # send_email es síncrono y haría esperar al event loop: va a un hilo.
+        await asyncio.to_thread(send_email, STORE_EMAIL, titulo, html)
+    except Exception:
+        log.exception("BOLD · no se pudo enviar el correo de %s", pedido.order_reference)
 
 
 async def _marcar(db: DBSession, pedido: PortalOrder, estado: str, payment_id: str) -> None:
@@ -262,14 +363,47 @@ async def _cerrar_evento(db: DBSession, payment_id: str, error: str | None = Non
         await db.commit()
 
 
+_CONSULTAS: dict[str, deque[float]] = {}
+_MAX_CONSULTAS = 60
+_VENTANA_S = 60.0
+
+
+def _frenar_consultas(ip: str) -> None:
+    """Tope de consultas de estado por IP y minuto.
+
+    La página de confirmación pregunta cada 3 segundos durante 2 minutos, o sea 40
+    consultas legítimas por pago. El tope de 60 deja holgura para eso y corta un
+    script que quiera barrer referencias.
+    """
+    ahora = time.monotonic()
+    marcas = _CONSULTAS.setdefault(ip, deque())
+    while marcas and ahora - marcas[0] > _VENTANA_S:
+        marcas.popleft()
+    if len(marcas) >= _MAX_CONSULTAS:
+        raise HTTPException(status_code=429, detail="Demasiadas consultas, espera un momento")
+    marcas.append(ahora)
+    # Sin esto el diccionario crece con cada IP que pase por aquí y no baja nunca.
+    if len(_CONSULTAS) > 2000:
+        for k in [k for k, v in _CONSULTAS.items() if not v or ahora - v[-1] > _VENTANA_S * 5]:
+            _CONSULTAS.pop(k, None)
+
+
 @router.get("/payments/{referencia}/estado")
-async def estado_pago(referencia: str, db: DBSession) -> dict:
+async def estado_pago(referencia: str, request: Request, db: DBSession) -> dict:
     """Estado real del pago, para la página de confirmación.
 
     Devuelve lo MÍNIMO. La referencia viaja en la URL y en el enlace de pago, así
     que hay que asumir que alguien que no es el dueño puede llegar a verla: aquí no
     salen teléfono, dirección ni datos del cliente.
     """
+    _frenar_consultas(request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                      or (request.client.host if request.client else "?"))
+
+    # Se valida el formato ANTES de ir a la base: una referencia que no tiene nuestra
+    # forma no puede existir, y así no se gasta una consulta por cada intento.
+    if not _REFERENCIA_OK.match(referencia):
+        return {"encontrado": False, "estado": "desconocido"}
+
     pedido = (
         await db.execute(select(PortalOrder).where(PortalOrder.order_reference == referencia))
     ).scalar_one_or_none()
@@ -282,7 +416,9 @@ async def estado_pago(referencia: str, db: DBSession) -> dict:
         "referencia": pedido.order_reference,
         "estado": pedido.payment_status or "pending",
         "metodo": pedido.payment_method,
-        "total": int(pedido.total_amount or 0),
+        # `bold_amount` es el entero EXACTO que se cobró. `total_amount` es Numeric y
+        # pasarlo por int() lo trunca: un total de 76000.6 se mostraría como 76000.
+        "total": pedido.bold_amount or int(pedido.total_amount or 0),
         "pagado_en": pedido.paid_at.isoformat() if pedido.paid_at else None,
         # Para que la página sepa si seguir preguntando o dejar de hacerlo.
         "definitivo": (pedido.payment_status or "pending") != "pending",
