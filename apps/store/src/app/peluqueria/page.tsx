@@ -134,6 +134,14 @@ export default function PeluqueriaPage() {
               </li>
             </ul>
             <div className="mt-6 flex flex-wrap gap-3">
+              {/* El anuncio promete "agenda sin llamar", pero en el celular el formulario
+                  queda debajo del pliegue y aqui solo se veian WhatsApp y Llamar: las dos
+                  salidas que ALEJAN de la reserva. Este boton es la accion principal y va
+                  primero. En pantalla grande sobra, porque el formulario ya se ve al lado. */}
+              <a href="#reservar"
+                className="w-full rounded-2xl bg-[#F5A641] px-5 py-3.5 text-center font-extrabold text-[#0d4a45] shadow-lg transition-transform hover:brightness-105 active:scale-[0.98] sm:w-auto lg:hidden">
+                Reservar mi cita · 10% menos
+              </a>
               <a href={`https://wa.me/${BUSINESS_INFO.whatsapp}?text=${WA_TXT}`} target="_blank" rel="noopener noreferrer"
                 className="rounded-2xl bg-[#25D366] px-5 py-3 font-bold text-white shadow-md hover:brightness-95">
                 Preguntar por WhatsApp
