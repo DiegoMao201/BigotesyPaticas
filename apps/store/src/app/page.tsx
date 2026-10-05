@@ -285,6 +285,27 @@ export default async function HomePage() {
                   <MapPin className="h-4 w-4" /> Ver cómo llegar
                 </a>
               </div>
+              {/* ENLACE A LA PÁGINA DE ZONAS, Y NO ES DECORATIVO.
+                  La portada y /pereira-dosquebradas-mascotas se reparten la
+                  búsqueda más importante del negocio: 546 impresiones entre 8
+                  páginas en «tienda de mascotas dosquebradas» (Search Console, 90
+                  días), con la ganadora atascada en el puesto 7,7 porque la fuerza
+                  va dividida.
+                  El texto de un enlace interno es de las señales más claras que
+                  tiene Google para decidir qué página mostrar para una búsqueda.
+                  Con este, la portada deja de competir y pasa a señalar: "para eso,
+                  la buena es esta otra". Y al cliente le sirve igual, que es la
+                  única razón por la que merece estar aquí. */}
+              <p className="mt-4 text-sm text-muted-foreground leading-relaxed">
+                ¿Quieres saber si llegamos a tu barrio? Mira nuestra{' '}
+                <Link
+                  href="/pereira-dosquebradas-mascotas"
+                  className="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-500"
+                >
+                  tienda de mascotas en Pereira y Dosquebradas
+                </Link>{' '}
+                con las zonas de domicilio y los tiempos de entrega.
+              </p>
             </div>
             {/* Mapa */}
             <div className="md:col-span-3">

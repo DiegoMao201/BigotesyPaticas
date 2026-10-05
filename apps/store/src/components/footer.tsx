@@ -127,14 +127,32 @@ export function Footer() {
         </div>
 
         <div>
-          <h4 className="font-display font-semibold text-sm mb-4 uppercase tracking-wider">Ciudades</h4>
+          {/* ESTE BLOQUE ERA LA CANIBALIZACIÓN HECHA ESTRUCTURA (5-oct-2026).
+              Seis enlaces a landings geográficas con textos casi idénticos
+              —"Mascotas Pereira", "Mascotas Dosquebradas", "Pereira y
+              Dosquebradas"— en TODAS las páginas del sitio. Con eso le estábamos
+              diciendo a Google que teníamos seis páginas equivalentes para lo
+              mismo, y Google hacía lo lógico: repartir la fuerza entre las seis y
+              no subir ninguna.
+
+              Medido en Search Console (90 días): «tienda de mascotas dosquebradas»
+              repartía 546 impresiones entre 8 páginas y «tienda de mascotas
+              pereira» 454 entre 7, con la ganadora atascada en el puesto 7,7.
+
+              No se borra ninguna —eso sí perdería alcance—: cada enlace pasa a
+              describir LA BÚSQUEDA QUE ESA PÁGINA DEBE GANAR, que es distinta para
+              cada una. Y la ganadora va primera y con el texto completo, porque el
+              texto del enlace es de las señales más claras que tiene Google para
+              decidir qué página mostrar. */}
+          <h4 className="font-display font-semibold text-sm mb-4 uppercase tracking-wider">Dónde llegamos</h4>
           <ul className="space-y-2 text-sm">
-            <li><Link href="/landing/comida-perros-pereira" className="text-muted-foreground hover:text-brand">Mascotas Pereira</Link></li>
-            <li><Link href="/landing/concentrado-perro-dosquebradas" className="text-muted-foreground hover:text-brand">Mascotas Dosquebradas</Link></li>
-            <li><Link href="/landing/domicilio-mascotas-pereira" className="text-muted-foreground hover:text-brand">Domicilio Pereira</Link></li>
-            <li><Link href="/landing/domicilio-mascotas-dosquebradas" className="text-muted-foreground hover:text-brand">Domicilio Dosquebradas</Link></li>
-            <li><Link href="/pereira-dosquebradas-mascotas" className="text-muted-foreground hover:text-brand">Pereira y Dosquebradas</Link></li>
-            <li><Link href="/landing/tienda-mascotas-risaralda" className="text-muted-foreground hover:text-brand">Tienda Risaralda</Link></li>
+            <li><Link href="/pereira-dosquebradas-mascotas" className="text-muted-foreground hover:text-brand">Tienda de mascotas en Pereira y Dosquebradas</Link></li>
+            <li><Link href="/landing/comida-perros-pereira" className="text-muted-foreground hover:text-brand">Comida para perros en Pereira</Link></li>
+            <li><Link href="/landing/concentrado-perro-dosquebradas" className="text-muted-foreground hover:text-brand">Concentrado para perro en Dosquebradas</Link></li>
+            <li><Link href="/landing/domicilio-mascotas-pereira" className="text-muted-foreground hover:text-brand">Domicilio de mascotas en Pereira</Link></li>
+            <li><Link href="/landing/domicilio-mascotas-dosquebradas" className="text-muted-foreground hover:text-brand">Domicilio de mascotas en Dosquebradas</Link></li>
+            <li><Link href="/landing/mascotas-cuba-pereira" className="text-muted-foreground hover:text-brand">Pet shop en Cuba, Pereira</Link></li>
+            <li><Link href="/landing/tienda-mascotas-risaralda" className="text-muted-foreground hover:text-brand">Pet shop en Risaralda</Link></li>
           </ul>
         </div>
 
