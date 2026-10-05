@@ -101,10 +101,23 @@ async def webhook_bold(request: Request, db: DBSession, tareas: BackgroundTasks)
             "BOLD · firma INVÁLIDA · tipo=%s ref=%s firma=%s",
             tipo, referencia, bold.enmascarar(firma),
         )
-        # La clave es el HASH DEL CUERPO, no el reloj: así el mismo intento
-        # repetido choca contra el UNIQUE y no inserta. Con un id basado en la hora,
-        # quien repitiera la petición llenaría la tabla sin tope — un DoS barato.
-        clave = payment_id or f"invalida:{hashlib.sha256(raw).hexdigest()[:40]}"
+        # LA CLAVE DE UN EVENTO INVÁLIDO NUNCA PUEDE SER EL payment_id REAL.
+        #
+        # Encontrado probando en producción el 5-oct-2026, y es grave: la versión
+        # anterior usaba `payment_id or hash`, así que un evento con firma inválida
+        # que trajera un payment_id insertaba su fila con ESE id. Cuando después
+        # llegaba el webhook legítimo del mismo pago, chocaba contra el UNIQUE y se
+        # descartaba como "duplicado ya procesado" — y el pedido se quedaba sin
+        # confirmar para siempre.
+        #
+        # O sea: cualquiera que conociera o acertara un payment_id podía BLOQUEAR la
+        # confirmación de un pago real, sin firma y sin dejar más rastro que un 401.
+        # Un ataque barato contra el cobro, no contra el dato.
+        #
+        # El prefijo `invalida:` más el hash del cuerpo lo cierra por los dos lados:
+        # jamás colisiona con un evento legítimo, y el mismo intento repetido sigue
+        # chocando consigo mismo, que era lo que evitaba llenar la tabla.
+        clave = f"invalida:{hashlib.sha256(raw).hexdigest()[:40]}"
         await _registrar_evento(
             db, clave, tipo, referencia, cuerpo, False, monto, error="firma inválida",
         )
