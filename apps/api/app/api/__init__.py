@@ -100,6 +100,22 @@ api_router.include_router(public_orders.router, prefix="/v1")
 # Pagos con Bold: el webhook y la consulta de estado sirven IGUAL a la tienda y al
 # portal; el canal se distingue por el prefijo de la referencia (BPW- / BPP-).
 api_router.include_router(payments.router, prefix="/v1")
+
+# ALIAS BAJO /api/v1 — Y NO ES POR GUSTO.
+# Esta API se sirve SIN el prefijo /api: /v1/... es la ruta real. El /api que se ve
+# en el navegador lo pone el proxy de Next (apps/store/next.config.mjs reescribe
+# /api/v1/* hacia la API), así que desde fuera parece que existe y no existe.
+#
+# El 5-oct-2026 el webhook se registró en el panel de Bold como
+# https://api.bigotesypaticas.com/api/v1/webhooks/bold, con ese /api de más. En
+# cualquier otro endpoint eso sería un 404 evidente; aquí sería invisible: Bold
+# cobraría, reintentaría cinco veces contra una URL que no existe, y los pedidos se
+# quedarían sin confirmar sin que nadie viera un error. Lo rescataría la
+# conciliación, pero con minutos de retraso y por el camino de emergencia.
+#
+# Aceptar las dos rutas cuesta una línea y elimina de raíz una clase entera de
+# fallo: la de la URL mal escrita en un panel que no es nuestro.
+api_router.include_router(payments.router, prefix="/api/v1")
 api_router.include_router(portal_loyalty.router, prefix="/v1")
 api_router.include_router(portal_monitor.router, prefix="/v1")
 api_router.include_router(portal_intelligence.router, prefix="/v1")
