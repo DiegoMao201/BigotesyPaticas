@@ -319,25 +319,56 @@ async def _avisar_pago(db: DBSession, pedido: PortalOrder, monto: int | None) ->
     titulo = f"💳 Pedido PAGADO · ${total:,.0f}".replace(",", ".")
     cuerpo = f"{pedido.product_name} · pagado en línea desde {canal}"
 
+    log.info("BOLD · avisando del pago de %s", pedido.order_reference)
+    datos = {
+        "order_id": str(pedido.id),
+        "order_reference": pedido.order_reference,
+        "total": total,
+        "canal": canal,
+        "pagado": True,
+    }
+
+    # LA NOTIFICACIÓN SE INSERTA A MANO, NO POR notify_admins().
+    #
+    # En la prueba del 5-oct-2026 el aviso no aparecía y no dejaba ni una línea de
+    # error: el pago se confirmaba, el evento se cerraba, y la notificación
+    # sencillamente no existía. `notify_admins()` hace dos cosas —escribe en la base
+    # y publica en Redis— y bastaba con que la segunda se atascara para perder
+    # también la primera.
+    #
+    # Separarlas arregla eso de raíz: lo que Diego TIENE que ver queda escrito en la
+    # base pase lo que pase, y el empujón por Redis es un extra que puede fallar sin
+    # llevarse nada por delante.
+    try:
+        from app.models.portal import PortalNotification
+
+        db.add(
+            PortalNotification(
+                customer_id=None,
+                is_admin=True,
+                type="web_order_paid",
+                title=titulo,
+                body=cuerpo,
+                data=datos,
+            )
+        )
+        await db.commit()
+        log.info("BOLD · aviso guardado para %s", pedido.order_reference)
+    except Exception:
+        log.exception("BOLD · FALLO EL AVISO AL PANEL de %s", pedido.order_reference)
+        await db.rollback()
+
+    # El empujón en vivo, aparte y sin que su fallo arrastre nada.
     try:
         from app.api.v1.portal_notifications import notify_admins
 
         await notify_admins(
-            db,
-            notif_type="web_order_paid",
-            title=titulo,
-            body=cuerpo,
-            data={
-                "order_id": str(pedido.id),
-                "order_reference": pedido.order_reference,
-                "total": total,
-                "canal": canal,
-                "pagado": True,
-            },
+            db, notif_type="web_order_paid", title=titulo, body=cuerpo, data=datos
         )
         await db.commit()
     except Exception:
-        log.exception("BOLD · FALLO EL AVISO AL PANEL de %s", pedido.order_reference)
+        log.warning("BOLD · no se pudo publicar el aviso en vivo (el de la base sí quedó)")
+        await db.rollback()
 
     try:
         import asyncio
