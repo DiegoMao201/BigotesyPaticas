@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import ClassVar
 
-from sqlalchemy import CheckConstraint, Date, DateTime, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -62,3 +72,43 @@ class CashClosing(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
     notas: Mapped[str | None] = mapped_column(Text, nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
+class Expense(UUIDPKMixin, Base):
+    """Un gasto del negocio. Tabla propia desde el 5-oct-2026.
+
+    Antes vivían en `ops.legacy_id_map` dentro de un JSON: el monto era texto, la
+    fecha también, no había índices, y cada informe era una consulta frágil escrita
+    a mano que leía las 478 filas enteras para filtrarlas en Python.
+
+    DOS CAMPOS QUE DECIDEN SI EL ANÁLISIS SIRVE O NO:
+
+    - **`tipo`**: 'Operativo' (sostener la tienda abierta) o 'Mercancía' (lo que se
+      revende). La mercancía YA está descontada en el margen bruto; meterla en los
+      gastos fijos contaría el mismo peso dos veces e inflaría el punto de
+      equilibrio hasta volverlo inalcanzable.
+    - **`es_fijo`**: si se repite todos los meses. Es lo que separa el costo de
+      tener la tienda abierta de un imprevisto, y sin esa distinción el punto de
+      equilibrio mezcla peras con manzanas.
+    """
+
+    __tablename__ = "expenses"
+    __table_args__: ClassVar = {"schema": "finance"}
+
+    fecha: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    monto: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    categoria: Mapped[str] = mapped_column(String(60), nullable=False, default="Sin categoría")
+    tipo: Mapped[str] = mapped_column(String(30), nullable=False, default="Operativo")
+    descripcion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metodo_pago: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    banco_origen: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    es_fijo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_by: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    #: De dónde salió la fila al migrar desde el JSON. Permite rastrear el origen.
+    legacy_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )

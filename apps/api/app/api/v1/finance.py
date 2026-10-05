@@ -1293,3 +1293,174 @@ async def daily_goal(
         target_source=source,
         weekday_avg=round(weekday_avg, 2),
     )
+
+
+# ────────────────── Punto de equilibrio ──────────────────────
+
+class PuntoEquilibrioOut(BaseModel):
+    """Cuánto hay que vender para no perder plata, con los números reales."""
+
+    meses_analizados: int
+    gasto_mensual_promedio: float
+    gasto_por_categoria: list[dict[str, Any]]
+    ventas_mes_actual: float
+    venta_diaria_actual: float
+    margen_bruto_pct: float
+    ventas_90d: float
+    costo_90d: float
+    punto_equilibrio_mensual: float
+    punto_equilibrio_diario: float
+    dias_habiles_mes: int
+    sobre_equilibrio: float
+    estado: str
+    alerta_sin_categoria: float
+
+
+@expenses_router.get(
+    "/punto-equilibrio",
+    response_model=PuntoEquilibrioOut,
+    dependencies=[Depends(require_permission("finance:read"))],
+)
+async def punto_equilibrio(db: DBSession, user: CurrentUser, meses: int = Query(4, ge=2, le=12)):
+    """El número que de verdad dice si el negocio va bien.
+
+    Diego (5-oct-2026): *"necesito afinar mucho el informe de ventas, de dónde sale
+    el presupuesto diario, que tengamos claridad de cómo vamos, para dónde vamos y
+    cuál es nuestro punto de equilibrio con los gastos promedios mensuales"*.
+
+    LA CUENTA, Y POR QUÉ ES ASÍ:
+
+        punto de equilibrio = gastos fijos del mes ÷ margen bruto
+
+    El margen bruto sale de las ventas reales menos lo que costó esa mercancía
+    —no de un porcentaje supuesto—, porque es lo único que queda para pagar
+    arriendo, sueldos y todo lo demás. Vender más no sirve si se vende con un
+    margen que no cubre el local.
+
+    **Las compras de mercancía NO son gasto fijo aquí.** Ya están descontadas en el
+    margen; sumarlas otra vez contaría el mismo peso dos veces e inflaría el punto
+    de equilibrio hasta volverlo inalcanzable.
+
+    El mes en curso se excluye del promedio de gastos: está a medias y arrastraría
+    la media hacia abajo, haciendo parecer que se necesita vender menos de lo real.
+    """
+    hoy = date.today()
+    mes_actual = hoy.strftime("%Y-%m")
+
+    # ── Gastos: los meses COMPLETOS anteriores al actual ──
+    #
+    # Se agrupan EN LA BASE, no en Python. Antes esto se traía las 478 filas enteras
+    # y las recorría dos veces; con la tabla propia y su índice por fecha, la base
+    # devuelve una fila por mes.
+    #
+    # El mes en curso se excluye: está a medias y arrastraría la media hacia abajo,
+    # haciendo parecer que hace falta vender menos de lo real.
+    #
+    # Y se excluye `tipo = 'Mercancía'`: eso ya está descontado en el margen bruto, y
+    # sumarlo aquí contaría el mismo peso dos veces.
+    gastos_mes = (
+        await db.execute(
+            text("""
+                SELECT to_char(fecha, 'YYYY-MM') AS mes, sum(monto) AS total
+                FROM finance.expenses
+                WHERE to_char(fecha, 'YYYY-MM') < :mes_actual
+                  AND tipo <> 'Mercancía'
+                GROUP BY 1 ORDER BY 1 DESC LIMIT :n
+            """),
+            {"mes_actual": mes_actual, "n": meses},
+        )
+    ).all()
+
+    por_mes = {r.mes: float(r.total or 0) for r in gastos_mes}
+    meses_orden = sorted(por_mes.keys(), reverse=True)
+    n_meses = len(meses_orden) or 1
+    gasto_mensual = sum(por_mes.values()) / n_meses
+
+    por_cat: dict[str, float] = {}
+    sin_cat = 0.0
+    if meses_orden:
+        cats = (
+            await db.execute(
+                text("""
+                    SELECT categoria, sum(monto) AS total
+                    FROM finance.expenses
+                    WHERE to_char(fecha, 'YYYY-MM') = ANY(:meses)
+                      AND tipo <> 'Mercancía'
+                    GROUP BY 1 ORDER BY 2 DESC
+                """),
+                {"meses": meses_orden},
+            )
+        ).all()
+        for r in cats:
+            cat = r.categoria or "Sin categoría"
+            por_cat[cat] = float(r.total or 0)
+            if cat in ("Sin categoría", "Otros"):
+                sin_cat += float(r.total or 0)
+
+    # ── Margen bruto real: 90 días de ventas contra lo que costó esa mercancía ──
+    margen_row = (
+        await db.execute(
+            text("""
+                SELECT coalesce(sum(oi.line_total), 0) AS venta,
+                       coalesce(sum(coalesce(p.cost, 0) * oi.quantity), 0) AS costo
+                FROM sales.order_items oi
+                JOIN sales.orders o ON o.id = oi.order_id
+                LEFT JOIN catalog.products p ON p.id = oi.product_id
+                WHERE o.occurred_at > now() - interval '90 days'
+                  AND o.status <> 'cancelled'
+            """)
+        )
+    ).one()
+    venta_90 = float(margen_row.venta or 0)
+    costo_90 = float(margen_row.costo or 0)
+    margen_pct = ((venta_90 - costo_90) / venta_90 * 100) if venta_90 > 0 else 0.0
+
+    # ── Ventas del último mes y su ritmo diario ──
+    v_row = (
+        await db.execute(
+            text("""
+                SELECT coalesce(sum(grand_total), 0) AS total,
+                       count(DISTINCT date(occurred_at)) AS dias
+                FROM sales.orders
+                WHERE occurred_at > now() - interval '30 days' AND status <> 'cancelled'
+            """)
+        )
+    ).one()
+    ventas_mes = float(v_row.total or 0)
+    dias_venta = int(v_row.dias or 0) or 26
+
+    # ── La cuenta ──
+    pe_mes = (gasto_mensual / (margen_pct / 100)) if margen_pct > 0 else 0.0
+    pe_dia = pe_mes / dias_venta if dias_venta else 0.0
+    sobre = ventas_mes - pe_mes
+
+    if margen_pct <= 0:
+        estado = "sin_datos"
+    elif sobre < 0:
+        estado = "en_perdida"
+    elif sobre < pe_mes * 0.1:
+        estado = "ajustado"  # menos del 10% de colchón
+    else:
+        estado = "sano"
+
+    return PuntoEquilibrioOut(
+        meses_analizados=n_meses,
+        gasto_mensual_promedio=round(gasto_mensual, 2),
+        gasto_por_categoria=[
+            {"categoria": c, "total": round(v, 2), "mensual": round(v / n_meses, 2)}
+            for c, v in sorted(por_cat.items(), key=lambda x: -x[1])
+        ],
+        ventas_mes_actual=round(ventas_mes, 2),
+        venta_diaria_actual=round(ventas_mes / dias_venta, 2) if dias_venta else 0.0,
+        margen_bruto_pct=round(margen_pct, 2),
+        ventas_90d=round(venta_90, 2),
+        costo_90d=round(costo_90, 2),
+        punto_equilibrio_mensual=round(pe_mes, 2),
+        punto_equilibrio_diario=round(pe_dia, 2),
+        dias_habiles_mes=dias_venta,
+        sobre_equilibrio=round(sobre, 2),
+        estado=estado,
+        # Lo que está en "Otros"/"Sin categoría" no se puede analizar. Si es mucho,
+        # el diagnóstico pierde precisión y conviene saberlo antes de confiar en él.
+        alerta_sin_categoria=round(sin_cat / n_meses, 2),
+    )
