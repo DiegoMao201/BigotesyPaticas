@@ -1,10 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import { orders } from '@/lib/api';
+import { usePortalCart } from '@/lib/cart-store';
 import { formatCOP, formatRelativeDate } from '@/lib/utils';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { PageHeader } from '@/components/ui/page-header';
@@ -18,6 +22,27 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export default function OrdersPage() {
+  // VUELVE DE PAGAR: se vacía el carrito del portal.
+  //
+  // El cliente paga en bigotesypaticas.com y vuelve aquí, a mi.bigotesypaticas.com.
+  // Son dominios distintos, así que la página de pago NO puede tocar este carrito:
+  // cada uno tiene su propio almacenamiento. Por eso la confirmación devuelve con
+  // `?pagado=BPP-…` y el vaciado se hace aquí.
+  //
+  // Diego, tras el primer pago real en la tienda: "el producto seguía en el carrito…
+  // eso confunde porque el pago ya se hizo". El riesgo real no es la confusión: es
+  // que lo vuelva a pagar.
+  const paramsPago = useSearchParams();
+  const vaciarCarrito = usePortalCart((st) => st.clear);
+  useEffect(() => {
+    if (paramsPago.get('pagado')) {
+      vaciarCarrito();
+      toast.success('¡Pago confirmado! Tu pedido ya está en camino 🎉');
+      // Se limpia la URL para que al recargar no vuelva a saludar.
+      window.history.replaceState({}, '', '/orders');
+    }
+  }, [paramsPago, vaciarCarrito]);
+
   const { data, isLoading } = useQuery({
     queryKey: ['portal-orders', 1],
     queryFn: () => orders.list(1),

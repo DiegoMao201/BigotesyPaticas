@@ -18,6 +18,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCart } from '@/lib/cart-store';
 
 const CADA_MS = 3000;
 const HASTA_MS = 120_000;
@@ -38,6 +39,26 @@ export function EstadoDelPago() {
   const [estado, setEstado] = useState<Estado | null>(null);
   const [agotado, setAgotado] = useState(false);
   const desde = useRef(Date.now());
+  const vaciarCarrito = useCart((s) => s.clear);
+  const yaVaciado = useRef(false);
+
+  // EL CARRITO SE VACÍA CUANDO EL PAGO SE CONFIRMA, Y SOLO ENTONCES.
+  //
+  // Diego, tras el primer pago real: "al darle volver a la tienda el producto seguía
+  // en el carrito... eso confunde porque el pago ya se hizo, la venta se realizó".
+  // Tenía razón: ver lo que acabas de comprar todavía en el carrito hace dudar de si
+  // el pago entró, y el riesgo real es que vuelva a pagarlo.
+  //
+  // No se vacía antes de salir a pagar, a propósito: quien abandona el checkout a
+  // medio camino debe encontrar su carrito intacto al volver, o se pierde la venta
+  // por un detalle. El momento correcto es este: cuando el servidor —no la URL—
+  // confirma que el dinero entró.
+  useEffect(() => {
+    if (estado?.estado === 'paid' && !yaVaciado.current) {
+      yaVaciado.current = true;
+      vaciarCarrito();
+    }
+  }, [estado?.estado, vaciarCarrito]);
 
   const preguntar = useCallback(async () => {
     if (!referencia) return true;
@@ -105,7 +126,7 @@ export function EstadoDelPago() {
       <Mensaje
         icono="✅"
         titulo="¡Pago confirmado!"
-        texto={`Recibimos tu pago${monto ? ` de ${monto}` : ''}. Ya estamos alistando tu pedido y te escribimos por WhatsApp cuando salga para tu casa.`}
+        texto={`Recibimos tu pago${monto ? ` de ${monto}` : ''}. Tu pedido ya está hecho y lo estamos alistando: te escribimos por WhatsApp cuando salga para tu casa. Vaciamos tu carrito porque esta compra ya quedó registrada.`}
         referencia={estado.referencia}
         tono="bien"
       />
@@ -168,6 +189,7 @@ function Mensaje({
   // porque algo de su pago le preocupa; obligarle a teclear un código que no tiene
   // a mano es ponerle un obstáculo justo en ese momento. Y a quien atiende le llega
   // la pregunta con el dato que necesita para responder.
+  const esDelPortal = (referencia ?? '').startsWith('BPP-');
   const texto_wa = referencia
     ? `Hola! Acabo de pagar en la página. Mi pedido es ${referencia} 🐾`
     : 'Hola! Tengo una pregunta sobre mi pedido 🐾';
@@ -187,12 +209,25 @@ function Mensaje({
         </p>
       )}
       <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
-        <Link
-          href="/categorias/todos"
-          className="rounded-xl bg-[#187f77] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0d4a45]"
-        >
-          Seguir comprando
-        </Link>
+        {/* Quien vino del PORTAL vuelve al portal, no al catálogo de la tienda: es
+            donde están sus pedidos, sus puntos y sus mascotas. El `?pagado=` es lo
+            que le dice al portal que vacíe su carrito — son dominios distintos y
+            esta página no puede tocarlo desde aquí. */}
+        {esDelPortal ? (
+          <a
+            href={`https://mi.bigotesypaticas.com/orders?pagado=${encodeURIComponent(referencia ?? '')}`}
+            className="rounded-xl bg-[#187f77] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0d4a45]"
+          >
+            Ver mi pedido en el portal
+          </a>
+        ) : (
+          <Link
+            href="/categorias/todos"
+            className="rounded-xl bg-[#187f77] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0d4a45]"
+          >
+            Seguir comprando
+          </Link>
+        )}
         <a
           href={waUrl}
           target="_blank"
