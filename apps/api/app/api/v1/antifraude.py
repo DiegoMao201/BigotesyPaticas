@@ -31,7 +31,20 @@ from app.deps import CurrentUser, DBSession, require_permission
 from app.models.portal import Chargeback, PortalOrder
 
 log = logging.getLogger(__name__)
-router = APIRouter(prefix="/admin", tags=["admin"])
+# LA PROTECCIÓN VA EN EL ROUTER, NO ENDPOINT POR ENDPOINT.
+#
+# Se desplegó una vez sin esto y los dos GET quedaron PÚBLICOS: cualquiera podía leer
+# las referencias de los pedidos marcados, sus montos y las tarjetas enmascaradas.
+# `admin_portal` lo hace así —`dependencies` en el APIRouter— y copiar solo el prefijo
+# sin copiar el candado fue el error.
+#
+# Puesto aquí, un endpoint nuevo nace protegido aunque a quien lo escriba se le
+# olvide; puesto uno por uno, el que se olvide queda abierto y nadie lo nota.
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(require_permission("crm:read"))],
+)
 
 #: El techo que Bold tolera antes de poder retener saldos. No es un número nuestro:
 #: está en su manual de ventas no presenciales.

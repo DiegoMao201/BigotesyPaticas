@@ -9,14 +9,14 @@ import uuid
 from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select, update
 
 from app.api.v1.portal_auth import PortalUser
 from app.config import get_settings
-from app.deps import DBSession
+from app.deps import DBSession, require_permission
 from app.models.crm import Customer
 from app.models.portal import PortalNotification
 
@@ -259,7 +259,24 @@ async def disk_alert_internal(request: Request, db: DBSession) -> dict:
 
 # ── SSE para admin ─────────────────────────────────────────────────────────────
 
-admin_router = APIRouter(prefix="/admin/portal-events", tags=["admin"])
+# ESTE FLUJO ESTABA ABIERTO A INTERNET (descubierto el 8-oct-2026).
+#
+# Es un SSE suscrito a `admin:notify`: por ahí viaja CADA aviso del panel —pedidos
+# nuevos con su monto, citas, clientes, pagos confirmados y, desde hoy, las alertas
+# de riesgo con el fragmento de tarjeta. Sin candado, cualquiera con la URL podía
+# escuchar el negocio en vivo.
+#
+# Se cierra con `crm:read` y no rompe nada: **ninguna app lo consume** —no hay un
+# solo `EventSource` en admin, portal, store ni aliados—. Era una fuga sin dueño.
+#
+# Si algún día se usa desde el navegador, ojo: `EventSource` NO puede mandar
+# cabeceras, así que habrá que pasar el token por la query y validarlo aquí. Dejarlo
+# abierto "porque SSE no admite cabeceras" no es una opción.
+admin_router = APIRouter(
+    prefix="/admin/portal-events",
+    tags=["admin"],
+    dependencies=[Depends(require_permission("crm:read"))],
+)
 
 
 @admin_router.get("")
