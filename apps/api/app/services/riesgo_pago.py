@@ -52,6 +52,27 @@ HORA_NORMAL_HASTA = 22
 #: es de otro orden y marcarlos igual que una tarjeta sería gritar por todo.
 MEDIOS_AUTENTICADOS = {"PSE", "NEQUI", "DAVIPLATA", "BANCOLOMBIA", "BOTON_BANCOLOMBIA", "QR"}
 
+#: Los dos nombres con que Bold manda una tarjeta. **`CARD_WEB` es el de la tienda**
+#: —se vio en el pago real de $102.000 del 5-oct— y `CARD` el del datáfono. Mirar solo
+#: "CARD" dejaba sin marcar justo el canal que importa: el no presencial.
+MEDIOS_TARJETA = {"CARD", "CARD_WEB"}
+
+
+def enmascarado(valor) -> bool:
+    """¿Bold tapó este campo?
+
+    En varios eventos Bold devuelve literalmente `"XXXX"` en lugar del dato: marca,
+    tipo de tarjeta, cuotas, nombre del titular y hasta el `masked_pan`. Tratarlo
+    como un valor real es peligroso, no solo inútil: si se guardara "XXXX" como
+    número de tarjeta, **todos los pagos web compartirían el mismo** y la regla de
+    "la misma tarjeta en varios clientes" se dispararía en cada venta. Una alarma que
+    suena siempre es una alarma apagada.
+    """
+    if not isinstance(valor, str):
+        return False
+    v = valor.strip().lower()
+    return not v or "xxx" in v
+
 ALTO = 50
 MEDIO = 25
 
@@ -88,8 +109,8 @@ async def _evaluar(db, pedido: PortalOrder, datos: dict) -> tuple[str, int, list
     senales: list[Senal] = []
     tarjeta = (datos.get("card") or {})
     medio = (datos.get("payment_method") or "").upper()
-    tipo_tarjeta = (tarjeta.get("card_type") or "").upper()
-    pan = tarjeta.get("masked_pan") or None
+    tipo_tarjeta = "" if enmascarado(tarjeta.get("card_type")) else (tarjeta.get("card_type") or "").upper()
+    pan = None if enmascarado(tarjeta.get("masked_pan")) else (tarjeta.get("masked_pan") or None)
     correo = (datos.get("payer_email") or "").strip().lower() or None
     monto = int(pedido.bold_amount or 0)
 
@@ -99,10 +120,16 @@ async def _evaluar(db, pedido: PortalOrder, datos: dict) -> tuple[str, int, list
         return "bajo", 0, []
 
     # ── 1. El medio de pago: aquí vive casi todo el riesgo ───────────────────
-    if medio == "CARD" and tipo_tarjeta == "CREDIT":
-        senales.append(Senal("tarjeta_credito", 15,
-                             "Tarjeta de crédito sin presencia física: es el único medio "
-                             "donde cabe 'no reconozco esta compra'."))
+    if medio in MEDIOS_TARJETA:
+        # Si Bold tapó el tipo, NO se puede descartar que sea crédito, y en duda se
+        # asume el caso que cuesta plata. Pesa igual: lo que crea el riesgo es que la
+        # tarjeta no estuvo presente, no si es crédito o débito.
+        detalle = ("Tarjeta de crédito" if tipo_tarjeta == "CREDIT"
+                   else "Tarjeta (Bold no informa si es crédito)" if not tipo_tarjeta
+                   else f"Tarjeta {tipo_tarjeta.lower()}")
+        senales.append(Senal("tarjeta_no_presente", 15,
+                             f"{detalle} sin presencia física: es el único medio donde "
+                             "cabe 'no reconozco esta compra'."))
     elif medio in MEDIOS_AUTENTICADOS:
         senales.append(Senal("medio_autenticado", -20,
                              f"Pagó por {medio}: se autenticó en su propio banco, "
@@ -221,17 +248,20 @@ def extraer_senales(datos: dict) -> dict:
     """
     tarjeta = datos.get("card") or {}
     cuotas = tarjeta.get("installments")
+
+    def limpio(valor):
+        """Nada enmascarado entra a la base: un `"XXXX"` guardado es peor que un vacío,
+        porque parece un dato y se cruza con los demás."""
+        return None if enmascarado(valor) else (valor or None)
+
     return {
-        "bold_payment_method": (datos.get("payment_method") or None),
-        "bold_integration": (datos.get("integration") or None),
-        "bold_card_type": (tarjeta.get("card_type") or None),
-        "bold_card_brand": (tarjeta.get("brand") or None),
-        "bold_masked_pan": (tarjeta.get("masked_pan") or None),
-        # Bold enmascara el correo en algunos canales ("XXXX@XXX.XX"): eso no es un
-        # correo y guardarlo solo ensucia el cruce.
-        "bold_payer_email": (
-            c if (c := (datos.get("payer_email") or "").strip().lower())
-            and "xxx" not in c else None
-        ),
+        "bold_payment_method": limpio(datos.get("payment_method")),
+        "bold_integration": limpio(datos.get("integration")),
+        "bold_card_type": limpio(tarjeta.get("card_type")),
+        "bold_card_brand": limpio(tarjeta.get("brand")),
+        "bold_masked_pan": limpio(tarjeta.get("masked_pan")),
+        "bold_payer_email": limpio((datos.get("payer_email") or "").strip().lower()),
+        # Bold manda las cuotas como "XXXX" cuando las tapa: solo se acepta un entero
+        # de verdad. Un `int("XXXX")` aquí reventaría la evaluación entera.
         "bold_installments": int(cuotas) if isinstance(cuotas, int) else None,
     }
