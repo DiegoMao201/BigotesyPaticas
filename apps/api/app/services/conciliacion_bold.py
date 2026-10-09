@@ -121,7 +121,22 @@ async def conciliar_una_vez() -> dict:
                     creado = creado.replace(tzinfo=UTC)
                 if creado and (ahora - creado) > timedelta(minutes=VENCIMIENTO_MIN):
                     pedido.payment_status = "expired"
+                    # Y SE CIERRA EL TRÁMITE, no solo el pago.
+                    #
+                    # Marcar `payment_status='expired'` dejando el `workflow_status`
+                    # en 'received' no sirve de nada: el aviso del panel cuenta por
+                    # workflow, así que el pedido seguía gritando "pendiente" para
+                    # siempre. Un enlace que nadie pagó no es trabajo por hacer.
+                    pedido.workflow_status = "cancelled"
+                    pedido.status = "cancelled"
+                    nota = (f"[{ahora.strftime('%d/%m %H:%M')}] Vencido: nadie pagó el "
+                            f"enlace en {VENCIMIENTO_MIN} min.")
+                    pedido.internal_notes = (
+                        f"{(pedido.internal_notes or '').strip()}\n{nota}".strip()
+                    )
                     await db.commit()
+                    log.info("BOLD · %s vencido y cerrado: nadie lo pagó",
+                             pedido.order_reference)
                     resumen["vencidos"] += 1
 
             # PROCESSING y PENDING (PSE) se dejan como están: siguen en curso.

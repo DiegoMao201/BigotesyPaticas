@@ -727,10 +727,25 @@ PENDING_WORKFLOW_STATUSES = [
 @router.get("/orders/pending-summary")
 async def pending_orders_summary(db: DBSession) -> dict:
     """Resumen liviano para el aviso global de pedidos del portal sin gestionar."""
+    # UN ENLACE DE PAGO SIN PAGAR NO ES TRABAJO POR HACER.
+    #
+    # Los cobros de origen 'libre' y 'link' se crean ANTES de que el cliente pague:
+    # alguien abre la página de pago, escribe su nombre y se va, y queda un registro
+    # fantasma avisando para siempre. A Diego le sonó un día entero por una prueba
+    # suya de $50.000 que nunca pagó (9-oct-2026).
+    #
+    # Pagado sí cuenta: ahí sí hay algo que hacer —asignarlo a su venta—.
     rows = (
         await db.execute(
             select(PortalOrder.id, PortalOrder.created_at)
-            .where(PortalOrder.workflow_status.in_(PENDING_WORKFLOW_STATUSES))
+            .where(
+                PortalOrder.workflow_status.in_(PENDING_WORKFLOW_STATUSES),
+                or_(
+                    PortalOrder.origen.not_in(("libre", "link")),
+                    PortalOrder.origen.is_(None),
+                    PortalOrder.payment_status == "paid",
+                ),
+            )
             .order_by(PortalOrder.created_at.desc())
         )
     ).all()

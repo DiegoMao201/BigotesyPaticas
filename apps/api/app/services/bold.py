@@ -181,9 +181,31 @@ async def consultar_voucher(referencia: str) -> dict:
 
     datos = r.json() or {}
     payload = datos.get("payload") or datos
+    # EL CAMPO SE LLAMA `payment_status`, Y NINGÚN OTRO.
+    #
+    # Hasta el 9-oct-2026 esto leía `status` o `transaction_status`, que Bold no
+    # manda: el estado SIEMPRE salía "DESCONOCIDO" y la conciliación no entraba en
+    # ninguna de sus ramas. O sea, **la red de seguridad nunca funcionó**: ni rescataba
+    # un pago cuyo webhook se hubiera perdido, ni vencía un enlace que nadie pagó.
+    #
+    # Se descubrió por el síntoma más tonto: a Diego le sonaba un aviso de "pedido
+    # pendiente" que no existía. Era un enlace de prueba suyo, sin pagar, que llevaba
+    # un día entero sin poder vencerse.
+    #
+    # Verificado contra la API real con cuatro referencias: `payment_status` vale
+    # APPROVED en el pago de Mabel y NO_TRANSACTION_FOUND en los no pagados;
+    # `status` y `transaction_status` vienen vacíos SIEMPRE.
+    estado = (
+        payload.get("payment_status")
+        or payload.get("status")
+        or payload.get("transaction_status")
+        or "DESCONOCIDO"
+    )
     return {
-        "estado": (payload.get("status") or payload.get("transaction_status") or "DESCONOCIDO"),
-        "payment_id": payload.get("payment_id") or payload.get("id"),
+        "estado": str(estado).upper(),
+        # Bold lo llama `transaction_id` en el voucher, no `payment_id`.
+        "payment_id": (payload.get("transaction_id") or payload.get("payment_id")
+                       or payload.get("id")),
         "monto": payload.get("total") or payload.get("amount"),
         "http": 200,
         "crudo": payload,
