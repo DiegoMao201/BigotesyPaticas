@@ -40,7 +40,7 @@ from app.api.v1.portal_appointments import _TZ_CO
 from app.deps import DBSession
 from app.models.catalog import Product
 from app.models.portal import PortalOrder, PortalOrderItem
-from app.services import bold
+from app.services import bold, cobertura
 from app.services.citas import cliente_por_telefono, limpiar
 
 log = logging.getLogger(__name__)
@@ -257,7 +257,15 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
         p = productos[uuid.UUID(it.product_id)]
         subtotal += Decimal(str(p.price or 0)) * it.quantity
 
-    envio, envio_texto = _domicilio(subtotal, payload.km)
+    # ── COBERTURA VERIFICADA EN EL SERVIDOR ──────────────────────────────────
+    # Hasta hoy la distancia venía en el cuerpo de la petición y se creía tal cual:
+    # un `km: 1` escrito a mano habilitaba el cobro de un pedido a 400 km. Ahora el
+    # servidor geocodifica la dirección con Google y recalcula la distancia él mismo.
+    # El `payload.km` del navegador solo se usa para pintar, nunca para decidir.
+    veredicto = await cobertura.verificar(payload.direccion, payload.lat, payload.lng)
+    km_real = veredicto.km if veredicto.km is not None else payload.km
+
+    envio, envio_texto = _domicilio(subtotal, km_real)
     total = subtotal + envio
 
     ahora = datetime.now(_TZ_CO)
@@ -270,8 +278,12 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
         direccion.append(payload.direccion.strip())
     if payload.lat is not None and payload.lng is not None:
         direccion.append(f"https://www.google.com/maps?q={payload.lat:.6f},{payload.lng:.6f}")
-    if payload.km is not None:
-        direccion.append(f"a {payload.km:.1f} km del local")
+    if km_real is not None:
+        direccion.append(f"a {km_real:.1f} km del local")
+    if veredicto.verificada_por_google and veredicto.direccion_normalizada:
+        # La dirección tal como Google la entiende. Vale para el domiciliario y vale
+        # como evidencia si algún día hay que demostrar a dónde se entregó.
+        direccion.append(f"[Google: {veredicto.direccion_normalizada}]")
 
     notas = [f"Pedido desde la tienda web · Tel: {tel}", envio_texto]
     if payload.notes and payload.notes.strip():
@@ -289,7 +301,7 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
     # El cobro anticipado solo se permite dentro de la zona de reparto. Si no, el
     # pedido entra igual pero como contraentrega/WhatsApp, y la respuesta dice POR QUE
     # —el front necesita el motivo para explicárselo al cliente en sus palabras.
-    en_zona, motivo_sin_pago = _puede_pagar_en_linea(payload.km)
+    en_zona, motivo_sin_pago = veredicto.cobrable, veredicto.motivo
     paga_en_linea = (
         payload.payment_method == "bold" and bold.esta_configurado() and en_zona
     )
@@ -388,7 +400,12 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
         "pago_en_linea_bloqueado": (
             motivo_sin_pago if (payload.payment_method == "bold" and not paga_en_linea) else None
         ),
-        "fuera_de_zona": payload.km is not None and payload.km > RADIO_MAX_KM,
+        # Lo decide el SERVIDOR, no el navegador: si el cliente manda km=1 para una
+        # direccion de Bogota, aqui sigue saliendo fuera de zona.
+        "fuera_de_zona": km_real is not None and km_real > RADIO_MAX_KM,
+        # Que tan segura es la ubicacion. El front lo usa para decir "verificamos tu
+        # direccion" en vez de dejar al cliente con la duda.
+        "cobertura": veredicto.dict(),
         # Desglose, para que el cliente vea de dónde sale cada peso.
         "envio_texto": envio_texto,
     }
