@@ -1500,6 +1500,42 @@ export interface PortalOrderDetail {
   /** cambios del admin que el cliente todavía no conoce */
   unsent_changes?: { action: string; changes: Record<string, unknown> | null; notes: string | null; created_at: string }[];
   pending_notification?: PendingNotification;
+  // ── Antifraude (8-oct-2026) ───────────────────────────────────────────────
+  /** bajo | medio | alto — solo lo traen los pedidos pagados en línea */
+  risk_level?: string | null;
+  risk_score?: number | null;
+  risk_flags?: RiskFlag[];
+  risk_cleared_at?: string | null;
+  risk_cleared_by?: string | null;
+  risk_cleared_note?: string | null;
+  payment_status?: string | null;
+  order_reference?: string | null;
+  bold_payment_method?: string | null;
+  bold_card_type?: string | null;
+  bold_card_brand?: string | null;
+  bold_masked_pan?: string | null;
+  bold_payer_email?: string | null;
+  delivered_to_name?: string | null;
+  delivered_to_doc?: string | null;
+  delivery_evidence_url?: string | null;
+  delivery_notes?: string | null;
+}
+
+/** Una señal de riesgo que se disparó, con cuánto pesó y cómo se le explica a un humano. */
+export interface RiskFlag {
+  codigo: string;
+  puntos: number;
+  texto: string;
+}
+
+/** Lo que se guarda al entregar un pedido pagado en línea: el expediente con el que
+ *  se pelea un contracargo. Bold pide exactamente esto —quién recibió, soporte de
+ *  entrega— y sin ello la disputa se pierde de entrada. */
+export interface DeliveryEvidence {
+  delivered_to_name?: string;
+  delivered_to_doc?: string;
+  delivery_evidence_url?: string;
+  delivery_notes?: string;
 }
 
 export interface ActivityLogEntry {
@@ -1644,10 +1680,18 @@ export const adminPortal = {
   // Sprint-2: order detail + workflow
   orderDetail: (id: string) => api<PortalOrderDetail>(`/v1/admin/portal/orders/${id}/detail`),
   orderActivity: (id: string) => api<ActivityLogEntry[]>(`/v1/admin/portal/orders/${id}/activity`),
-  changeWorkflow: (id: string, new_status: string, internal_notes?: string) =>
+  changeWorkflow: (
+    id: string, new_status: string, internal_notes?: string, evidencia?: DeliveryEvidence,
+  ) =>
     api<{ ok: boolean; workflow_status: string; pending_notification?: PendingNotification }>(
       `/v1/admin/portal/orders/${id}/workflow`,
-      { method: 'PATCH', body: JSON.stringify({ new_status, internal_notes }) }
+      { method: 'PATCH', body: JSON.stringify({ new_status, internal_notes, ...evidencia }) }
+    ),
+  /** Marca que un pedido de riesgo ya se verificó por teléfono y puede salir. */
+  liberarRiesgo: (id: string, nota: string) =>
+    api<{ ok: boolean; risk_cleared_at: string; risk_cleared_by: string }>(
+      `/v1/admin/portal/orders/${id}/riesgo`,
+      { method: 'PATCH', body: JSON.stringify({ nota }) }
     ),
   editItemQty: (orderId: string, itemId: string, new_quantity: number, reason?: string) =>
     api<PortalOrderDetail>(`/v1/admin/portal/orders/${orderId}/items/${itemId}/quantity`,

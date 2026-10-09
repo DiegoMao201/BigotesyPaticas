@@ -6,6 +6,7 @@ from app.api.v1 import (
     admin_etl,
     admin_partners,
     admin_portal,
+    antifraude,
     adoption,
     analytics,
     auth,
@@ -128,6 +129,7 @@ api_router.include_router(portal_notifications.router, prefix="/v1")
 api_router.include_router(portal_notifications.admin_router, prefix="/v1")
 api_router.include_router(portal_service_status.router, prefix="/v1")
 api_router.include_router(portal_location.router, prefix="/v1")
+api_router.include_router(antifraude.router, prefix="/v1")
 api_router.include_router(admin_portal.router, prefix="/v1")
 # Fase 1 comunidad: SOS mascotas perdidas
 # rescues.router (prefix /sos/rescues) DEBE registrarse antes que sos.router:

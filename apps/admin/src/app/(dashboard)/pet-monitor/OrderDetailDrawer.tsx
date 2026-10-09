@@ -22,8 +22,9 @@ import {
   Percent, UserCheck, XCircle, Clock,
   CheckCircle2, AlertCircle, Copy, Send, SkipForward,
   AlertTriangle, Minus, Plus, Trash2, Repeat, PackagePlus, Pencil, Lock, Bell, Undo2,
+  ShieldAlert, ShieldCheck,
 } from 'lucide-react';
-import { adminPortal, ApiError, type PortalOrderDetail, type PendingNotification, type Product } from '@/lib/api';
+import { adminPortal, ApiError, type PortalOrderDetail, type PendingNotification, type Product, type DeliveryEvidence } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { openWhatsApp, getWhatsAppMode, setWhatsAppMode, copyText, type WhatsAppMode } from '@/lib/whatsapp';
 import { ProductPickerModal } from '@/components/ProductPickerModal';
@@ -155,6 +156,8 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
   const [showWrite, setShowWrite] = useState(false);
   const [writeText, setWriteText] = useState('');
   const [approvalChannel, setApprovalChannel] = useState('phone_call');
+  const [notaLiberar, setNotaLiberar] = useState('');
+  const [pidiendoEvidencia, setPidiendoEvidencia] = useState(false);
   const [waMode, setWaModeState] = useState<WhatsAppMode>(() => (typeof window === 'undefined' ? 'web' : getWhatsAppMode()));
 
   const { data: order, isLoading } = useQuery({
@@ -176,9 +179,20 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
   };
   const onErr = (e: Error) => toast.error(e.message);
 
+  const liberarMut = useMutation({
+    mutationFn: (nota: string) => adminPortal.liberarRiesgo(orderId, nota),
+    onSuccess: () => {
+      toast.success('Pedido verificado: ya se puede entregar');
+      setNotaLiberar('');
+      invalidate();
+    },
+    onError: onErr,
+  });
+
   const workflowMut = useMutation({
-    mutationFn: ({ status, notes }: { status: string; notes?: string }) =>
-      adminPortal.changeWorkflow(orderId, status, notes),
+    mutationFn: ({ status, notes, evidencia }:
+      { status: string; notes?: string; evidencia?: DeliveryEvidence }) =>
+      adminPortal.changeWorkflow(orderId, status, notes, evidencia),
     onSuccess: (d) => {
       toast.success(`Estado → ${WORKFLOW_LABELS[d.workflow_status]?.label ?? d.workflow_status}`);
       invalidate();
@@ -335,6 +349,20 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
           <span className="text-gray-600">Envío: <strong>{order.shipping === 0 ? 'Gratis' : formatCurrency(order.shipping)}</strong></span>
           <span className="font-bold text-teal-800">Total: {formatCurrency(order.total)}</span>
         </div>
+
+        {/* ── Semáforo antifraude ────────────────────────────────────────────
+            Va aquí, pegado al total y antes de cualquier botón, porque la
+            decisión que informa es "¿esto sale de la tienda o no?". Más abajo
+            nadie la leería a tiempo. */}
+        {order.risk_level && order.risk_level !== 'bajo' && (
+          <BanderaRiesgo
+            order={order}
+            nota={notaLiberar}
+            setNota={setNotaLiberar}
+            onLiberar={() => liberarMut.mutate(notaLiberar)}
+            liberando={liberarMut.isPending}
+          />
+        )}
 
         {!canEditItems && ws !== 'cancelled' && (
           <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-b border-indigo-100 text-indigo-700 text-xs font-semibold shrink-0">
@@ -782,7 +810,17 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
               {nextOptions.map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => workflowMut.mutate({ status: opt.value })}
+                  onClick={() => {
+                    // Solo un pedido PAGADO EN LÍNEA puede acabar en contracargo, y
+                    // el único instante en que se puede recoger la evidencia es este.
+                    // En los de contraentrega no se pregunta nada: no hay disputa
+                    // posible y estorbar ahí sería frenar por frenar.
+                    if (opt.value === 'delivered' && order.payment_status === 'paid') {
+                      setPidiendoEvidencia(true);
+                    } else {
+                      workflowMut.mutate({ status: opt.value });
+                    }
+                  }}
                   disabled={busy}
                   className="flex-1 py-2 rounded-xl border-2 border-teal-600 text-teal-700 font-semibold text-sm hover:bg-teal-50 transition-colors disabled:opacity-50"
                 >
@@ -821,6 +859,17 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
           )}
         </div>
       </div>
+
+      {pidiendoEvidencia && (
+        <ModalEvidencia
+          cliente={order.customer_name}
+          onCancelar={() => setPidiendoEvidencia(false)}
+          onConfirmar={(evidencia) => {
+            setPidiendoEvidencia(false);
+            workflowMut.mutate({ status: 'delivered', evidencia });
+          }}
+        />
+      )}
 
       {/* Modal notificación WhatsApp */}
       {pendingNotif && (
@@ -977,4 +1026,166 @@ function formatAction(action: string): string {
     cancelled: '🚫 Pedido cancelado',
   };
   return map[action] ?? action.replace(/_/g, ' ');
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Antifraude (8-oct-2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** El semáforo del pedido, con el motivo escrito y el botón para liberarlo.
+ *
+ * Muestra POR QUÉ está marcado, no solo que lo está: un aviso sin razón se ignora
+ * la segunda vez. Y el botón pide una nota obligatoria, porque el valor real de
+ * haber llamado al cliente aparece después —en una disputa— y solo si quedó escrito.
+ */
+function BanderaRiesgo({
+  order, nota, setNota, onLiberar, liberando,
+}: {
+  order: PortalOrderDetail;
+  nota: string;
+  setNota: (v: string) => void;
+  onLiberar: () => void;
+  liberando: boolean;
+}) {
+  const alto = order.risk_level === 'alto';
+  const liberado = !!order.risk_cleared_at;
+  const motivos = (order.risk_flags ?? []).filter((f) => f.puntos > 0);
+
+  if (liberado) {
+    return (
+      <div className="flex items-start gap-2 px-4 py-2 bg-green-50 border-b border-green-100 text-green-800 text-xs shrink-0">
+        <ShieldCheck size={15} className="mt-0.5 shrink-0" />
+        <span>
+          <strong>Verificado por {order.risk_cleared_by}</strong>
+          {order.risk_cleared_note ? ` — ${order.risk_cleared_note}` : ''}. Se puede entregar.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`px-4 py-3 border-b shrink-0 ${alto ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+      <div className="flex items-start gap-2">
+        <ShieldAlert size={16} className={`mt-0.5 shrink-0 ${alto ? 'text-red-600' : 'text-amber-600'}`} />
+        <div className="min-w-0 flex-1">
+          <p className={`text-sm font-bold ${alto ? 'text-red-800' : 'text-amber-800'}`}>
+            {alto
+              ? 'Pago de riesgo ALTO — llama al cliente antes de entregar'
+              : 'Pago para mirar antes de despachar'}
+          </p>
+          <ul className={`mt-1 space-y-0.5 text-xs ${alto ? 'text-red-700' : 'text-amber-700'}`}>
+            {motivos.map((m) => <li key={m.codigo}>• {m.texto}</li>)}
+          </ul>
+          {order.bold_masked_pan && (
+            <p className="mt-1.5 font-mono text-[11px] text-gray-500">
+              {order.bold_card_brand} {order.bold_masked_pan}
+              {order.bold_payer_email ? ` · ${order.bold_payer_email}` : ''}
+            </p>
+          )}
+
+          {/* El rojo pide la nota; el amarillo es solo informativo y no estorba. */}
+          {alto && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                value={nota}
+                onChange={(e) => setNota(e.target.value)}
+                placeholder="¿Qué verificaste? Ej: llamé al 300… y confirmó"
+                className="flex-1 min-w-[180px] rounded-lg border border-red-200 px-2.5 py-1.5 text-xs"
+              />
+              <button
+                onClick={onLiberar}
+                disabled={nota.trim().length < 3 || liberando}
+                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+              >
+                {liberando ? 'Guardando…' : 'Verifiqué, liberar'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Pide el expediente de entrega de un pedido pagado en línea.
+ *
+ * Bold dice textualmente qué gana una disputa: "guías de envío, fotos del producto
+ * recibido por el cliente, soportes de entrega". Y da **2 días hábiles** para
+ * mandarlo. Recogerlo después es imposible: nadie recuerda quién abrió la puerta.
+ *
+ * Solo el nombre de quien recibe es obligatorio —tres segundos— porque un formulario
+ * largo en el momento de entregar no se llena: se salta.
+ */
+function ModalEvidencia({
+  cliente, onCancelar, onConfirmar,
+}: {
+  cliente: string | null;
+  onCancelar: () => void;
+  onConfirmar: (e: DeliveryEvidence) => void;
+}) {
+  const [nombre, setNombre] = useState(cliente ?? '');
+  const [documento, setDocumento] = useState('');
+  const [notas, setNotas] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+      onClick={onCancelar}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-bold text-gray-900">¿Quién recibió el pedido?</h3>
+        <p className="mt-1 text-xs text-gray-500">
+          Este pedido se pagó en línea. Si el cliente desconoce el cobro, esto es lo
+          único con lo que se puede pelear la disputa.
+        </p>
+
+        <label className="mt-4 block text-xs font-semibold text-gray-700">Nombre de quien recibe</label>
+        <input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          placeholder="Nombre completo"
+          className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+          autoFocus
+        />
+
+        <label className="mt-3 block text-xs font-semibold text-gray-700">
+          Cédula <span className="font-normal text-gray-400">(opcional, pero ayuda)</span>
+        </label>
+        <input
+          value={documento}
+          onChange={(e) => setDocumento(e.target.value)}
+          inputMode="numeric"
+          className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+        />
+
+        <label className="mt-3 block text-xs font-semibold text-gray-700">
+          Nota <span className="font-normal text-gray-400">(opcional)</span>
+        </label>
+        <input
+          value={notas}
+          onChange={(e) => setNotas(e.target.value)}
+          placeholder="Ej: lo recibió la mamá en la portería"
+          className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+        />
+
+        <div className="mt-5 flex gap-2">
+          <button onClick={onCancelar}
+            className="flex-1 rounded-xl border border-gray-200 py-2 text-sm font-semibold text-gray-600">
+            Cancelar
+          </button>
+          <button
+            onClick={() => onConfirmar({
+              delivered_to_name: nombre.trim() || undefined,
+              delivered_to_doc: documento.trim() || undefined,
+              delivery_notes: notas.trim() || undefined,
+            })}
+            disabled={nombre.trim().length < 2}
+            className="flex-1 rounded-xl bg-teal-600 py-2 text-sm font-bold text-white disabled:opacity-50"
+          >
+            Marcar entregado
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

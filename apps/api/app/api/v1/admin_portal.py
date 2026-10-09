@@ -1302,6 +1302,18 @@ async def admin_feed(db: DBSession) -> list[dict]:
 class ChangeWorkflowPayload(BaseModel):
     new_status: str
     internal_notes: str | None = None
+    # ── Evidencia de entrega (8-oct-2026) ────────────────────────────────────
+    # Bold es explícito sobre qué gana una disputa: "guías de envío, fotos del
+    # producto recibido por el cliente, soportes de entrega". Sin eso, un
+    # contracargo está perdido antes de empezar y se va la plata Y la mercancía.
+    #
+    # Son opcionales a propósito: la mayoría de los pedidos se paga contraentrega y
+    # no puede haber contracargo, así que exigirlo en todos sería estorbar por nada.
+    # Quien decide pedirlo es la interfaz, y solo para lo que se pagó en línea.
+    delivered_to_name: str | None = Field(default=None, max_length=140)
+    delivered_to_doc: str | None = Field(default=None, max_length=40)
+    delivery_evidence_url: str | None = None
+    delivery_notes: str | None = Field(default=None, max_length=1000)
 
 
 class EditQuantityPayload(BaseModel):
@@ -1511,6 +1523,27 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
         "total": total,
         "points_awarded": order.points_awarded,
         "invoice_number": order.invoice_number,
+        # ── Antifraude (8-oct-2026) ──────────────────────────────────────────
+        # El semáforo viaja con el pedido para que el admin no tenga que ir a
+        # buscarlo: si hay que decidir si esto sale o no de la tienda, la razón
+        # tiene que estar donde se toma la decisión.
+        "risk_level": order.risk_level,
+        "risk_score": order.risk_score,
+        "risk_flags": order.risk_flags or [],
+        "risk_cleared_at": order.risk_cleared_at.isoformat() if order.risk_cleared_at else None,
+        "risk_cleared_by": order.risk_cleared_by,
+        "risk_cleared_note": order.risk_cleared_note,
+        "payment_status": order.payment_status,
+        "order_reference": order.order_reference,
+        "bold_payment_method": order.bold_payment_method,
+        "bold_card_type": order.bold_card_type,
+        "bold_card_brand": order.bold_card_brand,
+        "bold_masked_pan": order.bold_masked_pan,
+        "bold_payer_email": order.bold_payer_email,
+        "delivered_to_name": order.delivered_to_name,
+        "delivered_to_doc": order.delivered_to_doc,
+        "delivery_evidence_url": order.delivery_evidence_url,
+        "delivery_notes": order.delivery_notes,
         "last_status_change_at": order.last_status_change_at.isoformat()
         if order.last_status_change_at
         else None,
@@ -1656,6 +1689,13 @@ async def change_workflow_status(
     if new == "delivered":
         order.delivered_at = datetime.now(UTC)
         order.status = "delivered"
+        # Quién recibió, con qué documento y con qué foto. Es el expediente con el
+        # que se pelea un contracargo, y el único momento en que se puede recoger
+        # es este: después, nadie se acuerda de quién abrió la puerta.
+        for campo in ("delivered_to_name", "delivered_to_doc",
+                      "delivery_evidence_url", "delivery_notes"):
+            if (valor := getattr(payload, campo, None)):
+                setattr(order, campo, valor.strip() if isinstance(valor, str) else valor)
 
     if new == "cancelled":
         await _reverse_invoice(order, payload.internal_notes or "cancelado desde el flujo", db)

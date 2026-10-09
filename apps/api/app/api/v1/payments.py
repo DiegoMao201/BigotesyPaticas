@@ -30,7 +30,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.deps import DBSession
 from app.models.portal import PaymentEvent, PortalOrder, PortalOrderItem
-from app.services import bold
+from app.services import bold, riesgo_pago
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["pagos"])
@@ -141,7 +141,7 @@ async def webhook_bold(request: Request, db: DBSession, tareas: BackgroundTasks)
         return Response(status_code=status.HTTP_200_OK)
 
     log.info("BOLD · evento %s · ref=%s · firma válida con '%s'", tipo, referencia, con_llave)
-    tareas.add_task(_procesar, payment_id, tipo, referencia, monto)
+    tareas.add_task(_procesar, payment_id, tipo, referencia, monto, datos)
     return Response(status_code=status.HTTP_200_OK)
 
 
@@ -181,7 +181,10 @@ async def _registrar_evento(
     return fila is not None
 
 
-async def _procesar(payment_id: str, tipo: str, referencia: str, monto: int | None) -> None:
+async def _procesar(
+    payment_id: str, tipo: str, referencia: str, monto: int | None,
+    datos: dict | None = None,
+) -> None:
     """Aplica el evento al pedido. Corre en segundo plano, con su propia sesión.
 
     Va aparte y no dentro del endpoint porque la sesión de la petición ya se cerró
@@ -198,12 +201,22 @@ async def _procesar(payment_id: str, tipo: str, referencia: str, monto: int | No
         ).scalar_one_or_none()
 
         if pedido is None:
+            # El webhook está registrado a nivel de COMERCIO, así que también llegan
+            # las ventas del datáfono: vienen con `integration='POS'` y sin
+            # referencia, porque no nacieron en la web. No son un error y no deben
+            # entrar al log como tal — un ERROR por cada venta del mostrador tapa los
+            # errores de verdad, que es exactamente cómo se pierden los fallos.
+            presencial = (datos or {}).get("integration", "").upper() == "POS"
+            if presencial or not referencia:
+                log.info("BOLD · %s del datáfono (%s) — sin pedido web que tocar", tipo, payment_id)
+                await _cerrar_evento(db, payment_id, error=None if presencial else "sin referencia")
+                return
             log.error("BOLD · %s: no existe pedido con referencia %s", tipo, referencia)
             await _cerrar_evento(db, payment_id, error="pedido inexistente")
             return
 
         if tipo == "SALE_APPROVED":
-            await _aprobar(db, pedido, payment_id, monto)
+            await _aprobar(db, pedido, payment_id, monto, datos or {})
         elif tipo == "SALE_REJECTED":
             await _marcar(db, pedido, "failed", payment_id)
             log.info("BOLD · pago rechazado · %s", referencia)
@@ -224,7 +237,10 @@ async def _procesar(payment_id: str, tipo: str, referencia: str, monto: int | No
             await _cerrar_evento(db, payment_id)
 
 
-async def _aprobar(db: DBSession, pedido: PortalOrder, payment_id: str, monto: int | None) -> None:
+async def _aprobar(
+    db: DBSession, pedido: PortalOrder, payment_id: str, monto: int | None,
+    datos: dict | None = None,
+) -> None:
     """Confirma el pago. **El monto manda.**
 
     Si lo que cobró Bold no es exactamente lo que firmamos, NO se confirma. Puede ser
@@ -297,6 +313,45 @@ async def _aprobar(db: DBSession, pedido: PortalOrder, payment_id: str, monto: i
         return
 
     log.info("BOLD · PAGADO %s · %s pesos", pedido.order_reference, monto)
+
+    # ── SEMÁFORO DE RIESGO (8-oct-2026) ──────────────────────────────────────
+    # El pago ya entró y el dinero ya está; esto NO lo revierte. Lo que decide es si
+    # la mercancía puede salir sin preguntar, porque el fraude de una venta no
+    # presencial no se pierde cuando cobran: se pierde cuando ENTREGAS y 15 días
+    # después llega el contracargo. Ahí se va la plata y además el producto.
+    #
+    # Va en su propio try y después del commit del pago a propósito: el pago ya está
+    # confirmado y nada de lo que pase aquí puede deshacerlo. Un semáforo roto que
+    # tumbe un cobro sería peor que no tener semáforo.
+    try:
+        senales = riesgo_pago.extraer_senales(datos or {})
+        nivel, puntaje, banderas = await riesgo_pago.evaluar(db, pedido, datos or {})
+        await db.execute(
+            update(PortalOrder).where(PortalOrder.id == pedido.id).values(
+                risk_level=nivel, risk_score=puntaje, risk_flags=banderas, **senales,
+            )
+        )
+        await db.commit()
+        if nivel != "bajo":
+            log.warning(
+                "BOLD · RIESGO %s (%s pts) en %s · %s",
+                nivel.upper(), puntaje, pedido.order_reference,
+                " | ".join(b["texto"] for b in banderas),
+            )
+        # EL AVISO SOLO SALE EN ROJO, Y ES DELIBERADO.
+        #
+        # Diego: *"tampoco quiero frenar la página para que no venda"*. Medido contra
+        # 2.730 ventas reales, el amarillo caería sobre el 15% —toda primera compra
+        # con tarjeta entra ahí— y un aviso que suena 15 veces de cada 100 deja de
+        # leerse a la tercera semana. El amarillo se queda como etiqueta en el
+        # pedido, visible para quien lo abra, sin interrumpir a nadie.
+        #
+        # El rojo es 1 de cada 1.365 ventas. Ese sí merece sonar.
+        if nivel == "alto":
+            await _avisar_riesgo(pedido, nivel, puntaje, banderas)
+    except Exception:
+        log.exception("BOLD · falló el semáforo de %s — el pago SÍ quedó confirmado",
+                      pedido.order_reference)
 
     # AQUÍ NO SE ACREDITAN PUNTOS NI SE CREA LA VENTA, Y ES A PROPÓSITO.
     #
@@ -456,6 +511,64 @@ async def _avisar_pago(
         )
     except Exception:
         log.exception("BOLD · no se pudo enviar el correo de %s", pedido.order_reference)
+
+
+async def _avisar_riesgo(
+    pedido: PortalOrder, nivel: str, puntaje: int, banderas: list[dict]
+) -> None:
+    """Avisa de un pago cobrado que NO conviene despachar sin verificar antes.
+
+    Este aviso existe por una razón muy concreta: en una venta no presencial el
+    dinero entra primero y la disputa llega semanas después. Entre esas dos cosas
+    está la única ventana en la que se puede evitar la pérdida, y dura lo que tarda
+    el pedido en salir por la puerta.
+
+    Va aparte del aviso de pago porque compite con él: si el pedido riesgoso se ve
+    igual que los demás, se despacha igual que los demás. Aquí el aviso tiene que
+    doler un poco.
+
+    Sesión propia y tope de tiempo, por lo mismo que `_avisar_pago`: lo aprendimos
+    perdiendo un aviso entero el 5-oct.
+    """
+    total = int(pedido.bold_amount or pedido.total_amount or 0)
+    emoji = "🚨" if nivel == "alto" else "⚠️"
+    titulo = (
+        f"{emoji} Pago de RIESGO {nivel.upper()} · ${total:,.0f}".replace(",", ".")
+    )
+    motivos = " · ".join(b["texto"] for b in banderas if b["puntos"] > 0)
+    cuerpo = (
+        f"{pedido.product_name} — NO lo entregues sin llamar primero al cliente "
+        f"y confirmar la compra. Motivo: {motivos}"
+    )
+
+    from app.db import AsyncSessionLocal
+
+    try:
+        async with asyncio.timeout(15):
+            async with AsyncSessionLocal() as db2:
+                from app.models.portal import PortalNotification
+
+                db2.add(
+                    PortalNotification(
+                        customer_id=None,
+                        is_admin=True,
+                        type="payment_risk",
+                        title=titulo,
+                        body=cuerpo,
+                        data={
+                            "order_id": str(pedido.id),
+                            "order_reference": pedido.order_reference,
+                            "total": total,
+                            "risk_level": nivel,
+                            "risk_score": puntaje,
+                            "risk_flags": banderas,
+                        },
+                    )
+                )
+                await db2.commit()
+        log.info("BOLD · aviso de riesgo %s guardado para %s", nivel, pedido.order_reference)
+    except Exception:
+        log.exception("BOLD · FALLÓ EL AVISO DE RIESGO de %s", pedido.order_reference)
 
 
 async def _marcar(db: DBSession, pedido: PortalOrder, estado: str, payment_id: str) -> None:

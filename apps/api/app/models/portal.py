@@ -15,7 +15,9 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    func,
     Numeric,
+    SmallInteger,
     String,
     Text,
 )
@@ -261,6 +263,35 @@ class PortalOrder(UUIDPKMixin, TimestampMixin, Base):
     purchase_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # ── Antifraude (8-oct-2026, migración 0049) ──────────────────────────────
+    # Bold manda estos datos en cada evento y hasta hoy morían dentro de
+    # `raw_payload`. Van a columnas porque lo que delata un fraude es poder cruzar:
+    # la misma tarjeta en dos clientes distintos, tres tarjetas en un mismo teléfono.
+    # Una señal que no se puede consultar con un WHERE no detecta nada.
+    bold_payment_method: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    bold_card_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    bold_card_brand: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    bold_masked_pan: Mapped[str | None] = mapped_column(String(25), nullable=True)
+    bold_payer_email: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    bold_integration: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    bold_installments: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    client_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    # El veredicto del semáforo. Se guarda en vez de recalcularse para que el admin
+    # lo vea sin trabajo y para poder medir después si acierta.
+    risk_level: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    risk_score: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    risk_flags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    risk_cleared_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    risk_cleared_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    risk_cleared_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Con qué se defiende una disputa. Bold dice que lo que la gana son "guías de
+    # envío, fotos del producto recibido, soportes de entrega". Vacío = perdida.
+    delivered_to_name: Mapped[str | None] = mapped_column(String(140), nullable=True)
+    delivered_to_doc: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    delivery_evidence_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    delivery_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class PortalOrderItem(UUIDPKMixin, Base):
@@ -488,4 +519,49 @@ class PaymentEvent(UUIDPKMixin, Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+
+class Chargeback(UUIDPKMixin, Base):
+    """Un contracargo que llegó: la plata que Bold va a debitar si perdemos la disputa.
+
+    **Esta tabla se llena A MANO, y no es un descuido.** El webhook de Bold tiene
+    cuatro eventos —`SALE_APPROVED`, `SALE_REJECTED`, `VOID_APPROVED`,
+    `VOID_REJECTED`— y **ninguno es de contracargo**: Bold avisa de la disputa por
+    correo, así que el sistema no puede enterarse solo. Si no se registra aquí, no
+    existe en ninguna parte y no hay forma de saber cómo vamos.
+
+    Y hay que saberlo, por dos razones con fecha: Bold da **2 días hábiles** para
+    mandar los soportes y debita **dentro de los 3 días hábiles** siguientes a su
+    aviso. Un contracargo que nadie anotó es un contracargo que vence solo.
+
+    La tercera razón es el **2,5 %**: ese es el índice de fraude máximo que Bold
+    tolera antes de poder retener saldos. Sin este registro no hay denominador.
+    """
+
+    __tablename__ = "chargebacks"
+    __table_args__ = (
+        CheckConstraint("outcome IN ('pendiente','ganado','perdido')", name="ck_chargeback_outcome"),
+        CheckConstraint("amount > 0", name="ck_chargeback_amount"),
+        {"schema": "portal"},
+    )
+
+    order_reference: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
+    bold_payment_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: 2 días hábiles desde el aviso. Es LA fecha que importa: pasada, no hay nada que hacer.
+    evidence_due_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    evidence_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    evidence_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False, default="pendiente")
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
