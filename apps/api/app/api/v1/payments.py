@@ -393,7 +393,20 @@ async def _aprobar(
     #
     # `enviar_purchase` es idempotente (mira `purchase_sent_at`) y no lanza
     # excepciones, así que al entregar no se duplica ni rompe nada.
-    if not cancelado:
+    # UN COBRO SIN PEDIDO NO ES UNA VENTA PARA GOOGLE. TODAVÍA.
+    #
+    # Descubierto el 9-oct-2026 mirando GA4: el pago libre de Mabel se había mandado
+    # solo al confirmarse, y llegó con el producto llamado literalmente **"Pago /
+    # abono"** y un id técnico por transacción. Es basura para Google —le enseña que
+    # vendemos un artículo que no existe— y, peor, cuando el cobro se asoció después a
+    # su venta real, **los $252.500 quedaron contados dos veces**.
+    #
+    # Un cobro de origen 'libre' o 'link' no tiene ítems porque no es un pedido: es
+    # plata. La venta que hay detrás se le cuenta a Google al **aplicarlo** a su
+    # factura (`cobros_a_ventas.py`), con los productos de verdad y el número de
+    # factura como transaction_id. Antes de eso no hay nada que contar.
+    es_cobro_suelto = (pedido.origen or "") in ("libre", "link")
+    if not cancelado and not es_cobro_suelto:
         try:
             from app.services.ga4 import enviar_purchase
 
@@ -401,6 +414,9 @@ async def _aprobar(
         except Exception:
             # Que Google no se entere no puede afectar a un cobro ya hecho.
             log.exception("BOLD · pago OK pero falló el purchase de %s", pedido.order_reference)
+    elif es_cobro_suelto:
+        log.info("BOLD · %s es un cobro sin pedido: a Google se le cuenta al aplicarlo "
+                 "a su venta, no ahora", pedido.order_reference)
 
     await _avisar_pago(db, pedido, monto, cancelado=cancelado)
 
