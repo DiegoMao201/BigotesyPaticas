@@ -1510,6 +1510,8 @@ export interface PortalOrderDetail {
   risk_cleared_note?: string | null;
   payment_status?: string | null;
   order_reference?: string | null;
+  /** 'web' | 'portal' | 'libre' | 'link' — 'libre' y 'link' son PAGOS, no pedidos: no tienen productos */
+  origen?: string | null;
   bold_payment_method?: string | null;
   bold_card_type?: string | null;
   bold_card_brand?: string | null;
@@ -1519,6 +1521,48 @@ export interface PortalOrderDetail {
   delivered_to_doc?: string | null;
   delivery_evidence_url?: string | null;
   delivery_notes?: string | null;
+}
+
+/** Una venta ya facturada a la que podría corresponder un pago sin pedido. */
+export interface VentaCandidata {
+  id: string;
+  order_number: string;
+  grand_total: number;
+  paid_amount: number;
+  /** lo que le falta por cobrar; 0 = ya estaba pagada */
+  falta: number;
+  status: string;
+  payment_status: string | null;
+  created_at: string | null;
+  /** el total de la venta es exactamente el del pago: casi seguro es esta */
+  coincide_el_monto: boolean;
+  ya_aplicada: boolean;
+  items: { nombre: string; cantidad: number; precio: number }[];
+}
+
+export interface CandidatasResp {
+  monto_del_cobro: number;
+  ya_aplicado: number;
+  disponible: number;
+  es_cobro_sin_pedido: boolean;
+  ventas_aplicadas: { sales_order_id: string; amount: number; enviado_a_google: boolean }[];
+  candidatas: VentaCandidata[];
+}
+
+export interface AplicarResp {
+  ok: boolean;
+  monto_del_cobro: number;
+  ya_estaba_registrado: number;
+  sobrante_sin_aplicar: number;
+  ventas: {
+    order_number?: string;
+    abonado_ahora?: number;
+    ya_estaba_cobrada?: boolean;
+    saldo?: number;
+    estado_de_pago?: string;
+    enviado_a_google?: boolean;
+    error?: string;
+  }[];
 }
 
 /** Una señal de riesgo que se disparó, con cuánto pesó y cómo se le explica a un humano. */
@@ -1687,6 +1731,20 @@ export const adminPortal = {
       `/v1/admin/portal/orders/${id}/workflow`,
       { method: 'PATCH', body: JSON.stringify({ new_status, internal_notes, ...evidencia }) }
     ),
+  /** Las ventas ya facturadas a las que podría corresponder un pago sin pedido. */
+  ventasCandidatas: (id: string) =>
+    api<CandidatasResp>(`/v1/admin/portal/orders/${id}/ventas-candidatas`),
+  /** Aplica un pago sin pedido a una o varias ventas ya facturadas. */
+  aplicarAVentas: (
+    id: string,
+    ventas: { sales_order_id: string; monto?: number }[],
+    enviar_a_google = true,
+    nota?: string,
+  ) =>
+    api<AplicarResp>(`/v1/admin/portal/orders/${id}/aplicar-a-ventas`, {
+      method: 'POST',
+      body: JSON.stringify({ ventas, enviar_a_google, nota }),
+    }),
   /** Marca que un pedido de riesgo ya se verificó por teléfono y puede salir. */
   liberarRiesgo: (id: string, nota: string) =>
     api<{ ok: boolean; risk_cleared_at: string; risk_cleared_by: string }>(

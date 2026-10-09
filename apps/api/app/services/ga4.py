@@ -251,3 +251,97 @@ async def _mandar(cuerpo: dict, etiqueta: str, *, debug: bool = False) -> bool:
         )
         return False
     return True
+
+
+async def enviar_purchase_de_venta(
+    db, venta, pago: PortalOrder, *, aplicacion=None, debug: bool = False
+) -> bool:
+    """Le cuenta a Google una venta YA FACTURADA que se cobró con un enlace de pago.
+
+    Diego (9-oct-2026): *"es un pago sin pedido porque ya está facturado… asociarlo a
+    la venta que ya se realizó y enviarlo a Google como venta"*.
+
+    **LOS PRODUCTOS SALEN DE LA VENTA, NO DEL PAGO.** Un pago libre no tiene ítems
+    —no es un pedido, es plata— así que mandar lo que trae el pago le enseñaría a
+    Google que vendemos un artículo llamado "Pago / abono". Lo que se vendió está en
+    `sales.order_items`, y es lo que se manda: nombre real, cantidad y precio.
+
+    **El `transaction_id` es el número de la VENTA** (`BP-2026…`), no el id del pago.
+    Así, si algún día la misma venta se reportara por otro camino, Google la reconoce
+    como la misma y no la cuenta dos veces. Un identificador de negocio es más seguro
+    que uno técnico justo para esto.
+
+    **La marca de "ya enviado" va en la APLICACIÓN, no en el pago.** Un pago puede
+    cubrir tres facturas, y para Google eso son tres transacciones distintas; si la
+    marca viviera en el pago, aplicar dos facturas hoy y la tercera mañana dejaría a
+    la tercera sin contar. Con la marca por aplicación, cada venta se cuenta una vez
+    y solo una.
+
+    Sin excepciones hacia afuera: contarle mal a Google nunca puede estorbar un cobro
+    que ya está hecho.
+    """
+    from app.models.sales import OrderItem as VentaItem
+
+    s = get_settings()
+    if not s.ga4_measurement_id or not s.ga4_api_secret:
+        log.warning("ga4: falta GA4_MEASUREMENT_ID o GA4_API_SECRET; la venta %s NO se "
+                    "le contó a Google", getattr(venta, "order_number", "?"))
+        return False
+    marca = aplicacion if aplicacion is not None else pago
+    if marca.purchase_sent_at is not None and not debug:
+        log.info("ga4: la venta %s ya se le había contado a Google", venta.order_number)
+        return False
+
+    valor = float(venta.grand_total or 0)
+    if valor <= 0:
+        log.warning("ga4: venta %s sin valor; no se manda purchase", venta.order_number)
+        return False
+
+    filas = (await db.execute(
+        select(VentaItem).where(VentaItem.order_id == venta.id)
+    )).scalars().all()
+    items = []
+    for f in filas:
+        nombre = None
+        try:
+            from app.models.catalog import Product
+
+            nombre = (await db.execute(
+                select(Product.name).where(Product.id == f.product_id)
+            )).scalar_one_or_none()
+        except Exception:
+            pass
+        items.append({
+            "item_id": str(f.product_id),
+            "item_name": (nombre or "Producto")[:100],
+            "price": round(float(f.unit_price or 0), 2),
+            "quantity": int(f.quantity or 1),
+        })
+
+    params: dict = {
+        "transaction_id": str(venta.order_number),
+        "value": round(valor, 2),
+        "currency": MONEDA,
+        "items": items,
+        "affiliation": "Cobro con enlace de pago",
+        "engagement_time_msec": 1,
+    }
+    if pago.ga_session_id:
+        params["session_id"] = pago.ga_session_id
+
+    cuerpo = {
+        # Si el cliente pagó desde un enlace que le mandamos por WhatsApp no hay
+        # cookie _ga, y Google lo verá como tráfico directo. Es lo honesto: no vino
+        # de un anuncio y atribuírselo a uno sería enseñarle a pujar por una mentira.
+        "client_id": pago.ga_client_id or _client_id_de_respaldo(venta.id),
+        "non_personalized_ads": False,
+        "events": [{"name": "purchase", "params": params}],
+    }
+
+    if not await _mandar(cuerpo, f"venta {venta.order_number}", debug=debug):
+        return False
+
+    marca.purchase_sent_at = datetime.now(UTC)
+    log.info("ga4: purchase enviado · venta %s · %s %s · %s ítems",
+             venta.order_number, valor, MONEDA, len(items))
+    return True

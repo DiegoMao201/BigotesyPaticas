@@ -22,9 +22,9 @@ import {
   Percent, UserCheck, XCircle, Clock,
   CheckCircle2, AlertCircle, Copy, Send, SkipForward,
   AlertTriangle, Minus, Plus, Trash2, Repeat, PackagePlus, Pencil, Lock, Bell, Undo2,
-  ShieldAlert, ShieldCheck,
+  ShieldAlert, ShieldCheck, Receipt, Check,
 } from 'lucide-react';
-import { adminPortal, ApiError, type PortalOrderDetail, type PendingNotification, type Product, type DeliveryEvidence } from '@/lib/api';
+import { adminPortal, ApiError, type PortalOrderDetail, type PendingNotification, type Product, type DeliveryEvidence, type VentaCandidata } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { openWhatsApp, getWhatsAppMode, setWhatsAppMode, copyText, type WhatsAppMode } from '@/lib/whatsapp';
 import { ProductPickerModal } from '@/components/ProductPickerModal';
@@ -349,6 +349,13 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
           <span className="text-gray-600">Envío: <strong>{order.shipping === 0 ? 'Gratis' : formatCurrency(order.shipping)}</strong></span>
           <span className="font-bold text-teal-800">Total: {formatCurrency(order.total)}</span>
         </div>
+
+        {/* ── Pago sin pedido: asignarle sus ventas ──────────────────────────
+            Va antes que nada porque cambia qué ES este registro. Si no se dice,
+            se trata como un pedido y se intenta facturar, que es como nacía una
+            venta duplicada. */}
+        {(order.origen === 'libre' || order.origen === 'link') &&
+          order.payment_status === 'paid' && <PagoSinPedido orderId={orderId} order={order} />}
 
         {/* ── Semáforo antifraude ────────────────────────────────────────────
             Va aquí, pegado al total y antes de cualquier botón, porque la
@@ -1187,5 +1194,157 @@ function ModalEvidencia({
         </div>
       </div>
     </div>
+  );
+}
+
+
+/** Panel para atar un pago sin pedido a las ventas ya facturadas que le corresponden.
+ *
+ * Diego (9-oct-2026): *"es un pago sin pedido porque ya está facturado… puede ser una
+ * o dos ventas o muchas ventas un solo pago"*.
+ *
+ * El trabajo de verdad lo hace la sugerencia: el servidor ordena las ventas del mismo
+ * cliente poniendo arriba la del monto exacto. En el caso real —Mabel, $252.500— la
+ * correcta sale primera y es un clic. Buscar a mano entre cientos de facturas es
+ * justo donde esto se volvería "complicado para el admin".
+ */
+function PagoSinPedido({ orderId, order }: { orderId: string; order: PortalOrderDetail }) {
+  const qc = useQueryClient();
+  const [elegidas, setElegidas] = useState<string[]>([]);
+  const [aGoogle, setAGoogle] = useState(true);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['ventas-candidatas', orderId],
+    queryFn: () => adminPortal.ventasCandidatas(orderId),
+  });
+
+  const aplicar = useMutation({
+    mutationFn: () =>
+      adminPortal.aplicarAVentas(orderId, elegidas.map((id) => ({ sales_order_id: id })), aGoogle),
+    onSuccess: (r) => {
+      const ok = r.ventas.filter((v) => !v.error);
+      toast.success(
+        `Aplicado a ${ok.map((v) => v.order_number).join(', ')}` +
+          (r.sobrante_sin_aplicar > 0
+            ? ` · sobran ${formatCurrency(r.sobrante_sin_aplicar)} sin asignar`
+            : ''),
+      );
+      setElegidas([]);
+      qc.invalidateQueries({ queryKey: ['ventas-candidatas', orderId] });
+      qc.invalidateQueries({ queryKey: ['portal-order', orderId] });
+      qc.invalidateQueries({ queryKey: ['portal-orders'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const yaAplicado = (data?.ventas_aplicadas.length ?? 0) > 0;
+
+  if (yaAplicado) {
+    return (
+      <div className="flex items-start gap-2 border-b border-green-100 bg-green-50 px-4 py-2 text-xs text-green-800 shrink-0">
+        <Check size={15} className="mt-0.5 shrink-0" />
+        <span>
+          Pago aplicado a {data!.ventas_aplicadas.length} venta(s).
+          {data!.ventas_aplicadas.some((v) => v.enviado_a_google) && ' Contado a Google.'}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-b border-blue-200 bg-blue-50 px-4 py-3 shrink-0">
+      <div className="flex items-start gap-2">
+        <Receipt size={16} className="mt-0.5 shrink-0 text-blue-600" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-blue-900">
+            Esto es un pago, no un pedido — no tiene productos
+          </p>
+          <p className="mt-0.5 text-xs text-blue-700">
+            Asígnale la venta (o las ventas) que ya facturaste. Se le abona lo que le
+            falte a cada una y se le cuenta a Google con sus productos reales.
+          </p>
+
+          {isLoading && <p className="mt-2 text-xs text-blue-600">Buscando ventas…</p>}
+
+          {data && data.candidatas.length === 0 && (
+            <p className="mt-2 text-xs text-blue-700">
+              No encontré ventas recientes de este cliente. Búscala en Ventas y vuelve.
+            </p>
+          )}
+
+          {data && data.candidatas.length > 0 && (
+            <>
+              <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                {data.candidatas.map((v) => (
+                  <FilaVenta
+                    key={v.id}
+                    venta={v}
+                    marcada={elegidas.includes(v.id)}
+                    onToggle={() =>
+                      setElegidas((prev) =>
+                        prev.includes(v.id) ? prev.filter((x) => x !== v.id) : [...prev, v.id],
+                      )
+                    }
+                  />
+                ))}
+              </div>
+
+              <label className="mt-2 flex items-center gap-2 text-xs text-blue-800">
+                <input
+                  type="checkbox"
+                  checked={aGoogle}
+                  onChange={(e) => setAGoogle(e.target.checked)}
+                />
+                Contarle la venta a Google
+              </label>
+
+              <button
+                onClick={() => aplicar.mutate()}
+                disabled={elegidas.length === 0 || aplicar.isPending}
+                className="mt-2 w-full rounded-xl bg-blue-600 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {aplicar.isPending
+                  ? 'Aplicando…'
+                  : `Aplicar este pago a ${elegidas.length || ''} venta${elegidas.length === 1 ? '' : 's'}`}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FilaVenta({
+  venta, marcada, onToggle,
+}: { venta: VentaCandidata; marcada: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={venta.ya_aplicada}
+      className={`w-full rounded-xl border px-3 py-2 text-left transition-colors disabled:opacity-40 ${
+        marcada ? 'border-blue-500 bg-blue-100' : 'border-blue-200 bg-white hover:border-blue-400'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-xs font-bold text-blue-900">{venta.order_number}</span>
+        <span className="text-xs font-bold text-gray-700">{formatCurrency(venta.grand_total)}</span>
+      </div>
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-gray-500">
+        {venta.coincide_el_monto && (
+          <span className="font-semibold text-blue-700">mismo monto del pago</span>
+        )}
+        <span>
+          {venta.falta > 0 ? `falta ${formatCurrency(venta.falta)}` : 'ya estaba cobrada'}
+        </span>
+        {venta.created_at && <span>{new Date(venta.created_at).toLocaleDateString('es-CO')}</span>}
+      </div>
+      {venta.items.length > 0 && (
+        <p className="mt-0.5 truncate text-[11px] text-gray-400">
+          {venta.items.map((i) => `${i.cantidad}x ${i.nombre}`).join(' · ')}
+        </p>
+      )}
+    </button>
   );
 }

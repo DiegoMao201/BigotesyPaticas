@@ -20,6 +20,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -562,6 +563,42 @@ class Chargeback(UUIDPKMixin, Base):
     outcome: Mapped[str] = mapped_column(String(20), nullable=False, default="pendiente")
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class PaymentApplication(UUIDPKMixin, Base):
+    """A qué venta (o ventas) se le aplicó un pago sin pedido.
+
+    Diego (9-oct-2026): *"puede ser una o dos ventas o muchas ventas un solo pago"*.
+    Una fila por (pago, venta), con **cuánto se le abonó a cada una**: un pago de
+    $500.000 repartido entre tres facturas no es lo mismo que tres pagos de $500.000.
+
+    `amount` puede ser **0**, y es un caso normal, no un error: la venta ya estaba
+    cobrada —se registró el pago al facturar— y lo único que aporta esta fila es la
+    trazabilidad, o sea poder responder *"¿qué pago cubrió esta venta?"* cuando llegue
+    un contracargo.
+    """
+
+    __tablename__ = "payment_applications"
+    __table_args__ = (
+        UniqueConstraint("portal_order_id", "sales_order_id", name="uq_pago_venta"),
+        CheckConstraint("amount >= 0", name="ck_pago_venta_monto"),
+        {"schema": "portal"},
+    )
+
+    portal_order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    sales_order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    sales_payment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    #: GA4 se marca POR VENTA: si el pago cubre tres facturas son tres transacciones
+    #: distintas para Google, y aplicarlas en dos tandas no puede dejar fuera a nadie.
+    purchase_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_by: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

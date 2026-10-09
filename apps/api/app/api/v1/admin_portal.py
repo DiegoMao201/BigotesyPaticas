@@ -1535,6 +1535,8 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
         "risk_cleared_note": order.risk_cleared_note,
         "payment_status": order.payment_status,
         "order_reference": order.order_reference,
+        "origen": order.origen,
+        "sales_order_id": str(order.sales_order_id) if order.sales_order_id else None,
         "bold_payment_method": order.bold_payment_method,
         "bold_card_type": order.bold_card_type,
         "bold_card_brand": order.bold_card_brand,
@@ -1676,6 +1678,22 @@ async def change_workflow_status(
 
     old = order.workflow_status or "received"
     new = payload.new_status
+
+    # UN COBRO SIN PEDIDO NO SE FACTURA NUNCA.
+    #
+    # Los de origen 'libre' y 'link' son plata, no pedidos: no tienen ítems. Facturar
+    # uno llamaría a `bridge_to_sales()` y crearía una SEGUNDA venta por el mismo
+    # dinero, descontando otra vez el inventario. Es exactamente lo que estaba a un
+    # clic de distancia en el cobro de Mabel el 9-oct.
+    #
+    # El camino correcto es "Aplicar a una venta ya facturada" (cobros_a_ventas.py).
+    if new == "invoiced" and (order.origen or "") in ("libre", "link"):
+        raise HTTPException(
+            400,
+            "Este es un pago sin pedido, no se factura: no tiene productos y "
+            "facturarlo crearía una venta duplicada. Usa «Aplicar a una venta ya "
+            "facturada» para asociarlo a la venta que corresponde.",
+        )
     allowed = WORKFLOW_TRANSITIONS.get(old, [])
     if new not in allowed:
         raise HTTPException(400, f"Transición no permitida: {old} → {new}")

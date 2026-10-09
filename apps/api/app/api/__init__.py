@@ -7,6 +7,7 @@ from app.api.v1 import (
     admin_partners,
     admin_portal,
     antifraude,
+    cobros_a_ventas,
     adoption,
     analytics,
     auth,
@@ -130,6 +131,9 @@ api_router.include_router(portal_notifications.admin_router, prefix="/v1")
 api_router.include_router(portal_service_status.router, prefix="/v1")
 api_router.include_router(portal_location.router, prefix="/v1")
 api_router.include_router(antifraude.router, prefix="/v1")
+# Antes de admin_portal: sus rutas fijas (/orders/{id}/ventas-candidatas) deben
+# declararse antes que las que llevan parámetro en la misma posición.
+api_router.include_router(cobros_a_ventas.router, prefix="/v1")
 api_router.include_router(admin_portal.router, prefix="/v1")
 # Fase 1 comunidad: SOS mascotas perdidas
 # rescues.router (prefix /sos/rescues) DEBE registrarse antes que sos.router:
