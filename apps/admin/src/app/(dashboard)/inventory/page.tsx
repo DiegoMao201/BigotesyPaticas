@@ -348,7 +348,7 @@ export default function InventoryPage() {
         const currentStock = items.length > 0 ? items[0].quantity_after : null;
 
         function movTypeLabel(t: string) {
-          return t === 'PURCHASE' ? 'Compra' : t === 'SALE' ? 'Venta' : t === 'ADJUSTMENT' ? 'Ajuste' : t === 'RETURN' ? 'Devolución' : t === 'COUNT_ADJUST' ? 'Conteo' : t;
+          return t === 'PURCHASE' ? 'Compra' : t === 'PURCHASE_CANCEL' ? 'Compra anulada' : t === 'SALE' ? 'Venta' : t === 'ADJUSTMENT' ? 'Ajuste' : t === 'RETURN' ? 'Devolución' : t === 'COUNT_ADJUST' ? 'Conteo' : t === 'OPENING' ? 'Stock inicial' : t;
         }
         function movTypeCls(t: string) {
           return t === 'PURCHASE' ? 'bg-emerald-100 text-emerald-700' : t === 'SALE' ? 'bg-blue-100 text-blue-700' : t === 'ADJUSTMENT' ? 'bg-amber-100 text-amber-700' : t === 'RETURN' ? 'bg-purple-100 text-purple-700' : 'bg-muted text-muted-foreground';

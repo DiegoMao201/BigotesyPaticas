@@ -483,6 +483,49 @@ function PurchaseDetailDialog({ id, onClose }: { id: string; onClose: () => void
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  // Anular = devolver al inventario lo que esta compra sumó. Es el arreglo para una
+  // factura cargada dos veces: antes no existía y el stock quedaba inflado para siempre.
+  const [confirmando, setConfirmando] = useState<'anular' | 'eliminar' | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const refrescar = () => {
+    qc.invalidateQueries({ queryKey: ['purchase', id] });
+    qc.invalidateQueries({ queryKey: ['purchases'] });
+    qc.invalidateQueries({ queryKey: ['purchases-cartera'] });
+    qc.invalidateQueries({ queryKey: ['inventory'] });
+  };
+  const cancelMut = useMutation({
+    mutationFn: () => purchases.cancel(id, motivo.trim() || undefined),
+    onSuccess: (r) => {
+      setConfirmando(null);
+      refrescar();
+      if (r.stock_revertido) {
+        toast.success('Compra anulada y stock devuelto');
+      } else {
+        toast.success('Compra anulada (no había entrado al stock)');
+      }
+      // Si de algún producto ya se vendió más de lo que esta compra trajo, el stock se
+      // bajó hasta 0 y no más. Hay que decirlo: significa que se vendió mercancía que
+      // esta compra nunca trajo.
+      for (const a of r.ajustados) {
+        toast.error(
+          `${a.product_name}: se devolvieron ${a.revertido} de ${a.esperado}; faltaron ${a.faltante} (ya se habían vendido). Cuenta ese producto.`,
+          { duration: 12000 },
+        );
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const deleteMut = useMutation({
+    mutationFn: () => purchases.delete(id),
+    onSuccess: () => {
+      toast.success('Compra eliminada');
+      refrescar();
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return (
     <Dialog open onClose={onClose} title={data ? `Compra ${data.folio || data.id.slice(0, 8)}` : 'Compra'} size="lg">
       <DialogBody>
@@ -538,8 +581,107 @@ function PurchaseDetailDialog({ id, onClose }: { id: string; onClose: () => void
         ) : null}
       </DialogBody>
       <DialogFooter>
-        <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        <div className="flex w-full items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {data && data.status !== 'cancelled' && (
+              <Button
+                variant="outline"
+                className="text-red-700 border-red-300 hover:bg-red-50"
+                disabled={cancelMut.isPending}
+                onClick={() => { setConfirmando('anular'); setMotivo(''); }}
+              >
+                Anular compra
+              </Button>
+            )}
+            {data && data.status === 'cancelled' && (
+              <Button
+                variant="outline"
+                className="text-red-700 border-red-300 hover:bg-red-50"
+                disabled={deleteMut.isPending}
+                onClick={() => setConfirmando('eliminar')}
+              >
+                Eliminar definitivamente
+              </Button>
+            )}
+          </div>
+          <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        </div>
       </DialogFooter>
+
+      {confirmando === 'anular' && data && (
+        <Dialog open onClose={() => setConfirmando(null)} title="Anular esta compra" size="md">
+          <DialogBody>
+            <div className="space-y-3 text-sm">
+              <p>
+                Se va a anular la compra <strong>{data.folio || data.id.slice(0, 8)}</strong> de{' '}
+                <strong>{data.supplier_name}</strong>.
+              </p>
+              {data.status === 'received' ? (
+                <div className="rounded-md bg-amber-50 border border-amber-200 p-3">
+                  Esta compra ya entró al inventario. Al anularla se le <strong>restan al stock
+                  las {data.items.reduce((a, it) => a + it.quantity, 0)} unidades</strong> que
+                  sumó, y queda registrado el movimiento de anulación en el historial de cada
+                  producto. Nada se borra: la entrada original se conserva.
+                </div>
+              ) : (
+                <div className="rounded-md bg-gray-50 border p-3">
+                  Esta compra todavía no entró al inventario, así que el stock no cambia.
+                </div>
+              )}
+              <label className="block">
+                <span className="text-gray-600">Motivo (opcional, queda en la compra)</span>
+                <input
+                  className="mt-1 w-full rounded-md border px-3 py-2"
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value)}
+                  placeholder="Ej: factura cargada dos veces"
+                  maxLength={200}
+                />
+              </label>
+              <p className="text-gray-500">
+                Después de anularla podrás eliminarla del todo si fue un error de carga.
+              </p>
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmando(null)}>Cancelar</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={cancelMut.isPending}
+              onClick={() => cancelMut.mutate()}
+            >
+              {cancelMut.isPending ? 'Anulando...' : 'Sí, anular y devolver el stock'}
+            </Button>
+          </DialogFooter>
+        </Dialog>
+      )}
+
+      {confirmando === 'eliminar' && data && (
+        <Dialog open onClose={() => setConfirmando(null)} title="Eliminar definitivamente" size="md">
+          <DialogBody>
+            <div className="space-y-3 text-sm">
+              <p>
+                La compra ya está anulada y su stock fue devuelto. Esto borra el registro de la
+                compra. <strong>No se puede deshacer.</strong>
+              </p>
+              <div className="rounded-md bg-gray-50 border p-3">
+                Los movimientos de inventario (la entrada y su anulación) se conservan en el
+                historial de cada producto, para que las cuentas sigan cuadrando.
+              </div>
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmando(null)}>Cancelar</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={deleteMut.isPending}
+              onClick={() => deleteMut.mutate()}
+            >
+              {deleteMut.isPending ? 'Eliminando...' : 'Sí, eliminar'}
+            </Button>
+          </DialogFooter>
+        </Dialog>
+      )}
     </Dialog>
   );
 }

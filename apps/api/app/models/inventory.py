@@ -85,7 +85,11 @@ class StockMovement(UUIDPKMixin, TimestampMixin, AuditMixin, Base):
         nullable=False,
         index=True,
     )
-    # Tipos: SALE, PURCHASE, ADJUSTMENT, RETURN, TRANSFER_IN, TRANSFER_OUT, COUNT_ADJUST
+    # Tipos: SALE, PURCHASE, PURCHASE_CANCEL, ADJUSTMENT, RETURN, TRANSFER_IN,
+    #        TRANSFER_OUT, COUNT_ADJUST, OPENING
+    # OPENING = el saldo con el que el producto entró al sistema (importación de mayo
+    # 2026). Existe porque esa carga escribió el stock directo en la tabla, con
+    # movimientos de cantidad 0: el stock estaba pero ningún movimiento lo explicaba.
     movement_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     quantity_delta: Mapped[int] = mapped_column(Integer, nullable=False)  # +/-
     quantity_after: Mapped[int] = mapped_column(Integer, nullable=False)

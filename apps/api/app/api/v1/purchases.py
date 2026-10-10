@@ -264,6 +264,83 @@ async def _apply_stock_and_cost(
         db.add(movement)
 
 
+async def _revert_stock(
+    db,
+    purchase: Purchase,
+    items: list[PurchaseItem],
+    user_email: str,
+) -> list[dict]:
+    """Deshace los movimientos de una compra ya recibida.
+
+    Los movimientos son append-only (nunca se borran): por cada ítem se escribe uno
+    nuevo de tipo PURCHASE_CANCEL con el delta en negativo, así el historial muestra
+    la entrada y su anulación, y se puede auditar quién y cuándo.
+
+    El stock no puede quedar negativo (hay un CHECK en la tabla). Si de la compra ya
+    se vendieron unidades, se baja hasta 0 y el ítem se devuelve en la lista de
+    `ajustados` para que el admin lo muestre: significa que se vendió mercancía que
+    esta compra nunca trajo, y eso hay que mirarlo, no esconderlo.
+
+    El costo del producto NO se revierte: no guardamos el costo anterior, y el precio
+    que pagó el proveedor sigue siendo el último dato real que tenemos.
+    """
+    loc = (
+        await db.execute(select(StockLocation).where(StockLocation.is_default == 1).limit(1))
+    ).scalar_one_or_none()
+    if loc is None:
+        return []
+
+    ajustados: list[dict] = []
+    for item in items:
+        if item.product_id is None:
+            continue
+
+        units = item.quantity * item.factor_pack
+        stock = (
+            await db.execute(
+                select(Stock)
+                .where(Stock.product_id == item.product_id)
+                .where(Stock.location_id == loc.id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        disponible = stock.quantity if stock else 0
+        quitar = min(units, disponible)
+
+        if quitar < units:
+            ajustados.append(
+                {
+                    "product_name": item.product_name,
+                    "esperado": units,
+                    "revertido": quitar,
+                    "faltante": units - quitar,
+                }
+            )
+        if stock is None or quitar == 0:
+            continue
+
+        stock.quantity = disponible - quitar
+        db.add(
+            StockMovement(
+                product_id=item.product_id,
+                location_id=loc.id,
+                movement_type="PURCHASE_CANCEL",
+                quantity_delta=-quitar,
+                quantity_after=stock.quantity,
+                unit_cost=round(float(item.unit_cost) / max(1, int(item.factor_pack or 1)), 2),
+                reference_type="purchase",
+                reference_id=purchase.id,
+                notes=(
+                    f"Anulación compra #{purchase.folio or str(purchase.id)[:8]} — "
+                    f"{item.product_name}"
+                ),
+                occurred_at=datetime.now(UTC),
+                created_by=user_email,
+            )
+        )
+    return ajustados
+
+
 async def _upsert_supplier_sku_map(
     db,
     purchase: Purchase,
@@ -659,6 +736,62 @@ async def cartera_proveedores(db: DBSession):
         total_pendiente=total_pendiente,
         total_vencido=total_vencido,
         por_proveedor=por_proveedor,
+    )
+
+
+class PurchaseCancelOut(BaseModel):
+    """Resultado de anular una compra."""
+
+    purchase: PurchaseOut
+    stock_revertido: bool
+    ajustados: list[dict] = []
+
+
+@router.post(
+    "/{purchase_id}/cancel",
+    response_model=PurchaseCancelOut,
+    dependencies=[Depends(require_permission("purchasing:write"))],
+)
+async def cancel_purchase(
+    purchase_id: uuid.UUID,
+    db: DBSession,
+    user: CurrentUser,
+    motivo: str | None = Query(None, max_length=200, description="Por qué se anula"),
+):
+    """Anula una compra y, si ya estaba recibida, devuelve el stock que había sumado.
+
+    Existe porque hasta el 10-oct-2026 no había forma de deshacer una compra: el único
+    camino era `DELETE`, y `DELETE` se niega a borrar una compra recibida diciendo
+    "cancélala primero" — una cancelación que nunca se había implementado. Resultado: una
+    factura cargada dos veces dejaba el inventario inflado para siempre.
+
+    Después de anular, la compra queda en `cancelled` y SÍ se puede borrar con DELETE.
+    """
+    purchase = (
+        await db.execute(select(Purchase).where(Purchase.id == purchase_id))
+    ).scalar_one_or_none()
+    if purchase is None:
+        raise HTTPException(status_code=404, detail="Compra no encontrada")
+    if purchase.status == "cancelled":
+        raise HTTPException(status_code=409, detail="Esta compra ya está anulada")
+
+    revertir = purchase.status == "received"
+    ajustados = (
+        await _revert_stock(db, purchase, list(purchase.items), user.email) if revertir else []
+    )
+
+    marca = f"[anulada {datetime.now(UTC):%Y-%m-%d} por {user.email}]"
+    if motivo:
+        marca += f" {motivo}"
+    purchase.status = "cancelled"
+    purchase.notes = f"{purchase.notes}\n{marca}" if purchase.notes else marca
+    purchase.updated_by = user.email
+    await db.commit()
+
+    return PurchaseCancelOut(
+        purchase=await get_purchase(purchase_id, db),
+        stock_revertido=revertir,
+        ajustados=ajustados,
     )
 
 

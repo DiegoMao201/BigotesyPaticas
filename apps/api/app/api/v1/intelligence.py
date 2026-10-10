@@ -310,7 +310,7 @@ async def intelligence_overview(
             StockMovement.product_id.label("pid"),
             func.min(StockMovement.occurred_at).label("first_in"),
         )
-        .where(StockMovement.movement_type.in_(("PURCHASE", "ADJUSTMENT", "COUNT_ADJUST")))
+        .where(StockMovement.movement_type.in_(("PURCHASE", "ADJUSTMENT", "COUNT_ADJUST", "OPENING")))
         .where(StockMovement.quantity_delta > 0)
         .group_by(StockMovement.product_id)
         .subquery()

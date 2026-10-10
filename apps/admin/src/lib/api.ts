@@ -1022,6 +1022,19 @@ export interface CarteraResponse {
   por_proveedor: { supplier_name: string; supplier_id: string | null; total: number; count: number }[];
 }
 
+export type PurchaseCancelAjuste = {
+  product_name: string;
+  esperado: number;
+  revertido: number;
+  faltante: number;
+};
+
+export type PurchaseCancelOut = {
+  purchase: PurchaseOut;
+  stock_revertido: boolean;
+  ajustados: PurchaseCancelAjuste[];
+};
+
 export const purchases = {
   list: (params: { q?: string; status?: string; payment_status?: PurchasePaymentStatus; page?: number; page_size?: number } = {}) => {
     const qs = new URLSearchParams();
@@ -1034,6 +1047,14 @@ export const purchases = {
   update: (id: string, payload: Partial<PurchaseCreate & { status: string }>) =>
     api<PurchaseOut>(`/v1/purchases/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   delete: (id: string) => api(`/v1/purchases/${id}`, { method: 'DELETE' }),
+  // Anular devuelve el stock que la compra había sumado. `ajustados` trae los productos
+  // de los que ya se habia vendido mas de lo que esta compra trajo: ahi el stock se baja
+  // hasta 0 y no mas, porque no puede quedar negativo.
+  cancel: (id: string, motivo?: string) =>
+    api<PurchaseCancelOut>(
+      `/v1/purchases/${id}/cancel${motivo ? `?motivo=${encodeURIComponent(motivo)}` : ''}`,
+      { method: 'POST' },
+    ),
   receive: (id: string) => api<PurchaseOut>(`/v1/purchases/${id}/receive`, { method: 'POST' }),
   markPaid: (id: string) => api<PurchaseOut>(`/v1/purchases/${id}/mark-paid`, { method: 'POST', body: JSON.stringify({}) }),
   cartera: () => api<CarteraResponse>('/v1/purchases/cartera/pendiente'),
