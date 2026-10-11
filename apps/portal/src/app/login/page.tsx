@@ -95,7 +95,7 @@ function LoginPageInner() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-teal-900">
+    <div className="relative min-h-[100dvh] overflow-hidden short:overflow-y-auto bg-teal-900">
 
       {/* VIDEO desde CDN */}
       <video
@@ -141,7 +141,7 @@ function LoginPageInner() {
         {step === 'login' && (
           <motion.div
             key="logo"
-            className="relative z-10 flex flex-col items-center pt-14 px-6"
+            className="relative z-10 flex flex-col items-center pt-14 short:pt-5 px-6"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
@@ -194,7 +194,7 @@ function LoginPageInner() {
       {/* ── CARD BOTTOM-SHEET ─────────────────────────────── */}
       <motion.div
         layout
-        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2rem] shadow-2xl z-10 overflow-hidden"
+        className="absolute bottom-0 left-0 right-0 short:relative short:mt-4 bg-white rounded-t-[2rem] shadow-2xl z-10 overflow-hidden"
         initial={{ y: 280 }}
         animate={{ y: 0 }}
         transition={{ delay: 0.15, type: 'spring', damping: 28, stiffness: 240 }}
@@ -202,7 +202,7 @@ function LoginPageInner() {
         {/* Handle */}
         <div className="w-10 h-1 rounded-full bg-gray-200 mx-auto mt-5 mb-1" />
 
-        <div className="px-6 pt-3 pb-10">
+        <div className="px-6 pt-3 pb-10 short:pb-5">
           <AnimatePresence mode="wait">
             {step === 'login' ? (
               <motion.form

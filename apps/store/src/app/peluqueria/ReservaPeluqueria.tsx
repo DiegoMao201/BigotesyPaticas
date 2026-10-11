@@ -278,7 +278,7 @@ export function ReservaPeluqueria() {
       {pidiendoPermiso && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true"
           aria-label="Autorización de datos" onClick={() => setPidiendoPermiso(false)}>
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <ShieldCheck className="h-10 w-10 text-[#187f77]" />
             <h3 className="mt-2 text-lg font-extrabold text-[#0d4a45]">Autorización de datos</h3>
             <p className="mt-2 text-sm text-gray-600 leading-relaxed">

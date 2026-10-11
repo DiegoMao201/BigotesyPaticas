@@ -58,7 +58,7 @@ export function WhatsAppFloat() {
       target="_blank"
       rel="noopener noreferrer"
       onClick={handleClick}
-      className="fixed bottom-6 right-6 z-50 group"
+      className="fixed bottom-6 right-6 short:bottom-3 short:right-3 z-50 group"
       aria-label="Hablar por WhatsApp"
     >
       <div className="relative">
@@ -70,7 +70,7 @@ export function WhatsAppFloat() {
               {itemCount}
             </span>
           )}
-          <span className="hidden md:inline-block whitespace-nowrap font-semibold text-sm">
+          <span className="hidden lg:inline-block whitespace-nowrap font-semibold text-sm">
             {itemCount > 0 ? 'Pedir por WhatsApp' : 'Habla con nosotros'}
           </span>
         </div>

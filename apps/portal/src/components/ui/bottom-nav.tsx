@@ -19,7 +19,7 @@ export function BottomNav() {
 
   return (
     <nav className="bottom-nav">
-      <div className="flex items-center justify-around px-2 py-2">
+      <div className="flex items-center justify-around px-2 py-2 short:py-1">
         {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
           const active = pathname === href || pathname.startsWith(href + '/');
           return (
@@ -49,7 +49,7 @@ export function BottomNav() {
                   strokeWidth={active ? 2.5 : 1.75}
                 />
                 <span className={cn(
-                  'text-[10px] transition-colors',
+                  'text-[10px] transition-colors short:hidden',
                   active ? 'font-semibold text-primary-700' : 'font-medium text-muted'
                 )}>
                   {label}

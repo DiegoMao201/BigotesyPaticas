@@ -38,7 +38,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   if (!data) return null;
 
   return (
-    <div className="min-h-screen pb-24" style={{ background: 'transparent' }}>
+    <div className="min-h-[100dvh] pb-24 short:pb-14" style={{ background: 'transparent' }}>
       <LocationTracker />
       <PromoGroomer />
 

@@ -6,6 +6,11 @@ const config: Config = {
   theme: {
     container: { center: true, padding: '1rem', screens: { sm: '430px' } },
     extend: {
+      // `short:` = celular ACOSTADO: horizontal y menos de 520 px de alto. Un
+      // iPhone en horizontal mide 390-430 px de alto; con cinta + header + barra
+      // (145 px) quedaba un tercio de pantalla para el contenido. Se mide con
+      // Chrome headless a 844x390 y 932x430 (10-oct-2026).
+      screens: { short: { raw: '(orientation: landscape) and (max-height: 520px)' } },
       fontFamily: {
         sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui'],
         display: ['var(--font-display)', 'ui-sans-serif'],

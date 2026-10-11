@@ -83,7 +83,7 @@ export function GoogleReviewPrompt() {
   return (
     <>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" onClick={handleDismiss} />
-      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl p-8 max-w-md w-[90%] z-50 animate-in fade-in zoom-in-95">
+      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl p-8 short:p-5 max-w-md w-[90%] max-h-[calc(100dvh-2rem)] overflow-y-auto z-50 animate-in fade-in zoom-in-95">
         <button
           onClick={handleDismiss}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"

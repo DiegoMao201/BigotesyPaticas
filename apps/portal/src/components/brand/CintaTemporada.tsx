@@ -20,7 +20,7 @@ export function CintaTemporada() {
   if (temporada !== 'halloween') return null;
 
   return (
-    <div className="cinta-halloween px-4 py-2 text-center text-white">
+    <div className="cinta-halloween px-4 py-2 text-center text-white short:hidden">
       <p className="mx-auto flex max-w-3xl items-center justify-center gap-2 text-[12.5px] font-medium leading-snug sm:text-sm">
         <span aria-hidden="true" className="cinta-calabaza shrink-0 text-base leading-none">
           🎃

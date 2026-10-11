@@ -26,7 +26,7 @@ export function CintaTemporada() {
   if (temporada !== 'halloween') return null;
 
   return (
-    <div className="cinta-halloween relative overflow-hidden text-white">
+    <div className="cinta-halloween relative overflow-hidden text-white short:hidden">
       <div className="container-wide flex min-h-10 items-center justify-center gap-2 py-1.5 text-center text-[12.5px] font-medium leading-snug sm:py-0 sm:text-sm">
         <span aria-hidden="true" className="cinta-calabaza shrink-0 text-base leading-none">
           🎃

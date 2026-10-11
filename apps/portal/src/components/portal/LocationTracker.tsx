@@ -64,7 +64,7 @@ export function LocationTracker() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}
             transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-            className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl"
+            className="w-full max-w-sm max-h-[100dvh] overflow-y-auto bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl"
           >
             <div
               className="flex flex-col items-center gap-3 py-7 px-6 text-center"

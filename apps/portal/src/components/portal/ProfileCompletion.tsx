@@ -132,7 +132,7 @@ export function ProfileCompletion() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 60, opacity: 0 }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl"
+              className="w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white rounded-2xl p-6 shadow-2xl"
             >
               <AnimatePresence mode="wait">
                 {showSuccess ? (

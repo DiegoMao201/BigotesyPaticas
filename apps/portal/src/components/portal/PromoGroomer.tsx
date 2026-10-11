@@ -47,7 +47,7 @@ export function PromoGroomer() {
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.85, y: 20, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-            className="relative w-full max-w-sm overflow-hidden rounded-[28px] shadow-2xl"
+            className="relative w-full max-w-sm max-h-[calc(100dvh-2.5rem)] overflow-y-auto rounded-[28px] shadow-2xl"
             style={{ background: 'linear-gradient(160deg,#0d4a45 0%,#187f77 55%,#1fa393 100%)' }}
           >
             <button onClick={() => setAbierto(false)} aria-label="Cerrar"

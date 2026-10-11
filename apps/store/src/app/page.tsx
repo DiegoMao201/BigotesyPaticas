@@ -56,7 +56,7 @@ export default async function HomePage() {
   return (
     <>
       {/* MARQUEE BANNER */}
-      <div className="gradient-brand text-white py-2.5 overflow-hidden">
+      <div className="gradient-brand text-white py-2.5 overflow-hidden short:hidden">
         <div className="flex whitespace-nowrap animate-marquee">
           {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, i) => (
             <span key={i} className="mx-8 text-sm font-medium shrink-0">{item}</span>

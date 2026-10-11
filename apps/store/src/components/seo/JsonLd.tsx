@@ -81,7 +81,14 @@ export function OrganizationSchema() {
           width: 512,
           height: 512,
         },
-        image: BUSINESS_INFO.logo,
+        // Merchant Center arma el "perfil de marca" con las imágenes que encuentra
+        // en el sitio, y contaba 0 "de tu sitio web": solo exponíamos el logo. Van
+        // también las fotos reales que ya servimos (10-oct-2026).
+        image: [
+          BUSINESS_INFO.logo,
+          `${BUSINESS_INFO.url}/peluqueria/fachada.jpg`,
+          `${BUSINESS_INFO.url}/opengraph-image.png`,
+        ],
         description: BUSINESS_INFO.description,
         address: {
           '@type': 'PostalAddress',

@@ -42,7 +42,7 @@ export function HeroSection() {
   }, []);
 
   return (
-    <section className="relative min-h-[88vh] flex items-center overflow-hidden">
+    <section className="relative min-h-[88vh] short:min-h-0 short:py-10 flex items-center overflow-hidden">
       {/* POSTER — siempre presente, es el elemento de LCP real y optimizado */}
       <Image
         src={VIDEO_POSTER}

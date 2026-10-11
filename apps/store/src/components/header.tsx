@@ -62,7 +62,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full glass border-b border-border/50">
-      <div className="container-wide flex h-16 items-center justify-between">
+      <div className="container-wide flex h-16 short:h-12 items-center justify-between gap-6">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group shrink-0">
           <Logo size={48} variant="header" priority />
@@ -71,9 +71,12 @@ export function Header() {
           </span>
         </Link>
 
-        {/* Nav central (desktop) */}
+        {/* Nav central (desktop). Sale desde `lg` (1024) y no desde `md` (768): los
+            8 enlaces + logo + iconos necesitan ~930 px; entre 768 y 1023 (celular
+            acostado, tablet) el texto del logo chocaba con "Perros" y "Nosotros"
+            se salía por la derecha. Ahí va el menú de hamburguesa. */}
         {!searchOpen && (
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium">
+          <nav className="hidden lg:flex items-center gap-7 text-sm font-medium">
             <Link href="/categorias/perros" className="hover:text-brand transition-colors">Perros</Link>
             <Link href="/categorias/gatos" className="hover:text-brand transition-colors">Gatos</Link>
             <Link href="/categorias/accesorios" className="hover:text-brand transition-colors">Accesorios</Link>
@@ -87,7 +90,7 @@ export function Header() {
 
         {/* Search expandida (desktop) */}
         {searchOpen && (
-          <form onSubmit={submitSearch} className="hidden md:flex flex-1 max-w-md mx-8 relative">
+          <form onSubmit={submitSearch} className="hidden lg:flex flex-1 max-w-md mx-8 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               ref={inputRef}
@@ -129,7 +132,7 @@ export function Header() {
             aria-label="Menú"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(true)}
-            className={cn(ICONO, 'md:hidden')}
+            className={cn(ICONO, 'lg:hidden')}
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -140,7 +143,7 @@ export function Header() {
           encabezado tiene backdrop-filter (clase glass) y eso convierte al header en el
           contenedor de los `fixed`, así que el panel quedaba encerrado en sus 64 px. */}
       {menuOpen && typeof document !== 'undefined' && createPortal(
-        <div className="md:hidden fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Menú">
+        <div className="lg:hidden fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Menú">
           <button aria-label="Cerrar menú" onClick={() => setMenuOpen(false)} className="absolute inset-0 bg-black/40 animate-in fade-in" />
           <nav className="absolute right-0 top-0 h-full w-[86%] max-w-sm bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
             <div className="flex items-center justify-between px-5 h-16 border-b border-gray-100">
@@ -190,7 +193,7 @@ export function Header() {
 
       {/* Search mobile */}
       {searchOpen && (
-        <div className="md:hidden border-t border-border/50 px-4 py-3">
+        <div className="lg:hidden border-t border-border/50 px-4 py-3">
           <form onSubmit={submitSearch} className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input

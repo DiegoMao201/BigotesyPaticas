@@ -141,7 +141,7 @@ export default async function ProductPage({ params }: Props) {
 
       {/* Main content */}
       <div className="container-wide pb-12">
-        <div className="grid lg:grid-cols-2 gap-10 xl:gap-16">
+        <div className="grid md:grid-cols-2 gap-8 lg:gap-10 xl:gap-16">
 
           {/* ── Imagen izquierda ── */}
           <div className="space-y-3">
@@ -198,7 +198,7 @@ export default async function ProductPage({ params }: Props) {
           </div>
 
           {/* ── Panel de compra derecha ── */}
-          <div className="space-y-5 lg:pt-2">
+          <div className="space-y-5 md:pt-2">
             {/* Category pill */}
             {product.category && (
               <Link
