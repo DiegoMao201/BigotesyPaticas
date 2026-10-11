@@ -33,9 +33,35 @@ export function setWhatsAppMode(mode: WhatsAppMode) {
   }
 }
 
+/**
+ * ¿Estamos en un celular o tablet? Ahí no existe WhatsApp Web (web.whatsapp.com
+ * solo muestra "usa la app"), así que los dos modos de escritorio no sirven.
+ * iPadOS se presenta como Mac en el user-agent; lo delata la pantalla táctil.
+ */
+export function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  if (/Android|iPhone|iPad|iPod|Windows Phone|Mobile/i.test(ua)) return true;
+  return /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+}
+
 /** `phone` puede venir guardado de cualquier forma (+57…, 10 dígitos, vacío). */
 export function openWhatsApp(phone: string | null | undefined, text?: string, mode = getWhatsAppMode()) {
   const digits = toWhatsAppDigits(phone);
+
+  // Celular (Diego, 11-oct-2026, grabando ventas desde el teléfono): el enlace
+  // universal wa.me abre la APLICACIÓN de WhatsApp con el mismo texto, emojis
+  // incluidos. encodeURIComponent y no URLSearchParams porque este convierte los
+  // espacios en "+", y la app los muestra como signos "+" literales.
+  // Mismo navegador, misma pestaña: al volver de WhatsApp el admin sigue donde estaba.
+  if (isMobileDevice()) {
+    const t = text ? `?text=${encodeURIComponent(text)}` : '';
+    window.location.href = digits
+      ? `https://wa.me/${digits}${t}`
+      : `https://api.whatsapp.com/send${t}`;
+    return;
+  }
+
   const params = new URLSearchParams();
   if (digits) params.set('phone', digits);
   if (text) params.set('text', text);
