@@ -42,11 +42,21 @@ export function StoreMapEmbed({ height = 420, zoom = 17, className = '' }: Props
         ],
       });
 
+      // Pin con el logo en vez del punto rojo estándar. No cuesta nada extra: el
+      // mapa ya se carga con la API de JavaScript (es lo que se factura) y el ícono
+      // es un parámetro del marcador. El PNG vive en /public/mapa y se despliega con
+      // el sitio, así que nunca puede faltar. @2x para que no se vea pixelado.
       const marker = new window.google.maps.Marker({
         position: center,
         map,
         title: BUSINESS_INFO.name,
         animation: window.google.maps.Animation.DROP,
+        zIndex: 1000,
+        icon: {
+          url: '/mapa/pin-bigotes@2x.png',
+          scaledSize: new window.google.maps.Size(76, 89),
+          anchor: new window.google.maps.Point(38, 86),
+        },
       });
 
       const info = new window.google.maps.InfoWindow({
