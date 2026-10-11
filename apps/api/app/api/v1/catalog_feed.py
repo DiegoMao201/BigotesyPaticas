@@ -64,6 +64,159 @@ _PET_TYPE: dict[str, str] = {
 }
 
 
+# ─── Detalles que Google pide en la descripción ──────────────────────────────
+# Merchant Center reclamó 93 productos de comida para perros: "actualiza las
+# descripciones para incluir los detalles que buscan los clientes", y en todos
+# señalaba lo mismo — el SABOR. La base ya tiene descripción larga, beneficios,
+# detalles técnicos y recomendaciones para los 546 productos; el feed solo mandaba
+# `descripcion_corta` (118 caracteres de media). Aquí se arma la descripción
+# completa y se emiten los atributos estructurados que Google sabe leer.
+
+# El ingrediente solo está cargado en 89 de 546 fichas, pero el nombre del producto
+# casi siempre lo lleva ("Max Perro Mature +7 Frango Y Arroz 2 Kg").
+_SABORES = [
+    ("cordero y arroz", "Cordero y arroz"), ("pollo y arroz", "Pollo y arroz"),
+    ("frango y arroz", "Pollo y arroz"), ("carne y arroz", "Carne y arroz"),
+    ("salmon y arroz", "Salmón y arroz"), ("salmón y arroz", "Salmón y arroz"),
+    ("buey y arroz", "Buey y arroz"), ("cordero", "Cordero"), ("salmon", "Salmón"),
+    ("salmón", "Salmón"), ("atun", "Atún"), ("atún", "Atún"), ("frango", "Pollo"),
+    ("pollo", "Pollo"), ("pavo", "Pavo"), ("cerdo", "Cerdo"), ("buey", "Buey"),
+    ("higado", "Hígado"), ("hígado", "Hígado"), ("res", "Res"), ("carne", "Carne"),
+    ("pescado", "Pescado"), ("vegetal", "Vegetales"), ("buffet", "Buffet"),
+    ("mix", "Mix"), ("leche", "Leche"),
+]
+
+
+# El sabor solo tiene sentido en lo que se come. Sin este filtro, buscar "sabor" en
+# la descripción de un juguete devolvía cosas como "Silicona".
+_NO_SE_COME = ("juguete", "collar", "correa", "arnes", "arnés", "pelota", "cama",
+               "plato", "bebedero", "comedero", "guacal", "transportador", "cepillo",
+               "shampoo", "champú", "jabon", "jabón", "arena", "pañal", "panal",
+               "toalla", "rascador", "placa", "ropa", "camiseta", "bozal", "peine",
+               "cortauñas", "cortaunas", "bolsa", "dispensador", "fuente", "silicona")
+
+
+def _busca(clave: str, texto: str) -> bool:
+    """Palabra completa. Buscando "res" como subcadena salían sabores inventados:
+    estaba dentro de "fresco", "frescos" y hasta de la marca "Freshly"."""
+    return re.search(rf"\b{re.escape(clave)}\b", texto) is not None
+
+
+def _sabor(nombre: str, detalles: dict, descripcion: str = "", categoria: str = "") -> str | None:
+    """El sabor, por orden de fiabilidad: el dato cargado, el nombre del producto, y
+    por último un "sabor a ..." escrito en la descripción. Nunca se inventa: si no
+    aparece en ninguno de los tres, el atributo no se emite."""
+    n = (nombre or "").lower()
+    if any(x in n or x in (categoria or "").lower() for x in _NO_SE_COME):
+        return None
+    ing = (detalles or {}).get("ingredientes_principales")
+    if ing:
+        return str(ing)[:100]
+    for clave, etiqueta in _SABORES:
+        if _busca(clave, n):
+            return etiqueta
+    d = (descripcion or "").lower()
+    for clave, etiqueta in _SABORES:
+        if _busca(clave, d):
+            return etiqueta
+    return None
+
+
+_EDAD = {"puppy": "Cachorro", "kitten": "Cachorro", "adult": "Adulto",
+         "senior": "Senior", "all": "Todas las edades"}
+_TALLA = {"small": "Raza pequeña", "medium": "Raza mediana", "large": "Raza grande",
+          "giant": "Raza gigante", "all": "Todas las razas"}
+
+
+def _detalles_producto(p, ec: dict, categoria: str = "") -> list[tuple[str, str]]:
+    """Pares (nombre, valor) para g:product_detail. Son los datos por los que la
+    gente filtra en Google: sabor, presentación, edad y tamaño de raza."""
+    dt = (ec.get("detalles_tecnicos") or {}) if ec else {}
+    out: list[tuple[str, str]] = []
+    sabor = _sabor(p["name"], dt, (ec or {}).get("descripcion") or "", categoria)
+    if sabor:
+        out.append(("Sabor", sabor))
+    if dt.get("presentacion"):
+        out.append(("Presentación", str(dt["presentacion"])[:100]))
+    edad = _EDAD.get((p["life_stage"] or "").lower()) or (
+        str(dt["edad_recomendada"]).capitalize() if dt.get("edad_recomendada") else None)
+    if edad:
+        out.append(("Edad recomendada", edad))
+    talla = _TALLA.get((p["size_range"] or "").lower()) or (
+        str(dt["tamano_recomendado"]).capitalize() if dt.get("tamano_recomendado") else None)
+    if talla:
+        out.append(("Tamaño de raza", talla))
+    if dt.get("principio_activo"):
+        out.append(("Principio activo", str(dt["principio_activo"])[:100]))
+    return out
+
+
+def _descripcion_rica(p, ec: dict, detalles: list[tuple[str, str]]) -> str:
+    """La descripción larga + beneficios + ficha + para quién es. Google premia la
+    descripción que responde lo que el cliente pregunta; la corta de 118 caracteres
+    no respondía nada."""
+    partes: list[str] = []
+    larga = (ec or {}).get("descripcion") or p["description"] or p["name"]
+    if larga:
+        partes.append(str(larga).strip())
+    if detalles:
+        partes.append(" · ".join(f"{k}: {v}" for k, v in detalles))
+    ben = [str(b).lstrip("✓ ").strip().rstrip(".") for b in ((ec or {}).get("beneficios") or [])][:6]
+    ben = [b for b in ben if b]
+    if ben:
+        partes.append("Beneficios: " + "; ".join(ben) + ".")
+    rec = [str(r).strip() for r in ((ec or {}).get("recomendado_para") or [])][:6]
+    if rec:
+        partes.append("Recomendado para: " + ", ".join(rec) + ".")
+    uso = (ec or {}).get("modo_de_uso")
+    if uso:
+        partes.append("Modo de uso: " + str(uso).strip())
+    return "\n\n".join(x for x in partes if x)[:5000]
+
+
+# Google rechaza los títulos TODO EN MAYÚSCULAS y los que traen basura al final
+# (un ";" suelto le costó la aprobación a un juguete en Discovery).
+def _titulo_limpio(nombre: str) -> str:
+    t = (nombre or "").strip().rstrip(";:,.- ").strip()
+    letras = [c for c in t if c.isalpha()]
+    if letras and sum(1 for c in letras if c.isupper()) / len(letras) > 0.7:
+        t = " ".join(w if (w.isdigit() or len(w) <= 2) else w.capitalize() for w in t.split())
+    return t[:150]
+
+
+_UNIDADES = re.compile(r"(\d+[.,]?\d*)\s*(kg|kilo|kilos|g|gr|grs|gramos|ml|l|lt|litro|litros|lb)\b", re.I)
+_NORMALIZA_UNIDAD = {"kilo": "kg", "kilos": "kg", "gr": "g", "grs": "g", "gramos": "g",
+                     "lt": "l", "litro": "l", "litros": "l", "lb": "lb"}
+
+
+# A kg o a litros siempre: la medida y su base tienen que ser de la misma magnitud
+# o Google rechaza el atributo, y en kg el precio es comparable entre presentaciones.
+_A_KG = {"kg": 1.0, "g": 0.001, "lb": 0.453592}
+_A_L = {"l": 1.0, "ml": 0.001}
+
+
+def _unidad_de_venta(texto: str) -> tuple[str, str] | None:
+    """Contenido normalizado a kg o a l, para g:unit_pricing_measure. Con esto Google
+    muestra el precio por kilo y el producto se puede comparar con la competencia."""
+    m = _UNIDADES.search(texto or "")
+    if not m:
+        return None
+    uni = _NORMALIZA_UNIDAD.get(m.group(2).lower(), m.group(2).lower())
+    try:
+        f = float(m.group(1).replace(",", "."))
+    except ValueError:
+        return None
+    if f <= 0:
+        return None
+    if uni in _A_KG:
+        kg = f * _A_KG[uni]
+        return (f"{round(kg, 3):g}", "kg") if 0 < kg <= 200 else None
+    if uni in _A_L:
+        lt = f * _A_L[uni]
+        return (f"{round(lt, 3):g}", "l") if 0 < lt <= 200 else None
+    return None
+
+
 @router.get("/products.xml", include_in_schema=False)
 async def products_feed_xml(db: DBSession) -> Response:
     """Feed RSS XML compatible con Meta Catalog y Google Merchant Center."""
@@ -72,6 +225,10 @@ async def products_feed_xml(db: DBSession) -> Response:
         SELECT
             p.id::text, p.sku, p.name,
             COALESCE(p.enriched_content->>'descripcion_corta', p.description, p.name) AS description,
+            p.enriched_content,
+            p.attributes,
+            p.life_stage,
+            p.size_range,
             p.price,
             p.compare_at_price,
             p.primary_image_url,
@@ -116,9 +273,12 @@ async def products_feed_xml(db: DBSession) -> Response:
 
         item = ET.SubElement(channel, "item")
 
+        ec = p["enriched_content"] or {}
+        detalles = _detalles_producto(p, ec, p["category_name"] or "")
+
         ET.SubElement(item, "g:id").text = str(p["sku"] or p["id"])
-        ET.SubElement(item, "g:title").text = (p["name"] or "")[:150]
-        ET.SubElement(item, "g:description").text = (p["description"] or p["name"] or "")[:5000]
+        ET.SubElement(item, "g:title").text = _titulo_limpio(p["name"])
+        ET.SubElement(item, "g:description").text = _descripcion_rica(p, ec, detalles)
         ET.SubElement(item, "g:link").text = f"{_STORE_URL}/producto/{p['slug']}"
 
         # Imagen principal: la foto a 1000x1000 por /img-feed (la transparente sale con
@@ -145,7 +305,15 @@ async def products_feed_xml(db: DBSession) -> Response:
         else:
             ET.SubElement(item, "g:price").text = f"{price:.2f} COP"
         ET.SubElement(item, "g:brand").text = brand
-        ET.SubElement(item, "g:identifier_exists").text = "no"
+
+        # Código de barras: recuperado de los XML de factura de los proveedores
+        # (10-oct-2026). Con GTIN, Google empareja el producto con su catálogo global
+        # y lo muestra en comparadores; sin él hay que declarar identifier_exists=no.
+        gtin = ((p["attributes"] or {}).get("gtin") or "").strip()
+        if gtin:
+            ET.SubElement(item, "g:gtin").text = gtin
+        else:
+            ET.SubElement(item, "g:identifier_exists").text = "no"
 
         # Categoría Google específica por tipo de producto
         google_cat = _GOOGLE_CAT.get(cat_name, "Animals & Pet Supplies > Pet Supplies")
@@ -159,6 +327,27 @@ async def products_feed_xml(db: DBSession) -> Response:
         ET.SubElement(ship, "g:service").text = "Domicilio Pereira y Dosquebradas"
         ship_price = "0.00 COP" if price >= 30000 else "5000.00 COP"
         ET.SubElement(ship, "g:price").text = ship_price
+
+        # Lo que Merchant Center pedía: los detalles por los que la gente filtra.
+        # Van como atributos, no solo dentro del texto, para que Google los entienda.
+        for nombre_attr, valor_attr in detalles:
+            det = ET.SubElement(item, "g:product_detail")
+            ET.SubElement(det, "g:section_name").text = "Características"
+            ET.SubElement(det, "g:attribute_name").text = nombre_attr
+            ET.SubElement(det, "g:attribute_value").text = valor_attr
+
+        # Los beneficios son los bullets que Google muestra en la ficha del producto.
+        for beneficio in [str(b).lstrip("✓ ").strip() for b in (ec.get("beneficios") or [])][:6]:
+            if beneficio:
+                ET.SubElement(item, "g:product_highlight").text = beneficio[:150]
+
+        # Precio por kilo/litro: deja el producto comparable con el de la competencia.
+        unidad = _unidad_de_venta(
+            (ec.get("detalles_tecnicos") or {}).get("presentacion") or p["name"]
+        )
+        if unidad:
+            ET.SubElement(item, "g:unit_pricing_measure").text = f"{unidad[0]}{unidad[1]}"
+            ET.SubElement(item, "g:unit_pricing_base_measure").text = f"1{unidad[1]}"
 
         # Custom labels para segmentación en Google Ads
         ET.SubElement(item, "g:custom_label_0").text = cat_name.lower() if cat_name else "otro"
