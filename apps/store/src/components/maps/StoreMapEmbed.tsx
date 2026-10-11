@@ -54,12 +54,15 @@ export function StoreMapEmbed({ height = 420, zoom = 17, className = '' }: Props
         zIndex: 1000,
         icon: {
           url: '/mapa/pin-bigotes@2x.png',
-          scaledSize: new window.google.maps.Size(76, 89),
-          anchor: new window.google.maps.Point(38, 86),
+          scaledSize: new window.google.maps.Size(92, 108),
+          anchor: new window.google.maps.Point(46, 105),
         },
       });
 
       const info = new window.google.maps.InfoWindow({
+        // el globo se abre sobre la punta del pin; sin este desplazamiento su
+        // flecha tapaba el logo (visto en la captura de producción, 11-oct-2026)
+        pixelOffset: new window.google.maps.Size(0, -96),
         content: `<div style="font-family:system-ui,sans-serif;padding:4px 2px;max-width:220px;">
           <p style="font-weight:700;font-size:14px;margin:0 0 4px">${BUSINESS_INFO.name}</p>
           <p style="font-size:12px;color:#555;margin:0 0 2px">Samara Plaza Mall, Cl. 15 #3A-07 Local 2</p>
