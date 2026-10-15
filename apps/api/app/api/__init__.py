@@ -19,6 +19,7 @@ from app.api.v1 import (
     content,
     customers,
     finance,
+    nomina,
     finance_export,
     health,
     intelligence,
@@ -81,6 +82,7 @@ api_router.include_router(customers.router, prefix="/v1")
 api_router.include_router(admin_etl.router, prefix="/v1")
 api_router.include_router(finance.router, prefix="/v1")
 api_router.include_router(finance.expenses_router, prefix="/v1")
+api_router.include_router(nomina.router, prefix="/v1")
 api_router.include_router(finance_export.export_router, prefix="/v1")
 api_router.include_router(catalog_export.catalog_export_router, prefix="/v1")
 # Legacy suppliers (lectura desde sheets ETL) → /v1/suppliers-legacy/...

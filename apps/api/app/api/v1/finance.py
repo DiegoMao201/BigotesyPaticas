@@ -15,6 +15,7 @@ from sqlalchemy import select, text
 from app.config import get_settings
 from app.deps import CurrentUser, DBSession, require_permission
 from app.models.finance import CashClosing as CashClosingModel
+from app.models.finance import Expense
 from app.models.ops import LegacyIdMap
 
 router = APIRouter(prefix="/finance", tags=["finance"])
@@ -46,6 +47,11 @@ class ExpenseCreate(BaseModel):
     monto: float = Field(gt=0)
     metodo_pago: str = "Efectivo"
     banco_origen: str = ""
+    #: None = se deduce de la categoría (arriendo, nómina y servicios son fijos).
+    es_fijo: bool | None = None
+
+
+_CATEGORIAS_FIJAS = {"arriendo", "nómina", "nomina", "servicios"}
 
 
 class CashClosingOut(BaseModel):
@@ -146,53 +152,66 @@ async def list_expenses(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
 ):
-    stmt = select(LegacyIdMap).where(LegacyIdMap.entity == "gasto")
-    rows = (await db.execute(stmt)).scalars().all()
+    """Lista desde `finance.expenses` (tabla propia desde el 5-oct-2026).
 
-    items = []
-    total_monto = 0.0
-    for r in rows:
-        e = r.extra or {}
-        f = str(e.get("fecha", ""))
-        try:
-            fecha_obj = datetime.fromisoformat(f[:10]).date() if f else None
-        except Exception:
-            fecha_obj = None
-        if start and fecha_obj and fecha_obj < start:
-            continue
-        if end and fecha_obj and fecha_obj > end:
-            continue
-        if categoria and str(e.get("categoria", "")).lower() != categoria.lower():
-            continue
-        if metodo_pago and str(e.get("metodo_pago", "")).lower() != metodo_pago.lower():
-            continue
-        monto = _f(e.get("monto"))
-        total_monto += monto
-        items.append(
-            {
-                "id": str(r.id),
-                "legacy_id": r.legacy_id,
-                "fecha": f[:10] if f else "",
-                "tipo": str(e.get("tipo", "")),
-                "categoria": str(e.get("categoria", "")),
-                "descripcion": str(e.get("descripcion", "")),
-                "monto": monto,
-                "metodo_pago": str(e.get("metodo_pago", "")),
-                "banco_origen": str(e.get("banco_origen", "")),
-            }
+    Filtra, ordena y pagina EN LA BASE. Antes se traían las 478 filas del JSON
+    viejo a memoria para devolver 50.
+    """
+    conds = ["true"]
+    params: dict[str, Any] = {}
+    if start:
+        conds.append("fecha >= :start")
+        params["start"] = start
+    if end:
+        conds.append("fecha <= :end")
+        params["end"] = end
+    if categoria:
+        conds.append("lower(categoria) = lower(:categoria)")
+        params["categoria"] = categoria
+    if metodo_pago:
+        conds.append("lower(coalesce(metodo_pago, '')) = lower(:metodo)")
+        params["metodo"] = metodo_pago
+    where = " AND ".join(conds)
+
+    tot = (
+        await db.execute(
+            text(f"SELECT count(*) AS n, coalesce(sum(monto), 0) AS total FROM finance.expenses WHERE {where}"),
+            params,
         )
-
-    items.sort(key=lambda x: x["fecha"], reverse=True)
-    total = len(items)
-    start_idx = (page - 1) * page_size
-    paged = items[start_idx : start_idx + page_size]
-
+    ).one()
+    rows = (
+        await db.execute(
+            text(f"""
+                SELECT id, legacy_id, fecha, tipo, categoria, descripcion, monto,
+                       metodo_pago, banco_origen, es_fijo
+                FROM finance.expenses WHERE {where}
+                ORDER BY fecha DESC, created_at DESC
+                LIMIT :limit OFFSET :offset
+            """),
+            {**params, "limit": page_size, "offset": (page - 1) * page_size},
+        )
+    ).all()
+    items = [
+        {
+            "id": str(r.id),
+            "legacy_id": r.legacy_id or "",
+            "fecha": r.fecha.isoformat(),
+            "tipo": r.tipo or "",
+            "categoria": r.categoria or "",
+            "descripcion": r.descripcion or "",
+            "monto": float(r.monto),
+            "metodo_pago": r.metodo_pago or "",
+            "banco_origen": r.banco_origen or "",
+            "es_fijo": bool(r.es_fijo),
+        }
+        for r in rows
+    ]
     return {
-        "items": paged,
-        "total": total,
+        "items": items,
+        "total": int(tot.n),
         "page": page,
         "page_size": page_size,
-        "total_monto": total_monto,
+        "total_monto": float(tot.total),
     }
 
 
@@ -204,22 +223,25 @@ async def create_expense(
     db: DBSession,
     user: CurrentUser,
 ):
+    """Escribe en `finance.expenses`. Hasta el 15-oct seguía escribiendo en el JSON
+    viejo y por eso los gastos nuevos no contaban en el punto de equilibrio."""
     legacy_id = f"GASTO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
-    extra = {
-        "fecha": payload.fecha.isoformat(),
-        "tipo": payload.tipo,
-        "categoria": payload.categoria,
-        "descripcion": payload.descripcion,
-        "monto": payload.monto,
-        "metodo_pago": payload.metodo_pago,
-        "banco_origen": payload.banco_origen,
-        "created_by": user.email,
-    }
-    record = LegacyIdMap(
-        entity="gasto",
+    es_fijo = (
+        payload.es_fijo
+        if payload.es_fijo is not None
+        else payload.categoria.strip().lower() in _CATEGORIAS_FIJAS
+    )
+    record = Expense(
+        fecha=payload.fecha,
+        monto=Decimal(str(payload.monto)),
+        categoria=payload.categoria.strip() or "Sin categoría",
+        tipo=payload.tipo.strip() or "Operativo",
+        descripcion=payload.descripcion.strip() or None,
+        metodo_pago=payload.metodo_pago.strip() or None,
+        banco_origen=payload.banco_origen.strip() or None,
+        es_fijo=es_fijo,
+        created_by=user.email,
         legacy_id=legacy_id,
-        new_id=uuid.uuid4(),
-        extra=extra,
     )
     db.add(record)
     await db.commit()
@@ -228,29 +250,27 @@ async def create_expense(
         id=str(record.id),
         legacy_id=legacy_id,
         fecha=payload.fecha.isoformat(),
-        tipo=payload.tipo,
-        categoria=payload.categoria,
-        descripcion=payload.descripcion,
-        monto=payload.monto,
-        metodo_pago=payload.metodo_pago,
-        banco_origen=payload.banco_origen,
+        tipo=record.tipo,
+        categoria=record.categoria,
+        descripcion=record.descripcion or "",
+        monto=float(record.monto),
+        metodo_pago=record.metodo_pago or "",
+        banco_origen=record.banco_origen or "",
     )
 
 
 @expenses_router.get("/categories")
 async def list_expense_categories(db: DBSession, user: CurrentUser):
     rows = (
-        (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "gasto"))).scalars().all()
-    )
-    cats: dict[str, dict] = {}
-    for r in rows:
-        e = r.extra or {}
-        cat = str(e.get("categoria", "Sin categoría")) or "Sin categoría"
-        if cat not in cats:
-            cats[cat] = {"name": cat, "count": 0, "total": 0.0}
-        cats[cat]["count"] += 1
-        cats[cat]["total"] += _f(e.get("monto"))
-    return sorted(cats.values(), key=lambda x: -x["total"])
+        await db.execute(
+            text("""
+                SELECT coalesce(nullif(categoria, ''), 'Sin categoría') AS name,
+                       count(*) AS count, coalesce(sum(monto), 0) AS total
+                FROM finance.expenses GROUP BY 1 ORDER BY 3 DESC
+            """)
+        )
+    ).all()
+    return [{"name": r.name, "count": int(r.count), "total": float(r.total)} for r in rows]
 
 
 # ────────────────── Cash Closings (real — finance.cash_closings) ──────────────────────
@@ -1082,25 +1102,25 @@ async def finance_summary(
     revenue = float(rev_row.revenue or 0)
     cogs = float(rev_row.cogs or 0)
 
-    # Expenses
+    # Expenses — desde finance.expenses, agrupados en la base
     exp_rows = (
-        (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "gasto"))).scalars().all()
-    )
+        await db.execute(
+            text("""
+                SELECT fecha, coalesce(nullif(categoria, ''), 'Sin categoría') AS categoria,
+                       sum(monto) AS total
+                FROM finance.expenses
+                WHERE fecha BETWEEN :start AND :end
+                GROUP BY 1, 2
+            """),
+            {"start": start, "end": end},
+        )
+    ).all()
     expenses_total = 0.0
     by_cat: dict[str, float] = {}
     for r in exp_rows:
-        e = r.extra or {}
-        f = str(e.get("fecha", ""))[:10]
-        try:
-            d = datetime.fromisoformat(f).date()
-        except Exception:
-            continue
-        if d < start or d > end:
-            continue
-        m = _f(e.get("monto"))
+        m = float(r.total or 0)
         expenses_total += m
-        cat = str(e.get("categoria", "Sin categoría")) or "Sin categoría"
-        by_cat[cat] = by_cat.get(cat, 0) + m
+        by_cat[r.categoria] = by_cat.get(r.categoria, 0) + m
 
     # Revenue by payment method
     method_rows = (
@@ -1143,18 +1163,10 @@ async def finance_summary(
     # Add daily expenses
     daily_map = {d["date"]: d for d in daily}
     for r in exp_rows:
-        e = r.extra or {}
-        f = str(e.get("fecha", ""))[:10]
-        try:
-            d = datetime.fromisoformat(f).date()
-        except Exception:
-            continue
-        if d < start or d > end:
-            continue
-        ds = str(d)
+        ds = r.fecha.isoformat()
         if ds not in daily_map:
             daily_map[ds] = {"date": ds, "revenue": 0.0, "expenses": 0.0}
-        daily_map[ds]["expenses"] += _f(e.get("monto"))
+        daily_map[ds]["expenses"] += float(r.total or 0)
     daily_sorted = sorted(daily_map.values(), key=lambda x: x["date"])
 
     gross_profit = revenue - cogs

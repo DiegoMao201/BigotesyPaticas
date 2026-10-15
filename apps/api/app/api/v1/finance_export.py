@@ -22,7 +22,6 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import select, text
 
 from app.deps import CurrentUser, DBSession, require_permission
-from app.models.ops import LegacyIdMap
 
 export_router = APIRouter(prefix="/finance", tags=["finance"])
 
@@ -230,37 +229,35 @@ async def _fetch_monthly_sales(db: DBSession, months: int) -> list[dict]:
 
 
 async def _fetch_all_expenses(db: DBSession, months: int) -> list[dict]:
-    """Retorna todos los gastos de los últimos N meses."""
+    """Retorna todos los gastos de los últimos N meses (finance.expenses)."""
     since = _months_ago_first_day(months)
     rows = (
-        (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "gasto"))).scalars().all()
-    )
+        await db.execute(
+            text("""
+                SELECT fecha, tipo, categoria, descripcion, metodo_pago, banco_origen, monto, es_fijo
+                FROM finance.expenses WHERE fecha >= :since
+                ORDER BY fecha DESC
+            """),
+            {"since": since},
+        )
+    ).all()
     result = []
     for r in rows:
-        e = r.extra or {}
-        raw_date = str(e.get("fecha", ""))[:10]
-        try:
-            d = datetime.fromisoformat(raw_date).date() if raw_date else None
-        except Exception:
-            d = None
-        if d and d < since:
-            continue
-        monto = _f(e.get("monto"))
-        cat = str(e.get("categoria", "Otros")) or "Otros"
+        raw_date = r.fecha.isoformat()
+        cat = r.categoria or "Otros"
         result.append(
             {
-                "fecha": raw_date or "",
-                "year_month": raw_date[:7] if raw_date else "",
-                "tipo": str(e.get("tipo", "")),
+                "fecha": raw_date,
+                "year_month": raw_date[:7],
+                "tipo": r.tipo or "",
                 "categoria": cat,
-                "descripcion": str(e.get("descripcion", "")),
-                "metodo_pago": str(e.get("metodo_pago", "")),
-                "banco_origen": str(e.get("banco_origen", "")),
-                "monto": monto,
-                "tipo_gasto": "Fijo" if cat in _GASTOS_FIJOS else "Variable",
+                "descripcion": r.descripcion or "",
+                "metodo_pago": r.metodo_pago or "",
+                "banco_origen": r.banco_origen or "",
+                "monto": float(r.monto),
+                "tipo_gasto": "Fijo" if (r.es_fijo or cat in _GASTOS_FIJOS) else "Variable",
             }
         )
-    result.sort(key=lambda x: x["fecha"], reverse=True)
     return result
 
 

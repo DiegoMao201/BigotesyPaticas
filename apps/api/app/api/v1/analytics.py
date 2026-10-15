@@ -16,7 +16,6 @@ from app.deps import DBSession, require_permission
 from app.models.catalog import Category, Product
 from app.models.crm import Customer
 from app.models.inventory import Stock
-from app.models.ops import LegacyIdMap
 from app.models.sales import Order, OrderItem, Payment
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -804,25 +803,25 @@ async def get_bi_full(
         for r in hm_rows
     ]
 
-    # ── Expenses (P&L) ─────────────────────────────────────────
+    # ── Expenses (P&L) — finance.expenses, por fecha Bogotá ───────
     expense_rows = (
-        (await db.execute(select(LegacyIdMap).where(LegacyIdMap.entity == "gasto"))).scalars().all()
-    )
+        await db.execute(
+            text("""
+                SELECT coalesce(nullif(categoria, ''), 'Otros') AS categoria, sum(monto) AS total
+                FROM finance.expenses
+                WHERE fecha >= :desde AND fecha < :hasta
+                GROUP BY 1
+            """),
+            {"desde": to_bogota_date(since), "hasta": to_bogota_date(until)},
+        )
+    ).all()
 
     expenses_total = 0.0
     cat_exp: dict[str, float] = {}
     for r in expense_rows:
-        e = r.extra or {}
-        f = str(e.get("fecha", ""))
-        try:
-            fd = datetime.fromisoformat(f[:10]) if f else None
-        except Exception:
-            fd = None
-        if fd and since <= fd.replace(tzinfo=UTC) < until:
-            m = float(e.get("monto") or 0)
-            expenses_total += m
-            c = str(e.get("categoria", "Otros"))
-            cat_exp[c] = cat_exp.get(c, 0) + m
+        m = float(r.total or 0)
+        expenses_total += m
+        cat_exp[r.categoria] = cat_exp.get(r.categoria, 0) + m
 
     expenses_by_category = sorted(
         [{"category": k, "total": v} for k, v in cat_exp.items()],

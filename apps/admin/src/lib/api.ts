@@ -587,6 +587,74 @@ export const expenses = {
   categories: () => api<{ name: string; count: number; total: number }[]>('/v1/expenses/categories'),
 };
 
+// ─── Nómina ────────────────────────────────────────────────────
+export interface NominaPeriodo { inicio: string; fin: string; quincena: 1 | 2; etiqueta: string; clave: string }
+export interface NominaLiquidacion {
+  dias_trabajados: number; salario_base: number; aux_base: number; pct_salud: number; pct_pension: number;
+  dev_salario: number; dev_auxilio: number; otros_devengados: number; total_devengado: number;
+  ded_salud: number; ded_pension: number; otros_descuentos: number; total_deducciones: number; neto: number;
+  prov_cesantias: number; prov_intereses: number; prov_prima: number; prov_vacaciones: number; total_provision: number;
+  notas: string[];
+}
+export interface NominaProvision { cesantias: number; intereses_cesantias: number; prima: number; vacaciones: number; total: number }
+export interface NominaEmpleado {
+  id: string; nombre: string; documento: string; email: string | null; cargo: string;
+  fecha_ingreso: string; fecha_retiro: string | null; salario_base: number; aux_transporte: number; usa_minimo: boolean;
+  tipo_contrato: string; activo: boolean; notas: string | null;
+  contrato_enviado_at: string | null; contrato_enviado_a: string | null;
+  provision_mensual: NominaProvision;
+  pendiente: { periodo: NominaPeriodo; dias_sugeridos: number; quincena_terminada: boolean; puede_pagar: boolean; motivo: string | null; liquidacion: NominaLiquidacion } | null;
+  acumulado: { quincenas_pagadas: number; neto_pagado: number; provision: NominaProvision };
+}
+export interface NominaPago {
+  id: string; consecutivo: number; employee_id: string; employee_nombre: string | null; periodo: NominaPeriodo;
+  dias_trabajados: number; salario_base: number; aux_base: number; dev_salario: number; dev_auxilio: number;
+  otros_devengados: number; total_devengado: number; ded_salud: number; ded_pension: number; otros_descuentos: number;
+  descripcion_otros: string | null; total_deducciones: number; neto: number;
+  prov_cesantias: number; prov_intereses: number; prov_prima: number; prov_vacaciones: number; total_provision: number;
+  fecha_pago: string; pagada_at: string | null; pagada_por: string | null; metodo_pago: string; banco_origen: string | null;
+  email_enviado_a: string | null; email_enviado_at: string | null; email_error: string | null;
+}
+export interface NominaParametro { id?: string; vigencia_desde: string; smmlv: number; aux_transporte: number; pct_salud: number; pct_pension: number; fuente: string | null }
+export interface NominaResumen {
+  hoy: string;
+  parametros_vigentes: NominaParametro;
+  parametros: NominaParametro[];
+  empleados: NominaEmpleado[];
+  historial: NominaPago[];
+}
+export interface NominaEmpleadoIn {
+  nombre: string; documento: string; email: string | null; cargo: string; fecha_ingreso: string; fecha_retiro: string | null;
+  salario_base: number | null; aux_transporte: number | null; tipo_contrato: string; activo: boolean; notas: string | null;
+}
+export interface NominaPagarIn {
+  employee_id: string; periodo_clave: string; dias_trabajados: number; otros_devengados: number; otros_descuentos: number;
+  descripcion_otros: string | null; metodo_pago: string; banco_origen: string | null; fecha_pago: string | null; enviar_correo: boolean;
+}
+
+async function apiPdf(path: string): Promise<Blob> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new Error('No se pudo generar el PDF');
+  return res.blob();
+}
+
+export const nomina = {
+  resumen: () => api<NominaResumen>('/v1/nomina/resumen'),
+  liquidacion: (p: { employee_id: string; dias: number; otros_devengados: number; otros_descuentos: number }) => {
+    const qs = new URLSearchParams({ employee_id: p.employee_id, dias: String(p.dias), otros_devengados: String(p.otros_devengados), otros_descuentos: String(p.otros_descuentos) });
+    return api<{ periodo: NominaPeriodo; liquidacion: NominaLiquidacion }>(`/v1/nomina/liquidacion?${qs}`);
+  },
+  pagar: (payload: NominaPagarIn) => api<NominaPago>('/v1/nomina/pagar', { method: 'POST', body: JSON.stringify(payload) }),
+  desprendiblePdf: (pagoId: string) => apiPdf(`/v1/nomina/pagos/${pagoId}/desprendible.pdf`),
+  reenviar: (pagoId: string) => api<NominaPago>(`/v1/nomina/pagos/${pagoId}/reenviar`, { method: 'POST' }),
+  crearEmpleado: (payload: NominaEmpleadoIn) => api<NominaEmpleado>('/v1/nomina/empleados', { method: 'POST', body: JSON.stringify(payload) }),
+  editarEmpleado: (id: string, payload: NominaEmpleadoIn) => api<NominaEmpleado>(`/v1/nomina/empleados/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  contratoPdf: (id: string) => apiPdf(`/v1/nomina/empleados/${id}/contrato.pdf`),
+  enviarContrato: (id: string) => api<NominaEmpleado>(`/v1/nomina/empleados/${id}/contrato/enviar`, { method: 'POST' }),
+  guardarParametro: (payload: NominaParametro) => api<{ ok: boolean }>('/v1/nomina/parametros', { method: 'POST', body: JSON.stringify(payload) }),
+};
+
 export interface CashClosing {
   id: string;
   fecha: string;

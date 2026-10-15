@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import ClassVar
@@ -11,12 +12,15 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    ForeignKey,
+    Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.common import AuditMixin, Base, TimestampMixin, UUIDPKMixin
@@ -110,5 +114,118 @@ class Expense(UUIDPKMixin, Base):
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+
+# ────────────────── Nómina (15-oct-2026) ──────────────────────
+#
+# Diego dejó de anotar "nómina Mario" como un gasto suelto. Ahora el empleado tiene
+# ficha, el mínimo legal tiene vigencia, y cada quincena pagada queda congelada con
+# sus números para que el desprendible sea siempre el mismo.
+
+
+class Employee(UUIDPKMixin, Base):
+    """Una persona en nómina. `salario_base` NULL = gana el mínimo vigente."""
+
+    __tablename__ = "employees"
+    __table_args__: ClassVar = {"schema": "finance"}
+
+    nombre: Mapped[str] = mapped_column(String(160), nullable=False)
+    documento: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
+    email: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    cargo: Mapped[str] = mapped_column(String(80), nullable=False, default="Auxiliar")
+    fecha_ingreso: Mapped[date] = mapped_column(Date, nullable=False)
+    fecha_retiro: Mapped[date | None] = mapped_column(Date, nullable=True)
+    salario_base: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    aux_transporte: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    tipo_contrato: Mapped[str] = mapped_column(String(40), nullable=False, default="indefinido")
+    activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notas: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contrato_enviado_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    contrato_enviado_a: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+
+class PayrollParam(UUIDPKMixin, Base):
+    """Salario mínimo y auxilio de transporte con fecha de vigencia."""
+
+    __tablename__ = "payroll_params"
+    __table_args__: ClassVar = {"schema": "finance"}
+
+    vigencia_desde: Mapped[date] = mapped_column(Date, nullable=False, unique=True)
+    smmlv: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    aux_transporte: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    pct_salud: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=4)
+    pct_pension: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=4)
+    fuente: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+
+class Payroll(UUIDPKMixin, Base):
+    """Una quincena pagada, con todas las cifras congeladas tal como se liquidó."""
+
+    __tablename__ = "payrolls"
+    __table_args__ = (
+        UniqueConstraint("employee_id", "periodo_inicio", name="uq_payrolls_employee_periodo"),
+        {"schema": "finance"},
+    )
+
+    consecutivo: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    employee_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("finance.employees.id"), nullable=False, index=True
+    )
+    periodo_inicio: Mapped[date] = mapped_column(Date, nullable=False)
+    periodo_fin: Mapped[date] = mapped_column(Date, nullable=False)
+    quincena: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    dias_trabajados: Mapped[int] = mapped_column(Integer, nullable=False)
+    salario_base: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    aux_base: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    pct_salud: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    pct_pension: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    dev_salario: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    dev_auxilio: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    otros_devengados: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    total_devengado: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    ded_salud: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    ded_pension: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    otros_descuentos: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    descripcion_otros: Mapped[str | None] = mapped_column(Text, nullable=True)
+    total_deducciones: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    neto: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    prov_cesantias: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    prov_intereses: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    prov_prima: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    prov_vacaciones: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    total_provision: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    estado: Mapped[str] = mapped_column(String(20), nullable=False, default="pagada")
+    fecha_pago: Mapped[date] = mapped_column(Date, nullable=False)
+    pagada_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    pagada_por: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    metodo_pago: Mapped[str] = mapped_column(String(40), nullable=False, default="Transferencia")
+    banco_origen: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    expense_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("finance.expenses.id"), nullable=True
+    )
+    provision_expense_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("finance.expenses.id"), nullable=True
+    )
+    email_enviado_a: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    email_enviado_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    email_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
