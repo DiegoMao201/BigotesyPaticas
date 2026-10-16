@@ -55,7 +55,7 @@ def _pie() -> str:
         f"<hr style='border:none;border-top:1px solid #e5e5e5;margin:20px 0'>"
         f"<p style='font-size:13px;color:#555'><b>{TIENDA}</b><br>{DIRECCION}<br>"
         f"WhatsApp y teléfono: <a href='{WA}'>{TEL}</a> · {HORARIO}<br>"
-        f"Representante legal: Diego Mauricio García</p>"
+        f"Representante legal: Diego Mauricio García Rengifo</p>"
     )
 
 

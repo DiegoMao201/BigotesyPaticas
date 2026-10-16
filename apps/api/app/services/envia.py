@@ -97,7 +97,8 @@ DEPARTAMENTO_NOMBRE = dict(DEPARTAMENTOS)
 #:
 #: EL RESPONSABLE DEL ENVÍO ES BIGOTES Y PATICAS (Diego, 16-oct-2026): así figura
 #: como remitente en la guía. Si la transportadora necesita más información, el
-#: contacto es Diego Mauricio García, representante legal; va en la referencia.
+#: contacto es Diego Mauricio García Rengifo, representante legal (CC 1088266407,
+#: en ENVIA_ORIGIN_DOC); va en la referencia.
 ORIGEN = {
     "name": "Bigotes y Paticas",
     "company": "Bigotes y Paticas",
@@ -111,7 +112,7 @@ ORIGEN = {
     "state": "RI",
     "country": "CO",
     "postalCode": "661001",
-    "reference": "Samara Plaza Mall, Local 2 · Contacto: Diego Mauricio García, representante legal",
+    "reference": "Samara Plaza Mall, Local 2 · Contacto: Diego Mauricio García Rengifo, representante legal",
     "coordinates": {"latitude": "4.8266652", "longitude": "-75.6923926"},
 }
 _ORIGEN_DOC = os.getenv("ENVIA_ORIGIN_DOC", "").strip()
