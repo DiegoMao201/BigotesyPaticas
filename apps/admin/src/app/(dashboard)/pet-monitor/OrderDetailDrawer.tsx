@@ -296,6 +296,19 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
     onError: onErr,
   });
 
+  // Enlace de pago nuevo para un pedido en línea que quedó vencido o fallido.
+  const [enlaceNuevo, setEnlaceNuevo] = useState<{ enlace: string; monto: number; whatsapp: string | null; mensaje: string; envio_recotizado: boolean } | null>(null);
+  const enlaceMut = useMutation({
+    mutationFn: () => adminPortal.nuevoEnlacePago(orderId),
+    onSuccess: (r) => {
+      setEnlaceNuevo(r);
+      copyText(r.mensaje);
+      toast.success(r.envio_recotizado ? 'Enlace creado · el envío cambió de precio y se actualizó' : 'Enlace de pago creado y copiado');
+      invalidate();
+    },
+    onError: onErr,
+  });
+
   if (isLoading || !order) {
     return (
       <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center" onClick={onClose}>
@@ -380,6 +393,38 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
             onLiberar={() => liberarMut.mutate(notaLiberar)}
             liberando={liberarMut.isPending}
           />
+        )}
+
+        {/* PAGO VENCIDO O RECHAZADO: el pedido está completo, solo falta el dinero.
+            Un enlace nuevo con el mismo pedido es la diferencia entre recuperar
+            la venta y perderla por un detalle. */}
+        {order.payment_method === 'bold' && ['expired', 'failed', 'pending'].includes(order.payment_status ?? '') && ws !== 'cancelled' && (
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 shrink-0 flex flex-col gap-2">
+            <p className="text-xs font-bold text-amber-900">
+              {order.payment_status === 'failed' ? 'El banco rechazó el pago' : order.payment_status === 'expired' ? 'El enlace de pago venció sin pagar' : 'Esperando el pago en línea'}
+              {order.shipping_mode === 'national' ? ' · envío nacional: no sale hasta que pague' : ''}
+            </p>
+            {!enlaceNuevo ? (
+              <button
+                onClick={() => enlaceMut.mutate()}
+                disabled={enlaceMut.isPending}
+                className="self-start rounded-lg bg-amber-500 text-white px-3 py-1.5 text-xs font-bold disabled:opacity-50"
+              >
+                {enlaceMut.isPending ? 'Creando…' : '🔗 Nuevo enlace de pago (30 min)'}
+              </button>
+            ) : (
+              <div className="rounded-lg bg-white border border-amber-200 p-2 text-xs flex flex-col gap-1.5">
+                <p className="font-mono break-all text-gray-800">{enlaceNuevo.enlace}</p>
+                <p className="text-gray-600">Total a cobrar: <strong>{formatCurrency(enlaceNuevo.monto)}</strong>. El mensaje ya quedó copiado.</p>
+                <div className="flex gap-2">
+                  {enlaceNuevo.whatsapp && (
+                    <a href={enlaceNuevo.whatsapp} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-green-500 text-white px-3 py-1.5 font-bold">Enviar por WhatsApp</a>
+                  )}
+                  <button onClick={async () => { if (await copyText(enlaceNuevo.mensaje)) toast.success('Copiado'); }} className="rounded-lg border border-gray-200 px-3 py-1.5">Copiar mensaje</button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {!canEditItems && ws !== 'cancelled' && (

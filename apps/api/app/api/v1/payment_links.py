@@ -25,16 +25,19 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from app.api.v1.portal_appointments import _TZ_CO
 from app.deps import DBSession, require_permission
-from app.models.portal import PortalOrder
+from app.models.crm import Customer
+from app.models.portal import PortalOrder, PortalOrderItem
 from app.services import bold
 from app.services.citas import cliente_por_telefono, limpiar
 
@@ -226,4 +229,114 @@ async def crear_pago_libre(payload: PagoLibreIn, request: Request, db: DBSession
         "referencia": referencia,
         "monto": monto,
         "pagar_en": f"{TIENDA}/pagar/{referencia}",
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NUEVO ENLACE DE PAGO PARA UN PEDIDO QUE NO SE PAGÓ (16-oct-2026)
+#
+# Diego, en la primera prueba del envío nacional: *"no pude completar el pago,
+# ¿puedes enviarme otro y generarle un pago al cliente nuevo si es del caso?"*.
+#
+# Un enlace de pago vive 30 minutos. Quien abandona a medio camino —se le cayó la
+# conexión, no tenía la tarjeta a mano, lo pensó— llega al admin como "pago
+# vencido" con su pedido completo: productos, dirección, transportadora. Volver
+# a pedirle todo sería perder la venta por un detalle. Esto le da un enlace
+# nuevo con el MISMO pedido, con el envío recotizado al precio de hoy.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/pedidos/{order_id}/nuevo-enlace", dependencies=[Depends(require_permission("crm:write"))]
+)
+async def nuevo_enlace_para_pedido(order_id: uuid.UUID, db: DBSession) -> dict:
+    from app.services import envia
+
+    if not bold.esta_configurado():
+        raise HTTPException(503, "Bold no está configurado.")
+    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Pedido no encontrado")
+    if order.payment_status == "paid":
+        raise HTTPException(409, "Este pedido ya está pagado.")
+    if (order.workflow_status or "") == "cancelled":
+        raise HTTPException(409, "El pedido está cancelado: reactívalo o crea uno nuevo.")
+    if (order.origen or "") in ("libre",):
+        raise HTTPException(409, "Un pago libre no tiene pedido que reenviar: crea un enlace de cobro.")
+
+    items = (
+        await db.execute(
+            select(PortalOrderItem).where(
+                PortalOrderItem.portal_order_id == order.id, PortalOrderItem.is_removed.is_(False)
+            )
+        )
+    ).scalars().all()
+    subtotal = sum(Decimal(str(i.subtotal or 0)) for i in items)
+    if not items and order.unit_price:
+        subtotal = Decimal(str(order.unit_price)) * (order.quantity or 1)
+    descuento = Decimal(str(order.discount_amount or 0))
+
+    # El envío se vuelve a cotizar: la tarifa que vio hace horas puede no ser la de
+    # hoy, y lo que se cobra tiene que ser lo que la transportadora cobra.
+    envio = Decimal("0")
+    nota_envio = ""
+    if order.shipping_mode == "national" and order.shipping_quote and order.shipping_destination:
+        q = dict(order.shipping_quote)
+        paquetes = envia.empacar(
+            [{"nombre": i.name or "", "cantidad": i.quantity} for i in items], int(subtotal)
+        )
+        try:
+            tarifa = await envia.tarifa_exacta(
+                envia.destino_a_envia(order.shipping_destination), paquetes, q["carrier"], q["service"]
+            )
+        except envia.EnviaError as exc:
+            raise HTTPException(502, f"No se pudo recotizar el envío: {exc}") from exc
+        if tarifa is None:
+            raise HTTPException(409, "La transportadora ya no ofrece esa tarifa. Pide al cliente que cotice de nuevo en la web.")
+        if tarifa.precio != int(q.get("precio") or 0):
+            nota_envio = f" (el envío pasó de ${int(q.get('precio') or 0):,} a ${tarifa.precio:,})".replace(",", ".")
+        order.shipping_quote = {**q, **tarifa.dict(), "cotizado_en": datetime.now(_TZ_CO).isoformat()}
+        envio = Decimal(tarifa.precio)
+    elif order.total_amount is not None and order.shipping_mode != "national":
+        # Domicilio local: lo que ya estaba cobrado por encima de los productos.
+        envio = max(Decimal("0"), Decimal(str(order.total_amount)) - subtotal + descuento)
+
+    total = subtotal - descuento + envio
+    monto = int(total)
+    if monto <= 0:
+        raise HTTPException(409, "El total es cero: no hay nada que cobrar.")
+
+    ahora = datetime.now(_TZ_CO)
+    referencia = bold.nueva_referencia("web" if (order.origen or "web") == "web" else "portal", ahora)
+    order.order_reference = referencia
+    order.bold_amount = monto
+    order.total_amount = total
+    order.payment_method = "bold"
+    order.payment_status = "pending"
+    order.payment_expires_at = ahora + timedelta(minutes=bold.MINUTOS_PARA_PAGAR)
+    order.bold_payment_id = None
+    marca = ahora.strftime("%d/%m %H:%M")
+    order.internal_notes = (f"{order.internal_notes or ''}\n[{marca}] Nuevo enlace de pago {referencia}{nota_envio}").strip()
+    await db.commit()
+
+    cliente = (await db.execute(select(Customer).where(Customer.id == order.customer_id))).scalar_one_or_none()
+    nombre = (cliente.full_name if cliente else "").split(" ")[0] or "¡Hola"
+    telefono = "".join(c for c in (cliente.phone or "") if c.isdigit()) if cliente else ""
+    enlace = f"{TIENDA}/pagar/{referencia}"
+    detalle = ""
+    if order.shipping_mode == "national":
+        q = order.shipping_quote or {}
+        detalle = f" con envío por {q.get('carrier_nombre')} ({q.get('dias')}) incluido"
+    texto = (
+        f"Hola {nombre}! 🐾 Te dejamos un enlace nuevo para pagar tu pedido{detalle}: "
+        f"${monto:,.0f}".replace(",", ".")
+        + f"\n\n{enlace}\n\nVale 30 minutos. Es un pago seguro procesado por Bold; "
+        "cualquier duda, escríbenos por aquí mismo."
+    )
+    log.info("COBRO · nuevo enlace %s para pedido %s por $%s", referencia, order_id, monto)
+    wa = f"https://wa.me/{('57' + telefono) if len(telefono) == 10 else telefono}?text={quote(texto)}" if telefono else None
+    return {
+        "ok": True, "referencia": referencia, "monto": monto, "enlace": enlace,
+        "expira": order.payment_expires_at.isoformat(), "whatsapp": wa, "mensaje": texto,
+        "envio_recotizado": bool(nota_envio),
     }

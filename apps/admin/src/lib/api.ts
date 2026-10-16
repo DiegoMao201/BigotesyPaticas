@@ -1874,6 +1874,10 @@ export const adminPortal = {
       `/v1/admin/portal/orders/${id}/workflow`,
       { method: 'PATCH', body: JSON.stringify({ new_status, internal_notes, ...evidencia }) }
     ),
+  /** Enlace de pago nuevo (30 min) para un pedido pagable en línea que quedó vencido o fallido. */
+  nuevoEnlacePago: (id: string) =>
+    api<{ ok: boolean; referencia: string; monto: number; enlace: string; expira: string; whatsapp: string | null; mensaje: string; envio_recotizado: boolean }>(
+      `/v1/admin/payment-links/pedidos/${id}/nuevo-enlace`, { method: 'POST', body: '{}' }),
   // ── Envío nacional por transportadora (16-oct-2026) ──────────────────────
   envio: (id: string) =>
     api<{ modo: string; destino: ShippingDestination; cotizacion: ShippingQuote; pagado: boolean; guia: Shipment | null; historial: Shipment[]; envia_env: string }>(

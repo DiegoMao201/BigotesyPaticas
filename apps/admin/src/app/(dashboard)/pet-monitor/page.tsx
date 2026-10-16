@@ -385,6 +385,11 @@ export default function PetMonitorPage() {
                               Pago rechazado
                             </span>
                           )}
+                          {order.payment_status === 'expired' && (
+                            <span className="text-xs bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                              ⌛ Pago vencido · reenviar enlace
+                            </span>
+                          )}
                           {order.has_stock_issues && (
                             <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                               <AlertTriangle size={11} /> Sin stock
