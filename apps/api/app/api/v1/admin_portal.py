@@ -2225,9 +2225,43 @@ async def mark_notifications_sent(
 # ── POST cancel order ─────────────────────────────────────────────────────────
 
 
+async def _cancelar_guia_si_hay(order: PortalOrder, db: DBSession) -> None:
+    """Al cancelar un pedido nacional, cancela también su guía en Envia (16-oct-2026).
+
+    Diego: *"¿y qué pasa si le doy cancelar pedido?"*. Una guía viva de un pedido
+    cancelado es saldo de Envia tirado y un paquete que alguien podría despachar
+    por error. Se intenta cancelar; si la transportadora ya la escaneó, Envia no
+    deja, y eso queda escrito en una nota interna para que se resuelva a mano. En
+    ningún caso esto impide cancelar el pedido.
+    """
+    if order.shipping_mode != "national":
+        return
+    from app.api.v1.admin_envios import guia_activa
+    from app.services import envia
+
+    guia = await guia_activa(db, order.id)
+    if not guia or not guia.tracking_number:
+        return
+    marca = datetime.now(UTC).strftime("%d/%m %H:%M")
+    try:
+        r = await envia.cancelar_guia(guia.carrier, guia.tracking_number)
+        guia.cancelled_at = datetime.now(UTC)
+        guia.refunded_amount = r.get("refundedAmount")
+        guia.status = "Canceled"
+        devuelto = r.get("refundedAmount")
+        nota = (f"Guía {guia.tracking_number} cancelada en Envia"
+                + (f" · devolvió ${int(devuelto):,}".replace(",", ".") if devuelto else ""))
+    except Exception as exc:  # la cancelación del pedido no depende de Envia
+        log.exception("ENVIA · no se pudo cancelar la guía %s del pedido %s", guia.tracking_number, order.id)
+        nota = (f"⚠️ La guía {guia.tracking_number} NO se pudo cancelar en Envia: {exc}. "
+                "Cancélala a mano en shipping.envia.com o avisa a la transportadora.")
+    order.internal_notes = f"{order.internal_notes or ''}\n[{marca}] {nota}".strip()
+
+
 async def _reverse_invoice(order: PortalOrder, reason: str, db: DBSession) -> None:
     """Si el pedido ya se facturó, anula la venta y devuelve el inventario.
     Mismo patrón que la cancelación del POS (sales.py cancel_order). Idempotente."""
+    await _cancelar_guia_si_hay(order, db)
     if not order.sales_order_id:
         return
     from app.models.inventory import Stock, StockLocation, StockMovement
