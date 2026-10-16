@@ -54,6 +54,16 @@ el botón **"Generar guía ahora"** para reintentar.
   Dosquebradas ni Pereira por la API**, así que para llevarlo a mano hay que confirmar
   la oficina directamente con la transportadora. No se asume ninguna dirección.
 
+## El envío no es venta: registro de envíos
+
+Al facturar, la venta y la factura llevan SOLO los productos. El envío que el cliente
+pagó aparece discriminado debajo del total de la factura ("Envío por X, pagado por el
+cliente, aparte de la venta") y entra al **registro de envíos** (menú Finanzas →
+Envíos nacionales): por cada pedido, lo que Bold cobró en total, cuánto era producto,
+cuánto envío, lo que costó la guía en Envia y la diferencia. Se exporta a CSV para
+cruzarlo con el extracto de Bold y la factura de Envia. Un pedido pagado con Bold se
+factura ya pagado por el valor de los productos, con la referencia de Bold.
+
 ## Cancelar una guía
 
 Solo antes de que la transportadora escanee el paquete. Botón "Cancelar esta guía" en el

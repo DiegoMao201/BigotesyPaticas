@@ -26,15 +26,19 @@ sería peor que quedarse sin guía un rato.
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
 import uuid
 from datetime import UTC, date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.deps import DBSession, require_permission
+from app.models.crm import Customer
 from app.models.portal import PortalOrder, Shipment
 from app.services import envia
 from app.services.portal_order_actions import queue_customer_notification
@@ -306,3 +310,117 @@ async def puntos(order_id: uuid.UUID, db: DBSession) -> dict:
             vistos.add(k)
             unicos.append(p)
     return {"carrier": carrier, "carrier_nombre": envia.NOMBRES.get(carrier, carrier), "puntos": unicos}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# REGISTRO DE ENVÍOS (Diego, 16-oct-2026)
+#
+# *"Eso lo llevamos no a ventas sino a un registro de envíos para ver cuánto va
+# costando esos envíos y cruzarlos con Bold"*. Una fila por pedido nacional: lo
+# que el cliente pagó por el envío, lo que cobró Envia por la guía, la diferencia,
+# la referencia y el total de Bold, la factura y el estado de la guía.
+# ══════════════════════════════════════════════════════════════════════════════
+
+router_registro = APIRouter(prefix="/admin/envios", tags=["admin-envios"])
+
+
+async def _filas_registro(db: DBSession, desde: date | None, hasta: date | None) -> list[dict]:
+    q = (
+        select(PortalOrder, Customer.full_name)
+        .join(Customer, PortalOrder.customer_id == Customer.id, isouter=True)
+        .where(PortalOrder.shipping_mode == "national")
+        .where(PortalOrder.payment_status.isnot(None), PortalOrder.payment_status != "pending")
+        .order_by(PortalOrder.created_at.desc())
+    )
+    if desde:
+        q = q.where(PortalOrder.created_at >= datetime.combine(desde, datetime.min.time(), tzinfo=UTC))
+    if hasta:
+        q = q.where(PortalOrder.created_at < datetime.combine(hasta, datetime.max.time(), tzinfo=UTC))
+    filas = (await db.execute(q)).all()
+    ids = [o.id for o, _ in filas]
+    guias: dict = {}
+    if ids:
+        for g in (
+            await db.execute(
+                select(Shipment).where(Shipment.portal_order_id.in_(ids)).order_by(Shipment.created_at.asc())
+            )
+        ).scalars().all():
+            # La vigente manda; si todas se cancelaron, queda la última cancelada.
+            actual = guias.get(g.portal_order_id)
+            if actual is None or actual.cancelled_at is not None:
+                guias[g.portal_order_id] = g
+    salida = []
+    for o, nombre in filas:
+        qo = o.shipping_quote or {}
+        d = o.shipping_destination or {}
+        g = guias.get(o.id)
+        cobrado = float(qo.get("precio") or 0)
+        costo = float(g.label_cost) if (g and g.label_cost is not None and g.cancelled_at is None) else None
+        total_bold = float(o.bold_amount or o.total_amount or 0)
+        salida.append({
+            "order_id": str(o.id),
+            "fecha": (o.paid_at or o.created_at).isoformat(),
+            "order_reference": o.order_reference,
+            "cliente": nombre,
+            "ciudad": d.get("ciudad"),
+            "departamento": d.get("departamento_nombre"),
+            "carrier": qo.get("carrier_nombre"),
+            "servicio": qo.get("service_nombre"),
+            "dias": qo.get("dias"),
+            "payment_status": o.payment_status,
+            "workflow_status": o.workflow_status,
+            "total_bold": total_bold,
+            "productos": max(0.0, total_bold - cobrado) if total_bold else 0.0,
+            "envio_cobrado": cobrado,
+            "envio_costo": costo,
+            "diferencia": (cobrado - costo) if costo is not None else None,
+            "invoice_number": o.invoice_number,
+            "guia": g.tracking_number if g else None,
+            "guia_estado": g.status if g else None,
+            "guia_cancelada": bool(g and g.cancelled_at),
+            "refund": float(g.refunded_amount) if (g and g.refunded_amount is not None) else None,
+            "track_url": g.track_url if g else None,
+        })
+    return salida
+
+
+@router_registro.get("/registro")
+async def registro_envios(
+    db: DBSession,
+    desde: date | None = Query(default=None),
+    hasta: date | None = Query(default=None),
+    csv_: bool = Query(default=False, alias="csv"),
+):
+    filas = await _filas_registro(db, desde, hasta)
+    if csv_:
+        buf = io.StringIO()
+        w = csv.writer(buf, delimiter=";")
+        w.writerow(["fecha", "referencia_bold", "cliente", "ciudad", "departamento", "transportadora", "servicio",
+                    "estado_pago", "estado_pedido", "total_bold", "productos", "envio_cobrado_cliente",
+                    "costo_guia_envia", "diferencia", "factura", "guia", "estado_guia", "guia_cancelada", "devuelto"])
+        for f in filas:
+            w.writerow([f["fecha"][:16].replace("T", " "), f["order_reference"], f["cliente"], f["ciudad"],
+                        f["departamento"], f["carrier"], f["servicio"], f["payment_status"], f["workflow_status"],
+                        int(f["total_bold"]), int(f["productos"]), int(f["envio_cobrado"]),
+                        "" if f["envio_costo"] is None else int(f["envio_costo"]),
+                        "" if f["diferencia"] is None else int(f["diferencia"]),
+                        f["invoice_number"] or "", f["guia"] or "", f["guia_estado"] or "",
+                        "sí" if f["guia_cancelada"] else "no", "" if f["refund"] is None else int(f["refund"])])
+        return StreamingResponse(
+            iter(["\ufeff" + buf.getvalue()]), media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=registro_envios.csv"},
+        )
+    pagadas = [f for f in filas if f["payment_status"] == "paid"]
+    con_costo = [f for f in pagadas if f["envio_costo"] is not None]
+    return {
+        "filas": filas,
+        "totales": {
+            "pedidos_pagados": len(pagadas),
+            "envio_cobrado": sum(f["envio_cobrado"] for f in pagadas),
+            "envio_costo": sum(f["envio_costo"] for f in con_costo),
+            "diferencia": sum(f["diferencia"] for f in con_costo),
+            "guias_generadas": len(con_costo),
+            "total_bold": sum(f["total_bold"] for f in pagadas),
+            "productos": sum(f["productos"] for f in pagadas),
+        },
+    }

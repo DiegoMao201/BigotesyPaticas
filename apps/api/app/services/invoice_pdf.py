@@ -359,7 +359,20 @@ def render_invoice_html(*, order, customer_name: str, customer_doc: str) -> str:
         notes_html = f'<div class="notes"><strong>Notas:</strong> {order.notes}</div>'
 
     shipping_row = ""
-    if float(order.shipping_total) > 0:
+    shipping_after_total = ""
+    envio_meta = (order.metadata_ or {}).get("envio") if isinstance(order.metadata_, dict) else None
+    if float(order.shipping_total) > 0 and envio_meta:
+        # Envío por transportadora: lo pagó el cliente junto con el pedido, pero NO
+        # hace parte del total de la venta (va al registro de envíos). Se imprime
+        # discriminado debajo del total para que la factura y el cobro de Bold cuadren.
+        carrier = envio_meta.get("carrier_nombre") or "transportadora"
+        shipping_after_total = (
+            f'<tr><td style="color:#555">Envío por {carrier} (pagado por el cliente, aparte de la venta)</td>'
+            f'<td class="num" style="color:#555">{_money(order.shipping_total)}</td></tr>'
+            f'<tr><td style="color:#555">Total pagado con el envío</td>'
+            f'<td class="num" style="color:#555">{_money(float(order.grand_total) + float(order.shipping_total))}</td></tr>'
+        )
+    elif float(order.shipping_total) > 0:
         shipping_row = (
             f'<tr><td>Domicilio</td><td class="num">{_money(order.shipping_total)}</td></tr>'
         )
@@ -665,6 +678,7 @@ def render_invoice_html(*, order, customer_name: str, customer_doc: str) -> str:
                     {discount_row}
                     {shipping_row}
                     <tr class="grand"><td>Total</td><td class="num">{_money(order.grand_total)}</td></tr>
+                    {shipping_after_total}
                 </table>
             </div>
         </div>

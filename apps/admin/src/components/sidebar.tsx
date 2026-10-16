@@ -57,6 +57,7 @@ const NAV_GROUPS = [
       { href: '/nomina', label: 'Nómina', icon: BadgeDollarSign },
       { href: '/equilibrio', label: 'Punto de equilibrio', icon: Calculator },
       { href: '/cash-closings', label: 'Cierres de Caja', icon: ReceiptText },
+      { href: '/envios', label: 'Envíos nacionales', icon: Truck },
     ],
   },
   {

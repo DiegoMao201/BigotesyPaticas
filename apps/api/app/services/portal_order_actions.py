@@ -381,25 +381,62 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
     invoice_num = await _next_order_number(db)
     now = datetime.now(UTC)
 
+    # EL ENVÍO NO ES VENTA (Diego, 16-oct-2026): *"al facturar solo facturo el
+    # producto, pero necesito ver en la venta y en la factura el pago del envío
+    # discriminado [...] eso lo llevamos no a ventas sino a un registro de envíos
+    # para cruzarlo con Bold"*. Por eso `grand_total` lleva SOLO los productos;
+    # el envío queda en `shipping_total` y en `metadata` para verlo en la factura
+    # y en el registro de envíos, sin sumar a los ingresos.
+    metadata = {"portal_order_id": str(order.id)}
+    if envio_nacional:
+        q = order.shipping_quote or {}
+        metadata["envio"] = {
+            "modo": "national", "carrier": q.get("carrier"), "carrier_nombre": q.get("carrier_nombre"),
+            "cobrado_al_cliente": envio_nacional, "order_reference": order.order_reference,
+            "bold_amount": order.bold_amount,
+        }
     sales_order = SalesOrder(
         order_number=invoice_num,
         channel="PORTAL",
         customer_id=order.customer_id,
-        grand_total=total - discount + envio_nacional,
+        grand_total=total - discount,
         subtotal=total,
         tax_total=0,
         discount_total=discount,
-        # El envío por transportadora lo pagó el cliente junto con los productos:
-        # va en la venta para que la caja cuadre con lo que cobró Bold.
         shipping_total=envio_nacional,
         payment_status="Pendiente",
         status="confirmed",
         occurred_at=now,
         notes=f"Pedido portal #{str(order.id)[:8]}",
-        metadata_={"portal_order_id": str(order.id)},
+        metadata_=metadata,
     )
     db.add(sales_order)
     await db.flush()
+
+    # Un pedido nacional YA PAGADO con Bold entra a la venta como pagado, por el
+    # valor de los productos: el resto del cobro de Bold es el envío y vive en el
+    # registro de envíos. Así la factura sale con el sello PAGADO y la caja no
+    # muestra un saldo pendiente que el cliente ya cubrió.
+    if envio_nacional and order.payment_status == "paid" and order.payment_method == "bold":
+        from app.models.sales import Payment
+
+        productos = total - discount
+        db.add(
+            Payment(
+                order_id=sales_order.id,
+                method="bold",
+                amount=productos,
+                received_at=order.paid_at or now,
+                reference=order.order_reference,
+                notes=(f"Pago en línea Bold de ${int(order.bold_amount or 0):,}: productos "
+                       f"${int(productos):,} + envío ${int(envio_nacional):,} (registro de envíos)").replace(",", "."),
+                created_by="bold",
+            )
+        )
+        sales_order.paid_amount = productos
+        sales_order.balance_due = 0
+        sales_order.payment_status = "Pagado"
+        sales_order.payment_method = "bold"
 
     if items:
         for i in items:

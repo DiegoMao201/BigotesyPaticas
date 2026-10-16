@@ -106,6 +106,7 @@ api_router.include_router(public_grooming.router, prefix="/v1")
 api_router.include_router(public_orders.router, prefix="/v1")
 api_router.include_router(public_shipping.router, prefix="/v1")
 api_router.include_router(admin_envios.router, prefix="/v1")
+api_router.include_router(admin_envios.router_registro, prefix="/v1")
 # Pagos con Bold: el webhook y la consulta de estado sirven IGUAL a la tienda y al
 # portal; el canal se distingue por el prefijo de la referencia (BPW- / BPP-).
 api_router.include_router(payments.router, prefix="/v1")

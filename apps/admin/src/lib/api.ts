@@ -1584,6 +1584,18 @@ export interface ShippingQuote {
   precio: number; precio_envia: number; dias: string; fecha_estimada: string | null; cotizado_en?: string;
 }
 
+export interface FilaRegistroEnvio {
+  order_id: string; fecha: string; order_reference: string | null; cliente: string | null;
+  ciudad: string | null; departamento: string | null; carrier: string | null; servicio: string | null; dias: string | null;
+  payment_status: string | null; workflow_status: string | null;
+  total_bold: number; productos: number; envio_cobrado: number; envio_costo: number | null; diferencia: number | null;
+  invoice_number: string | null; guia: string | null; guia_estado: string | null; guia_cancelada: boolean; refund: number | null; track_url: string | null;
+}
+export interface RegistroEnvios {
+  filas: FilaRegistroEnvio[];
+  totales: { pedidos_pagados: number; envio_cobrado: number; envio_costo: number; diferencia: number; guias_generadas: number; total_bold: number; productos: number };
+}
+
 export interface PuntoEntrega {
   nombre: string; direccion: string; ciudad: string; lat?: string | null; lng?: string | null;
   distancia_km?: number | null; recibe: boolean;
@@ -1874,6 +1886,15 @@ export const adminPortal = {
       `/v1/admin/portal/orders/${id}/workflow`,
       { method: 'PATCH', body: JSON.stringify({ new_status, internal_notes, ...evidencia }) }
     ),
+  /** Registro de envíos nacionales: lo cobrado al cliente vs. lo que costó la guía, cruzado con Bold. */
+  registroEnvios: (desde?: string, hasta?: string) => {
+    const qs = new URLSearchParams(); if (desde) qs.set('desde', desde); if (hasta) qs.set('hasta', hasta);
+    return api<RegistroEnvios>(`/v1/admin/envios/registro${qs.toString() ? `?${qs}` : ''}`);
+  },
+  registroEnviosCsv: (desde?: string, hasta?: string) => {
+    const qs = new URLSearchParams({ csv: '1' }); if (desde) qs.set('desde', desde); if (hasta) qs.set('hasta', hasta);
+    return apiPdf(`/v1/admin/envios/registro?${qs}`);
+  },
   /** Enlace de pago nuevo (30 min) para un pedido pagable en línea que quedó vencido o fallido. */
   nuevoEnlacePago: (id: string) =>
     api<{ ok: boolean; referencia: string; monto: number; enlace: string; expira: string; whatsapp: string | null; mensaje: string; envio_recotizado: boolean }>(
