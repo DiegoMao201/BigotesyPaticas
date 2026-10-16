@@ -31,6 +31,7 @@ LO QUE SE APRENDIÓ PROBANDO CONTRA EL SANDBOX (16-oct-2026)
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import os
@@ -298,7 +299,19 @@ def empacar(items: list[dict], valor_declarado: int) -> list[dict]:
 
 
 def _headers() -> dict:
-    return {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+    return {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json; charset=utf-8"}
+
+
+def cuerpo_json(body: dict) -> bytes:
+    """El JSON que viaja a Envia, con las tildes y la eñe en UTF-8 CRUDO.
+
+    DESCUBIERTO EN PRODUCCIÓN (16-oct-2026): con la eñe escapada como `\\u00f1`
+    —que es lo que hace `json.dumps` por defecto y httpx < 0.28— Envia responde
+    `{"code": 400, "message": "Internal error"}` con HTTP 200. Con la eñe tal cual
+    funciona. "Pañales", "Pequeños" y "Cachorro" están en media tienda, así que
+    sin esto media tienda no cotizaba.
+    """
+    return json.dumps(body, ensure_ascii=False).encode("utf-8")
 
 
 async def _post(path: str, body: dict, timeout: float = 40) -> dict:
@@ -306,7 +319,7 @@ async def _post(path: str, body: dict, timeout: float = 40) -> dict:
         raise EnviaError("Envíos por transportadora no configurados (falta ENVIA_TOKEN).")
     try:
         async with httpx.AsyncClient(timeout=timeout) as cli:
-            r = await cli.post(f"{API}{path}", json=body, headers=_headers())
+            r = await cli.post(f"{API}{path}", content=cuerpo_json(body), headers=_headers())
     except httpx.HTTPError as exc:
         raise EnviaError("La transportadora no respondió. Intenta de nuevo en un momento.") from exc
     if r.status_code == 401:
@@ -315,9 +328,21 @@ async def _post(path: str, body: dict, timeout: float = 40) -> dict:
         datos = r.json()
     except ValueError as exc:
         raise EnviaError(f"Respuesta no válida de Envia ({r.status_code}).") from exc
-    if datos.get("meta") == "error" or r.status_code >= 400:
+    if not isinstance(datos, dict):
+        raise EnviaError(f"Respuesta inesperada de Envia ({r.status_code}).")
+    # Envia tiene DOS formas de decir que algo falló: `{"meta":"error","error":{…}}`
+    # y `{"code":400,"message":"Internal error","description":"…ep-…"}` — esta
+    # última con HTTP 200. Las dos tienen que sonar; un error que pasa como "sin
+    # tarifas" deja al cliente sin explicación y a nosotros sin pista.
+    codigo = datos.get("code")
+    if datos.get("meta") == "error" or r.status_code >= 400 or (
+        isinstance(codigo, int) and codigo >= 400
+    ):
         err = datos.get("error") or {}
-        msg = err.get("message") or err.get("description") or str(datos)[:200]
+        msg = (err.get("message") or err.get("description")
+               or " · ".join(str(datos.get(k)) for k in ("message", "description") if datos.get(k))
+               or str(datos)[:200])
+        log.warning("ENVIA · %s respondió error: %s", path, msg)
         raise EnviaError(msg)
     return datos
 

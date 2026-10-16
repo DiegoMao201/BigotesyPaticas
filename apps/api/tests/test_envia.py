@@ -5,7 +5,6 @@ sandbox el 16-oct-2026 (ver la cabecera de app/services/envia.py).
 """
 
 import pytest
-
 from app.services import envia
 
 
@@ -99,3 +98,10 @@ def test_departamentos_tienen_codigo_de_dos_letras() -> None:
     assert all(len(c) == 2 for c, _ in envia.DEPARTAMENTOS)
     assert envia.DEPARTAMENTO_NOMBRE["RI"] == "Risaralda"
     assert envia.DEPARTAMENTO_NOMBRE["DC"].startswith("Bogotá")
+
+
+def test_el_json_lleva_la_enie_en_utf8_crudo() -> None:
+    # Envia devuelve "Internal error" con la eñe escapada como \u00f1.
+    crudo = envia.cuerpo_json({"content": "Pañales Pequeños"})
+    assert "Pañales Pequeños".encode() in crudo
+    assert b"\\u00f1" not in crudo
