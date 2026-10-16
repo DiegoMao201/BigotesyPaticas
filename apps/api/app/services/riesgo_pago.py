@@ -212,8 +212,15 @@ async def _evaluar(db, pedido: PortalOrder, datos: dict) -> tuple[str, int, list
                              f"Pago a las {hora}:00, fuera del horario en que vendes."))
 
     # ── 8. Fuera de la zona de reparto ───────────────────────────────────────
+    # Un envío NACIONAL va a otra ciudad por definición (16-oct-2026): decir que
+    # "no menciona Pereira" sería marcar en rojo cada venta por transportadora. Lo
+    # que sí es cierto de esos pedidos es que, una vez despachados, la mercancía
+    # no se recupera; vale como señal menor, que suma solo si hay otras.
     direccion = (pedido.shipping_address or "").lower()
-    if direccion and not any(c in direccion for c in ("pereira", "dosquebradas")):
+    if getattr(pedido, "shipping_mode", None) == "national":
+        senales.append(Senal("envio_nacional", 10,
+                             "Sale por transportadora a otra ciudad: una vez despachado no se recupera."))
+    elif direccion and not any(c in direccion for c in ("pereira", "dosquebradas")):
         senales.append(Senal("fuera_de_cobertura", 20,
                              "La dirección no menciona Pereira ni Dosquebradas."))
 
