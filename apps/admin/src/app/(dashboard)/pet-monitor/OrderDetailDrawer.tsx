@@ -134,7 +134,7 @@ function quickMessages(o: PortalOrderDetail): { key: string; label: string; text
           key: 'camino',
           label: '📦 Guía y rastreo',
           text: o.shipment?.tracking_number
-            ? `${hi}\n\nTu pedido ya tiene guía de ${o.shipment.carrier_nombre} ✅\n📦 Guía: *${o.shipment.tracking_number}*${o.shipment.track_url ? `\n🔎 Rastréalo aquí: ${o.shipment.track_url}` : ''}\n\nTiempo estimado: ${o.shipping_quote?.dias ?? 'pocos días'}. Ya está pagado: no pagas nada al recibir 🐾`
+            ? `${hi}\n\nTu pedido ya tiene guía de ${o.shipment.carrier_nombre} ✅\n📦 Guía: *${o.shipment.tracking_number}*${o.shipment.track_url ? `\n🔎 Rastréalo aquí: ${o.shipment.track_url}` : ''}\n\nTiempo estimado: ${o.shipping_quote?.dias ?? 'pocos días'}. Ya está pagado: no pagas nada al recibir 🐾\n\n📌 Tu compra es con Bigotes y Paticas. Desde que ${o.shipment.carrier_nombre} recibe el paquete, el transporte y la entrega son responsabilidad de ${o.shipment.carrier_nombre}; cualquier novedad nos la escribes por aquí y nosotros gestionamos la reclamación contigo.`
             : `${hi}\n\nTu pedido va para ${o.shipping_destination?.ciudad ?? 'tu ciudad'} con ${o.shipping_quote?.carrier_nombre ?? 'transportadora'}. En cuanto tengamos la guía te la mandamos por aquí 🐾`,
         }
       : {

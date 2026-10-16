@@ -205,12 +205,24 @@ def _render_template(template_code: str, data: dict) -> str:
         if data.get("track_url"):
             guia_txt += f"\n🔎 Rastréalo aquí: {data['track_url']}"
 
+    carrier = data.get('carrier_nombre') or 'la transportadora'
+    # Quién responde por qué, en el mismo mensaje de la guía (Diego, 16-oct-2026):
+    # la compra es con la tienda; desde que la transportadora recibe el paquete,
+    # el transporte y la entrega son responsabilidad de ella.
+    responsabilidad = (
+        f"📌 Tu compra es con Bigotes y Paticas. Desde que {carrier} recibe el paquete, "
+        f"el transporte y la entrega son responsabilidad de {carrier}; cualquier novedad "
+        f"nos la escribes por aquí y nosotros gestionamos la reclamación contigo."
+    )
+
     if template_code == "shipment_created":
         return (
             f"¡Hola {first}! Tu pedido ya tiene guía de envío ✅🐾\n\n"
             f"{guia_txt}\n\n"
-            f"Sale con {data.get('carrier_nombre') or 'la transportadora'} y el tiempo estimado es "
-            f"{data.get('dias_envio') or 'de pocos días'}. Te avisamos cuando lo entreguemos a la transportadora.\n\n"
+            f"Sale con {carrier} y el tiempo estimado es "
+            f"{data.get('dias_envio') or 'de pocos días'} desde que lo recoge. "
+            f"Ya está pagado: no pagas nada al recibir.\n\n"
+            f"{responsabilidad}\n\n"
             f"🛒 bigotesypaticas.com · 📸 @bigotesypaticas"
         )
 
@@ -222,6 +234,7 @@ def _render_template(template_code: str, data: dict) -> str:
             f"{guia_txt}\n\n"
             f"Tiempo estimado: {data.get('dias_envio') or 'pocos días'}. Tu pedido ya está pagado: "
             f"no tienes que pagar nada al recibirlo.\n\n"
+            f"{responsabilidad}\n\n"
             f"📸 @bigotesypaticas · 🛒 bigotesypaticas.com"
         )
 
