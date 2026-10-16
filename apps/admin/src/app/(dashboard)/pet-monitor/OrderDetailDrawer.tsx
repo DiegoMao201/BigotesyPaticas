@@ -427,6 +427,20 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
           </div>
         )}
 
+        {/* EL PEDIDO YA NO VALE LO QUE SE COBRÓ. Pasa cuando se sustituye o se
+            cambia un producto después del pago (visto el 16-oct-2026 en la primera
+            prueba: pagó $22.500 y el pedido terminó valiendo $24.200). No se bloquea
+            —a veces es a propósito— pero se dice, con la diferencia exacta. */}
+        {order.payment_status === 'paid' && order.bold_amount != null && Math.round(order.total) !== order.bold_amount && (
+          <div className="px-4 py-2 bg-red-50 border-b border-red-200 text-xs text-red-800 shrink-0">
+            <strong>Ojo:</strong> el cliente pagó <strong>{formatCurrency(order.bold_amount)}</strong> por Bold, pero el pedido ahora vale{' '}
+            <strong>{formatCurrency(order.total)}</strong>
+            {order.total > order.bold_amount
+              ? ` · faltan ${formatCurrency(order.total - order.bold_amount)} por cobrar.`
+              : ` · hay ${formatCurrency(order.bold_amount - order.total)} de más que devolver o abonar.`}
+          </div>
+        )}
+
         {!canEditItems && ws !== 'cancelled' && (
           <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-b border-indigo-100 text-indigo-700 text-xs font-semibold shrink-0">
             <Lock size={13} className="shrink-0" />

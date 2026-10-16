@@ -1676,6 +1676,8 @@ export interface PortalOrderDetail {
   shipping_quote?: ShippingQuote | null;
   /** La guía vigente (no cancelada), si ya se generó */
   shipment?: Shipment | null;
+  /** Lo que Bold cobró de verdad (pesos enteros) */
+  bold_amount?: number | null;
 }
 
 /** Una venta ya facturada a la que podría corresponder un pago sin pedido. */

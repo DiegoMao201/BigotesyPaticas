@@ -1571,6 +1571,9 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
         "shipping_destination": order.shipping_destination,
         "shipping_quote": order.shipping_quote,
         "shipment": guia,
+        # Lo que Bold cobró de verdad (entero firmado). Si el admin cambia productos
+        # después del pago, el pedido deja de valer lo que se cobró y hay que verlo.
+        "bold_amount": order.bold_amount,
         "bold_payment_method": order.bold_payment_method,
         "bold_card_type": order.bold_card_type,
         "bold_card_brand": order.bold_card_brand,

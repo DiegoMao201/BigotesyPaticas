@@ -105,6 +105,9 @@ export function EnvioNacionalPanel({ orderId, order, onNotif, onChanged }: Props
 
   const pagado = order.payment_status === 'paid';
   const estadoGuia = guia?.status ? (ESTADO_ES[guia.status] ?? guia.status) : null;
+  // Un pedido entregado o cancelado ya no necesita guía: ofrecerla sería gastar
+  // saldo por error con un clic.
+  const cerrado = ['delivered', 'cancelled', 'returned'].includes(order.workflow_status ?? '');
 
   return (
     <div className="rounded-xl border-2 border-sky-200 bg-sky-50/60 p-3 flex flex-col gap-3 text-sm">
@@ -135,7 +138,9 @@ export function EnvioNacionalPanel({ orderId, order, onNotif, onChanged }: Props
       </div>
 
       {/* La guía */}
-      {!guia ? (
+      {!guia && cerrado ? (
+        <p className="text-xs text-gray-600">Pedido {order.workflow_status === 'delivered' ? 'entregado' : 'cerrado'} sin guía generada. No se genera una ahora para no gastar saldo.</p>
+      ) : !guia ? (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-sky-900">
             La guía se genera sola al <strong>facturar</strong>. Si no salió, o la cancelaste, sácala aquí.

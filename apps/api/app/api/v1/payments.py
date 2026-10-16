@@ -411,6 +411,12 @@ async def _aprobar(
             from app.services.ga4 import enviar_purchase
 
             await enviar_purchase(db, pedido)
+            # EL CANDADO HAY QUE GUARDARLO. Descubierto el 16-oct-2026: `enviar_purchase`
+            # marca `purchase_sent_at` en el objeto, pero esta sesión no volvía a hacer
+            # commit, así que la marca se perdía y al ENTREGAR el pedido se mandaba el
+            # purchase otra vez. Desde el 5-oct cada venta pagada en línea se le contó
+            # DOS veces a Google (una al pagar, otra al entregar).
+            await db.commit()
         except Exception:
             # Que Google no se entere no puede afectar a un cobro ya hecho.
             log.exception("BOLD · pago OK pero falló el purchase de %s", pedido.order_reference)

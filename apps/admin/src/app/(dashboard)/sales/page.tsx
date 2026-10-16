@@ -182,6 +182,12 @@ function OrderDetailModal({ order, onClose, onCancelDone, onPaymentDone }: { ord
               <tr><td colSpan={4} className="px-3 py-1 text-right text-rose-500 font-normal text-xs">Descuentos</td><td className="px-3 py-1 text-right text-rose-500">-{formatCurrency(Number(order.discount_total))}</td></tr>
             )}
             <tr><td colSpan={4} className="px-3 py-2 text-right">Total</td><td className="px-3 py-2 text-right text-emerald-700 text-base">{formatCurrency(Number(order.grand_total))}</td></tr>
+            {Number(order.shipping_total) > 0 && (
+              <>
+                <tr><td colSpan={4} className="px-3 py-1 text-right font-normal text-xs text-muted-foreground">Envío por transportadora (pagado por el cliente, aparte de la venta)</td><td className="px-3 py-1 text-right font-normal text-xs text-muted-foreground">{formatCurrency(Number(order.shipping_total))}</td></tr>
+                <tr><td colSpan={4} className="px-3 py-1 text-right font-normal text-xs text-muted-foreground">Total pagado con el envío</td><td className="px-3 py-1 text-right font-normal text-xs text-muted-foreground">{formatCurrency(Number(order.grand_total) + Number(order.shipping_total))}</td></tr>
+              </>
+            )}
           </tfoot>
         </table>
 
