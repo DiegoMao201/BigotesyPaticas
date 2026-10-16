@@ -91,7 +91,7 @@ export function Footer() {
             </span>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Productos premium para mascotas en Pereira y Dosquebradas. Cuidamos a quien te cuida.
+            Productos premium para mascotas en Pereira y Dosquebradas, con envíos a toda Colombia. Cuidamos a quien te cuida.
           </p>
           {/* Google stars */}
           <div className="flex items-center gap-2 mt-4">

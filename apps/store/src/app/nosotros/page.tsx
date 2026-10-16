@@ -29,7 +29,8 @@ export default function NosotrosPage() {
           </p>
           <p>
             Estamos ubicados en <strong className="text-foreground">Dosquebradas, Risaralda</strong>,
-            y entregamos en toda la zona urbana de Pereira y Dosquebradas. Nuestro compromiso es
+            entregamos el mismo día en toda la zona urbana de Pereira y Dosquebradas, y enviamos al
+            resto de Colombia por transportadora. Nuestro compromiso es
             simple: si no se lo daríamos a nuestra propia mascota, no lo vendemos.
           </p>
         </div>

@@ -43,11 +43,20 @@ export const FAQS_CONTACTO = [
       `${phoneDisplay} o en la tienda.`,
   },
   {
+    pregunta: '¿Hacen envíos a otras ciudades de Colombia?',
+    respuesta:
+      `Sí. Fuera de Pereira y Dosquebradas enviamos a cualquier ciudad del país por transportadora ` +
+      `(Coordinadora, Servientrega, Inter Rapidísimo o TCC). En el checkout escribes tu dirección, ` +
+      `cotizas el envío, eliges la transportadora y lo pagas en línea junto con el pedido. ` +
+      `Al facturarlo generamos la guía y te la enviamos por WhatsApp para que rastrees el paquete.`,
+  },
+  {
     pregunta: '¿Cuánto cuesta el domicilio?',
     respuesta:
       `El domicilio cuesta ${pesos(shipping.standardShippingCost)} hasta ` +
       `${shipping.nearRadiusKm} km de la tienda y ${pesos(shipping.farShippingCost)} más lejos. ` +
-      `Desde ${pesos(shipping.freeShippingMinimum)} de compra el envío es gratis en Pereira y Dosquebradas.`,
+      `Desde ${pesos(shipping.freeShippingMinimum)} de compra el envío es gratis en Pereira y Dosquebradas. ` +
+      `A otras ciudades el valor lo cotiza la transportadora según la ciudad y el peso, y lo ves antes de pagar.`,
   },
   {
     pregunta: '¿Dónde queda la tienda de mascotas Bigotes y Paticas?',

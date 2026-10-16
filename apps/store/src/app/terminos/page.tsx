@@ -26,8 +26,9 @@ export default function TerminosPage() {
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-3">2. Servicio</h2>
           <p>
-            Bigotes y Paticas es una tienda de productos para mascotas con entrega a domicilio en
-            Pereira y Dosquebradas, Risaralda, Colombia. Operamos de lunes a sábado de 10:00 a 19:00.
+            Bigotes y Paticas es una tienda de productos para mascotas con entrega a domicilio propio en
+            Pereira y Dosquebradas, Risaralda, y envíos al resto de Colombia por transportadora.
+            Operamos de lunes a sábado de 10:00 a 19:00.
             Los pedidos recibidos fuera de este horario son procesados al siguiente día hábil.
           </p>
         </section>
@@ -49,7 +50,21 @@ export default function TerminosPage() {
             <li>Pedidos de menos de $30.000: domicilio de $3.000 COP hasta 5 km del local y de $5.000 COP a mayor distancia</li>
             <li>Pedidos hechos desde el portal de clientes (mi.bigotesypaticas.com): domicilio gratis</li>
             <li>Tiempo estimado: 1 a 3 días hábiles en Pereira y Dosquebradas</li>
-            <li>Nos reservamos el derecho de rechazar pedidos con dirección fuera de nuestra zona de cobertura</li>
+            <li>
+              Envíos a otras ciudades de Colombia: por transportadora (Coordinadora, Servientrega, Inter
+              Rapidísimo o TCC). El valor del envío se cotiza en el checkout según la ciudad y el peso del
+              pedido, se muestra antes de pagar y se cobra junto con los productos
+            </li>
+            <li>
+              Los envíos nacionales se pagan en línea antes del despacho; fuera de Pereira y Dosquebradas
+              no hay pago contra entrega
+            </li>
+            <li>
+              Tiempo estimado de los envíos nacionales: el que indica la transportadora al cotizar
+              (días hábiles contados desde que recibe el paquete). Al generar la guía, el cliente recibe
+              el número para rastrear su paquete
+            </li>
+            <li>Nos reservamos el derecho de rechazar pedidos con dirección que ninguna transportadora cubra</li>
           </ul>
         </section>
 
@@ -57,7 +72,9 @@ export default function TerminosPage() {
           <h2 className="text-xl font-bold text-gray-900 mb-3">5. Métodos de pago</h2>
           <p>
             Aceptamos efectivo contra entrega, tarjeta débito/crédito al recibir, Nequi, Daviplata
-            y transferencia bancaria. El pago se realiza al momento de la entrega salvo indicación contraria.
+            y transferencia bancaria, y pago en línea (tarjeta, PSE, Nequi y Daviplata) a través de Bold.
+            En Pereira y Dosquebradas el pago puede hacerse al momento de la entrega; los envíos a otras
+            ciudades se pagan siempre en línea.
           </p>
         </section>
 

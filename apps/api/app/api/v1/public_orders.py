@@ -37,10 +37,11 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app.api.v1.portal_appointments import _TZ_CO
+from app.api.v1.public_shipping import DANE_LOCALES, DestinoIn, resolver_destino
 from app.deps import DBSession
 from app.models.catalog import Product
 from app.models.portal import PortalOrder, PortalOrderItem
-from app.services import bold, cobertura
+from app.services import bold, cobertura, envia
 from app.services.citas import cliente_por_telefono, limpiar
 
 log = logging.getLogger(__name__)
@@ -165,6 +166,15 @@ def _recortar(valor: object, tope: int) -> str | None:
     return texto or None
 
 
+class EnvioElegido(BaseModel):
+    carrier: str = Field(min_length=2, max_length=40)
+    service: str = Field(min_length=1, max_length=40)
+    #: Lo que el cliente vio en pantalla. Si la transportadora hoy cobra MÁS que
+    #: esto, no se crea el pedido: se devuelve 409 con el precio nuevo para que lo
+    #: vuelva a ver antes de pagar. Cobrar más de lo mostrado sería engañarlo.
+    precio: int = Field(ge=0, le=5_000_000)
+
+
 class PedidoIn(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
     phone: str = Field(min_length=7, max_length=20)
@@ -212,6 +222,14 @@ class PedidoIn(BaseModel):
     # contraentrega, el flujo de siempre. Es lo UNICO que el navegador decide sobre
     # el pago: el monto se calcula abajo, contra la base, y se firma en el servidor.
     payment_method: Literal["bold", "cash"] = "cash"
+    # ── Envío nacional por transportadora (16-oct-2026) ──────────────────────
+    # 'local' = domicilio propio en Pereira/Dosquebradas, el flujo de siempre.
+    # 'national' = sale por Envia.com a otra ciudad: el cliente ya cotizó y eligió
+    # una transportadora; `envio` dice cuál y cuánto VIO. El servidor vuelve a
+    # pedir esa tarifa y cobra la de hoy, nunca la del navegador.
+    shipping_mode: Literal["local", "national"] = "local"
+    destino: DestinoIn | None = None
+    envio: EnvioElegido | None = None
     website: str | None = None  # trampa para bots: una persona nunca lo llena
 
 
@@ -262,28 +280,84 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
     # un `km: 1` escrito a mano habilitaba el cobro de un pedido a 400 km. Ahora el
     # servidor geocodifica la dirección con Google y recalcula la distancia él mismo.
     # El `payload.km` del navegador solo se usa para pintar, nunca para decidir.
-    veredicto = await cobertura.verificar(payload.direccion, payload.lat, payload.lng)
-    km_real = veredicto.km if veredicto.km is not None else payload.km
+    nacional = payload.shipping_mode == "national"
+    destino_nacional: dict | None = None
+    tarifa: envia.Tarifa | None = None
+    direccion: list[str] = []
 
-    envio, envio_texto = _domicilio(subtotal, km_real)
+    if nacional:
+        # ── ENVÍO NACIONAL POR TRANSPORTADORA ────────────────────────────────
+        # No hay radio ni geocodificación de cobertura: la cobertura la pone la
+        # transportadora. Lo que sí se exige es pagar en línea, porque el paquete
+        # sale de la ciudad y no hay "contraentrega" posible para nosotros.
+        if payload.destino is None or payload.envio is None:
+            raise HTTPException(422, "Falta la dirección de destino o la transportadora elegida.")
+        if payload.payment_method != "bold":
+            raise HTTPException(422, "Los envíos a otras ciudades se pagan en línea antes de despachar.")
+        if not bold.esta_configurado() or not envia.esta_configurado():
+            raise HTTPException(503, "El envío por transportadora no está disponible en este momento.")
+        if len((payload.destino.calle or "").strip()) < 6:
+            raise HTTPException(422, "Escribe la dirección completa de entrega (calle y número).")
+        destino_nacional = await resolver_destino(payload.destino, nombre=nombre, telefono=tel)
+        if destino_nacional["dane"] in DANE_LOCALES:
+            raise HTTPException(
+                422,
+                f"{DANE_LOCALES[destino_nacional['dane']]} es nuestra zona de domicilio propio: "
+                "elige «Pereira o Dosquebradas» en el checkout.",
+            )
+        paquetes = envia.empacar(
+            [{"nombre": productos[uuid.UUID(i.product_id)].name or "", "cantidad": i.quantity,
+              "atributos": productos[uuid.UUID(i.product_id)].attributes or {}} for i in payload.items],
+            int(subtotal),
+        )
+        try:
+            tarifa = await envia.tarifa_exacta(
+                envia.destino_a_envia(destino_nacional), paquetes,
+                payload.envio.carrier, payload.envio.service,
+            )
+        except envia.EnviaError as exc:
+            raise HTTPException(503, f"No pudimos confirmar el envío con la transportadora: {exc}") from exc
+        if tarifa is None:
+            raise HTTPException(409, {"motivo": "tarifa_no_disponible",
+                                      "mensaje": "Esa tarifa ya no está disponible. Vuelve a cotizar el envío."})
+        if tarifa.precio > payload.envio.precio:
+            raise HTTPException(409, {"motivo": "precio_cambio", "precio_nuevo": tarifa.precio,
+                                      "mensaje": "El valor del envío cambió. Revísalo antes de pagar."})
+        veredicto = cobertura.Verificacion(cobrable=True, fuente="transportadora",
+                                           municipio=destino_nacional["ciudad"])
+        km_real = None
+        envio = Decimal(tarifa.precio)
+        envio_texto = (f"Envío nacional por {tarifa.carrier_nombre} ({tarifa.dias}) "
+                       f"${tarifa.precio:,}".replace(",", "."))
+        d = destino_nacional
+        direccion = [
+            f"{d['calle']}" + (f", {d['barrio']}" if d["barrio"] else ""),
+            f"{d['ciudad']}, {d['departamento_nombre']}",
+        ]
+        if d["referencia"]:
+            direccion.append(f"Ref: {d['referencia']}")
+        direccion.append(f"[Envío por {tarifa.carrier_nombre}]")
+    else:
+        veredicto = await cobertura.verificar(payload.direccion, payload.lat, payload.lng)
+        km_real = veredicto.km if veredicto.km is not None else payload.km
+        envio, envio_texto = _domicilio(subtotal, km_real)
+        if payload.direccion:
+            direccion.append(payload.direccion.strip())
+        if payload.lat is not None and payload.lng is not None:
+            direccion.append(f"https://www.google.com/maps?q={payload.lat:.6f},{payload.lng:.6f}")
+        if km_real is not None:
+            direccion.append(f"a {km_real:.1f} km del local")
+        if veredicto.verificada_por_google and veredicto.direccion_normalizada:
+            # La dirección tal como Google la entiende. Vale para el domiciliario y vale
+            # como evidencia si algún día hay que demostrar a dónde se entregó.
+            direccion.append(f"[Google: {veredicto.direccion_normalizada}]")
+
     total = subtotal + envio
 
     ahora = datetime.now(_TZ_CO)
     cliente = await cliente_por_telefono(
         db, nombre, tel, "pedido_web_tienda", ahora, consentimiento=True
     )
-
-    direccion = []
-    if payload.direccion:
-        direccion.append(payload.direccion.strip())
-    if payload.lat is not None and payload.lng is not None:
-        direccion.append(f"https://www.google.com/maps?q={payload.lat:.6f},{payload.lng:.6f}")
-    if km_real is not None:
-        direccion.append(f"a {km_real:.1f} km del local")
-    if veredicto.verificada_por_google and veredicto.direccion_normalizada:
-        # La dirección tal como Google la entiende. Vale para el domiciliario y vale
-        # como evidencia si algún día hay que demostrar a dónde se entregó.
-        direccion.append(f"[Google: {veredicto.direccion_normalizada}]")
 
     notas = [f"Pedido desde la tienda web · Tel: {tel}", envio_texto]
     if payload.notes and payload.notes.strip():
@@ -332,6 +406,9 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
         ga_client_id=payload.ga_client_id or None,
         ga_session_id=payload.ga_session_id or None,
         gclid=payload.gclid or None,
+        shipping_mode="national" if nacional else "local",
+        shipping_destination=destino_nacional,
+        shipping_quote=({**tarifa.dict(), "cotizado_en": ahora.isoformat()} if tarifa else None),
     )
     db.add(order)
     await db.flush()
@@ -408,6 +485,8 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
         "cobertura": veredicto.dict(),
         # Desglose, para que el cliente vea de dónde sale cada peso.
         "envio_texto": envio_texto,
+        "shipping_mode": "national" if nacional else "local",
+        "envio_detalle": tarifa.dict() if tarifa else None,
     }
     if paga_en_linea:
         respuesta["bold"] = {

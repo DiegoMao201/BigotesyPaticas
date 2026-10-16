@@ -29,6 +29,10 @@ type Estado = {
   referencia?: string;
   total?: number;
   definitivo?: boolean;
+  shipping_mode?: 'local' | 'national';
+  envio_detalle?: { carrier_nombre?: string | null; dias?: string | null; ciudad?: string | null } | null;
+  /** La guía, cuando ya existe. Este enlace se puede volver a abrir días después. */
+  guia?: { carrier_nombre?: string | null; tracking_number?: string | null; track_url?: string | null; status?: string | null } | null;
 };
 
 export function EstadoDelPago() {
@@ -122,13 +126,20 @@ export function EstadoDelPago() {
   const monto = estado.total ? `$${estado.total.toLocaleString('es-CO')}` : '';
 
   if (estado.estado === 'paid') {
+    const nacional = estado.shipping_mode === 'national';
+    const d = estado.envio_detalle;
     return (
       <Mensaje
         icono="✅"
         titulo="¡Pago confirmado!"
-        texto={`Recibimos tu pago${monto ? ` de ${monto}` : ''}. Tu pedido ya está hecho y lo estamos alistando: te escribimos por WhatsApp cuando salga para tu casa. Vaciamos tu carrito porque esta compra ya quedó registrada.`}
+        texto={
+          nacional
+            ? `Recibimos tu pago${monto ? ` de ${monto}` : ''}, con el envío incluido. Alistamos tu pedido y lo entregamos a ${d?.carrier_nombre ?? 'la transportadora'} para ${d?.ciudad ?? 'tu ciudad'} (tiempo estimado ${d?.dias ?? 'de pocos días'}). Te mandamos la guía por WhatsApp y aquí mismo la verás cuando exista. Vaciamos tu carrito porque esta compra ya quedó registrada.`
+            : `Recibimos tu pago${monto ? ` de ${monto}` : ''}. Tu pedido ya está hecho y lo estamos alistando: te escribimos por WhatsApp cuando salga para tu casa. Vaciamos tu carrito porque esta compra ya quedó registrada.`
+        }
         referencia={estado.referencia}
         tono="bien"
+        guia={nacional ? estado.guia ?? null : null}
       />
     );
   }
@@ -178,12 +189,14 @@ function Mensaje({
   texto,
   referencia,
   tono,
+  guia,
 }: {
   icono: string;
   titulo: string;
   texto: string;
   referencia?: string;
   tono?: 'bien' | 'mal';
+  guia?: Estado['guia'];
 }) {
   // El mensaje llega ESCRITO con la referencia. Quien escribe desde aquí lo hace
   // porque algo de su pago le preocupa; obligarle a teclear un código que no tiene
@@ -203,6 +216,24 @@ function Mensaje({
       </div>
       <h1 className="mt-4 font-display text-2xl font-bold text-[#0d4a45]">{titulo}</h1>
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{texto}</p>
+      {guia?.tracking_number && (
+        <div className="mt-5 rounded-2xl border border-[#187f77]/30 bg-white p-4 text-left text-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#187f77]">Tu guía de envío</p>
+          <p className="mt-1 font-semibold">{guia.carrier_nombre ?? 'Transportadora'}</p>
+          <p className="font-mono text-base">{guia.tracking_number}</p>
+          {guia.status && <p className="mt-1 text-xs text-muted-foreground">Estado: {guia.status}</p>}
+          {guia.track_url && (
+            <a
+              href={guia.track_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-block rounded-xl bg-[#187f77] px-4 py-2 text-xs font-semibold text-white"
+            >
+              Rastrear mi paquete
+            </a>
+          )}
+        </div>
+      )}
       {referencia && (
         <p className="mt-4 font-mono text-xs text-muted-foreground">
           Referencia: {referencia}

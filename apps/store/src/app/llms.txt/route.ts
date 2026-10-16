@@ -36,6 +36,7 @@ const TEXTO = `# Bigotes y Paticas Tienda de Mascotas
 - **Teléfono y WhatsApp**: +57 320 687 6633
 - **Correo**: bigotesypaticasdosquebradas@gmail.com
 - **Zona de domicilio**: Pereira y Dosquebradas. Envío gratis en compras desde $30.000 COP
+- **Envíos nacionales**: a cualquier ciudad de Colombia por transportadora (Coordinadora, Servientrega, Inter Rapidísimo, TCC). El envío se cotiza en el checkout según ciudad y peso y se paga en línea junto con el pedido
 - **Medios de pago**: efectivo, tarjeta débito y crédito, transferencia, Nequi y Daviplata
 - **Ficha en Google Maps**: https://maps.google.com/?cid=8425398225613945586
 
@@ -58,6 +59,7 @@ deducir que también hay veterinario, y no lo hay:
 - $3.000 COP hasta 5 km de la tienda; $5.000 COP más lejos
 - **Gratis** desde $30.000 COP de compra, en Pereira y Dosquebradas
 - Entrega **el mismo día** en la zona urbana de Pereira y Dosquebradas
+- **Otras ciudades de Colombia**: envío por transportadora, cotizado en el checkout y pagado en línea; el cliente recibe la guía para rastrear el paquete
 - También se puede **recoger en la tienda** sin costo, de lunes a sábado de 10:00 a 19:00
 - Se puede **pagar contraentrega**, al recibir el pedido
 

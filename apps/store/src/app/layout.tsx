@@ -46,7 +46,7 @@ export const metadata: Metadata = {
   },
   // ≤155 caracteres: la anterior medía 206 y Google la cortaba a media frase.
   description:
-    'Tienda de mascotas con domicilio el mismo día en Pereira y Dosquebradas. Concentrado, accesorios y medicamentos. 5,0 ★ en Google. Envío gratis desde $30.000.',
+    'Tienda de mascotas con domicilio el mismo día en Pereira y Dosquebradas y envíos a toda Colombia. Concentrado, accesorios y medicamentos. Gratis desde $30.000.',
   keywords: [
     'pet shop Pereira', 'pet shop Dosquebradas', 'petshop Pereira', 'petshop Dosquebradas',
     'domicilio pet shop Pereira', 'pet shop domicilio', 'petshop domicilio Risaralda',
@@ -82,7 +82,7 @@ export const metadata: Metadata = {
     url: 'https://bigotesypaticas.com',
     siteName: 'Bigotes y Paticas',
     title: 'Bigotes y Paticas — Pet Shop Pereira y Dosquebradas con domicilio',
-    description: 'Pet shop con domicilio en Pereira y Dosquebradas. Más de 500 productos para mascotas. Envío gratis desde $30.000.',
+    description: 'Pet shop con domicilio en Pereira y Dosquebradas y envíos a toda Colombia. Más de 500 productos para mascotas. Envío gratis desde $30.000.',
     images: [{
       url: 'https://bigotesypaticas.com/opengraph-image.png',
       width: 1200,
@@ -93,7 +93,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Bigotes y Paticas — Pet Shop Pereira y Dosquebradas',
-    description: 'Pet shop con domicilio en Pereira y Dosquebradas. Más de 500 productos. Entrega el mismo día.',
+    description: 'Pet shop con domicilio en Pereira y Dosquebradas. Más de 500 productos. Entrega el mismo día y envíos a toda Colombia.',
     images: ['https://bigotesypaticas.com/opengraph-image.png'],
   },
   robots: {

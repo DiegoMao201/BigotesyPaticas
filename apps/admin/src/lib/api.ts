@@ -1539,6 +1539,52 @@ export interface PortalOrder {
   payment_method?: string | null;
   order_reference?: string | null;
   paid_at?: string | null;
+  /** 'national' = sale por transportadora (Envia); 'local' o null = domicilio propio */
+  shipping_mode?: 'local' | 'national' | null;
+  shipping_city?: string | null;
+}
+
+/** Una guía generada ante Envia para un pedido nacional (16-oct-2026). */
+export interface Shipment {
+  id: string;
+  carrier: string;
+  carrier_nombre: string;
+  service: string;
+  service_name: string | null;
+  label_cost: number | null;
+  currency: string;
+  envia_shipment_id: number | null;
+  tracking_number: string | null;
+  track_url: string | null;
+  label_url: string | null;
+  status: string | null;
+  status_at: string | null;
+  events: { fecha?: string | null; estado?: string | null; lugar?: string | null }[];
+  pickup_number: string | null;
+  pickup_date: string | null;
+  pickup_window: string | null;
+  cancelled_at: string | null;
+  refunded_amount: number | null;
+  packages: { content?: string; weight?: number; dimensions?: { length: number; width: number; height: number } }[];
+  created_at: string | null;
+  created_by: string | null;
+}
+
+export interface ShippingDestination {
+  nombre?: string; telefono?: string; email?: string | null; cedula?: string | null;
+  calle?: string; barrio?: string; referencia?: string;
+  ciudad?: string; dane?: string; departamento?: string; departamento_nombre?: string; postal?: string;
+  lat?: number | null; lng?: number | null;
+}
+
+export interface ShippingQuote {
+  carrier: string; carrier_nombre: string; service: string; service_nombre: string;
+  precio: number; precio_envia: number; dias: string; fecha_estimada: string | null; cotizado_en?: string;
+}
+
+export interface PuntoEntrega {
+  nombre: string; direccion: string; ciudad: string; lat?: string | null; lng?: string | null;
+  distancia_km?: number | null; recibe: boolean;
 }
 
 export interface PortalOrderItem {
@@ -1610,6 +1656,12 @@ export interface PortalOrderDetail {
   delivered_to_doc?: string | null;
   delivery_evidence_url?: string | null;
   delivery_notes?: string | null;
+  // ── Envío nacional (16-oct-2026) ─────────────────────────────────────────
+  shipping_mode?: 'local' | 'national' | null;
+  shipping_destination?: ShippingDestination | null;
+  shipping_quote?: ShippingQuote | null;
+  /** La guía vigente (no cancelada), si ya se generó */
+  shipment?: Shipment | null;
 }
 
 /** Una venta ya facturada a la que podría corresponder un pago sin pedido. */
@@ -1816,10 +1868,25 @@ export const adminPortal = {
   changeWorkflow: (
     id: string, new_status: string, internal_notes?: string, evidencia?: DeliveryEvidence,
   ) =>
-    api<{ ok: boolean; workflow_status: string; pending_notification?: PendingNotification }>(
+    api<{ ok: boolean; workflow_status: string; pending_notification?: PendingNotification; guia?: Shipment; envio_error?: string }>(
       `/v1/admin/portal/orders/${id}/workflow`,
       { method: 'PATCH', body: JSON.stringify({ new_status, internal_notes, ...evidencia }) }
     ),
+  // ── Envío nacional por transportadora (16-oct-2026) ──────────────────────
+  envio: (id: string) =>
+    api<{ modo: string; destino: ShippingDestination; cotizacion: ShippingQuote; pagado: boolean; guia: Shipment | null; historial: Shipment[]; envia_env: string }>(
+      `/v1/admin/portal/orders/${id}/envio`),
+  generarGuia: (id: string, aunque_no_pagado = false) =>
+    api<{ ok: boolean; guia: Shipment; pending_notification?: PendingNotification }>(
+      `/v1/admin/portal/orders/${id}/envio/generar`, { method: 'POST', body: JSON.stringify({ aunque_no_pagado }) }),
+  rastrearGuia: (id: string) =>
+    api<{ ok: boolean; guia: Shipment }>(`/v1/admin/portal/orders/${id}/envio/rastrear`, { method: 'POST', body: '{}' }),
+  cancelarGuia: (id: string) =>
+    api<{ ok: boolean; guia: Shipment }>(`/v1/admin/portal/orders/${id}/envio/cancelar`, { method: 'POST', body: '{}' }),
+  programarRecogida: (id: string, body: { fecha: string; desde: number; hasta: number; instrucciones?: string }) =>
+    api<{ ok: boolean; guia: Shipment }>(`/v1/admin/portal/orders/${id}/envio/recogida`, { method: 'POST', body: JSON.stringify(body) }),
+  puntosEntrega: (id: string) =>
+    api<{ carrier: string; carrier_nombre: string; puntos: PuntoEntrega[] }>(`/v1/admin/portal/orders/${id}/envio/puntos`),
   /** Las ventas ya facturadas a las que podría corresponder un pago sin pedido. */
   ventasCandidatas: (id: string) =>
     api<CandidatasResp>(`/v1/admin/portal/orders/${id}/ventas-candidatas`),

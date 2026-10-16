@@ -113,7 +113,7 @@ export function HeroSection() {
           <p className="text-lg md:text-xl text-white/85 max-w-lg leading-relaxed">
             Tu petshop de confianza en Samara Plaza Mall: alimento premium, accesorios,
             medicamentos veterinarios y peluquería para perros y gatos.
-            Entregamos el mismo día en Pereira y Dosquebradas, lo más rápido posible.
+            Entregamos el mismo día en Pereira y Dosquebradas, y enviamos a toda Colombia por transportadora.
           </p>
 
           {/* CTAs */}

@@ -34,6 +34,14 @@ type Cobro = {
   items?: { nombre: string; cantidad: number; subtotal: number }[];
   subtotal?: number;
   envio?: number;
+  shipping_mode?: 'local' | 'national';
+  envio_detalle?: {
+    carrier_nombre?: string | null;
+    service_nombre?: string | null;
+    dias?: string | null;
+    ciudad?: string | null;
+    departamento_nombre?: string | null;
+  } | null;
 };
 
 export function PaginaDePago({ referencia }: { referencia: string }) {
@@ -120,7 +128,7 @@ export function PaginaDePago({ referencia }: { referencia: string }) {
               <span className="tabular-nums">{formatCurrency(cobro.subtotal ?? 0)}</span>
             </div>
             <div className="flex justify-between text-muted-foreground">
-              <span>Domicilio</span>
+              <span>{cobro.shipping_mode === 'national' ? `Envío por ${cobro.envio_detalle?.carrier_nombre ?? 'transportadora'}` : 'Domicilio'}</span>
               <span className="tabular-nums">
                 {(cobro.envio ?? 0) > 0 ? (
                   formatCurrency(cobro.envio ?? 0)
@@ -137,8 +145,9 @@ export function PaginaDePago({ referencia }: { referencia: string }) {
             </span>
           </div>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Entrega en Pereira y Dosquebradas, el mismo día. No hay cobros
-            adicionales: este es el valor final.
+            {cobro.shipping_mode === 'national'
+              ? `Envío a ${cobro.envio_detalle?.ciudad ?? 'tu ciudad'}${cobro.envio_detalle?.departamento_nombre ? ` (${cobro.envio_detalle.departamento_nombre})` : ''} con ${cobro.envio_detalle?.carrier_nombre ?? 'transportadora'}, tiempo estimado ${cobro.envio_detalle?.dias ?? 'de pocos días'}. El envío ya está incluido: no pagas nada al recibir.`
+              : 'Entrega en Pereira y Dosquebradas, el mismo día. No hay cobros adicionales: este es el valor final.'}
           </p>
 
           <div className="mt-6">

@@ -237,7 +237,7 @@ export default function CartPage() {
       <div className="py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
-            { icon: '🚚', title: 'Envío GRATIS desde $30.000', desc: 'Entrega el mismo día en Pereira y Dosquebradas' },
+            { icon: '🚚', title: 'Envío GRATIS desde $30.000', desc: 'El mismo día en Pereira y Dosquebradas · a toda Colombia por transportadora' },
             { icon: '🛡️', title: 'Pago seguro', desc: 'Datos protegidos · Transacciones encriptadas' },
             { icon: '↩️', title: 'Devoluciones gratis', desc: '30 días sin complicaciones' },
           ].map((item) => (
@@ -279,7 +279,7 @@ export default function CartPage() {
           ))}
         </div>
         <p className="text-center text-sm text-muted-foreground">
-          💳 Pago contra entrega disponible en Pereira y Dosquebradas
+          💳 Pago contra entrega en Pereira y Dosquebradas · los envíos a otras ciudades se pagan en línea
         </p>
       </div>
 

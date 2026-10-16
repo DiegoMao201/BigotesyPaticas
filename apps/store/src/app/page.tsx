@@ -27,7 +27,7 @@ const CATEGORIES = [
 ];
 
 const VALUES = [
-  { icon: Truck,       title: 'Envío rápido',      desc: 'Entregas el mismo día en Pereira y Dosquebradas', color: 'from-teal-500 to-teal-600'      },
+  { icon: Truck,       title: 'Envío rápido',      desc: 'El mismo día en Pereira y Dosquebradas · a toda Colombia por transportadora', color: 'from-teal-500 to-teal-600'      },
   { icon: ShieldCheck, title: 'Compra segura',      desc: 'Pagos protegidos y garantía de calidad',       color: 'from-emerald-500 to-emerald-600' },
   { icon: Heart,       title: 'Curado con cariño', desc: 'Marcas seleccionadas por veterinarios',         color: 'from-rose-500 to-rose-600'       },
   { icon: Sparkles,    title: 'Premium siempre',   desc: 'Solo productos de la mejor calidad',            color: 'from-amber-500 to-orange-500'    },
@@ -42,7 +42,7 @@ const MARQUEE_ITEMS = [
   '🎁 10% en tu primera compra',
   '💉 Carnet digital gratis',
   '📦 Pereira y Dosquebradas',
-  '🏠 Zona urbana Risaralda',
+  '🚚 Envíos a toda Colombia',
 ];
 
 export default async function HomePage() {
@@ -203,7 +203,8 @@ export default async function HomePage() {
           <p className="text-brand-600 font-semibold text-sm mb-2">Cobertura de entrega</p>
           <h2 className="text-3xl md:text-4xl font-display font-extrabold">Atendemos en Pereira y Dosquebradas</h2>
           <p className="text-muted-foreground mt-3 max-w-xl mx-auto">
-            Domicilio rápido a toda la zona urbana de Risaralda. Haz tu pedido y lo recibís en casa.
+            Domicilio propio el mismo día en la zona urbana, gratis desde $30.000. ¿Vives en otra
+            ciudad? Te lo enviamos por transportadora: cotizas y pagas el envío en el mismo pedido.
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
@@ -245,7 +246,7 @@ export default async function HomePage() {
                 <p className="text-brand-600 font-semibold text-sm mb-2 uppercase tracking-wider">Punto físico</p>
                 <h2 className="text-3xl font-display font-extrabold mb-1">Encuéntranos</h2>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Visítanos en el Samara Plaza Mall o haz tu pedido con domicilio — cubrimos toda la zona urbana de Pereira y Dosquebradas.
+                  Visítanos en el Samara Plaza Mall o haz tu pedido con domicilio — cubrimos toda la zona urbana de Pereira y Dosquebradas, y enviamos al resto de Colombia por transportadora.
                 </p>
               </div>
               <ul className="space-y-3 text-sm">

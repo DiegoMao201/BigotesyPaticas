@@ -50,6 +50,8 @@ NOTIFICATION_TEMPLATES: dict[str, str] = {
     "invoiced": "order_invoiced",
     "in_transit": "ready_for_delivery",
     "delivered": "delivered_with_review_cta",
+    # Envío nacional: se avisa en cuanto existe la guía (16-oct-2026).
+    "shipment_created": "shipment_created",
 }
 
 
@@ -81,7 +83,25 @@ async def _order_render_data(order: PortalOrder, db: DBSession) -> dict:
         subtotal = float(order.unit_price) * (order.quantity or 1)
     discount = float(order.discount_amount or 0)
     shipping = 0.0  # portal: domicilio gratis en TODO pedido (Diego 27-sep-2026, para incentivar el portal)
+    nacional = order.shipping_mode == "national"
+    if nacional:
+        # Envío por transportadora: lo que el cliente pagó por el envío es lo que
+        # cotizó y se congeló en el pedido.
+        shipping = float((order.shipping_quote or {}).get("precio") or 0)
     total = subtotal - discount + shipping
+
+    guia = None
+    if nacional:
+        from app.models.portal import Shipment
+
+        guia = (
+            await db.execute(
+                select(Shipment)
+                .where(Shipment.portal_order_id == order.id, Shipment.cancelled_at.is_(None))
+                .order_by(Shipment.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
 
     return {
         "id": str(order.id),
@@ -89,6 +109,11 @@ async def _order_render_data(order: PortalOrder, db: DBSession) -> dict:
         "customer_phone": customer.phone if customer else None,
         "payment_method": order.payment_method,
         "shipping_address": order.shipping_address,
+        "shipping_mode": order.shipping_mode or "local",
+        "carrier_nombre": (order.shipping_quote or {}).get("carrier_nombre"),
+        "dias_envio": (order.shipping_quote or {}).get("dias"),
+        "tracking_number": guia.tracking_number if guia else None,
+        "track_url": guia.track_url if guia else None,
         "customer_facing_notes": order.customer_facing_notes,
         "items": [
             {
@@ -173,6 +198,33 @@ def _render_template(template_code: str, data: dict) -> str:
             f"🛒 Catálogo completo: https://bigotesypaticas.com"
         )
 
+    nacional = data.get("shipping_mode") == "national"
+    guia_txt = ""
+    if data.get("tracking_number"):
+        guia_txt = f"📦 Guía {data.get('carrier_nombre') or ''}: *{data['tracking_number']}*"
+        if data.get("track_url"):
+            guia_txt += f"\n🔎 Rastréalo aquí: {data['track_url']}"
+
+    if template_code == "shipment_created":
+        return (
+            f"¡Hola {first}! Tu pedido ya tiene guía de envío ✅🐾\n\n"
+            f"{guia_txt}\n\n"
+            f"Sale con {data.get('carrier_nombre') or 'la transportadora'} y el tiempo estimado es "
+            f"{data.get('dias_envio') or 'de pocos días'}. Te avisamos cuando lo entreguemos a la transportadora.\n\n"
+            f"🛒 bigotesypaticas.com · 📸 @bigotesypaticas"
+        )
+
+    if template_code == "ready_for_delivery" and nacional:
+        addr = data.get("shipping_address") or "pendiente"
+        return (
+            f"¡Hola {first}! Tu pedido ya está en manos de {data.get('carrier_nombre') or 'la transportadora'} 🚚🐾\n\n"
+            f"📍 Va para: {addr}\n"
+            f"{guia_txt}\n\n"
+            f"Tiempo estimado: {data.get('dias_envio') or 'pocos días'}. Tu pedido ya está pagado: "
+            f"no tienes que pagar nada al recibirlo.\n\n"
+            f"📸 @bigotesypaticas · 🛒 bigotesypaticas.com"
+        )
+
     if template_code == "ready_for_delivery":
         addr = data.get("shipping_address") or "pendiente"
         return (
@@ -240,6 +292,10 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
         total = float(order.unit_price) * (order.quantity or 1)
     # El descuento que el admin dio en el pedido tiene que llegar a la factura
     discount = min(float(order.discount_amount or 0), total)
+    envio_nacional = (
+        float((order.shipping_quote or {}).get("precio") or 0)
+        if order.shipping_mode == "national" else 0.0
+    )
 
     # ── Validar + descontar inventario real ANTES de crear la factura ────────
     # Mismo patrón que el POS (app/api/v1/sales.py): lock de fila + StockMovement.
@@ -316,11 +372,13 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
         order_number=invoice_num,
         channel="PORTAL",
         customer_id=order.customer_id,
-        grand_total=total - discount,
+        grand_total=total - discount + envio_nacional,
         subtotal=total,
         tax_total=0,
         discount_total=discount,
-        shipping_total=0,
+        # El envío por transportadora lo pagó el cliente junto con los productos:
+        # va en la venta para que la caja cuadre con lo que cobró Bold.
+        shipping_total=envio_nacional,
         payment_status="Pendiente",
         status="confirmed",
         occurred_at=now,

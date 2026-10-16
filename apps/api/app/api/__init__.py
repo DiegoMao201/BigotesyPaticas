@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    admin_envios,
     admin_etl,
     admin_partners,
     admin_portal,
@@ -35,6 +36,7 @@ from app.api.v1 import (
     payment_links,
     payments,
     public_orders,
+    public_shipping,
     portal_auth,
     portal_bookings,
     portal_intelligence,
@@ -102,6 +104,8 @@ api_router.include_router(public_grooming.router, prefix="/v1")
 # Pedido de la tienda web sin cuenta (2-oct-2026): entra al flujo del portal y se
 # le cuenta a Google cuando el admin lo marca entregado.
 api_router.include_router(public_orders.router, prefix="/v1")
+api_router.include_router(public_shipping.router, prefix="/v1")
+api_router.include_router(admin_envios.router, prefix="/v1")
 # Pagos con Bold: el webhook y la consulta de estado sirven IGUAL a la tienda y al
 # portal; el canal se distingue por el prefijo de la referencia (BPW- / BPP-).
 api_router.include_router(payments.router, prefix="/v1")

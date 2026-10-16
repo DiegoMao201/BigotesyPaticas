@@ -361,6 +361,11 @@ export default function PetMonitorPage() {
                               🌐 Tienda web
                             </span>
                           )}
+                          {order.shipping_mode === 'national' && (
+                            <span className="text-xs bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full font-bold">
+                              🚚 Transportadora{order.shipping_city ? ` · ${order.shipping_city}` : ''}
+                            </span>
+                          )}
                           {/* PAGADO vs ESPERANDO PAGO. Es la diferencia entre un
                               pedido con el dinero encima —que hay que alistar ya— y
                               uno que todavía puede no pagarse nunca. Sin esto los

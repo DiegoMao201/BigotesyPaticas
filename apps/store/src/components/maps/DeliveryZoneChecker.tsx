@@ -206,20 +206,27 @@ export function DeliveryZoneChecker() {
             <XCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-amber-800 text-sm">
-                Por ahora cubrimos Pereira y Dosquebradas
+                Nuestro domicilio propio cubre Pereira y Dosquebradas
               </p>
               <p className="text-amber-700 text-xs mt-1">
-                Escríbenos — a veces podemos coordinar entregas especiales.
+                Pero sí te lo enviamos: a otras ciudades de Colombia va por transportadora. En el
+                checkout eliges «Otra ciudad», cotizas el envío y lo pagas con el pedido.
               </p>
             </div>
           </div>
           <a
+            href="/categorias/todos"
+            className="flex items-center justify-center gap-2 w-full mt-3 py-2.5 rounded-xl bg-[#187f77] text-white font-semibold text-sm hover:bg-[#0d4a45] transition-colors"
+          >
+            🛒 Armar mi pedido y cotizar el envío
+          </a>
+          <a
             href={`https://wa.me/573206876633?text=${waMsg}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full mt-3 py-2.5 rounded-xl bg-amber-500 text-white font-semibold text-sm hover:bg-amber-600 transition-colors"
+            className="flex items-center justify-center gap-2 w-full mt-2 py-2 rounded-xl border border-amber-300 text-amber-800 font-semibold text-sm hover:bg-amber-100 transition-colors"
           >
-            💬 Consultar de todas formas
+            💬 Preguntar por WhatsApp
           </a>
         </div>
       )}

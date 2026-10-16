@@ -28,6 +28,7 @@ import { adminPortal, ApiError, type PortalOrderDetail, type PendingNotification
 import { formatCurrency } from '@/lib/utils';
 import { openWhatsApp, getWhatsAppMode, setWhatsAppMode, copyText, type WhatsAppMode } from '@/lib/whatsapp';
 import { ProductPickerModal } from '@/components/ProductPickerModal';
+import { EnvioNacionalPanel } from './EnvioNacionalPanel';
 
 const PORTAL_URL = 'https://mi.bigotesypaticas.com';
 
@@ -128,11 +129,19 @@ function quickMessages(o: PortalOrderDetail): { key: string; label: string; text
       label: '✅ Pedir aprobación',
       text: `${hi}\n\nRevisamos tu pedido y así quedaría:\n\n${summaryLines(o)}\n\n¿Lo confirmas? Responde *SÍ* o apruébalo en tu portal 👉 ${PORTAL_URL}/orders/${o.id}`,
     },
-    {
-      key: 'camino',
-      label: '🚚 En camino',
-      text: `${hi}\n\nTu pedido ya va en camino 🚚\n📍 ${o.shipping_address || ''}\n\nTotal a pagar: *${money(o.total)}*`,
-    },
+    o.shipping_mode === 'national'
+      ? {
+          key: 'camino',
+          label: '📦 Guía y rastreo',
+          text: o.shipment?.tracking_number
+            ? `${hi}\n\nTu pedido ya tiene guía de ${o.shipment.carrier_nombre} ✅\n📦 Guía: *${o.shipment.tracking_number}*${o.shipment.track_url ? `\n🔎 Rastréalo aquí: ${o.shipment.track_url}` : ''}\n\nTiempo estimado: ${o.shipping_quote?.dias ?? 'pocos días'}. Ya está pagado: no pagas nada al recibir 🐾`
+            : `${hi}\n\nTu pedido va para ${o.shipping_destination?.ciudad ?? 'tu ciudad'} con ${o.shipping_quote?.carrier_nombre ?? 'transportadora'}. En cuanto tengamos la guía te la mandamos por aquí 🐾`,
+        }
+      : {
+          key: 'camino',
+          label: '🚚 En camino',
+          text: `${hi}\n\nTu pedido ya va en camino 🚚\n📍 ${o.shipping_address || ''}\n\nTotal a pagar: *${money(o.total)}*`,
+        },
   ];
   return msgs;
 }
@@ -195,6 +204,8 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
       adminPortal.changeWorkflow(orderId, status, notes, evidencia),
     onSuccess: (d) => {
       toast.success(`Estado → ${WORKFLOW_LABELS[d.workflow_status]?.label ?? d.workflow_status}`);
+      if (d.guia) toast.success(`Guía ${d.guia.tracking_number} generada con ${d.guia.carrier_nombre}`, { duration: 8000 });
+      if (d.envio_error) toast.error(`Facturado, pero la guía no salió: ${d.envio_error}. Genérala desde el panel de envío.`, { duration: 12000 });
       invalidate();
       if (d.pending_notification) setPendingNotif(d.pending_notification);
     },
@@ -346,7 +357,7 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
           {order.discount_amount > 0 && (
             <span className="text-red-600">Desc: -{formatCurrency(order.discount_amount)}</span>
           )}
-          <span className="text-gray-600">Envío: <strong>{order.shipping === 0 ? 'Gratis' : formatCurrency(order.shipping)}</strong></span>
+          <span className="text-gray-600">{order.shipping_mode === 'national' ? 'Transportadora' : 'Envío'}: <strong>{order.shipping === 0 ? 'Gratis' : formatCurrency(order.shipping)}</strong></span>
           <span className="font-bold text-teal-800">Total: {formatCurrency(order.total)}</span>
         </div>
 
@@ -442,8 +453,18 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                 </div>
               )}
 
+              {/* Envío nacional: destino, guía, recogida o punto de entrega */}
+              {order.shipping_mode === 'national' && (
+                <EnvioNacionalPanel
+                  orderId={orderId}
+                  order={order}
+                  onNotif={(n) => setPendingNotif(n)}
+                  onChanged={onRefreshList}
+                />
+              )}
+
               {/* Dirección */}
-              {!editingAddress ? (
+              {order.shipping_mode === 'national' ? null : !editingAddress ? (
                 <div className="flex items-start gap-2 bg-gray-50 rounded-xl p-3 text-sm">
                   <MapPin size={14} className="text-gray-400 mt-0.5 shrink-0" />
                   <span className="text-gray-700 flex-1 whitespace-pre-line">{order.shipping_address || 'Sin dirección registrada'}</span>
@@ -832,7 +853,11 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                   className="flex-1 py-2 rounded-xl border-2 border-teal-600 text-teal-700 font-semibold text-sm hover:bg-teal-50 transition-colors disabled:opacity-50"
                 >
                   {opt.value === 'under_review' && ws === 'awaiting_customer' ? <Undo2 size={13} className="inline mr-1" /> : null}
-                  {opt.label} <ChevronRight size={13} className="inline" />
+                  {order.shipping_mode === 'national' && opt.value === 'in_transit'
+                    ? 'Entregado a la transportadora'
+                    : order.shipping_mode === 'national' && opt.value === 'invoiced'
+                      ? 'Facturar y generar guía'
+                      : opt.label} <ChevronRight size={13} className="inline" />
                 </button>
               ))}
             </div>

@@ -10,7 +10,9 @@ import { useMounted } from '@/lib/use-mounted';
 import { useCart } from '@/lib/cart-store';
 import { formatCurrency } from '@/lib/utils';
 import { BUSINESS_INFO } from '@/lib/business-info';
-import { MessageCircle, ArrowLeft, Package, ShoppingBag, CheckCircle, ShieldCheck } from 'lucide-react';
+import { MessageCircle, ArrowLeft, Package, ShoppingBag, CheckCircle, ShieldCheck, Truck, Home } from 'lucide-react';
+import { EnvioNacional } from '@/components/envio/EnvioNacional';
+import { useEnvioNacional, huellaCotizacion } from '@/lib/envio-nacional';
 import { useMetaPixelEvent } from '@/hooks/useMetaPixelEvent';
 import { trackBeginCheckout, huellaGoogle, recordarGclid } from '@/lib/analytics';
 
@@ -49,7 +51,23 @@ export default function CheckoutPage() {
   const items = useCart((s) => s.items);
   const subtotal = useCart((s) => s.subtotal());
   const ubicacion = useUbicacionEntrega((s) => s.ubicacion);
-  const dom = calcularDomicilio(subtotal, ubicacion?.km ?? null);
+  // ENVÍO NACIONAL (16-oct-2026). Dos caminos que no se mezclan: el domicilio
+  // propio en Pereira y Dosquebradas (lib/delivery) y la transportadora a otra
+  // ciudad (lib/envio-nacional). El modo decide qué formulario se ve, qué vale el
+  // envío y cómo se puede pagar.
+  const modo = useEnvioNacional((s) => s.modo);
+  const setModo = useEnvioNacional((s) => s.setModo);
+  const destinoN = useEnvioNacional((s) => s.destino);
+  const tarifaN = useEnvioNacional((s) => s.tarifa);
+  const cotizadoPara = useEnvioNacional((s) => s.cotizadoPara);
+  const nacional = modo === 'nacional';
+  const tarifaVigente = nacional && tarifaN && cotizadoPara === huellaCotizacion(items, destinoN) ? tarifaN : null;
+  const domLocal = calcularDomicilio(subtotal, ubicacion?.km ?? null);
+  const dom: Domicilio = nacional
+    ? (tarifaVigente
+        ? { tipo: 'tarifa', valor: tarifaVigente.precio, texto: `${tarifaVigente.carrier_nombre} · ${tarifaVigente.dias}` }
+        : { tipo: 'pendiente', valor: null, texto: 'Cotiza el envío' })
+    : domLocal;
   const shipping = dom.valor ?? 0;
   const total = subtotal + shipping;
   const { track } = useMetaPixelEvent();   // antes se llamaba DESPUÉS de un return (regla de hooks)
@@ -90,9 +108,13 @@ export default function CheckoutPage() {
   // porque el cliente paga, espera, y hay que devolverle el dinero explicándole por
   // qué. La confianza no se recupera con un reembolso.
   const km = ubicacion?.km ?? null;
-  const sinUbicacion = km == null;
-  const fueraDeZona = km != null && km > RADIO_MAX_KM;
-  const puedePagarEnLinea = !sinUbicacion && !fueraDeZona;
+  const sinUbicacion = !nacional && km == null;
+  const fueraDeZona = !nacional && km != null && km > RADIO_MAX_KM;
+  const destinoListo = destinoN.departamento !== '' && destinoN.ciudad.trim().length >= 2 && destinoN.calle.trim().length >= 6;
+  // Nacional: solo se paga cuando hay destino completo y una tarifa elegida. Y
+  // SOLO en línea: el paquete sale de la ciudad, no hay contraentrega posible.
+  const puedePagarEnLinea = nacional ? (destinoListo && !!tarifaVigente) : (!sinUbicacion && !fueraDeZona);
+  const metodoEfectivo: 'bold' | 'cash' = nacional ? 'bold' : metodoPago;
 
   // el carrito vive en el navegador: hasta montar no se sabe si está vacío (ver use-mounted)
   if (!mounted) return <div className="container-tight py-24 min-h-[60vh]" />;
@@ -178,6 +200,25 @@ export default function CheckoutPage() {
         body: JSON.stringify({ ...cuerpoPedido(), payment_method: 'bold' }),
       });
       const d = await r.json();
+      // EL ENVÍO CAMBIÓ DE PRECIO entre que cotizó y pagó (la transportadora cobra
+      // lo de hoy). No se cobra de más en silencio: se le dice y vuelve a cotizar.
+      if (r.status === 409 && d?.detail?.motivo) {
+        useEnvioNacional.getState().setTarifa(null, '');
+        setEnviando(false);
+        setErrorPago(
+          d.detail.motivo === 'precio_cambio'
+            ? `El valor del envío cambió a ${formatCurrency(d.detail.precio_nuevo)}. Vuelve a cotizar para verlo antes de pagar.`
+            : (d.detail.mensaje ?? 'La tarifa ya no está disponible. Vuelve a cotizar el envío.'),
+        );
+        document.getElementById('entrega')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      if (r.status === 422 || r.status === 503) {
+        const det = d?.detail;
+        setEnviando(false);
+        setErrorPago(typeof det === 'string' ? det : (det?.mensaje ?? 'No pudimos preparar el pago. Revisa los datos e intenta de nuevo.'));
+        return;
+      }
       const ref = d?.bold?.order_reference;
       if (!r.ok || !ref) throw new Error('sin referencia');
 
@@ -209,6 +250,31 @@ export default function CheckoutPage() {
 
   /** Los datos del pedido, iguales para los dos metodos de pago. */
   function cuerpoPedido() {
+    if (nacional) {
+      return {
+        full_name: name.trim(),
+        phone: phone.replace(/\D/g, ''),
+        items: items.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
+        shipping_mode: 'national',
+        destino: {
+          departamento: destinoN.departamento,
+          ciudad: destinoN.ciudad.trim(),
+          calle: destinoN.calle.trim(),
+          barrio: destinoN.barrio.trim() || null,
+          referencia: destinoN.referencia.trim() || null,
+          postal: destinoN.postal.trim() || null,
+          cedula: destinoN.cedula.trim() || null,
+          email: destinoN.email.trim() || null,
+          lat: destinoN.lat,
+          lng: destinoN.lng,
+        },
+        envio: tarifaVigente
+          ? { carrier: tarifaVigente.carrier, service: tarifaVigente.service, precio: tarifaVigente.precio }
+          : null,
+        notes: notes.trim() || null,
+        ...huellaGoogle(),
+      };
+    }
     return {
       full_name: name.trim(),
       phone: phone.replace(/\D/g, ''),
@@ -224,7 +290,7 @@ export default function CheckoutPage() {
 
   /** Ubicacion, nombre y celular: sin esto el pedido no se puede entregar. */
   function validarDatos(): boolean {
-    if (!ubicacion) {
+    if (nacional ? !(destinoListo && tarifaVigente) : !ubicacion) {
       setPideUbicacion(true);
       document.getElementById('entrega')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return false;
@@ -244,6 +310,12 @@ export default function CheckoutPage() {
   function confirmarPedido() {
     // Guarda final: si entre que eligió y confirmó cambió la ubicación, no se
     // intenta cobrar. El servidor lo rechazaría igual, pero es mejor no prometerlo.
+    if (nacional) {
+      // A otra ciudad no hay WhatsApp que valga: o está todo y se paga, o falta algo.
+      if (!validarDatos()) return;
+      void pagarEnLinea();
+      return;
+    }
     if (metodoPago === 'bold' && puedePagarEnLinea) void pagarEnLinea();
     else void openWhatsApp();
   }
@@ -310,7 +382,14 @@ export default function CheckoutPage() {
                   botón de al lado no es solo descuido: Google Merchant Center revisa
                   estas páginas a mano, y una instrucción que no cuadra con el flujo
                   es motivo de rechazo. */}
-              {(metodoPago === 'bold' && puedePagarEnLinea
+              {(nacional
+                ? [
+                    { step: '1', text: 'Revisa tu pedido aquí abajo' },
+                    { step: '2', text: 'Escribe tu dirección y cotiza el envío: eliges la transportadora y ves el valor antes de pagar' },
+                    { step: '3', text: 'Paga en línea de forma segura — tarjeta, PSE, Nequi o Daviplata' },
+                    { step: '4', text: 'Generamos la guía, te la enviamos por WhatsApp y puedes rastrear tu paquete' },
+                  ]
+                : metodoPago === 'bold' && puedePagarEnLinea
                 ? [
                     { step: '1', text: 'Revisa tu pedido aquí abajo' },
                     { step: '2', text: 'Dinos dónde entregamos: tu ubicación o tu dirección en Google Maps' },
@@ -334,37 +413,60 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Cobertura */}
-          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3 items-start">
-            <span className="text-xl shrink-0">📍</span>
-            <div>
-              <p className="font-semibold text-blue-900 text-sm">Cobertura actual</p>
-              <p className="text-blue-700 text-xs mt-0.5">
-                Pereira y Dosquebradas zona urbana, entrega el mismo día.
-              </p>
-              <p className="text-blue-600 text-xs mt-1">
-                ¿Estás fuera de esta zona?{' '}
-                <a
-                  href="https://wa.me/573206876633?text=Hola!%20Quiero%20consultar%20cobertura%20de%20domicilio%20a%20mi%20zona."
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline font-medium"
-                >
-                  Escríbenos por WhatsApp
-                </a>{' '}
-                y coordinamos un envío especial.
-              </p>
-            </div>
+          {/* ¿A DÓNDE VA? Domicilio propio o transportadora. Las dos opciones se
+              ven completas y con su promesa real: el mismo día aquí, días hábiles
+              por transportadora allá. */}
+          <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Tipo de entrega">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!nacional}
+              onClick={() => { setModo('local'); setPideUbicacion(false); setErrorPago(''); }}
+              className={`rounded-2xl border-2 p-4 text-left transition-colors ${!nacional ? 'border-[#187f77] bg-[#187f77]/5' : 'border-border hover:border-[#187f77]/40'}`}
+            >
+              <div className="flex items-start gap-3">
+                <Home className={`h-5 w-5 shrink-0 mt-0.5 ${!nacional ? 'text-[#187f77]' : 'text-muted-foreground'}`} />
+                <div>
+                  <p className="font-semibold">Pereira o Dosquebradas</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Domicilio propio, el mismo día · gratis desde {formatCurrency(GRATIS_DESDE)}</p>
+                </div>
+              </div>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={nacional}
+              onClick={() => { setModo('nacional'); setMetodoPago('bold'); setPideUbicacion(false); setErrorPago(''); }}
+              className={`rounded-2xl border-2 p-4 text-left transition-colors ${nacional ? 'border-[#187f77] bg-[#187f77]/5' : 'border-border hover:border-[#187f77]/40'}`}
+            >
+              <div className="flex items-start gap-3">
+                <Truck className={`h-5 w-5 shrink-0 mt-0.5 ${nacional ? 'text-[#187f77]' : 'text-muted-foreground'}`} />
+                <div>
+                  <p className="font-semibold">Otra ciudad de Colombia</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Por transportadora · cotizas y pagas el envío aquí mismo</p>
+                </div>
+              </div>
+            </button>
           </div>
 
           {/* Entrega: ubicación con Google Maps */}
-          <div id="entrega" className={`bg-white border rounded-2xl p-5 flex flex-col gap-4 ${pideUbicacion && !ubicacion ? 'border-amber-400 ring-2 ring-amber-200' : 'border-border'}`}>
+          <div id="entrega" className={`bg-white border rounded-2xl p-5 flex flex-col gap-4 ${pideUbicacion && (nacional ? !(destinoListo && tarifaVigente) : !ubicacion) ? 'border-amber-400 ring-2 ring-amber-200' : 'border-border'}`}>
             <div>
               <p className="font-semibold text-gray-900">¿Dónde te lo llevamos?</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{REGLA_TEXTO}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {nacional ? 'Envío por transportadora a cualquier ciudad de Colombia. El valor depende de la ciudad y del peso.' : REGLA_TEXTO}
+              </p>
             </div>
-            <DeliveryLocationPicker subtotal={subtotal} />
-            {pideUbicacion && !ubicacion && (
+            {nacional ? (
+              <EnvioNacional
+                items={items}
+                pideDatos={pideUbicacion}
+                onCambiarALocal={() => { setModo('local'); setPideUbicacion(false); }}
+              />
+            ) : (
+              <DeliveryLocationPicker subtotal={subtotal} />
+            )}
+            {pideUbicacion && !nacional && !ubicacion && (
               <p className="text-sm font-medium text-amber-700">Indícanos dónde entregar para enviar el pedido.</p>
             )}
             <div className="grid gap-4 sm:grid-cols-2">
@@ -459,12 +561,15 @@ export default function CheckoutPage() {
                 <span>{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Domicilio</span>
+                <span className="text-muted-foreground">{nacional ? 'Envío por transportadora' : 'Domicilio'}</span>
                 <span className={dom.tipo === 'gratis' ? 'text-green-600 font-medium' : dom.tipo === 'pendiente' ? 'text-muted-foreground text-xs' : ''}>
                   {dom.tipo === 'gratis' ? '¡Gratis! 🎉' : dom.tipo === 'tarifa' ? formatCurrency(dom.valor) : dom.texto}
                 </span>
               </div>
-              {subtotal < GRATIS_DESDE && (
+              {nacional && tarifaVigente && (
+                <p className="text-xs text-muted-foreground">{tarifaVigente.carrier_nombre} · {tarifaVigente.dias} · {destinoN.ciudad}</p>
+              )}
+              {!nacional && subtotal < GRATIS_DESDE && (
                 <p className="text-xs text-muted-foreground">
                   Agrega {formatCurrency(GRATIS_DESDE - subtotal)} más y el domicilio es gratis
                 </p>
@@ -482,13 +587,13 @@ export default function CheckoutPage() {
               <p className="text-sm font-semibold">¿Cómo quieres pagar?</p>
               <button
                 type="button"
-                disabled={!puedePagarEnLinea}
+                disabled={!puedePagarEnLinea && !nacional}
                 onClick={() => setMetodoPago('bold')}
-                aria-pressed={metodoPago === 'bold'}
+                aria-pressed={metodoEfectivo === 'bold'}
                 className={`w-full rounded-2xl border-2 p-4 text-left transition-colors ${
-                  !puedePagarEnLinea
+                  !puedePagarEnLinea && !nacional
                     ? 'cursor-not-allowed border-border bg-muted/40 opacity-70'
-                    : metodoPago === 'bold'
+                    : metodoEfectivo === 'bold'
                       ? 'border-[#187f77] bg-[#187f77]/5'
                       : 'border-border hover:border-[#187f77]/40'
                 }`}
@@ -497,7 +602,11 @@ export default function CheckoutPage() {
                   <div className="min-w-0">
                     <p className="font-semibold">Pagar ahora en línea</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {sinUbicacion
+                      {nacional
+                        ? (tarifaVigente
+                            ? 'Tarjeta, PSE, Nequi o Daviplata · el envío va incluido en el total'
+                            : 'Cotiza el envío arriba para ver el total a pagar')
+                        : sinUbicacion
                         ? 'Dinos primero dónde entregamos para calcular el domicilio'
                         : fueraDeZona
                           ? `Tu dirección está a ${km!.toFixed(1)} km, fuera de nuestra zona de reparto`
@@ -506,7 +615,7 @@ export default function CheckoutPage() {
                   </div>
                   <CheckCircle
                     className={`h-5 w-5 shrink-0 ${
-                      metodoPago === 'bold' && puedePagarEnLinea
+                      metodoEfectivo === 'bold' && (puedePagarEnLinea || nacional)
                         ? 'text-[#187f77]'
                         : 'text-transparent'
                     }`}
@@ -519,35 +628,47 @@ export default function CheckoutPage() {
                   avisar después sería lo peor que podríamos hacer. */}
               {fueraDeZona && (
                 <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-                  <p className="font-semibold">Estás fuera de nuestra zona de reparto</p>
+                  <p className="font-semibold">Estás fuera de nuestra zona de domicilio propio</p>
                   <p className="mt-1 leading-relaxed">
-                    Llegamos a la zona urbana de Pereira y Dosquebradas. Tu dirección
-                    está a {km!.toFixed(1)} km del local, así que el envío hay que
-                    coordinarlo aparte: escríbenos y te decimos el costo y el tiempo
-                    <strong> antes de cobrarte nada</strong>.
+                    Nuestro domicilio llega a la zona urbana de Pereira y Dosquebradas, y tu
+                    dirección está a {km!.toFixed(1)} km del local. Pero sí te lo enviamos:
+                    elige <strong>«Otra ciudad de Colombia»</strong> y cotiza el envío por
+                    transportadora, con el valor a la vista antes de pagar.
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => { setModo('nacional'); setMetodoPago('bold'); document.getElementById('entrega')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}
+                    className="mt-2 font-semibold underline"
+                  >
+                    Cotizar envío por transportadora
+                  </button>
                 </div>
               )}
               <button
                 type="button"
+                disabled={nacional}
                 onClick={() => setMetodoPago('cash')}
-                aria-pressed={metodoPago === 'cash'}
+                aria-pressed={metodoEfectivo === 'cash'}
                 className={`w-full rounded-2xl border-2 p-4 text-left transition-colors ${
-                  metodoPago === 'cash'
-                    ? 'border-[#187f77] bg-[#187f77]/5'
-                    : 'border-border hover:border-[#187f77]/40'
+                  nacional
+                    ? 'cursor-not-allowed border-border bg-muted/40 opacity-70'
+                    : metodoPago === 'cash'
+                      ? 'border-[#187f77] bg-[#187f77]/5'
+                      : 'border-border hover:border-[#187f77]/40'
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold">Pagar al recibir</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Contraentrega · coordinamos por WhatsApp
+                      {nacional
+                        ? 'Solo en Pereira y Dosquebradas: los envíos por transportadora se pagan antes de despachar'
+                        : 'Contraentrega · coordinamos por WhatsApp'}
                     </p>
                   </div>
                   <CheckCircle
                     className={`h-5 w-5 shrink-0 ${
-                      metodoPago === 'cash' ? 'text-[#187f77]' : 'text-transparent'
+                      metodoEfectivo === 'cash' ? 'text-[#187f77]' : 'text-transparent'
                     }`}
                   />
                 </div>
@@ -557,13 +678,15 @@ export default function CheckoutPage() {
             {errorPago && (
               <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
                 <p>{errorPago}</p>
-                <button
-                  type="button"
-                  onClick={() => { setErrorPago(''); setMetodoPago('cash'); }}
-                  className="mt-2 font-semibold underline"
-                >
-                  Pedir contraentrega por WhatsApp
-                </button>
+                {!nacional && (
+                  <button
+                    type="button"
+                    onClick={() => { setErrorPago(''); setMetodoPago('cash'); }}
+                    className="mt-2 font-semibold underline"
+                  >
+                    Pedir contraentrega por WhatsApp
+                  </button>
+                )}
               </div>
             )}
 
@@ -572,14 +695,20 @@ export default function CheckoutPage() {
               onClick={confirmarPedido}
               disabled={enviando}
               className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-bold text-white text-lg shadow-lg hover:opacity-90 active:scale-95 transition-all disabled:opacity-60"
-              style={{ backgroundColor: metodoPago === 'bold' && puedePagarEnLinea ? '#187f77' : '#25D366' }}
+              style={{ backgroundColor: metodoEfectivo === 'bold' && (puedePagarEnLinea || nacional) ? '#187f77' : '#25D366' }}
             >
-              {metodoPago === 'bold' ? (
+              {metodoEfectivo === 'bold' ? (
                 <ShieldCheck className="h-6 w-6" />
               ) : (
                 <MessageCircle className="h-6 w-6" />
               )}
-              {!ubicacion
+              {nacional
+                ? (!tarifaVigente
+                    ? 'Cotiza el envío para pagar'
+                    : enviando
+                      ? 'Preparando tu pago…'
+                      : `Pagar ${formatCurrency(total)}`)
+                : !ubicacion
                 ? 'Indica dónde entregamos'
                 : enviando
                   ? 'Preparando tu pago…'
@@ -589,7 +718,7 @@ export default function CheckoutPage() {
             </button>
 
             <p className="text-xs text-center text-muted-foreground mt-3">
-              {metodoPago === 'bold'
+              {metodoEfectivo === 'bold'
                 ? 'Te llevamos a una página segura para pagar. El cobro lo procesa Bold.'
                 : 'Te enviaremos el resumen del pedido por WhatsApp y coordinaremos la entrega contigo.'}
             </p>
@@ -598,13 +727,15 @@ export default function CheckoutPage() {
           {/* Trust signals */}
           <div className="flex flex-col gap-2">
             {[
-              { icon: '🚚', text: 'Entrega en Pereira y Dosquebradas' },
+              nacional
+                ? { icon: '🚚', text: 'Envío a toda Colombia por transportadora, con guía para rastrear' }
+                : { icon: '🚚', text: 'Domicilio propio en Pereira y Dosquebradas, el mismo día' },
               { icon: '⏱️', text: 'Respuesta en menos de 30 min en horario de atención' },
               // El sello decía "pago contraentrega" incluso con el pago en línea
               // elegido. Prometer una forma de pago y cobrar otra es justo lo que
               // revisa Merchant Center, y para el cliente es peor: contradice lo que
               // acaba de elegir tres dedos más arriba.
-              metodoPago === 'bold' && puedePagarEnLinea
+              metodoEfectivo === 'bold' && (puedePagarEnLinea || nacional)
                 ? { icon: '🔒', text: 'Pago seguro en línea — procesado por Bold' }
                 : { icon: '🔒', text: 'Pago contraentrega — pagas al recibir' },
             ].map((item) => (
@@ -622,7 +753,7 @@ export default function CheckoutPage() {
         <div className="flex items-center gap-3">
           <div className="min-w-0">
             <p className="text-[11px] text-muted-foreground leading-none">
-              {dom.valor == null ? 'Total productos' : 'Total con domicilio'}
+              {dom.valor == null ? 'Total productos' : nacional ? 'Total con envío' : 'Total con domicilio'}
             </p>
             <p className="font-bold text-lg leading-tight">{formatCurrency(total)}</p>
           </div>
@@ -630,14 +761,16 @@ export default function CheckoutPage() {
             onClick={confirmarPedido}
             disabled={enviando}
             className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl font-bold text-white active:scale-[0.98] transition-all disabled:opacity-60"
-            style={{ backgroundColor: metodoPago === 'bold' && puedePagarEnLinea ? '#187f77' : '#25D366' }}
+            style={{ backgroundColor: metodoEfectivo === 'bold' && (puedePagarEnLinea || nacional) ? '#187f77' : '#25D366' }}
           >
-            {metodoPago === 'bold' ? (
+            {metodoEfectivo === 'bold' ? (
               <ShieldCheck className="h-5 w-5" />
             ) : (
               <MessageCircle className="h-5 w-5" />
             )}
-            {!ubicacion
+            {nacional
+              ? (!tarifaVigente ? 'Cotiza el envío' : enviando ? 'Preparando…' : 'Pagar ahora')
+              : !ubicacion
               ? 'Indica dónde entregamos'
               : enviando
                 ? 'Preparando…'

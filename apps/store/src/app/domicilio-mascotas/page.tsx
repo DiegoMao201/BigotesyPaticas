@@ -48,7 +48,7 @@ export default function ZonasPage() {
             Llevamos concentrado, snacks, arena, accesorios y medicamentos veterinarios a las{' '}
             <strong>19 comunas de Pereira</strong> y a las <strong>12 de Dosquebradas</strong>. Busca tu
             zona y mira los barrios que cubre. Envío gratis desde $30.000 y entrega el mismo día siempre
-            que sea posible.
+            que sea posible. ¿Vives en otra ciudad? También enviamos a toda Colombia por transportadora.
           </p>
         </div>
 

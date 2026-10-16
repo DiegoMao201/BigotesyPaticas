@@ -729,6 +729,24 @@ async def datos_de_cobro(referencia: str, request: Request, db: DBSession) -> di
             0.0,
             float(pedido.bold_amount or 0) - sum(float(i.subtotal or 0) for i in items),
         ),
+        # Envío nacional: quién lo lleva y a dónde, para que la página de pago no
+        # diga "entrega el mismo día en Pereira" a alguien de Bogotá.
+        "shipping_mode": pedido.shipping_mode or "local",
+        "envio_detalle": _envio_detalle(pedido),
+    }
+
+
+def _envio_detalle(pedido: PortalOrder) -> dict | None:
+    if pedido.shipping_mode != "national":
+        return None
+    q = pedido.shipping_quote or {}
+    d = pedido.shipping_destination or {}
+    return {
+        "carrier_nombre": q.get("carrier_nombre"),
+        "service_nombre": q.get("service_nombre"),
+        "dias": q.get("dias"),
+        "ciudad": d.get("ciudad"),
+        "departamento_nombre": d.get("departamento_nombre"),
     }
 
 
@@ -754,11 +772,26 @@ async def estado_pago(referencia: str, request: Request, db: DBSession) -> dict:
     if pedido is None:
         return {"encontrado": False, "estado": "desconocido"}
 
+    guia = None
+    if pedido.shipping_mode == "national":
+        from app.api.v1.admin_envios import guia_activa
+
+        g = await guia_activa(db, pedido.id)
+        if g:
+            # Solo lo que el cliente necesita para seguir su paquete. La etiqueta
+            # (PDF con datos del remitente y del destinatario) no sale por aquí.
+            guia = {"carrier_nombre": (pedido.shipping_quote or {}).get("carrier_nombre"),
+                    "tracking_number": g.tracking_number, "track_url": g.track_url,
+                    "status": g.status}
+
     return {
         "encontrado": True,
         "referencia": pedido.order_reference,
         "estado": pedido.payment_status or "pending",
         "metodo": pedido.payment_method,
+        "shipping_mode": pedido.shipping_mode or "local",
+        "envio_detalle": _envio_detalle(pedido),
+        "guia": guia,
         # `bold_amount` es el entero EXACTO que se cobró. `total_amount` es Numeric y
         # pasarlo por int() lo trunca: un total de 76000.6 se mostraría como 76000.
         "total": pedido.bold_amount or int(pedido.total_amount or 0),

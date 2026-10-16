@@ -44,7 +44,7 @@ export default function ContactoPage() {
           <p className="text-brand-600 font-semibold text-sm mb-1">Estamos aquí para ti</p>
           <h1 className="text-4xl md:text-5xl font-display font-extrabold mb-3">Contáctanos</h1>
           <p className="text-muted-foreground text-lg max-w-xl">
-            Pet shop con domicilio en Pereira y Dosquebradas. Escríbenos y te respondemos pronto.
+            Pet shop con domicilio en Pereira y Dosquebradas y envíos a toda Colombia. Escríbenos y te respondemos pronto.
           </p>
         </div>
 

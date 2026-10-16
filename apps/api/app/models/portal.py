@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, ClassVar
 
@@ -293,6 +293,54 @@ class PortalOrder(UUIDPKMixin, TimestampMixin, Base):
     delivered_to_doc: Mapped[str | None] = mapped_column(String(40), nullable=True)
     delivery_evidence_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     delivery_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # ── Envío nacional por transportadora (16-oct-2026, migración 0052) ──────
+    # 'local' = domicilio propio en Pereira/Dosquebradas (o NULL en los viejos);
+    # 'national' = sale por Envia.com a otra ciudad. `shipping_destination` es el
+    # destino ESTRUCTURADO que exige la transportadora (ciudad con código DANE,
+    # departamento, postal, calle, barrio, cédula) y `shipping_quote` la tarifa que
+    # el cliente vio y pagó: transportadora, servicio, precio y días. Se congelan al
+    # crear el pedido porque son parte del monto firmado con Bold.
+    shipping_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    shipping_destination: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    shipping_quote: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class Shipment(UUIDPKMixin, Base):
+    """Una guía generada ante Envia. Tabla aparte porque una guía se cancela y se
+    vuelve a generar, y ese historial no cabe en una columna del pedido."""
+
+    __tablename__ = "shipments"
+    __table_args__ = ({"schema": "portal"},)
+
+    portal_order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("portal.portal_orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    carrier: Mapped[str] = mapped_column(String(40), nullable=False)
+    service: Mapped[str] = mapped_column(String(40), nullable=False)
+    service_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    label_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    currency: Mapped[str] = mapped_column(String(5), nullable=False, default="COP")
+    envia_shipment_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    tracking_number: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    track_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    label_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    events: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    pickup_number: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    pickup_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    pickup_window: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    refunded_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    packages: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    raw_generate: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default="now()", nullable=False
+    )
+    created_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
 class PortalOrderItem(UUIDPKMixin, Base):

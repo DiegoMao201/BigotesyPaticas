@@ -211,7 +211,8 @@ export function ProductTabs({ product }: { product: Product }) {
               <div>
                 <p className="font-semibold text-teal-800">Envío a domicilio</p>
                 <p className="text-sm text-teal-700 mt-1 leading-relaxed">
-                  Entregas el mismo día en Pereira y Dosquebradas, Risaralda.
+                  Entrega el mismo día en Pereira y Dosquebradas, Risaralda. Al resto de Colombia
+                  va por transportadora: cotizas el envío en el checkout y lo pagas con el pedido.
                 </p>
               </div>
             </div>
@@ -220,16 +221,16 @@ export function ProductTabs({ product }: { product: Product }) {
               <div>
                 <p className="font-semibold text-amber-800">Envío gratis</p>
                 <p className="text-sm text-amber-700 mt-1 leading-relaxed">
-                  En pedidos desde $30.000 dentro de nuestra zona de cobertura.
+                  En pedidos desde $30.000 con domicilio propio en Pereira y Dosquebradas.
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-4 p-5 rounded-2xl bg-gray-50 border border-gray-200">
               <span className="text-2xl flex-shrink-0">📞</span>
               <div>
-                <p className="font-semibold text-gray-800">Pedidos especiales</p>
+                <p className="font-semibold text-gray-800">Pedidos al por mayor</p>
                 <p className="text-sm text-gray-600 mt-1 leading-relaxed">
-                  Para pedidos fuera de cobertura o al por mayor, contáctanos por WhatsApp.
+                  Para pedidos al por mayor o con condiciones especiales, contáctanos por WhatsApp.
                 </p>
               </div>
             </div>

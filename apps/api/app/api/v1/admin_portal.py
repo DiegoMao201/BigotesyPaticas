@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -33,6 +34,8 @@ from app.services.portal_order_actions import (
     process_referral_reward,
     queue_customer_notification,
 )
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/admin/portal",
@@ -706,6 +709,9 @@ async def list_portal_orders(
                 "payment_method": order.payment_method,
                 "order_reference": order.order_reference,
                 "paid_at": order.paid_at.isoformat() if order.paid_at else None,
+                # 'national' = sale por transportadora; hay que generar guía.
+                "shipping_mode": order.shipping_mode or "local",
+                "shipping_city": (order.shipping_destination or {}).get("ciudad"),
             }
         )
     return result
@@ -1490,7 +1496,15 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
     subtotal = sum(float(i.subtotal or 0) for i in items)
     discount = float(order.discount_amount or 0)
     shipping = 0.0  # portal: domicilio gratis en TODO pedido (Diego 27-sep-2026, para incentivar el portal)
+    if order.shipping_mode == "national":
+        shipping = float((order.shipping_quote or {}).get("precio") or 0)
     total = subtotal - discount + shipping
+
+    guia = None
+    if order.shipping_mode == "national":
+        from app.api.v1.admin_envios import _guia_dict, guia_activa
+
+        guia = _guia_dict(await guia_activa(db, order.id))
 
     customer = (
         (
@@ -1552,6 +1566,11 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
         "order_reference": order.order_reference,
         "origen": order.origen,
         "sales_order_id": str(order.sales_order_id) if order.sales_order_id else None,
+        # ── Envío nacional (16-oct-2026) ─────────────────────────────────────
+        "shipping_mode": order.shipping_mode or "local",
+        "shipping_destination": order.shipping_destination,
+        "shipping_quote": order.shipping_quote,
+        "shipment": guia,
         "bold_payment_method": order.bold_payment_method,
         "bold_card_type": order.bold_card_type,
         "bold_card_brand": order.bold_card_brand,
@@ -1757,8 +1776,34 @@ async def change_workflow_status(
         # está caído esto devuelve False y no estorba: entregar nunca puede fallar.
         await enviar_purchase(db, order)
 
+    # ── GUÍA DE TRANSPORTADORA AL FACTURAR (16-oct-2026) ─────────────────────
+    # Diego: "aprobamos la venta y le damos aprobada y así se genera la guía".
+    # Facturar es la aprobación irreversible: la venta existe y el stock bajó. Si
+    # el pedido es nacional y está pagado, aquí mismo se saca la guía. Si Envia
+    # falla, el pedido queda facturado igual y la razón, en una nota interna: el
+    # botón "Generar guía" del admin lo reintenta.
+    envio_error: str | None = None
+    guia_nueva = None
+    if new == "invoiced" and order.shipping_mode == "national":
+        from app.api.v1.admin_envios import _guia_dict, generar_para_pedido
+
+        try:
+            guia_nueva = _guia_dict(await generar_para_pedido(db, order, actor="facturación"))
+        except HTTPException as exc:
+            envio_error = str(exc.detail)
+        except Exception as exc:  # nunca tumbar la factura por la guía
+            log.exception("ENVIA · fallo inesperado generando guía para %s", order_id)
+            envio_error = str(exc)
+        if envio_error:
+            marca = datetime.now(UTC).strftime("%d/%m %H:%M")
+            order.internal_notes = (
+                f"{order.internal_notes or ''}\n[{marca}] ⚠️ No se generó la guía: {envio_error}"
+            ).strip()
+
     # Encolar notificación WhatsApp para modal admin (no envía nada automático)
-    pending_notif = await queue_customer_notification(order, new, db)
+    pending_notif = await queue_customer_notification(
+        order, "shipment_created" if guia_nueva else new, db
+    )
 
     await _log(
         db, order_id, "status_changed", changes={"workflow_status": {"before": old, "after": new}}
@@ -1768,6 +1813,10 @@ async def change_workflow_status(
     result: dict = {"ok": True, "workflow_status": new}
     if pending_notif:
         result["pending_notification"] = pending_notif
+    if guia_nueva:
+        result["guia"] = guia_nueva
+    if envio_error:
+        result["envio_error"] = envio_error
     return result
 
 
