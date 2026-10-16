@@ -71,6 +71,8 @@ class DestinoIn(BaseModel):
     postal: str | None = Field(default=None, max_length=10)
     cedula: str | None = Field(default=None, max_length=20)
     email: str | None = Field(default=None, max_length=120)
+    #: Quién recibe, si no es quien compra (la transportadora pregunta por el nombre).
+    recibe: str | None = Field(default=None, max_length=120)
     lat: float | None = None
     lng: float | None = None
 
@@ -100,8 +102,13 @@ async def resolver_destino(d: DestinoIn, nombre: str = "", telefono: str = "") -
     postal = (d.postal or "").strip()
     if not postal.isdigit() or len(postal) != 6:
         postal = await envia.codigo_postal(loc["nombre"], loc["dane"], loc["state"]) or ""
+    recibe = (d.recibe or "").strip()
     return {
-        "nombre": nombre,
+        # El nombre que va en la guía es el de quien RECIBE; el comprador queda en
+        # el pedido. Si no dijo otro, es la misma persona.
+        "nombre": recibe or nombre,
+        "comprador": nombre,
+        "recibe": recibe or None,
         "telefono": telefono,
         "email": (d.email or "").strip() or None,
         "cedula": (d.cedula or "").strip() or None,

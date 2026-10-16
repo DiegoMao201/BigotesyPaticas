@@ -30,20 +30,42 @@ def test_peso_del_atributo_manda() -> None:
     assert envia.peso_kg_de("Agility Gold 15k", {"peso_kg": "3"}) == 3.0
 
 
-def test_empacar_una_caja_minimo_un_kilo() -> None:
+def test_empacar_lo_suelto_va_en_una_caja_con_relleno() -> None:
     cajas = envia.empacar([{"nombre": "Organew 100 G", "cantidad": 2}], 40000)
     assert len(cajas) == 1
-    assert cajas[0]["weight"] == 1.0
+    # 200 g + 300 g de caja y relleno (el 10 % sería menos)
+    assert cajas[0]["weight"] == pytest.approx(0.5)
     assert cajas[0]["declaredValue"] == 40000
     assert cajas[0]["weightUnit"] == "KG" and cajas[0]["lengthUnit"] == "CM"
 
 
-def test_empacar_parte_en_varias_cajas_si_pasa_de_25_kilos() -> None:
-    cajas = envia.empacar([{"nombre": "Agility Gold 15k", "cantidad": 3}], 300000)
-    # 45 kg + 10 % = 49,5 kg → 2 cajas de 24,75 kg
+def test_empacar_cada_saco_es_su_propio_paquete() -> None:
+    cajas = envia.empacar([{"nombre": "Agility Gold 15k", "cantidad": 2}], 300000)
     assert len(cajas) == 2
-    assert sum(c["weight"] for c in cajas) == pytest.approx(49.5, abs=0.05)
+    assert all(c["weight"] == pytest.approx(15.3) for c in cajas)
     assert sum(c["declaredValue"] for c in cajas) == 300000
+    # medidas de saco, no de caja
+    assert cajas[0]["dimensions"]["length"] >= 60
+
+
+def test_empacar_saco_mas_sueltos_son_dos_paquetes() -> None:
+    cajas = envia.empacar(
+        [{"nombre": "Chunky Perro Adulto Pollo 9k", "cantidad": 1},
+         {"nombre": "Churu Cat 4x14g", "cantidad": 3, "atributos": {"peso_kg": 0.1}}],
+        120000,
+    )
+    assert len(cajas) == 2
+    assert cajas[0]["weight"] == pytest.approx(9.3)
+    assert cajas[1]["weight"] == pytest.approx(0.6)
+    assert sum(c["declaredValue"] for c in cajas) == 120000
+
+
+def test_peso_ignora_el_rango_del_animal_y_entiende_onzas() -> None:
+    assert envia.peso_kg_de("Nexgard Perros 25 - 50 Kg") == envia.PESO_POR_DEFECTO_KG
+    assert envia.peso_kg_de("Bravecto 1M 10-20 Kg") == envia.PESO_POR_DEFECTO_KG
+    assert envia.peso_kg_de("Hills Perro Lata K/D 13 Oz") == pytest.approx(0.369, abs=0.001)
+    assert envia.peso_kg_de("Br For Cat Castrado Pollo X 10 Kl") == 10.0
+    assert envia.peso_kg_de("Royal Canin Gato Urinary Care 400 Grs") == 0.4
 
 
 def test_destino_separa_calle_y_numero() -> None:

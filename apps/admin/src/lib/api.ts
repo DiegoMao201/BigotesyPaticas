@@ -1571,7 +1571,9 @@ export interface Shipment {
 }
 
 export interface ShippingDestination {
-  nombre?: string; telefono?: string; email?: string | null; cedula?: string | null;
+  /** `nombre` es quien RECIBE (va en la guía); `comprador` quien pagó. */
+  nombre?: string; comprador?: string; recibe?: string | null;
+  telefono?: string; email?: string | null; cedula?: string | null;
   calle?: string; barrio?: string; referencia?: string;
   ciudad?: string; dane?: string; departamento?: string; departamento_nombre?: string; postal?: string;
   lat?: number | null; lng?: number | null;

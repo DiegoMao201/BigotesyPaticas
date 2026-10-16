@@ -165,6 +165,14 @@ export function PaginaDePago({ referencia }: { referencia: string }) {
               directo a la pasarela: nosotros nunca los vemos ni los guardamos.
             </span>
           </p>
+          {cobro.shipping_mode === 'national' && (
+            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+              Tu compra es con <strong>Bigotes y Paticas</strong> (producto, estado y empaque). El
+              transporte lo hace <strong>{cobro.envio_detalle?.carrier_nombre ?? 'la transportadora'}</strong>,
+              contratada a través de Envia.com, que define el tiempo de entrega y responde por el
+              paquete en el camino. La guía te llega por WhatsApp y correo cuando alistemos el pedido.
+            </p>
+          )}
         </div>
 
         {/* Lo institucional: dirección real, horario real, teléfono real. */}

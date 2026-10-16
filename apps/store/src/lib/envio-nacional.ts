@@ -29,6 +29,8 @@ export interface DestinoNacional {
   postal: string;
   cedula: string;
   email: string;
+  /** Quién recibe, si no es quien compra. */
+  recibe: string;
   lat: number | null;
   lng: number | null;
 }
@@ -80,7 +82,7 @@ export function codigoDepartamento(nombre: string): string | null {
 
 export const DESTINO_VACIO: DestinoNacional = {
   departamento: '', departamento_nombre: '', ciudad: '', calle: '', barrio: '',
-  referencia: '', postal: '', cedula: '', email: '', lat: null, lng: null,
+  referencia: '', postal: '', cedula: '', email: '', recibe: '', lat: null, lng: null,
 };
 
 interface Estado {

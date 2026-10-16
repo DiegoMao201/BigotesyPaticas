@@ -298,6 +298,11 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
             raise HTTPException(503, "El envío por transportadora no está disponible en este momento.")
         if len((payload.destino.calle or "").strip()) < 6:
             raise HTTPException(422, "Escribe la dirección completa de entrega (calle y número).")
+        # Correo OBLIGATORIO en envíos nacionales (Diego, 16-oct-2026): es por donde
+        # llegan la confirmación y la guía, y por donde se avisa un retraso.
+        correo = (payload.destino.email or "").strip()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", correo):
+            raise HTTPException(422, "Escribe un correo válido: ahí te enviamos la confirmación y la guía.")
         destino_nacional = await resolver_destino(payload.destino, nombre=nombre, telefono=tel)
         if destino_nacional["dane"] in DANE_LOCALES:
             raise HTTPException(

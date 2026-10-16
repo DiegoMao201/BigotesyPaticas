@@ -155,6 +155,14 @@ async def generar_para_pedido(
     await db.flush()
     log.info("ENVIA · guía %s (%s) para pedido %s · saldo Envia %s",
              guia.tracking_number, guia.carrier, referencia, r.get("currentBalance"))
+    # El correo con la guía sale aquí mismo, en segundo plano. El WhatsApp lo manda
+    # el admin desde el modal que se abre al generar.
+    try:
+        from app.services import correos_envio
+
+        await correos_envio.guia_lista(order, guia)
+    except Exception:
+        log.exception("ENVIA · guía creada pero falló el correo de %s", referencia)
     return guia
 
 

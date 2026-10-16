@@ -110,7 +110,8 @@ export default function CheckoutPage() {
   const km = ubicacion?.km ?? null;
   const sinUbicacion = !nacional && km == null;
   const fueraDeZona = !nacional && km != null && km > RADIO_MAX_KM;
-  const destinoListo = destinoN.departamento !== '' && destinoN.ciudad.trim().length >= 2 && destinoN.calle.trim().length >= 6;
+  const correoNacionalOk = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(destinoN.email.trim());
+  const destinoListo = destinoN.departamento !== '' && destinoN.ciudad.trim().length >= 2 && destinoN.calle.trim().length >= 6 && correoNacionalOk;
   // Nacional: solo se paga cuando hay destino completo y una tarifa elegida. Y
   // SOLO en línea: el paquete sale de la ciudad, no hay contraentrega posible.
   const puedePagarEnLinea = nacional ? (destinoListo && !!tarifaVigente) : (!sinUbicacion && !fueraDeZona);
@@ -265,6 +266,7 @@ export default function CheckoutPage() {
           postal: destinoN.postal.trim() || null,
           cedula: destinoN.cedula.trim() || null,
           email: destinoN.email.trim() || null,
+          recibe: destinoN.recibe.trim() || null,
           lat: destinoN.lat,
           lng: destinoN.lng,
         },

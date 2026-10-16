@@ -118,7 +118,10 @@ export function EnvioNacionalPanel({ orderId, order, onNotif, onChanged }: Props
 
       {/* A dónde va */}
       <div className="bg-white rounded-lg p-3 flex flex-col gap-1">
-        <p className="font-semibold text-gray-900">{d.nombre || order.customer_name}{d.cedula ? ` · CC ${d.cedula}` : ''}</p>
+        <p className="font-semibold text-gray-900">
+          Recibe: {d.nombre || order.customer_name}{d.cedula ? ` · CC ${d.cedula}` : ''}
+          {d.recibe && d.comprador ? <span className="font-normal text-gray-500"> · compró {d.comprador}</span> : null}
+        </p>
         <p className="text-gray-700">{d.calle}{d.barrio ? `, ${d.barrio}` : ''}</p>
         <p className="text-gray-700">{d.ciudad}, {d.departamento_nombre} {d.postal ? `· CP ${d.postal}` : ''}</p>
         {d.referencia && <p className="text-gray-500 text-xs">Ref: {d.referencia}</p>}

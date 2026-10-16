@@ -420,6 +420,24 @@ async def _aprobar(
 
     await _avisar_pago(db, pedido, monto, cancelado=cancelado)
 
+    # Envío nacional: el cliente dio su correo para esto. Se le confirma la compra
+    # con el destino, la transportadora y qué sigue; la guía llega después.
+    if pedido.shipping_mode == "national" and not cancelado:
+        try:
+            from app.services import correos_envio
+
+            items = (
+                await db.execute(
+                    select(PortalOrderItem).where(PortalOrderItem.portal_order_id == pedido.id)
+                )
+            ).scalars().all()
+            await correos_envio.compra_confirmada(
+                pedido,
+                [{"nombre": i.name, "cantidad": i.quantity, "subtotal": float(i.subtotal or 0)} for i in items],
+            )
+        except Exception:
+            log.exception("BOLD · pago OK pero falló el correo de compra de %s", pedido.order_reference)
+
 
 async def _avisar_pago(
     db: DBSession, pedido: PortalOrder, monto: int | None, cancelado: bool = False

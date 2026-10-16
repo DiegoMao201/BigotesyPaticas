@@ -94,6 +94,10 @@ DEPARTAMENTO_NOMBRE = dict(DEPARTAMENTOS)
 #: Lo que la transportadora ve como remitente. Es la ficha de Google: misma
 #: dirección, mismo teléfono. El documento (NIT o cédula) va por variable de
 #: entorno porque no está escrito en ningún otro sitio del código.
+#:
+#: EL RESPONSABLE DEL ENVÍO ES BIGOTES Y PATICAS (Diego, 16-oct-2026): así figura
+#: como remitente en la guía. Si la transportadora necesita más información, el
+#: contacto es Diego Mauricio García, representante legal; va en la referencia.
 ORIGEN = {
     "name": "Bigotes y Paticas",
     "company": "Bigotes y Paticas",
@@ -107,7 +111,7 @@ ORIGEN = {
     "state": "RI",
     "country": "CO",
     "postalCode": "661001",
-    "reference": "Samara Plaza Mall, Local 2",
+    "reference": "Samara Plaza Mall, Local 2 · Contacto: Diego Mauricio García, representante legal",
     "coordinates": {"latitude": "4.8266652", "longitude": "-75.6923926"},
 }
 _ORIGEN_DOC = os.getenv("ENVIA_ORIGIN_DOC", "").strip()
@@ -128,10 +132,13 @@ def esta_configurado() -> bool:
 # ══════════════════════════════════════════════════════════════════════════════
 
 _UNIDAD = re.compile(
-    r"(\d+(?:[.,]\d+)?)\s*(kg|kilo|kilos|k|g|gr|gramos|lb|lbs|libras?|ml|l|lt|litros?)\b",
+    r"(\d+(?:[.,]\d+)?)\s*(kg|kl|kilo|kilos|k|g|gr|grs|gramos|lb|lbs|libras?|oz|onzas?|ml|l|lt|litros?)\b",
     re.IGNORECASE,
 )
-_MULTI = re.compile(r"(\d+)\s*x\s*(\d+(?:[.,]\d+)?)\s*(kg|g|gr|ml|l)\b", re.IGNORECASE)
+_MULTI = re.compile(r"(\d+)\s*x\s*(\d+(?:[.,]\d+)?)\s*(kg|g|gr|grs|ml|l|oz)\b", re.IGNORECASE)
+#: "Bravecto 10-20 Kg", "Nexgard 25 - 50 Kg", "Spectra 2 A 3.5 Kg": es el peso del
+#: PERRO, no del producto. Si el nombre trae un rango así, los kilos no cuentan.
+_RANGO_ANIMAL = re.compile(r"\d+(?:[.,]\d+)?\s*(?:-|a|hasta)\s*\d+(?:[.,]\d+)?\s*(?:kg|k)\b", re.IGNORECASE)
 
 PESO_POR_DEFECTO_KG = 0.5
 
@@ -139,11 +146,11 @@ PESO_POR_DEFECTO_KG = 0.5
 def peso_kg_de(nombre: str, atributos: dict | None = None) -> float:
     """Peso de UNA unidad, en kilos.
 
-    Los productos no tienen peso en la base (546 publicados, cero con atributo), pero
-    casi todos lo llevan en el nombre: "Agility Gold 15k", "Hills Gato 3,5 Lb (1,59
-    Kg)", "Churu 4x14g", "Organew 100 G". Se toma la cifra MÁS GRANDE que aparezca,
-    convertida a kilos: en "3,5 Lb (1,59 Kg)" gana 1,59 kg y no 3,5 lb. Si el admin
-    algún día escribe `attributes.peso_kg`, eso manda.
+    MANDA `attributes.peso_kg`: el 16-oct-2026 se les puso a los 546 productos
+    publicados (scripts/pesos_productos.py), así que el nombre es solo el respaldo
+    para productos nuevos. Del nombre se toma la cifra MÁS GRANDE que aparezca,
+    convertida a kilos: en "3,5 Lb (1,59 Kg)" gana 1,59 kg y no 3,5 lb. Los
+    rangos de peso del animal ("Bravecto 10-20 Kg") se ignoran.
     """
     if atributos:
         for k in ("peso_kg", "weight_kg", "peso"):
@@ -156,9 +163,12 @@ def peso_kg_de(nombre: str, atributos: dict | None = None) -> float:
 
     candidatos: list[float] = []
     texto = nombre or ""
+    rango_animal = bool(_RANGO_ANIMAL.search(texto))
     for cant, val, unidad in _MULTI.findall(texto):
         candidatos.append(int(cant) * _a_kg(float(val.replace(",", ".")), unidad))
     for val, unidad in _UNIDAD.findall(texto):
+        if rango_animal and unidad.lower() in ("kg", "k", "kl", "kilo", "kilos"):
+            continue
         candidatos.append(_a_kg(float(val.replace(",", ".")), unidad))
     candidatos = [c for c in candidatos if 0 < c <= 60]
     return round(max(candidatos), 3) if candidatos else PESO_POR_DEFECTO_KG
@@ -166,57 +176,119 @@ def peso_kg_de(nombre: str, atributos: dict | None = None) -> float:
 
 def _a_kg(valor: float, unidad: str) -> float:
     u = unidad.lower()
-    if u in ("kg", "kilo", "kilos", "k", "l", "lt", "litro", "litros"):
+    if u in ("kg", "kl", "kilo", "kilos", "k", "l", "lt", "litro", "litros"):
         return valor
-    if u in ("g", "gr", "gramos", "ml"):
+    if u in ("g", "gr", "grs", "gramos", "ml"):
         return valor / 1000
     if u.startswith("lb") or u.startswith("libra"):
         return valor * 0.4536
+    if u.startswith("oz") or u.startswith("onza"):
+        return valor * 0.02835
     return valor
 
 
-#: Caja según el peso total. Las transportadoras cobran por el mayor entre el peso
-#: real y el volumétrico; estas cajas son las del tamaño de un bulto de concentrado
-#: de ese peso, para que el volumétrico no se dispare.
-_CAJAS = [
-    (1.0, (20, 15, 10)),
-    (3.0, (30, 20, 15)),
-    (8.0, (40, 30, 20)),
-    (15.0, (50, 35, 25)),
-    (25.0, (60, 40, 30)),
-    (40.0, (70, 45, 35)),
+#: CÓMO SE EMPACA (acordado con Diego, 16-oct-2026).
+#:
+#: Un bulto de concentrado de 7 kg o más viaja TAL CUAL: el saco es el empaque, se
+#: le pone una bolsa plástica o vinipel por fuera para protegerlo y la etiqueta va
+#: pegada encima con cinta ancha. No se mete en caja (una caja de 25 kg sale más
+#: cara por volumen y no aguanta). Por eso un saco es SU PROPIO paquete, con las
+#: medidas de un saco y no de una caja.
+#:
+#: Lo demás (bolsas de 1,5-3 kg, latas, snacks, medicamentos, accesorios) va junto
+#: en UNA caja de cartón con relleno. Si el pedido es un saco + cosas sueltas, son
+#: dos paquetes en la misma guía: a un saco no se le puede pegar nada encima.
+#:
+#: Las transportadoras cobran por el mayor entre el peso real y el volumétrico
+#: (largo x ancho x alto / 2.500 en Colombia), así que las medidas importan tanto
+#: como los kilos.
+SACO_DESDE_KG = 7.0
+#: (tope de kilos, largo, ancho, alto) de un saco de concentrado de ese peso.
+_SACOS = [
+    (8.0, (50, 32, 12)),
+    (10.5, (55, 35, 13)),
+    (13.0, (60, 38, 14)),
+    (16.0, (65, 40, 15)),
+    (21.0, (70, 42, 17)),
+    (26.0, (75, 45, 18)),
+    (60.0, (85, 50, 22)),
 ]
-PESO_MAX_PAQUETE_KG = 25.0
+#: (tope de kilos, largo, ancho, alto) de la caja para lo suelto.
+_CAJAS = [
+    (0.6, (20, 15, 10)),
+    (1.5, (25, 20, 12)),
+    (3.5, (35, 25, 15)),
+    (6.0, (40, 30, 20)),
+    (10.0, (45, 35, 25)),
+    (15.0, (50, 40, 30)),
+    (25.0, (60, 40, 35)),
+]
+PESO_MAX_CAJA_KG = 20.0
+EMPAQUE_SACO_KG = 0.3
+
+
+def _dims(tabla: list, kg: float) -> tuple[int, int, int]:
+    return next((d for tope, d in tabla if kg <= tope), tabla[-1][1])
 
 
 def empacar(items: list[dict], valor_declarado: int) -> list[dict]:
     """Convierte los ítems del pedido en los `packages` que pide Envia.
 
-    `items`: [{"nombre", "cantidad", "atributos"?}]. Se suma el peso de todo más un
-    10 % de empaque, mínimo 1 kg, y si pasa de 25 kg se parte en varias cajas (las
-    transportadoras limitan el bulto a 25-50 kg). El valor declarado es el de la
-    compra: es lo que se asegura.
+    `items`: [{"nombre", "cantidad", "atributos"?}]. Cada saco de 7 kg o más es un
+    paquete; el resto va en una caja (o varias si pasa de 20 kg). El valor
+    declarado de la compra se reparte entre los paquetes en proporción al peso.
     """
-    total = sum(peso_kg_de(i.get("nombre", ""), i.get("atributos")) * int(i.get("cantidad", 1)) for i in items)
-    total = max(1.0, round(total * 1.10, 2))
-    n_cajas = max(1, math.ceil(total / PESO_MAX_PAQUETE_KG))
-    por_caja = round(total / n_cajas, 2)
-    largo, ancho, alto = next((d for tope, d in _CAJAS if por_caja <= tope), _CAJAS[-1][1])
-    contenido = ", ".join(f"{i.get('nombre', '')[:40]} x{i.get('cantidad', 1)}" for i in items)[:120]
-    return [
-        {
-            "content": contenido or "Productos para mascotas",
+    sacos: list[tuple[str, float]] = []
+    sueltos: list[tuple[str, float]] = []
+    for i in items:
+        nombre = i.get("nombre", "")
+        peso = peso_kg_de(nombre, i.get("atributos"))
+        for _ in range(int(i.get("cantidad", 1))):
+            (sacos if peso >= SACO_DESDE_KG else sueltos).append((nombre, peso))
+
+    paquetes: list[dict] = []
+    for nombre, peso in sacos:
+        kg = round(peso + EMPAQUE_SACO_KG, 2)
+        paquetes.append({"content": nombre[:60], "weight": kg, "dims": _dims(_SACOS, kg)})
+
+    if sueltos:
+        peso_sueltos = sum(p for _, p in sueltos)
+        # +10 % de caja y relleno, nunca menos de 300 g.
+        kg_total = round(max(peso_sueltos * 1.10, peso_sueltos + 0.3), 2)
+        n_cajas = max(1, math.ceil(kg_total / PESO_MAX_CAJA_KG))
+        por_caja = round(kg_total / n_cajas, 2)
+        nombres: dict[str, int] = {}
+        for nombre, _ in sueltos:
+            nombres[nombre] = nombres.get(nombre, 0) + 1
+        contenido = ", ".join(f"{n[:35]} x{c}" for n, c in nombres.items())[:120]
+        for _ in range(n_cajas):
+            paquetes.append({"content": contenido, "weight": por_caja, "dims": _dims(_CAJAS, por_caja)})
+
+    if not paquetes:
+        paquetes.append({"content": "Productos para mascotas", "weight": 1.0, "dims": _dims(_CAJAS, 1.0)})
+
+    peso_total = sum(p["weight"] for p in paquetes) or 1.0
+    salida = []
+    repartido = 0
+    for n, p in enumerate(paquetes):
+        if n == len(paquetes) - 1:
+            valor = max(0, int(valor_declarado) - repartido)
+        else:
+            valor = int(round(valor_declarado * p["weight"] / peso_total))
+            repartido += valor
+        largo, ancho, alto = p["dims"]
+        salida.append({
+            "content": p["content"] or "Productos para mascotas",
             "amount": 1,
             "type": "box",
             "dimensions": {"length": largo, "width": ancho, "height": alto},
-            "weight": por_caja,
+            "weight": max(0.1, p["weight"]),
             "insurance": 0,
-            "declaredValue": max(0, int(round(valor_declarado / n_cajas))),
+            "declaredValue": valor,
             "weightUnit": "KG",
             "lengthUnit": "CM",
-        }
-        for _ in range(n_cajas)
-    ]
+        })
+    return salida
 
 
 # ══════════════════════════════════════════════════════════════════════════════

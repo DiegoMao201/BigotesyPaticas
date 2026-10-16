@@ -64,6 +64,14 @@ export default function TerminosPage() {
               (días hábiles contados desde que recibe el paquete). Al generar la guía, el cliente recibe
               el número para rastrear su paquete
             </li>
+            <li>
+              Responsabilidades en envíos nacionales: la compra se celebra con Bigotes y Paticas, que
+              responde por el producto, su estado y su empaque. El transporte lo presta la
+              transportadora elegida por el cliente, contratada a través de Envia.com, que responde por
+              el paquete mientras está en su poder y define los tiempos de entrega. Ante un retraso,
+              daño o pérdida en tránsito, Bigotes y Paticas presenta y gestiona la reclamación ante la
+              transportadora en nombre del cliente
+            </li>
             <li>Nos reservamos el derecho de rechazar pedidos con dirección que ninguna transportadora cubra</li>
           </ul>
         </section>

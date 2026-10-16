@@ -128,18 +128,32 @@ export function EstadoDelPago() {
   if (estado.estado === 'paid') {
     const nacional = estado.shipping_mode === 'national';
     const d = estado.envio_detalle;
+    // ENVÍO NACIONAL: COMPRA EXITOSA, PUNTO. Diego (16-oct-2026): "el cliente no
+    // se quedará esperando que la página le cargue la guía; al admin le llega y se
+    // puede demorar en facturar". Aquí se confirma la compra, se dice qué sigue y
+    // cómo contactarnos. La guía llega por WhatsApp y correo cuando exista; si
+    // vuelve a abrir este enlace y ya existe, se le muestra.
     return (
       <Mensaje
-        icono="✅"
-        titulo="¡Pago confirmado!"
+        icono={nacional ? '🎉' : '✅'}
+        titulo={nacional ? '¡Compra exitosa!' : '¡Pago confirmado!'}
         texto={
           nacional
-            ? `Recibimos tu pago${monto ? ` de ${monto}` : ''}, con el envío incluido. Alistamos tu pedido y lo entregamos a ${d?.carrier_nombre ?? 'la transportadora'} para ${d?.ciudad ?? 'tu ciudad'} (tiempo estimado ${d?.dias ?? 'de pocos días'}). Te mandamos la guía por WhatsApp y aquí mismo la verás cuando exista. Vaciamos tu carrito porque esta compra ya quedó registrada.`
+            ? `Recibimos tu pago${monto ? ` de ${monto}` : ''} con el envío incluido. Tu pedido va para ${d?.ciudad ?? 'tu ciudad'} con ${d?.carrier_nombre ?? 'la transportadora'}. Vaciamos tu carrito porque esta compra ya quedó registrada.`
             : `Recibimos tu pago${monto ? ` de ${monto}` : ''}. Tu pedido ya está hecho y lo estamos alistando: te escribimos por WhatsApp cuando salga para tu casa. Vaciamos tu carrito porque esta compra ya quedó registrada.`
         }
         referencia={estado.referencia}
         tono="bien"
         guia={nacional ? estado.guia ?? null : null}
+        pasos={
+          nacional
+            ? [
+                'Alistamos y empacamos tu pedido en la tienda.',
+                `Generamos la guía con ${d?.carrier_nombre ?? 'la transportadora'} y te la enviamos por WhatsApp y al correo que nos diste, con el enlace para rastrear el paquete.`,
+                `La transportadora lo entrega en ${d?.dias ?? 'pocos días'} desde que lo recoge. No pagas nada al recibir.`,
+              ]
+            : undefined
+        }
       />
     );
   }
@@ -190,6 +204,7 @@ function Mensaje({
   referencia,
   tono,
   guia,
+  pasos,
 }: {
   icono: string;
   titulo: string;
@@ -197,6 +212,7 @@ function Mensaje({
   referencia?: string;
   tono?: 'bien' | 'mal';
   guia?: Estado['guia'];
+  pasos?: string[];
 }) {
   // El mensaje llega ESCRITO con la referencia. Quien escribe desde aquí lo hace
   // porque algo de su pago le preocupa; obligarle a teclear un código que no tiene
@@ -216,9 +232,27 @@ function Mensaje({
       </div>
       <h1 className="mt-4 font-display text-2xl font-bold text-[#0d4a45]">{titulo}</h1>
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{texto}</p>
+      {pasos && (
+        <ol className="mt-5 space-y-2 text-left text-sm text-muted-foreground">
+          {pasos.map((p, i) => (
+            <li key={i} className="flex items-start gap-3">
+              <span className="h-6 w-6 shrink-0 rounded-full bg-[#187f77] text-xs font-bold text-white flex items-center justify-center">{i + 1}</span>
+              <span className="leading-relaxed">{p}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {pasos && !guia?.tracking_number && (
+        <div className="mt-5 rounded-2xl border border-border bg-white p-4 text-left text-sm">
+          <p className="font-semibold text-[#0d4a45]">¿Dudas con tu pedido?</p>
+          <p className="mt-1 text-muted-foreground">
+            Escríbenos por WhatsApp al <a href="https://wa.me/573206876633" className="font-semibold text-[#187f77] underline">320 687 6633</a> con tu referencia, lunes a sábado de 10:00 a. m. a 7:00 p. m. Samara Plaza Mall, Local 2, Dosquebradas.
+          </p>
+        </div>
+      )}
       {guia?.tracking_number && (
         <div className="mt-5 rounded-2xl border border-[#187f77]/30 bg-white p-4 text-left text-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#187f77]">Tu guía de envío</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#187f77]">Tu guía ya está lista</p>
           <p className="mt-1 font-semibold">{guia.carrier_nombre ?? 'Transportadora'}</p>
           <p className="font-mono text-base">{guia.tracking_number}</p>
           {guia.status && <p className="mt-1 text-xs text-muted-foreground">Estado: {guia.status}</p>}

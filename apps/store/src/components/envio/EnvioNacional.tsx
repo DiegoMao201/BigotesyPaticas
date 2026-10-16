@@ -59,6 +59,7 @@ export function EnvioNacional({ items, onCambiarALocal, pideDatos }: Props) {
   // La tarifa elegida solo vale si el carrito y la ciudad son los mismos de cuando
   // se cotizó. Si cambió algo, se pide de nuevo: el peso cambia el precio.
   const tarifaVigente = tarifa && cotizadoPara === huella ? tarifa : null;
+  const correoOk = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(destino.email.trim());
   const listo = destino.departamento && destino.ciudad.trim().length >= 2 && destino.calle.trim().length >= 6;
 
   // Autocompletado de Google: toda Colombia, sin el límite de Pereira–Dosquebradas
@@ -224,15 +225,33 @@ export function EnvioNacional({ items, onCambiarALocal, pideDatos }: Props) {
         </div>
       </div>
 
+      {/* Para comunicarnos si algo pasa: el correo es obligatorio (ahí llegan la
+          confirmación y la guía); el celular ya se pide arriba. */}
       <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label htmlFor="n-email" className="text-xs font-medium text-muted-foreground block mb-1">Correo electrónico</label>
+          <input
+            id="n-email"
+            type="email"
+            value={destino.email}
+            onChange={(e) => setDestino({ email: e.target.value })}
+            placeholder="tu@correo.com"
+            autoComplete="email"
+            className={`${campo} ${pideDatos && !correoOk ? 'border-amber-400 ring-2 ring-amber-200' : ''}`}
+          />
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {pideDatos && !correoOk ? <span className="text-amber-700 font-medium">Escribe un correo válido. </span> : null}
+            Ahí te llegan la confirmación de compra y la guía para rastrear tu paquete.
+          </p>
+        </div>
         <div>
           <label htmlFor="n-cedula" className="text-xs font-medium text-muted-foreground block mb-1">Cédula de quien recibe <span className="opacity-60">(opcional)</span></label>
           <input id="n-cedula" type="text" inputMode="numeric" value={destino.cedula} onChange={(e) => setDestino({ cedula: e.target.value })} placeholder="La pide la transportadora al entregar" className={campo} />
         </div>
-        <div>
-          <label htmlFor="n-email" className="text-xs font-medium text-muted-foreground block mb-1">Correo <span className="opacity-60">(opcional)</span></label>
-          <input id="n-email" type="email" value={destino.email} onChange={(e) => setDestino({ email: e.target.value })} placeholder="Para enviarte la guía" autoComplete="email" className={campo} />
-        </div>
+      </div>
+      <div>
+        <label htmlFor="n-recibe" className="text-xs font-medium text-muted-foreground block mb-1">¿Quién recibe? <span className="opacity-60">(solo si no eres tú)</span></label>
+        <input id="n-recibe" type="text" value={destino.recibe} onChange={(e) => setDestino({ recibe: e.target.value })} placeholder="Nombre de la persona que recibe el paquete" autoComplete="off" className={campo} />
       </div>
 
       {/* Cotizar */}
@@ -299,6 +318,20 @@ export function EnvioNacional({ items, onCambiarALocal, pideDatos }: Props) {
           <p className="text-[11px] text-muted-foreground">
             El tiempo lo estima la transportadora en días hábiles desde que recoge el paquete.
           </p>
+          {/* QUIÉN RESPONDE POR QUÉ. Diego (16-oct-2026): "la compra del producto se
+              hace con Bigotes y Paticas, pero los temas del envío son responsabilidad
+              de la transportadora". Se dice ANTES de pagar, no en la letra pequeña. */}
+          <div className="rounded-2xl border border-border bg-gray-50 p-3 text-[12px] leading-relaxed text-gray-700">
+            <p className="font-semibold text-gray-900">Quién responde por qué</p>
+            <p className="mt-1">
+              Tu compra es con <strong>Bigotes y Paticas</strong>: respondemos por el producto, su
+              estado y su empaque, y somos tu contacto para cualquier duda. El transporte lo hace la
+              <strong> transportadora que elijas</strong>, contratada a través de Envia.com: ella define
+              el tiempo de entrega y responde por el paquete mientras lo lleva. Si hay un retraso, un
+              daño o una pérdida en el camino, escríbenos: la reclamación va ante la transportadora y
+              nosotros la gestionamos contigo.
+            </p>
+          </div>
         </div>
       )}
     </div>
