@@ -321,12 +321,19 @@ async def products_feed_xml(db: DBSession) -> Response:
         if cat_name:
             ET.SubElement(item, "g:product_type").text = cat_name
 
-        # Envío Colombia — gratis desde $30.000, sino $5.000
-        ship = ET.SubElement(item, "g:shipping")
-        ET.SubElement(ship, "g:country").text = "CO"
-        ET.SubElement(ship, "g:service").text = "Domicilio Pereira y Dosquebradas"
-        ship_price = "0.00 COP" if price >= 30000 else "5000.00 COP"
-        ET.SubElement(ship, "g:price").text = ship_price
+        # ENVÍO (17-oct-2026). Antes cada producto declaraba "Colombia: gratis desde
+        # $30.000, si no $5.000", y lo que declara el producto PISA la configuración
+        # de la cuenta: le decía a Google que entregábamos gratis en todo el país.
+        # Ahora el envío vive en la configuración de envío de Merchant Center (dos
+        # servicios: domicilio local y envío nacional por transportadora, tabla
+        # por peso), y aquí va el PESO de envío que esa tabla necesita. El peso
+        # sale de attributes.peso_kg con el 10 % de empaque, como lo empaca Envia.
+        try:
+            peso = float((p["attributes"] or {}).get("peso_kg") or 0)
+        except (TypeError, ValueError):
+            peso = 0.0
+        if peso > 0:
+            ET.SubElement(item, "g:shipping_weight").text = f"{max(0.3, round(peso * 1.1, 2))} kg"
 
         # Lo que Merchant Center pedía: los detalles por los que la gente filtra.
         # Van como atributos, no solo dentro del texto, para que Google los entienda.

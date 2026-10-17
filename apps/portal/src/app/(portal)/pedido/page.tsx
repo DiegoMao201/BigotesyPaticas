@@ -177,8 +177,9 @@ export default function PedidoPage() {
           <p className="text-xs text-gray-500 mb-3 leading-relaxed">
             Entregamos en la zona urbana de <strong>Pereira y Dosquebradas</strong>, el
             mismo día. En el portal el <strong>domicilio es gratis siempre</strong>, sin
-            mínimo de compra. Si estás fuera de esa zona, escríbenos por WhatsApp y
-            coordinamos el envío antes de cobrarte.
+            mínimo de compra. ¿Vives en otra ciudad de Colombia? Haz tu pedido en{' '}
+            <a href="https://bigotesypaticas.com" className="font-semibold text-teal-700 underline">bigotesypaticas.com</a>:
+            allí cotizas el envío por transportadora, lo pagas con el pedido y te llega la guía para rastrearlo.
           </p>
           <div className="space-y-2">
             {PAYMENT_METHODS.map((pm) => (

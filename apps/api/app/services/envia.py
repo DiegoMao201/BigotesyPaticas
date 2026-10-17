@@ -521,6 +521,15 @@ def _precio_cliente(precio_envia: float) -> int:
 _SERVICIOS_EXCLUIDOS = ("doc", "document", "sobre", "envelope", "same_day", "sameday", "hoy")
 
 
+#: CACHÉ DE TARIFAS (17-oct-2026). Envia limita las consultas por minuto: cotizando
+#: la tabla para Google respondió "Too Many Requests" y "Bad Gateway". Cada
+#: cotización del checkout pregunta a 4 transportadoras a la vez, y al crear el
+#: pedido se vuelve a preguntar; varios clientes a la vez podían quedarse sin
+#: tarifas. La misma ruta con el mismo paquete devuelve lo mismo durante 15 min.
+_TTL_TARIFA = 15 * 60
+_cache_tarifas: dict[str, tuple[float, dict]] = {}
+
+
 async def _tarifa_de(carrier: str, destino: dict, paquetes: list[dict]) -> list[Tarifa]:
     body = {
         "origin": ORIGEN,
@@ -529,11 +538,31 @@ async def _tarifa_de(carrier: str, destino: dict, paquetes: list[dict]) -> list[
         "shipment": {"carrier": carrier, "type": 1},
         "settings": {"currency": "COP"},
     }
-    try:
-        datos = await _post("/ship/rate/", body, timeout=30)
-    except EnviaError as exc:
-        log.info("ENVIA · %s sin tarifa: %s", carrier, exc)
-        return []
+    clave = json.dumps(
+        [carrier, destino.get("city"), destino.get("postalCode"), paquetes], sort_keys=True, ensure_ascii=False
+    )
+    guardado = _cache_tarifas.get(clave)
+    if guardado and time.monotonic() - guardado[0] < _TTL_TARIFA:
+        datos = guardado[1]
+    else:
+        datos = None
+        for intento in range(2):
+            try:
+                datos = await _post("/ship/rate/", body, timeout=30)
+                break
+            except EnviaError as exc:
+                saturado = any(x in str(exc) for x in ("Too Many", "Bad Gateway", "Gateway", "no respondió"))
+                if intento == 0 and saturado:
+                    await asyncio.sleep(1.2)
+                    continue
+                log.info("ENVIA · %s sin tarifa: %s", carrier, exc)
+                return []
+        if datos is None:
+            return []
+        _cache_tarifas[clave] = (time.monotonic(), datos)
+        if len(_cache_tarifas) > 2000:
+            for k in list(_cache_tarifas)[:500]:
+                _cache_tarifas.pop(k, None)
     salida: list[Tarifa] = []
     for t in datos.get("data") or []:
         servicio = str(t.get("service") or "")

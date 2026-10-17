@@ -12,7 +12,7 @@ import { Logo } from '@/components/brand/Logo';
 const WHATSAPP_MSG = (code: string) => {
   const url = `https://mi.bigotesypaticas.com/?ref=${code}`;
   // Kept under 200 chars so WhatsApp preserves the full text when opening the native app
-  return `Hola! Te invito a Bigotes y Paticas, tienda de mascotas en Pereira y Dosquebradas. Pide a domicilio y gana puntos. Registrate gratis: ${url}`;
+  return `Hola! Te invito a Bigotes y Paticas, tienda de mascotas en Pereira y Dosquebradas, con envíos a toda Colombia. Pide a domicilio y gana puntos. Registrate gratis: ${url}`;
 };
 
 export default function InvitarPage() {
