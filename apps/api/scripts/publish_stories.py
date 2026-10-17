@@ -64,6 +64,59 @@ def get_config(cur) -> dict:
     return {r[0]: r[1] for r in cur.fetchall()}
 
 
+def cerrar_promociones(cur, conn) -> None:
+    """Candados de las promociones de producto (17-oct-2026).
+
+    Diego pidió promocionar dos productos con historias diarias y reels "hasta
+    vender". Dos cosas no pueden quedar en manos de la memoria de nadie:
+
+    1. **Oferta vencida → precio normal.** Si `attributes.oferta_hasta` ya pasó,
+       el precio vuelve a `compare_at_price` y se borra el tachado. Google no
+       puede seguir viendo un "antes/ahora" que ya no es verdad.
+    2. **Producto agotado u oferta terminada → no se publica más.** Las piezas
+       aprobadas con `product_id` de un producto sin stock o sin oferta se pasan
+       a `rejected` con el motivo, para no anunciar algo que no se puede vender.
+
+    Nunca lanza: un fallo aquí no puede frenar el resto de la cola.
+    """
+    try:
+        hoy = datetime.now(_BOGOTA).date().isoformat()
+        cur.execute(
+            """
+            UPDATE catalog.products
+               SET price = compare_at_price, compare_at_price = NULL,
+                   attributes = attributes - 'oferta_hasta' || jsonb_build_object('oferta_cerrada', %s::text),
+                   updated_at = now()
+             WHERE attributes ? 'oferta_hasta' AND attributes->>'oferta_hasta' < %s
+               AND compare_at_price IS NOT NULL
+            RETURNING name
+            """,
+            (hoy, hoy),
+        )
+        for (nombre,) in cur.fetchall():
+            log.info("PROMO · oferta vencida, precio normal de nuevo: %s", nombre)
+        cur.execute(
+            """
+            UPDATE content.story_posts sp
+               SET status = 'rejected', updated_at = now(),
+                   error_message = CASE
+                       WHEN p.compare_at_price IS NULL THEN 'Retirada: la oferta del producto terminó'
+                       ELSE 'Retirada: producto agotado' END
+              FROM catalog.products p
+             WHERE sp.product_id = p.id AND sp.status = 'approved' AND sp.published_at IS NULL
+               AND (p.compare_at_price IS NULL
+                    OR COALESCE((SELECT SUM(quantity) FROM inventory.stock s WHERE s.product_id = p.id), 0) <= 0)
+            RETURNING sp.id, p.name
+            """
+        )
+        for sid, nombre in cur.fetchall():
+            log.info("PROMO · pieza %s retirada (%s)", sid, nombre)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        log.exception("PROMO · falló el cierre de promociones; la cola sigue")
+
+
 def get_pending_stories(cur) -> list[dict]:
     """Stories aprobadas cuya hora ya llegó. Antes esto exigía scheduled_at
     dentro de la última hora -- si el dueño del negocio tardaba más de 1h en
@@ -505,11 +558,11 @@ def publicar_landing(conn, cur, story_id: str) -> None:
         except requests.RequestException as e:
             log.warning("landing %s publicada, pero la tienda no se refrescó: %s", slug, e)
         log.info("Landing publicada: https://bigotesypaticas.com/noticias/%s", slug)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         log.warning("no se pudo publicar la landing de %s: %s", story_id[:8], e)
         try:
             conn.rollback()
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
 
@@ -528,6 +581,8 @@ async def run():
         return
 
     dry_run = cfg.get("stories_dry_run_mode") == "true"
+    if not dry_run:
+        cerrar_promociones(cur, conn)
     stories = get_pending_stories(cur)
 
     if not stories:
