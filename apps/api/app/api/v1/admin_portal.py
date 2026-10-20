@@ -668,6 +668,12 @@ async def list_portal_orders(
     stock_by_product = await _stock_availability(db, all_product_ids)
 
     def _has_stock_issues(order: PortalOrder) -> bool:
+        # Un pedido FACTURADO ya descontó su stock: compararlo contra lo que queda
+        # en bodega lo marcaba "Sin stock" justo después de venderse la última
+        # unidad (Diego, 20-oct-2026, primera venta web de Max Gato 3 kg). La
+        # alerta solo sirve mientras el pedido todavía se puede ajustar.
+        if not _is_editable(order):
+            return False
         items = items_by_order.get(order.id)
         if items:
             checks = [(i.product_id, i.quantity) for i in items]
@@ -1470,9 +1476,11 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
 
     items_data = []
     has_stock_issues = False
+    # Facturado = su stock ya salió de bodega; no hay faltante que avisar.
+    editable = _is_editable(order)
     for i in items:
         available = stock_by_product.get(i.product_id) if i.product_id else None
-        stock_ok = available is None or available >= i.quantity
+        stock_ok = (not editable) or available is None or available >= i.quantity
         if not stock_ok:
             has_stock_issues = True
         items_data.append(

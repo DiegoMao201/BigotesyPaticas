@@ -417,7 +417,10 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
     # valor de los productos: el resto del cobro de Bold es el envío y vive en el
     # registro de envíos. Así la factura sale con el sello PAGADO y la caja no
     # muestra un saldo pendiente que el cliente ya cubrió.
-    if envio_nacional and order.payment_status == "paid" and order.payment_method == "bold":
+    # Vale para TODO pedido pagado en línea, local o nacional: el 20-oct-2026 la
+    # primera venta web local (Max Gato 3 kg, $68.000 pagados por Bold) quedó en
+    # ventas como "Pendiente" con $0 pagado.
+    if order.payment_status == "paid" and order.payment_method == "bold":
         from app.models.sales import Payment
 
         productos = total - discount
@@ -428,8 +431,10 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
                 amount=productos,
                 received_at=order.paid_at or now,
                 reference=order.order_reference,
-                notes=(f"Pago en línea Bold de ${int(order.bold_amount or 0):,}: productos "
-                       f"${int(productos):,} + envío ${int(envio_nacional):,} (registro de envíos)").replace(",", "."),
+                notes=(
+                    f"Pago en línea Bold de ${int(order.bold_amount or 0):,}: productos ${int(productos):,}"
+                    + (f" + envío ${int(envio_nacional):,} (registro de envíos)" if envio_nacional else "")
+                ).replace(",", "."),
                 created_by="bold",
             )
         )
