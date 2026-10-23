@@ -74,6 +74,19 @@ async def _supplier_map(db: DBSession, product_ids: list) -> dict:
     return {pid: (str(v[1]), v[2]) for pid, v in best.items()}
 
 
+def _check_publicable(p: Product) -> None:
+    """La base despublica sola un producto sin precio o sin foto (trigger 0053);
+    aquí se avisa en vez de guardarlo en silencio como borrador."""
+    if not p.is_published:
+        return
+    falta = [n for n, ok in (("precio", (p.price or 0) > 0), ("foto", bool(p.primary_image_url))) if not ok]
+    if falta:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede publicar sin {' ni '.join(falta)}: Google y Merchant lo rechazan.",
+        )
+
+
 async def _upsert_product_supplier(db: DBSession, product: Product, supplier_id) -> None:
     """Asocia (o reasocia) un producto a un proveedor manualmente.
 
@@ -501,6 +514,7 @@ async def create_product(payload: ProductCreate, db: DBSession):
     supplier_id = data.pop("supplier_id", None)
     slug = slugify(payload.name)
     p = Product(slug=slug, **data)
+    _check_publicable(p)
     db.add(p)
     await db.flush()
     if supplier_id is not None:
@@ -548,6 +562,8 @@ async def update_product(product_id: uuid.UUID, payload: ProductUpdate, db: DBSe
     supplier_id = data.pop("supplier_id", None)
     for k, v in data.items():
         setattr(p, k, v)
+    if data.get("is_published"):
+        _check_publicable(p)
     # Auto-sync brand_normalized cuando cambia la marca
     if "brand_id" in data:
         if data["brand_id"]:
