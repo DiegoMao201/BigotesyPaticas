@@ -1,6 +1,6 @@
 'use client';
 import Script from 'next/script';
-import { useCargaDiferida } from './useCargaDiferida';
+import { useCargaDiferida } from '@/lib/useCargaDiferida';
 
 export function MetaPixel() {
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;

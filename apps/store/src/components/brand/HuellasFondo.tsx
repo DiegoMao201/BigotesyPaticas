@@ -23,6 +23,7 @@
  */
 
 import { useTemporada } from '@/lib/temporada';
+import { useCargaDiferida } from '@/lib/useCargaDiferida';
 import { Calabaza, Fantasma, Murcielago, HuellaBruja } from './figuras-halloween';
 
 const TEAL = '#187f77';
@@ -98,7 +99,11 @@ const HALLOWEEN: Pieza[] = [
 
 export function HuellasFondo() {
   const temporada = useTemporada();
+  // 24-oct-2026: aparecen después de la primera interacción o a los 2,5 s. Montadas
+  // durante la carga, su dibujo y su animación competían con la imagen principal.
+  const listo = useCargaDiferida();
   const reparto = temporada === 'halloween' ? HALLOWEEN : NORMAL;
+  if (!listo) return null;
 
   return (
     <div

@@ -21,7 +21,9 @@ const jakarta = Plus_Jakarta_Sans({
   display: 'swap',
   weight: ['500', '600', '700', '800'],
 });
-const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
+// solo para SKU y guías de envío, nunca en la primera pantalla: sin precarga, para
+// que no compita con la imagen principal (24-oct-2026)
+const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap', preload: false });
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://bigotesypaticas.com'),

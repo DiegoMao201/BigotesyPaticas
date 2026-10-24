@@ -1,6 +1,6 @@
 'use client';
 import Script from 'next/script';
-import { useCargaDiferida } from './useCargaDiferida';
+import { useCargaDiferida } from '@/lib/useCargaDiferida';
 
 declare global {
   interface Window {

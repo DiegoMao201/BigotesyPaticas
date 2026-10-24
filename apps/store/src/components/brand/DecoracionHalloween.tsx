@@ -34,6 +34,7 @@
  */
 
 import { useTemporada } from '@/lib/temporada';
+import { useCargaDiferida } from '@/lib/useCargaDiferida';
 
 /* ─── Telarañas ──────────────────────────────────────────────────────────── */
 
@@ -255,7 +256,10 @@ const COLGANTES = [
 
 export function DecoracionHalloween() {
   const temporada = useTemporada();
-  if (temporada !== 'halloween') return null;
+  // aparece después de la primera interacción o a los 2,5 s (ver useCargaDiferida):
+  // dos docenas de piezas animadas montándose en plena carga frenaban la portada
+  const listo = useCargaDiferida();
+  if (temporada !== 'halloween' || !listo) return null;
 
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[55] overflow-hidden">
