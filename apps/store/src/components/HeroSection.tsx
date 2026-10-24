@@ -44,9 +44,11 @@ export function HeroSection() {
   return (
     <section className="relative min-h-[88vh] short:min-h-0 short:py-10 flex items-center overflow-hidden">
       {/* POSTER — siempre presente, es el elemento de LCP real y optimizado */}
+      {/* alt descrito mirando la imagen (24-oct-2026): estaba vacío y era la única
+          imagen sin texto de la portada. Si se cambia el poster, cambiar el texto. */}
       <Image
         src={VIDEO_POSTER}
-        alt=""
+        alt="Perro golden retriever acostado en el piso de una sala junto a un gato calicó"
         fill
         priority
         sizes="100vw"
