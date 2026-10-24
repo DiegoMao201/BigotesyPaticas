@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 export function NewsletterForm() {
   const [email, setEmail] = useState('');
+  const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
 
   async function handleSubmit(e: React.FormEvent) {
@@ -14,7 +15,7 @@ export function NewsletterForm() {
       const res = await fetch('/api/v1/contact/newsletter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), website }),
       });
       if (!res.ok) throw new Error();
       setStatus('ok');
@@ -35,7 +36,11 @@ export function NewsletterForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto">
+    <form onSubmit={handleSubmit} className="relative flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto">
+      {/* Campo trampa: las personas no lo ven; los bots de spam lo llenan y la API los descarta. */}
+      <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true"
+        value={website} onChange={(e) => setWebsite(e.target.value)}
+        style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
       <input
         type="email"
         required

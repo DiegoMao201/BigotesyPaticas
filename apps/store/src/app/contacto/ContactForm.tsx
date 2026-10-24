@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Send, CheckCircle } from 'lucide-react';
 
 export function ContactForm() {
-  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '', website: '' });
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
 
   function update(k: keyof typeof form, v: string) {
@@ -40,7 +40,11 @@ export function ContactForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 relative">
+      {/* Campo trampa: las personas no lo ven; los bots de spam lo llenan y la API los descarta. */}
+      <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true"
+        value={form.website} onChange={(e) => update('website', e.target.value)}
+        style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
           <label className="text-sm font-medium mb-1.5 block">Nombre *</label>

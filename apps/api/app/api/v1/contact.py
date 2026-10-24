@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends
-from pydantic import BaseModel, EmailStr
+import html
+import logging
+import re
+import time
+from collections import deque
+
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,37 +17,90 @@ from app.db import get_db
 from app.services.email import STORE_EMAIL, send_email
 
 router = APIRouter(prefix="/contact", tags=["contact"])
+log = logging.getLogger(__name__)
+
+# 24-oct-2026: llegaron "Contacto web: YlyNrZbIWKnIoGSrIcuTNmrM" con correos de terceros
+# (tony.r@pacemetals.com…). Son bots de spam: llenan formularios con texto al azar y el
+# correo de una víctima, y el formulario le mandaba a esa víctima nuestro autorresponder
+# desde hola@bigotesypaticas.com (daña la reputación del dominio: los correos de pedidos y
+# pagos empiezan a caer en spam). Además el nombre y el mensaje iban al HTML sin escapar.
+# Defensa: campo trampa invisible, filtro de texto al azar, tope por IP y tope global.
+MAX_POR_IP_HORA = 5
+MAX_GLOBAL_HORA = 30     # la IP puede llegar agrupada detrás del proxy de la tienda
+_por_ip: dict[str, deque] = {}
+_global: deque = deque()
+_AZAR = re.compile(r"^[A-Za-z]{10,}$")
+
+
+def _ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+def _pasa_tope(ip: str) -> bool:
+    ahora = time.monotonic()
+    for q in (_por_ip.setdefault(ip, deque()), _global):
+        while q and ahora - q[0] > 3600:
+            q.popleft()
+    if len(_por_ip[ip]) >= MAX_POR_IP_HORA or len(_global) >= MAX_GLOBAL_HORA:
+        return False
+    _por_ip[ip].append(ahora); _global.append(ahora)
+    if len(_por_ip) > 5000:
+        for k in list(_por_ip)[:1000]:
+            _por_ip.pop(k, None)
+    return True
+
+
+def es_texto_al_azar(t: str) -> bool:
+    """Una sola 'palabra' de 10+ letras con mayúsculas metidas en medio: YlyNrZbIWKnIoGSrIcuTNmrM.
+    Un nombre o mensaje real tiene espacios o no alterna mayúsculas así."""
+    t = (t or "").strip()
+    return bool(_AZAR.match(t)) and sum(c.isupper() for c in t[1:]) >= 3
 
 
 class ContactForm(BaseModel):
-    name: str
+    name: str = Field(max_length=120)
     email: EmailStr
-    phone: str | None = None
-    message: str
+    phone: str | None = Field(default=None, max_length=40)
+    message: str = Field(max_length=4000)
+    website: str | None = None   # campo trampa: invisible para personas, los bots lo llenan
 
 
 class NewsletterIn(BaseModel):
     email: EmailStr
-    source: str = "store_footer"
+    source: str = Field(default="store_footer", max_length=40)
+    website: str | None = None
 
 
 @router.post("/send")
-async def send_contact(payload: ContactForm, bg: BackgroundTasks) -> dict:
+async def send_contact(payload: ContactForm, bg: BackgroundTasks, request: Request) -> dict:
     """Forward contact form to store email and send auto-reply to sender."""
+    ip = _ip(request)
+    if payload.website or es_texto_al_azar(payload.name) or es_texto_al_azar(payload.message):
+        log.warning("contacto descartado como spam ip=%s email=%s", ip, payload.email)
+        return {"ok": True}     # al bot se le dice que sí: si sabe que lo frenamos, cambia
+    if not _pasa_tope(ip):
+        log.warning("contacto frenado por tope ip=%s", ip)
+        return {"ok": True}
+
+    e = lambda t: html.escape(t or "")
 
     def _send() -> None:
-        phone_line = f"<p><strong>Teléfono:</strong> {payload.phone}</p>" if payload.phone else ""
+        phone_line = f"<p><strong>Teléfono:</strong> {e(payload.phone)}</p>" if payload.phone else ""
         store_html = f"""
         <h2 style="color:#187f77;">Nuevo mensaje desde bigotesypaticas.com</h2>
-        <p><strong>Nombre:</strong> {payload.name}</p>
-        <p><strong>Email:</strong> {payload.email}</p>
+        <p><strong>Nombre:</strong> {e(payload.name)}</p>
+        <p><strong>Email:</strong> {e(payload.email)}</p>
         {phone_line}
         <hr style="border:none;border-top:1px solid #eee;margin:12px 0;">
-        <p style="color:#555;">{payload.message.replace(chr(10), '<br>')}</p>
+        <p style="color:#555;">{e(payload.message).replace(chr(10), '<br>')}</p>
         """
-        send_email(STORE_EMAIL, f"Contacto web: {payload.name}", store_html)
+        asunto = re.sub(r"[\r\n]+", " ", payload.name)[:80]
+        send_email(STORE_EMAIL, f"Contacto web: {asunto}", store_html)
 
-        first = payload.name.split()[0] if payload.name.strip() else "cliente"
+        first = e(payload.name.split()[0][:40]) if payload.name.strip() else "cliente"
         reply_html = f"""
         <h2 style="color:#187f77;">¡Hola, {first}!</h2>
         <p>Gracias por escribirnos. Recibimos tu mensaje y te responderemos a la brevedad.</p>
@@ -287,9 +346,14 @@ def ALREADY_SUBSCRIBED_HTML(email: str) -> str:
 async def newsletter_subscribe(
     payload: NewsletterIn,
     bg: BackgroundTasks,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Suscribe email con deduplicado — un cupón por dirección, siempre."""
+    ip = _ip(request)
+    if payload.website or not _pasa_tope(ip):
+        log.warning("suscripción descartada ip=%s email=%s", ip, payload.email)
+        return {"ok": True, "already_subscribed": False}
 
     # Verificar si ya está suscrito
     row = await db.execute(
