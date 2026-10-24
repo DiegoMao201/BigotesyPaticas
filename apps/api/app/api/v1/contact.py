@@ -25,8 +25,8 @@ log = logging.getLogger(__name__)
 # desde hola@bigotesypaticas.com (daña la reputación del dominio: los correos de pedidos y
 # pagos empiezan a caer en spam). Además el nombre y el mensaje iban al HTML sin escapar.
 # Defensa: campo trampa invisible, filtro de texto al azar, tope por IP y tope global.
-MAX_POR_IP_HORA = 5
-MAX_GLOBAL_HORA = 30     # la IP puede llegar agrupada detrás del proxy de la tienda
+MAX_POR_IP_HORA = 20      # la API ve a todos detrás del proxy (10.0.1.1): esto es casi un tope global
+MAX_GLOBAL_HORA = 40
 _por_ip: dict[str, deque] = {}
 _global: deque = deque()
 _AZAR = re.compile(r"^[A-Za-z]{10,}$")
