@@ -15,24 +15,33 @@ import { useEffect, useState } from 'react';
  * puesto en diciembre. En el cliente también se resuelve solo el huso horario:
  * `new Date()` es la hora del visitante, que en Pereira es la que importa.
  *
- * El precio es que el disfraz aparece un cuadro después de pintar. Para una
- * capa decorativa que vive detrás del contenido, no se nota; y evita que el
- * HTML cacheado mienta sobre la fecha.
+ * (Actualizado el 24-oct-2026: ahora el valor inicial también se calcula en el
+ * servidor; ver useTemporada.)
  */
 
 export type Temporada = 'halloween' | null;
 
-/** 1 de octubre → 2 de noviembre (el día de difuntos todavía cuenta acá). */
+/** 1 de octubre → 2 de noviembre (el día de difuntos todavía cuenta acá), en hora
+ *  de Bogotá: el servidor corre en UTC y adelantaría el cambio cinco horas. */
 export function temporadaDe(fecha: Date): Temporada {
-  const mes = fecha.getMonth(); // 0-11
-  const dia = fecha.getDate();
-  if (mes === 9) return 'halloween';
-  if (mes === 10 && dia <= 2) return 'halloween';
+  const [mes, dia] = fecha
+    .toLocaleDateString('en-CA', { timeZone: 'America/Bogota', month: '2-digit', day: '2-digit' })
+    .split('-')
+    .map(Number);
+  if (mes === 10) return 'halloween';
+  if (mes === 11 && dia <= 2) return 'halloween';
   return null;
 }
 
+/**
+ * 24-oct-2026: el valor inicial se calcula YA (también en el servidor), así la cinta
+ * sale en el HTML y no empuja la página un cuadro después de pintar. Ese empujón no
+ * se veía mientras la portada tardaba en pintarse; al acelerarla apareció como
+ * salto de diseño (CLS 0,052). El HTML se regenera cada 10-60 min, así que en el
+ * cambio de temporada puede quedar hasta una hora desfasado: el efecto lo corrige.
+ */
 export function useTemporada(): Temporada {
-  const [temporada, setTemporada] = useState<Temporada>(null);
+  const [temporada, setTemporada] = useState<Temporada>(() => temporadaDe(new Date()));
   useEffect(() => setTemporada(temporadaDe(new Date())), []);
   return temporada;
 }
