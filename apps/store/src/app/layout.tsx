@@ -108,7 +108,11 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    types: { 'application/rss+xml': [{ url: '/feed.xml', title: 'Blog Bigotes y Paticas' }] },
+    types: {
+      'application/rss+xml': [{ url: '/feed.xml', title: 'Blog Bigotes y Paticas' }],
+      // los datos de la tienda para asistentes de IA (ChatGPT, Perplexity, Claude…)
+      'text/plain': [{ url: '/llms.txt', title: 'llms.txt' }],
+    },
   },
   verification: {
     google: 'Eh5nbpTENsmdblrIL4_gERvjZCRbJtldy266FQVYqLo',

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import math
 import uuid
@@ -13,6 +14,7 @@ from slugify import slugify
 from sqlalchemy import func, or_, select, update
 
 from app.deps import DBSession, require_permission
+from app.services.seo_notifications import notify_indexnow
 from app.models.catalog import Brand, Category, Product, ProductReview
 from app.models.crm import Customer
 from app.models.inventory import Stock
@@ -35,6 +37,17 @@ admin_products_router = APIRouter(
     tags=["admin-catalog"],
     dependencies=[Depends(require_permission("admin"))],
 )
+
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _avisar_buscadores(p: Product) -> None:
+    """IndexNow (Bing, ChatGPT, Copilot, DuckDuckGo): que se enteren al instante de un
+    producto publicado, cambiado o retirado, sin esperar a que vuelvan a rastrear."""
+    task = asyncio.create_task(notify_indexnow([f"https://bigotesypaticas.com/producto/{p.slug}"]))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 async def _supplier_map(db: DBSession, product_ids: list) -> dict:
@@ -521,6 +534,8 @@ async def create_product(payload: ProductCreate, db: DBSession):
         await _upsert_product_supplier(db, p, supplier_id)
     await db.commit()
     await db.refresh(p)
+    if p.is_published:
+        _avisar_buscadores(p)
     out = ProductOut.model_validate(p)
     if supplier_id is not None:
         sup = (await _supplier_map(db, [p.id])).get(p.id)
@@ -560,6 +575,7 @@ async def update_product(product_id: uuid.UUID, payload: ProductUpdate, db: DBSe
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     data = payload.model_dump(exclude_unset=True)
     supplier_id = data.pop("supplier_id", None)
+    estaba_publicado = p.is_published
     for k, v in data.items():
         setattr(p, k, v)
     if data.get("is_published"):
@@ -578,6 +594,8 @@ async def update_product(product_id: uuid.UUID, payload: ProductUpdate, db: DBSe
         await _upsert_product_supplier(db, p, supplier_id)
     await db.commit()
     await db.refresh(p)
+    if p.is_published or estaba_publicado:   # publicado, cambiado o recién retirado
+        _avisar_buscadores(p)
     out = ProductOut.model_validate(p)
     sup = (await _supplier_map(db, [p.id])).get(p.id)
     if sup:

@@ -23,6 +23,10 @@ async def notify_indexnow(urls: Sequence[str]) -> None:
 
     try:
         async with httpx.AsyncClient(timeout=8) as client:
-            await client.post(BING_URL, json=payload)
+            r = await client.post(BING_URL, json=payload)
+        # 24-oct-2026: antes no se miraba la respuesta; un 403 (llave rechazada) o un
+        # 422 (URL de otro dominio) pasaban en silencio y nadie se enteraba.
+        if r.status_code not in (200, 202):
+            print(f"[indexnow] Bing respondió {r.status_code}: {r.text[:200]} ({len(payload['urlList'])} URLs)")
     except Exception as exc:
         print(f"[indexnow] Failed: {exc}")

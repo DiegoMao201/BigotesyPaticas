@@ -20,10 +20,11 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: 'ClaudeBot', allow: '/' },
       { userAgent: 'Google-Extended', allow: '/' },
     ],
-    // Los dos mapas: el de siempre para los buscadores y /llms.txt para los
-    // modelos de lenguaje, que es donde encuentran los datos de la tienda ya
-    // masticados en vez de tener que sacarlos del HTML.
-    sitemap: ['https://bigotesypaticas.com/sitemap.xml', 'https://bigotesypaticas.com/llms.txt'],
+    // 24-oct-2026: /llms.txt estaba declarado aquí como sitemap y no lo es (es texto
+    // plano, no XML de sitemaps): Search Console y Bing lo marcan como sitemap con
+    // errores. Los modelos de lenguaje lo buscan solos en /llms.txt, que es la ruta
+    // estándar, y va enlazado en el <head> de todas las páginas (layout.tsx).
+    sitemap: 'https://bigotesypaticas.com/sitemap.xml',
     host: 'https://bigotesypaticas.com',
   };
 }

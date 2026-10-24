@@ -16,6 +16,16 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // 24-oct-2026: HSTS. Le dice al navegador "a este dominio, siempre por HTTPS"
+        // y corta el primer salto en http:// donde se puede interceptar. Todos los
+        // subdominios (api, admin, mi, aliados, www) ya sirven HTTPS: por eso se
+        // puede incluirlos. Sin 'preload' a propósito: esa lista es casi irreversible.
+        source: '/:path*',
+        headers: [
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+        ],
+      },
+      {
         // Iconos, manifest y demás estáticos servidos desde /public no cambian
         // de contenido sin un rename/redeploy — cache larga es segura.
         source: '/:path(icon-.*\\.png|apple-touch-icon\\.png|favicon\\.ico|icon\\.svg|site\\.webmanifest|opengraph-image\\.png)',
