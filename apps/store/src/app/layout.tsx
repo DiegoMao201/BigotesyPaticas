@@ -107,13 +107,8 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
-  alternates: {
-    types: {
-      'application/rss+xml': [{ url: '/feed.xml', title: 'Blog Bigotes y Paticas' }],
-      // los datos de la tienda para asistentes de IA (ChatGPT, Perplexity, Claude…)
-      'text/plain': [{ url: '/llms.txt', title: 'llms.txt' }],
-    },
-  },
+  // (el feed y llms.txt van como <link> en el <head> de abajo: cada página define sus
+  // propios `alternates` para la canónica y eso REEMPLAZA los del layout; aquí nunca salían)
   verification: {
     google: 'Eh5nbpTENsmdblrIL4_gERvjZCRbJtldy266FQVYqLo',
   },
@@ -122,6 +117,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning>
+      <head>
+        <link rel="alternate" type="application/rss+xml" href="/feed.xml" title="Blog Bigotes y Paticas" />
+        {/* los datos de la tienda para asistentes de IA (ChatGPT, Perplexity, Claude…) */}
+        <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
+      </head>
       <body className={`${inter.variable} ${jakarta.variable} ${mono.variable} font-sans`}>
         <GoogleAnalytics />
         <MetaPixel />
