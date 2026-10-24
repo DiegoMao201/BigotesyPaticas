@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useBorrador } from '@/lib/borradores';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText, XCircle, ShoppingCart, Search, RefreshCw, Eye,
@@ -265,20 +266,20 @@ export default function SalesPage() {
   const qc = useQueryClient();
   const [showDateWarning, setShowDateWarning] = useState(true);
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useBorrador('vista:ventas:buscar', '');
 
   // Pre-llena el buscador si se llega desde inventario con ?q=NUM_ORDEN
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get('q');
     if (q) setSearch(q);
   }, []);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [paymentFilter, setPaymentFilter] = useState('');
-  const [channelFilter, setChannelFilter] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [productFilter, setProductFilter] = useState('');
-  const [customerFilter, setCustomerFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useBorrador('vista:ventas:estado', '');
+  const [paymentFilter, setPaymentFilter] = useBorrador('vista:ventas:pago', '');
+  const [channelFilter, setChannelFilter] = useBorrador('vista:ventas:canal', '');
+  const [dateFrom, setDateFrom] = useBorrador('vista:ventas:desde', '');
+  const [dateTo, setDateTo] = useBorrador('vista:ventas:hasta', '');
+  const [productFilter, setProductFilter] = useBorrador('vista:ventas:producto', '');
+  const [customerFilter, setCustomerFilter] = useBorrador('vista:ventas:cliente', '');
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
 
   const fixDatesMut = useMutation({

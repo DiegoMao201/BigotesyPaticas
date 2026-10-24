@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useBorrador, descartarBorrador, useHayBorrador } from '@/lib/borradores';
+import { BorradorAviso } from '@/components/BorradorAviso';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Upload, FileText, Plus, Trash2, Search, Save, Eye, Truck, Sparkles,
@@ -98,8 +100,10 @@ function costoUnitarioFinal(
 }
 
 export default function PurchasesPage() {
-  const [tab, setTab] = useState<Tab>('historial');
-  const [desdeCorreo, setDesdeCorreo] = useState<DesdeCorreo | null>(null);
+  // pestaña y factura del correo en curso sobreviven a salir de Compras (lib/borradores.ts)
+  const [tab, setTab] = useBorrador<Tab>('vista:compras:tab', 'historial');
+  const [desdeCorreo, setDesdeCorreo] = useBorrador<DesdeCorreo | null>('compras:xml:correo', null);
+  const xmlEnCurso = useHayBorrador('compras:xml:factura');
   const qc = useQueryClient();
   const pendientesQ = useQuery({ queryKey: ['inbox', 'pendiente'], queryFn: () => purchases.inbox.list('pendiente'), refetchInterval: 120_000 });
   const nPendientes = pendientesQ.data?.conteo?.pendiente ?? 0;
@@ -144,7 +148,7 @@ export default function PurchasesPage() {
         ].map((t) => (
           <button
             key={t.id}
-            onClick={() => { setTab(t.id as Tab); if (t.id === 'nueva-xml') setDesdeCorreo(null); }}
+            onClick={() => { setTab(t.id as Tab); if (t.id === 'nueva-xml' && !xmlEnCurso) setDesdeCorreo(null); }}
             className={`px-4 py-2 font-medium border-b-2 transition flex items-center gap-2 ${
               tab === t.id ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-600 hover:text-gray-900'
             }`}
@@ -170,12 +174,12 @@ export default function PurchasesPage() {
           inicial={desdeCorreo}
           onDone={() => {
             const venia = !!desdeCorreo;
-            setDesdeCorreo(null);
+            descartarBorrador('compras:xml');
             setTab(venia ? 'correo' : 'historial');
           }}
         />
       )}
-      {tab === 'nueva-manual' && <NuevaManualTab onDone={() => setTab('historial')} />}
+      {tab === 'nueva-manual' && <NuevaManualTab onDone={() => { descartarBorrador('compras:manual'); setTab('historial'); }} />}
     </div>
   );
 }
@@ -792,18 +796,19 @@ function CarteraTab() {
 // ─── NUEVA CON XML ────────────────────────────────────────────────
 function NuevaXmlTab({ onDone, inicial }: { onDone: () => void; inicial?: DesdeCorreo | null }) {
   const qc = useQueryClient();
-  const [step, setStep] = useState<Step>(1);
-  const [parsed, setParsed] = useState<ParsedInvoice | null>(null);
-  const [items, setItems] = useState<EditableItem[]>([]);
-  const [supplierId, setSupplierId] = useState<string>('');
-  const [supplierName, setSupplierName] = useState<string>('');
-  const [createNewSupplier, setCreateNewSupplier] = useState(false);
-  const [newSupplier, setNewSupplier] = useState<SupplierIn>({ nit: '', name: '' });
-  const [folio, setFolio] = useState('');
-  const [transportCost, setTransportCost] = useState(0);
-  const [descGlobal, setDescGlobal] = useState(0);
-  const [cargosGlobal, setCargosGlobal] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState<PurchasePaymentMethod>('efectivo');
+  const [step, setStep] = useBorrador<Step>('compras:xml:paso', 1);
+  const [parsed, setParsed] = useBorrador<ParsedInvoice | null>('compras:xml:factura', null);
+  const [items, setItems] = useBorrador<EditableItem[]>('compras:xml:items', []);
+  const [supplierId, setSupplierId] = useBorrador<string>('compras:xml:proveedor', '');
+  const [supplierName, setSupplierName] = useBorrador<string>('compras:xml:proveedorNombre', '');
+  const [createNewSupplier, setCreateNewSupplier] = useBorrador('compras:xml:provNuevo', false);
+  const [newSupplier, setNewSupplier] = useBorrador<SupplierIn>('compras:xml:provNuevoDatos', { nit: '', name: '' });
+  const [folio, setFolio] = useBorrador('compras:xml:folio', '');
+  const [transportCost, setTransportCost] = useBorrador('compras:xml:transporte', 0);
+  const [descGlobal, setDescGlobal] = useBorrador('compras:xml:descuento', 0);
+  const [cargosGlobal, setCargosGlobal] = useBorrador('compras:xml:cargos', 0);
+  const [paymentMethod, setPaymentMethod] = useBorrador<PurchasePaymentMethod>('compras:xml:pago', 'efectivo');
+  const [origen, setOrigen] = useBorrador<string | null>('compras:xml:origen', null);
   const parseMut = useMutation({
     mutationFn: (file: File) => purchases.parseXml(file),
     onSuccess: (data) => aplicarParsed(data),
@@ -811,8 +816,13 @@ function NuevaXmlTab({ onDone, inicial }: { onDone: () => void; inicial?: DesdeC
   });
 
   // Factura del correo: ya viene leída por el MISMO parser → directo al paso 2 (revisión)
+  // Solo la primera vez: si la pantalla se vuelve a abrir con un borrador de ESTA
+  // misma factura, no se pisa lo que el usuario ya había asociado y corregido.
   useEffect(() => {
-    if (inicial) aplicarParsed(inicial.parsed);
+    if (inicial && origen !== inicial.id) {
+      aplicarParsed(inicial.parsed);
+      setOrigen(inicial.id);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inicial?.id]);
 
@@ -933,6 +943,7 @@ function NuevaXmlTab({ onDone, inicial }: { onDone: () => void; inicial?: DesdeC
 
   return (
     <div className="space-y-4">
+      <BorradorAviso prefijo="compras:xml" />
       {inicial && (
         <Card className="p-3 bg-orange-50 border-orange-200 text-sm text-orange-900 flex items-center gap-2">
           <Inbox className="h-4 w-4" /> Factura del correo: <b>{inicial.etiqueta}</b>. Revisa, asocia y guarda como siempre.
@@ -1348,16 +1359,17 @@ function ProductPickerDialog({ query, onPick, onClose }: { query: string; onPick
 // ─── NUEVA MANUAL ─────────────────────────────────────────────────
 function NuevaManualTab({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
-  const [supplierId, setSupplierId] = useState('');
-  const [supplierName, setSupplierName] = useState('');
+  // la compra manual a medio digitar sobrevive a salir a facturar (lib/borradores.ts)
+  const [supplierId, setSupplierId] = useBorrador('compras:manual:proveedor', '');
+  const [supplierName, setSupplierName] = useBorrador('compras:manual:proveedorNombre', '');
   // proveedor nuevo desde la compra manual (antes solo se podía escoger de la lista)
-  const [nuevoProv, setNuevoProv] = useState(false);
-  const [nuevoNit, setNuevoNit] = useState('');
-  const [nuevoNombre, setNuevoNombre] = useState('');
-  const [folio, setFolio] = useState('');
-  const [items, setItems] = useState<EditableItem[]>([]);
+  const [nuevoProv, setNuevoProv] = useBorrador('compras:manual:provNuevo', false);
+  const [nuevoNit, setNuevoNit] = useBorrador('compras:manual:nit', '');
+  const [nuevoNombre, setNuevoNombre] = useBorrador('compras:manual:nombre', '');
+  const [folio, setFolio] = useBorrador('compras:manual:folio', '');
+  const [items, setItems] = useBorrador<EditableItem[]>('compras:manual:items', []);
   const [picking, setPicking] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PurchasePaymentMethod>('efectivo');
+  const [paymentMethod, setPaymentMethod] = useBorrador<PurchasePaymentMethod>('compras:manual:pago', 'efectivo');
 
   const supList = useQuery({ queryKey: ['suppliers-all'], queryFn: () => suppliersApi.list({ is_active: true, page_size: 200 }) });
 
@@ -1400,6 +1412,7 @@ function NuevaManualTab({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-4">
+      <BorradorAviso prefijo="compras:manual" />
       <Card className="p-4 grid grid-cols-4 gap-3">
         <div>
           <label className="text-sm">Proveedor</label>

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useBorrador, descartarBorrador } from '@/lib/borradores';
+import { BorradorAviso } from '@/components/BorradorAviso';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, TrendingDown, Wallet, Calendar, Filter, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,7 +24,7 @@ export default function ExpensesPage() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<{ start?: string; end?: string; categoria?: string; metodo_pago?: string }>({});
-  const [openCreate, setOpenCreate] = useState(false);
+  const [openCreate, setOpenCreate] = useBorrador('gastos:nuevo:abierto', false);
   const [exportingExcel, setExportingExcel] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -36,7 +38,7 @@ export default function ExpensesPage() {
       toast.success('Gasto registrado');
       qc.invalidateQueries({ queryKey: ['expenses'] });
       qc.invalidateQueries({ queryKey: ['finance-summary'] });
-      setOpenCreate(false);
+      descartarBorrador('gastos:nuevo');
     },
     onError: (e: Error) => toast.error(e.message || 'Error al crear gasto'),
   });
@@ -183,7 +185,7 @@ export default function ExpensesPage() {
 }
 
 function CreateExpenseForm({ onSubmit, loading }: { onSubmit: (p: any) => void; loading: boolean }) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useBorrador('gastos:nuevo:form', {
     fecha: new Date().toISOString().slice(0, 10),
     tipo: 'Operativo',
     categoria: 'Otros',
@@ -196,6 +198,7 @@ function CreateExpenseForm({ onSubmit, loading }: { onSubmit: (p: any) => void; 
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(form); }}>
       <DialogBody className="space-y-4">
+        <BorradorAviso prefijo="gastos:nuevo:form" />
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-medium mb-1 block">Fecha</label>

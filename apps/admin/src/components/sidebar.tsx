@@ -17,6 +17,23 @@ import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ShareStoreModal } from '@/components/ShareStoreModal';
+import { useHayBorrador } from '@/lib/borradores';
+
+// pantalla → prefijo de sus borradores (lib/borradores.ts): marca lo que quedó a medias
+const BORRADOR_DE: Record<string, string> = {
+  '/pos': 'pos', '/purchases': 'compras', '/inventory': 'inventario', '/products': 'productos',
+  '/customers': 'clientes', '/expenses': 'gastos', '/cobros': 'cobros', '/nomina': 'nomina',
+};
+
+function EnCurso({ prefijo }: { prefijo: string }) {
+  const hay = useHayBorrador(prefijo);
+  if (!hay) return null;
+  return (
+    <span title="Tienes algo sin terminar aquí" className="text-[10px] font-bold bg-amber-400 text-amber-900 rounded-full px-1.5 py-0.5 leading-none">
+      en curso
+    </span>
+  );
+}
 
 const NAV_GROUPS = [
   {
@@ -182,6 +199,7 @@ export function Sidebar({
                       {item.label}
                     </div>
                     <div className="flex items-center gap-1">
+                      {mounted && BORRADOR_DE[item.href] && <EnCurso prefijo={BORRADOR_DE[item.href]} />}
                       {item.href === '/pet-monitor' && pendingCount > 0 && (
                         <span className="text-[10px] font-bold bg-amber-400 text-amber-900 rounded-full px-1.5 py-0.5 leading-none">
                           {pendingCount}

@@ -14,6 +14,8 @@
  */
 
 import { useState } from 'react';
+import { useBorrador, descartarBorrador } from '@/lib/borradores';
+import { BorradorAviso } from '@/components/BorradorAviso';
 import { Copy, Link2, Loader2, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -35,12 +37,13 @@ const VALIDEZ = [
 ];
 
 export default function CobrosPage() {
-  const [concepto, setConcepto] = useState('');
-  const [monto, setMonto] = useState('');
-  const [nombre, setNombre] = useState('');
-  const [telefono, setTelefono] = useState('');
-  const [notas, setNotas] = useState('');
-  const [validez, setValidez] = useState(1440);
+  // el cobro a medio llenar sobrevive a salir de la pantalla (lib/borradores.ts)
+  const [concepto, setConcepto] = useBorrador('cobros:concepto', '');
+  const [monto, setMonto] = useBorrador('cobros:monto', '');
+  const [nombre, setNombre] = useBorrador('cobros:nombre', '');
+  const [telefono, setTelefono] = useBorrador('cobros:telefono', '');
+  const [notas, setNotas] = useBorrador('cobros:notas', '');
+  const [validez, setValidez] = useBorrador('cobros:validez', 1440);
   const [creando, setCreando] = useState(false);
   const [cobro, setCobro] = useState<Cobro | null>(null);
 
@@ -64,6 +67,7 @@ export default function CobrosPage() {
         }),
       });
       setCobro(r);
+      descartarBorrador('cobros');
       toast.success('Enlace de cobro creado');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo crear el enlace');
@@ -91,6 +95,7 @@ export default function CobrosPage() {
 
       {!cobro ? (
         <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+          <BorradorAviso prefijo="cobros" />
           <Campo label="¿Qué le estás cobrando?" hint="Lo verá el cliente en la página de pago">
             <input
               value={concepto}

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useBorrador, descartarBorrador } from '@/lib/borradores';
+import { BorradorAviso } from '@/components/BorradorAviso';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Users, Phone, Mail, MapPin, Plus, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
@@ -55,7 +57,8 @@ function CustomerForm({
   onSubmit: (d: CustomerFormData) => void;
   loading: boolean;
 }) {
-  const [form, setForm] = useState<CustomerFormData>({
+  const clave = initial?.id ? `clientes:form:${initial.id}` : 'clientes:nuevo:form';
+  const [form, setForm] = useBorrador<CustomerFormData>(clave, {
     full_name: initial?.full_name || '',
     email: initial?.email || '',
     phone: initial?.phone || '',
@@ -72,8 +75,8 @@ function CustomerForm({
   const set = (k: keyof CustomerFormData, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const parsedInitialPhone = parsePhoneForForm(initial?.phone);
-  const [phoneDial, setPhoneDial] = useState(parsedInitialPhone.dial);
-  const [phoneLocal, setPhoneLocal] = useState(parsedInitialPhone.local);
+  const [phoneDial, setPhoneDial] = useBorrador(`${clave}:indicativo`, parsedInitialPhone.dial);
+  const [phoneLocal, setPhoneLocal] = useBorrador(`${clave}:celular`, parsedInitialPhone.local);
   function updatePhone(dial: string, local: string) {
     setPhoneDial(dial);
     setPhoneLocal(local);
@@ -88,6 +91,7 @@ function CustomerForm({
       }}
     >
       <DialogBody className="space-y-3">
+        <BorradorAviso prefijo={clave} />
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className="text-xs font-medium mb-1 block">Nombre completo *</label>
@@ -180,9 +184,9 @@ export default function CustomersPage() {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
-  const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
+  const [editCustomer, setEditCustomer] = useBorrador<Customer | null>('clientes:editando', null);
   const [inviteCustomer, setInviteCustomer] = useState<Customer | null>(null);
-  const [openCreate, setOpenCreate] = useState(false);
+  const [openCreate, setOpenCreate] = useBorrador('clientes:nuevo:abierto', false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['customers', q, page],
@@ -205,7 +209,7 @@ export default function CustomersPage() {
       last_deworming: d.last_deworming || undefined,
       notes: d.notes || undefined,
     }),
-    onSuccess: () => { toast.success('Cliente creado'); qc.invalidateQueries({ queryKey: ['customers'] }); setOpenCreate(false); },
+    onSuccess: () => { toast.success('Cliente creado'); qc.invalidateQueries({ queryKey: ['customers'] }); descartarBorrador('clientes:nuevo'); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -224,7 +228,7 @@ export default function CustomersPage() {
       last_deworming: d.last_deworming || undefined,
       notes: d.notes || undefined,
     }),
-    onSuccess: () => { toast.success('Cliente actualizado'); qc.invalidateQueries({ queryKey: ['customers'] }); setEditCustomer(null); },
+    onSuccess: (_r, v) => { toast.success('Cliente actualizado'); qc.invalidateQueries({ queryKey: ['customers'] }); descartarBorrador(`clientes:form:${v.id}`); setEditCustomer(null); },
     onError: (e: Error) => toast.error(e.message),
   });
 

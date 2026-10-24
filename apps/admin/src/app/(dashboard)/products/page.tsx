@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useBorrador, descartarBorrador } from '@/lib/borradores';
+import { BorradorAviso } from '@/components/BorradorAviso';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Plus, Package, Pencil, Eye, EyeOff, Star, Filter, Truck, AlertTriangle, Download, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -38,8 +40,9 @@ export default function ProductsPage() {
   const [page, setPage] = useState(1);
   const [filterPublished, setFilterPublished] = useState<string>('all');
   const [filterSupplier, setFilterSupplier] = useState<string>('all');
-  const [editProduct, setEditProduct] = useState<Product | null>(null);
-  const [openCreate, setOpenCreate] = useState(false);
+  // el producto a medio crear/editar sigue abierto al volver (lib/borradores.ts)
+  const [editProduct, setEditProduct] = useBorrador<Product | null>('productos:editando', null);
+  const [openCreate, setOpenCreate] = useBorrador('productos:nuevo:abierto', false);
   const [deleteProduct, setDeleteProduct] = useState<Product | null>(null);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -66,13 +69,13 @@ export default function ProductsPage() {
 
   const createMut = useMutation({
     mutationFn: (p: Parameters<typeof products.create>[0]) => products.create(p),
-    onSuccess: () => { toast.success('Producto creado'); qc.invalidateQueries({ queryKey: ['products'] }); setOpenCreate(false); },
+    onSuccess: () => { toast.success('Producto creado'); qc.invalidateQueries({ queryKey: ['products'] }); descartarBorrador('productos:nuevo'); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Partial<Product> }) => products.update(id, payload),
-    onSuccess: () => { toast.success('Producto actualizado'); qc.invalidateQueries({ queryKey: ['products'] }); setEditProduct(null); },
+    onSuccess: (_r, v) => { toast.success('Producto actualizado'); qc.invalidateQueries({ queryKey: ['products'] }); descartarBorrador(`productos:form:${v.id}`); setEditProduct(null); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -357,7 +360,8 @@ type ProductFormProps = {
 
 function ProductForm({ initial, brands, categories, suppliers, onSubmit, loading }: ProductFormProps) {
   const initialAttrs = (initial?.attributes ?? {}) as Record<string, unknown>;
-  const [form, setForm] = useState({
+  const clave = initial?.id ? `productos:form:${initial.id}` : 'productos:nuevo:form';
+  const [form, setForm] = useBorrador(clave, {
     sku: initial?.sku || '',
     name: initial?.name || '',
     short_description: initial?.short_description || '',
@@ -419,6 +423,7 @@ function ProductForm({ initial, brands, categories, suppliers, onSubmit, loading
   return (
     <form onSubmit={handleSubmit}>
       <DialogBody className="space-y-4">
+        <BorradorAviso prefijo={clave} />
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-medium mb-1 block">SKU *</label>

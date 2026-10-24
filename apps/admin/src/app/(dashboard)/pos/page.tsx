@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { useBorrador, descartarBorrador } from '@/lib/borradores';
+import { BorradorAviso } from '@/components/BorradorAviso';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CreditCard,
@@ -628,11 +630,13 @@ function ComboSuggestions({ cartIds, onAdd }: { cartIds: string[]; onAdd: (p: Pr
 export default function POSPage() {
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<'venta' | 'historial'>('venta');
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [customer, setCustomer] = useState<Customer | null>(null);
-  const [payments, setPayments] = useState<PaymentEntry[]>([{ method: 'Efectivo', amount: '' }]);
-  const [notes, setNotes] = useState('');
+  // la venta en curso sobrevive a salir de la pantalla (ver lib/borradores.ts)
+  const [cart, setCart] = useBorrador<CartItem[]>('pos:carrito', []);
+  const [customer, setCustomer] = useBorrador<Customer | null>('pos:cliente', null);
+  const [payments, setPayments] = useBorrador<PaymentEntry[]>('pos:pagos', [{ method: 'Efectivo', amount: '' }]);
+  const [notes, setNotes] = useBorrador('pos:notas', '');
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
+  const [completedCustomer, setCompletedCustomer] = useState<Customer | null>(null);
 
   // ── Cart helpers ──
   const addProduct = useCallback((p: Product) => {
@@ -704,6 +708,10 @@ export default function POSPage() {
       }),
     onSuccess: (order) => {
       setCompletedOrder(order);
+      setCompletedCustomer(customer);
+      // ya está facturada: el borrador se va YA, para que salir de la pantalla de
+      // éxito sin tocar "Nueva venta" no deje el carrito listo para cobrarlo dos veces
+      descartarBorrador('pos');
       qc.invalidateQueries({ queryKey: ['orders'] });
       qc.invalidateQueries({ queryKey: ['pos-history'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
@@ -713,18 +721,16 @@ export default function POSPage() {
   });
 
   const resetAll = () => {
-    setCart([]);
-    setCustomer(null);
-    setPayments([{ method: 'Efectivo', amount: '' }]);
-    setNotes('');
+    descartarBorrador('pos');
     setCompletedOrder(null);
+    setCompletedCustomer(null);
     mutation.reset();
   };
 
   if (completedOrder) {
     return (
       <div className="max-w-2xl mx-auto">
-        <SuccessScreen order={completedOrder} customer={customer} onNew={resetAll} />
+        <SuccessScreen order={completedOrder} customer={completedCustomer} onNew={resetAll} />
       </div>
     );
   }
@@ -748,6 +754,7 @@ export default function POSPage() {
         </div>
       </div>
 
+      {activeTab === 'venta' && <BorradorAviso prefijo="pos" />}
       {activeTab === 'historial' ? (
         <SalesHistoryPanel />
       ) : (

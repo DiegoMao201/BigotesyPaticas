@@ -12,7 +12,9 @@
  * correo del empleado y deja el registro en el historial. Nada más que apretar.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useBorrador, descartarBorrador } from '@/lib/borradores';
+import { BorradorAviso } from '@/components/BorradorAviso';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, BadgeDollarSign, CheckCircle2, Download, FileText, Loader2, Mail,
@@ -51,8 +53,8 @@ function descargar(blob: Blob, nombre: string) {
 export default function NominaPage() {
   const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({ queryKey: ['nomina'], queryFn: nomina.resumen });
-  const [empleadoId, setEmpleadoId] = useState<string | null>(null);
-  const [editando, setEditando] = useState<NominaEmpleado | null | 'nuevo'>(null);
+  const [empleadoId, setEmpleadoId] = useBorrador<string | null>('vista:nomina:empleado', null);
+  const [editando, setEditando] = useBorrador<NominaEmpleado | null | 'nuevo'>('nomina:editando', null);
   const [editParam, setEditParam] = useState(false);
 
   const activos = useMemo(() => data?.empleados.filter((e) => e.activo) ?? [], [data]);
@@ -129,19 +131,17 @@ export default function NominaPage() {
 
 function LiquidacionCard({ empleado, onPagado }: { empleado: NominaEmpleado; onPagado: () => void }) {
   const pend = empleado.pendiente;
-  const [dias, setDias] = useState(pend?.dias_sugeridos ?? 15);
-  const [otrosDev, setOtrosDev] = useState(0);
-  const [otrosDesc, setOtrosDesc] = useState(0);
-  const [descOtros, setDescOtros] = useState('');
-  const [metodo, setMetodo] = useState('Transferencia');
-  const [enviarCorreo, setEnviarCorreo] = useState(true);
+  // la clave lleva la quincena: una quincena nueva arranca limpia sola, y la que
+  // está a medio liquidar sobrevive a salir de Nómina (lib/borradores.ts)
+  const clave = `nomina:liq:${empleado.id}:${pend?.periodo.clave ?? 'sin'}`;
+  const [dias, setDias] = useBorrador(`${clave}:dias`, pend?.dias_sugeridos ?? 15);
+  const [otrosDev, setOtrosDev] = useBorrador(`${clave}:otrosDev`, 0);
+  const [otrosDesc, setOtrosDesc] = useBorrador(`${clave}:otrosDesc`, 0);
+  const [descOtros, setDescOtros] = useBorrador(`${clave}:descOtros`, '');
+  const [metodo, setMetodo] = useBorrador(`${clave}:metodo`, 'Transferencia');
+  const [enviarCorreo, setEnviarCorreo] = useBorrador(`${clave}:correo`, true);
   const [confirmar, setConfirmar] = useState(false);
   const [ultimo, setUltimo] = useState<NominaPago | null>(null);
-
-  useEffect(() => {
-    setDias(pend?.dias_sugeridos ?? 15);
-    setOtrosDev(0); setOtrosDesc(0); setDescOtros('');
-  }, [empleado.id, pend?.periodo.clave, pend?.dias_sugeridos]);
 
   const ajustado = dias !== (pend?.dias_sugeridos ?? 15) || otrosDev > 0 || otrosDesc > 0;
   const preview = useQuery({
@@ -167,6 +167,7 @@ function LiquidacionCard({ empleado, onPagado }: { empleado: NominaEmpleado; onP
     onSuccess: (p) => {
       setConfirmar(false);
       setUltimo(p);
+      descartarBorrador(clave);
       if (p.email_enviado_at) toast.success(`Quincena pagada y desprendible enviado a ${p.email_enviado_a}`);
       else if (enviarCorreo) toast.warning(`Quincena pagada, pero el correo falló: ${p.email_error ?? 'sin detalle'}. Puedes reenviarlo desde el historial.`);
       else toast.success('Quincena pagada y registrada en Gastos');
@@ -401,7 +402,8 @@ function EmpleadoCard({ empleado, onEditar, onCambio }: { empleado: NominaEmplea
 }
 
 function EmpleadoForm({ inicial, minimo, onListo }: { inicial: NominaEmpleado | null; minimo: NominaParametro; onListo: () => void }) {
-  const [f, setF] = useState<NominaEmpleadoIn>({
+  const claveForm = `nomina:empleado:${inicial?.id ?? 'nuevo'}`;
+  const [f, setF] = useBorrador<NominaEmpleadoIn>(claveForm, {
     nombre: inicial?.nombre ?? '',
     documento: inicial?.documento ?? '',
     email: inicial?.email ?? '',
@@ -417,12 +419,13 @@ function EmpleadoForm({ inicial, minimo, onListo }: { inicial: NominaEmpleado | 
   const usaMinimo = f.salario_base === null;
   const guardar = useMutation({
     mutationFn: () => (inicial ? nomina.editarEmpleado(inicial.id, f) : nomina.crearEmpleado(f)),
-    onSuccess: () => { toast.success('Empleado guardado'); onListo(); },
+    onSuccess: () => { toast.success('Empleado guardado'); descartarBorrador(claveForm); onListo(); },
     onError: (e: Error) => toast.error(e.message || 'No se pudo guardar'),
   });
   return (
     <form onSubmit={(e) => { e.preventDefault(); guardar.mutate(); }}>
       <DialogBody className="space-y-3">
+        <BorradorAviso prefijo={claveForm} />
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2"><label className="text-xs font-medium mb-1 block">Nombre completo</label><Input value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} required /></div>
           <div><label className="text-xs font-medium mb-1 block">Cédula</label><Input value={f.documento} onChange={(e) => setF({ ...f, documento: e.target.value })} required /></div>

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback, useMemo, useRef } from 'react';
+import { useBorrador } from '@/lib/borradores';
+import { BorradorAviso } from '@/components/BorradorAviso';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
@@ -50,15 +52,16 @@ function SortTh({
 
 export default function InventoryPage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<'stock' | 'movements' | 'alerts' | 'analytics' | 'conteo' | 'ajustes'>('stock');
+  // la vista (pestaña, búsqueda) se recuerda; el ajuste a medias cuenta como borrador
+  const [tab, setTab] = useBorrador<'stock' | 'movements' | 'alerts' | 'analytics' | 'conteo' | 'ajustes'>('vista:inventario:tab', 'stock');
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useBorrador('vista:inventario:buscar', '');
   const [filter, setFilter] = useState<{ only_in_stock?: boolean; only_low_stock?: boolean }>({});
   const [sortBy, setSortBy] = useState<SortField>('quantity');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [adjustRow, setAdjustRow] = useState<StockRow | null>(null);
-  const [adjustDelta, setAdjustDelta] = useState('');
-  const [adjustNotes, setAdjustNotes] = useState('');
+  const [adjustRow, setAdjustRow] = useBorrador<StockRow | null>('inventario:rapido:fila', null);
+  const [adjustDelta, setAdjustDelta] = useBorrador('inventario:rapido:cantidad', '');
+  const [adjustNotes, setAdjustNotes] = useBorrador('inventario:rapido:notas', '');
   const [editing, setEditing] = useState<EditingPrice | null>(null);
   const editCostRef = useRef<HTMLInputElement>(null);
 
@@ -1616,11 +1619,11 @@ function ConteoTab() {
 
 function AjustesTab() {
   const qc = useQueryClient();
-  const [searchQ, setSearchQ] = useState('');
-  const [selected, setSelected] = useState<StockRow | null>(null);
-  const [delta, setDelta] = useState('');
-  const [notes, setNotes] = useState('');
-  const [batch, setBatch] = useState<{ product_id: string; name: string; sku: string; current: number; delta: number; notes: string }[]>([]);
+  const [searchQ, setSearchQ] = useBorrador('inventario:ajustes:buscar', '');
+  const [selected, setSelected] = useBorrador<StockRow | null>('inventario:ajustes:producto', null);
+  const [delta, setDelta] = useBorrador('inventario:ajustes:cantidad', '');
+  const [notes, setNotes] = useBorrador('inventario:ajustes:notas', '');
+  const [batch, setBatch] = useBorrador<{ product_id: string; name: string; sku: string; current: number; delta: number; notes: string }[]>('inventario:ajustes:lote', []);
 
   const { data: searchData, isLoading: searching } = useQuery({
     queryKey: ['inventory-search-ajuste', searchQ],
@@ -1696,6 +1699,7 @@ function AjustesTab() {
 
   return (
     <div className="space-y-5">
+      <BorradorAviso prefijo="inventario:ajustes" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Form */}
         <Card className="p-5 space-y-4">
