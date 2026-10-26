@@ -9,6 +9,7 @@ from sqlalchemy import (
     ARRAY,
     Boolean,
     CheckConstraint,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -239,5 +240,5 @@ class ProductBarcode(Base):
     # 'lector' (escaneado en el admin), 'xml' (factura del proveedor), 'ficha' (attributes.gtin)
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="lector")
     created_at: Mapped[datetime.datetime] = mapped_column(
-        nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
