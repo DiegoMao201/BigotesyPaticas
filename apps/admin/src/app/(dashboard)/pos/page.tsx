@@ -83,15 +83,16 @@ function ProductSearch({ onAdd }: { onAdd: (p: Product) => void }) {
     if (e.key === 'Enter' && barcodeInput.trim()) {
       const sku = barcodeInput.trim();
       setBarcodeInput('');
-      // Search by exact SKU
-      products.list({ q: sku, page_size: 5 }).then((res) => {
-        const exact = res.items.find((p) => p.sku.toLowerCase() === sku.toLowerCase()) ?? res.items[0];
-        if (exact) {
-          onAdd(exact);
-        } else {
-          setQ(sku);
-        }
-      }).catch(() => setQ(sku));
+      // Primero el código de barras guardado en el producto; si no, el SKU exacto
+      products.byBarcode(sku).then(onAdd).catch(() =>
+        products.list({ q: sku, page_size: 5 }).then((res) => {
+          const exact = res.items.find((p) => p.sku.toLowerCase() === sku.toLowerCase()) ?? res.items[0];
+          if (exact) {
+            onAdd(exact);
+          } else {
+            setQ(sku);
+          }
+        }).catch(() => setQ(sku)));
     }
   }
 

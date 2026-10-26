@@ -10,11 +10,13 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.deps import CurrentUser, DBSession, require_permission
-from app.models.catalog import Product
+from app.models.catalog import Product, ProductBarcode
 from app.models.inventory import Stock, StockLocation, StockMovement
 from app.models.purchasing import Purchase, PurchaseItem, SupplierSkuMap
+from app.services.codigos_barras import es_gtin_unidad
 
 router = APIRouter(prefix="/purchases", tags=["purchases"])
 
@@ -394,6 +396,15 @@ async def _upsert_supplier_sku_map(
             entry.last_seen_at = purchase.purchased_at
 
         seen[sku_prov] = entry
+
+        # Si el proveedor mandó el GTIN de la unidad (schemeID 010 en el XML), queda
+        # como código de barras del producto. Si el código ya es de otro, no se toca.
+        if es_gtin_unidad(sku_prov) and int(item.factor_pack or 1) == 1:
+            await db.execute(
+                pg_insert(ProductBarcode)
+                .values(code=sku_prov, product_id=item.product_id, source="xml")
+                .on_conflict_do_nothing(index_elements=["code"])
+            )
 
 
 # ─── Endpoints ────────────────────────────────────────────────────

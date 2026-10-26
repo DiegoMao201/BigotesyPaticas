@@ -8,14 +8,14 @@ import math
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from slugify import slugify
 from sqlalchemy import func, or_, select, update
 
 from app.deps import DBSession, require_permission
 from app.services.seo_notifications import notify_indexnow
-from app.models.catalog import Brand, Category, Product, ProductReview
+from app.models.catalog import Brand, Category, Product, ProductBarcode, ProductReview
 from app.models.crm import Customer
 from app.models.inventory import Stock
 from app.models.purchasing import Supplier, SupplierSkuMap
@@ -171,7 +171,14 @@ async def list_products(
         tokens = q.split()
         for token in tokens:
             like = f"%{token}%"
-            cond = or_(Product.name.ilike(like), Product.sku.ilike(like))
+            cond = or_(
+                Product.name.ilike(like),
+                Product.sku.ilike(like),
+                # lo que dispara la pistola lectora: el código de barras exacto
+                Product.id.in_(
+                    select(ProductBarcode.product_id).where(ProductBarcode.code == token)
+                ),
+            )
             stmt = stmt.where(cond)
             count_stmt = count_stmt.where(cond)
     if brand_id:
@@ -414,6 +421,83 @@ async def get_product(product_id: uuid.UUID, db: DBSession):
         p_out.supplier_id = sup[0]
         p_out.supplier_name = sup[1]
     return p_out
+
+
+@router.get("/by-barcode/{code}", response_model=ProductOut)
+async def get_product_by_barcode(code: str, db: DBSession):
+    """El producto de un código de barras (la pistola del POS)."""
+    product_id = (
+        await db.execute(
+            select(ProductBarcode.product_id).where(ProductBarcode.code == code.strip())
+        )
+    ).scalar_one_or_none()
+    if product_id is None:
+        raise HTTPException(status_code=404, detail="Código de barras sin producto")
+    return await get_product(product_id, db)
+
+
+@router.get(
+    "/{product_id}/barcodes",
+    dependencies=[Depends(require_permission("catalog:write"))],
+)
+async def list_barcodes(product_id: uuid.UUID, db: DBSession):
+    rows = (
+        await db.execute(
+            select(ProductBarcode)
+            .where(ProductBarcode.product_id == product_id)
+            .order_by(ProductBarcode.created_at)
+        )
+    ).scalars()
+    return [{"code": b.code, "source": b.source, "created_at": b.created_at} for b in rows]
+
+
+@router.post(
+    "/{product_id}/barcodes",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("catalog:write"))],
+)
+async def add_barcode(product_id: uuid.UUID, db: DBSession, code: str = Body(..., embed=True)):
+    """Guarda el código que leyó la pistola. Un código es de un solo producto."""
+    code = code.strip()
+    if not code or len(code) > 32 or not code.isprintable():
+        raise HTTPException(status_code=422, detail="Código de barras inválido")
+    p = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one_or_none()
+    if p is None or p.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    actual = (
+        await db.execute(select(ProductBarcode).where(ProductBarcode.code == code))
+    ).scalar_one_or_none()
+    if actual is not None:
+        if actual.product_id == product_id:
+            return {"code": code, "source": actual.source, "created_at": actual.created_at}
+        otro = (
+            await db.execute(select(Product.name, Product.sku).where(Product.id == actual.product_id))
+        ).one_or_none()
+        nombre = f"{otro.name} ({otro.sku})" if otro else "otro producto"
+        raise HTTPException(status_code=409, detail=f"Ese código ya es de {nombre}")
+    b = ProductBarcode(code=code, product_id=product_id, source="lector")
+    db.add(b)
+    await db.commit()
+    return {"code": b.code, "source": b.source, "created_at": b.created_at}
+
+
+@router.delete(
+    "/{product_id}/barcodes/{code}",
+    dependencies=[Depends(require_permission("catalog:write"))],
+)
+async def delete_barcode(product_id: uuid.UUID, code: str, db: DBSession):
+    b = (
+        await db.execute(
+            select(ProductBarcode).where(
+                ProductBarcode.code == code, ProductBarcode.product_id == product_id
+            )
+        )
+    ).scalar_one_or_none()
+    if b is None:
+        raise HTTPException(status_code=404, detail="Código no encontrado")
+    await db.delete(b)
+    await db.commit()
+    return {"ok": True}
 
 
 @router.get("/by-slug/{slug}/redirect-target")

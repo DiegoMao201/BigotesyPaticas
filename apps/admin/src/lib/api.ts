@@ -217,6 +217,13 @@ export const products = {
     return api<PaginatedProducts>(`/v1/products?${qs.toString()}`);
   },
   get: (id: string) => api<Product>(`/v1/products/${id}`),
+  byBarcode: (code: string) => api<Product>(`/v1/products/by-barcode/${encodeURIComponent(code)}`),
+  barcodes: (id: string) =>
+    api<{ code: string; source: string; created_at: string }[]>(`/v1/products/${id}/barcodes`),
+  addBarcode: (id: string, code: string) =>
+    api<{ code: string; source: string }>(`/v1/products/${id}/barcodes`, { method: 'POST', body: JSON.stringify({ code }) }),
+  deleteBarcode: (id: string, code: string) =>
+    api<{ ok: boolean }>(`/v1/products/${id}/barcodes/${encodeURIComponent(code)}`, { method: 'DELETE' }),
   create: (payload: Partial<Product> & { sku: string; name: string }) =>
     api<Product>('/v1/products', { method: 'POST', body: JSON.stringify(payload) }),
   update: (id: string, payload: Partial<Product>) =>

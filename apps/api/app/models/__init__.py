@@ -1,7 +1,7 @@
 """Re-exporta todos los modelos para que Alembic los detecte."""
 
 from app.models.auth import PERMISSIONS, ROLE_DEFAULTS, Role, User, user_roles
-from app.models.catalog import Brand, Category, Product
+from app.models.catalog import Brand, Category, Product, ProductBarcode
 from app.models.common import Base
 from app.models.crm import Customer
 from app.models.finance import CashClosing, Employee, Expense, Payroll, PayrollParam

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
 from app.deps import CurrentUser, DBSession, require_permission
-from app.models.catalog import Product
+from app.models.catalog import Product, ProductBarcode
 from app.models.inventory import Stock, StockLocation, StockMovement
 from app.models.sales import Order
 
@@ -293,7 +293,15 @@ async def list_stock(
         # Multi-token AND: each word must appear in name or sku (order-independent)
         for token in q.split():
             like = f"%{token}%"
-            stmt = stmt.where(or_(Product.name.ilike(like), Product.sku.ilike(like)))
+            stmt = stmt.where(
+                or_(
+                    Product.name.ilike(like),
+                    Product.sku.ilike(like),
+                    Product.id.in_(
+                        select(ProductBarcode.product_id).where(ProductBarcode.code == token)
+                    ),
+                )
+            )
 
     rows = (await db.execute(stmt)).all()
     items = []

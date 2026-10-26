@@ -216,3 +216,28 @@ class GBPReviewCache(UUIDPKMixin, Base):
     )
     points_credited: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     points_credited_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
+
+
+class ProductBarcode(Base):
+    """Códigos de barras de un producto (26-oct-2026).
+
+    El código es la llave: uno solo por producto en toda la tienda, para que la
+    pistola nunca dude. Un producto sí puede tener varios (la bolsa y la caja, o
+    una presentación vieja que sigue en estantería).
+    """
+
+    __tablename__ = "product_barcodes"
+    __table_args__ = ({"schema": "catalog"},)
+
+    code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("catalog.products.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # 'lector' (escaneado en el admin), 'xml' (factura del proveedor), 'ficha' (attributes.gtin)
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="lector")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
+    )
