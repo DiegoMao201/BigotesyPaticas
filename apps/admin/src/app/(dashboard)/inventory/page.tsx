@@ -12,7 +12,7 @@ import {
   ArrowUp, ArrowDown, Edit2, Check, X, RefreshCw, TrendingUp,
   DollarSign, ShoppingBag, Plus, Minus, Sparkles, Download, ShoppingCart,
   ClipboardList, Upload, ChevronRight, Trash2, PlayCircle, Eye, FileSpreadsheet, SlidersHorizontal,
-  Copy, MessageCircle,
+  Copy, MessageCircle, ScanLine,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, inventory, analytics, inventoryCounts, sales, type StockRow, type CountSessionOut, type CountSessionDetail, type UploadPreviewRow, type Order } from '@/lib/api';
@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/pagination';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
+import { CodigosBarras } from '@/components/CodigosBarras';
 
 type SortField = 'quantity' | 'cost' | 'price' | 'margin_pct' | 'stock_value_price' | 'stock_value_cost' | 'name';
 type SortDir = 'asc' | 'desc';
@@ -57,6 +58,8 @@ export default function InventoryPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useBorrador('vista:inventario:buscar', '');
   const [filter, setFilter] = useState<{ only_in_stock?: boolean; only_low_stock?: boolean }>({});
+  const [sinCodigo, setSinCodigo] = useState(false);
+  const [escanear, setEscanear] = useState<StockRow | null>(null);
   const [sortBy, setSortBy] = useState<SortField>('quantity');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [adjustRow, setAdjustRow] = useBorrador<StockRow | null>('inventario:rapido:fila', null);
@@ -85,8 +88,8 @@ export default function InventoryPage() {
   }, [sortBy]);
 
   const { data: stockData, isLoading: loadingStock } = useQuery({
-    queryKey: ['inventory-stock', page, search, filter, sortBy, sortDir],
-    queryFn: () => inventory.list({ page, page_size: 50, q: search || undefined, sort_by: sortBy, sort_dir: sortDir, ...filter }),
+    queryKey: ['inventory-stock', page, search, filter, sinCodigo, sortBy, sortDir],
+    queryFn: () => inventory.list({ page, page_size: 50, q: search || undefined, sort_by: sortBy, sort_dir: sortDir, ...filter, without_barcode: sinCodigo || undefined }),
     enabled: tab === 'stock',
     staleTime: 30_000,
   });
@@ -245,6 +248,7 @@ export default function InventoryPage() {
               <div className="flex gap-2">
                 <Button variant={filter.only_in_stock ? 'default' : 'outline'} size="sm" onClick={() => { setFilter({ only_in_stock: !filter.only_in_stock }); setPage(1); }}>Con stock</Button>
                 <Button variant={filter.only_low_stock ? 'default' : 'outline'} size="sm" onClick={() => { setFilter({ only_low_stock: !filter.only_low_stock }); setPage(1); }}>Stock bajo</Button>
+                <Button variant={sinCodigo ? 'default' : 'outline'} size="sm" onClick={() => { setSinCodigo(!sinCodigo); setPage(1); }}><ScanLine className="w-4 h-4 mr-1" /> Sin código de barras</Button>
               </div>
             </div>
           </Card>
@@ -305,6 +309,7 @@ export default function InventoryPage() {
                             </div>
                           ) : (
                             <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => setEscanear(s)} className="p-1.5 rounded text-muted-foreground hover:text-brand-600 hover:bg-brand-50 transition" title="Código de barras"><ScanLine className="w-3.5 h-3.5" /></button>
                               <button onClick={() => startEdit(s)} className="p-1.5 rounded text-muted-foreground hover:text-brand-600 hover:bg-brand-50 transition" title="Editar precios"><Edit2 className="w-3.5 h-3.5" /></button>
                               <button onClick={() => { setAdjustRow(s); setAdjustDelta(''); setAdjustNotes(''); }} className="p-1.5 rounded text-muted-foreground hover:text-amber-600 hover:bg-amber-50 transition" title="Ajustar stock"><ArrowUpDown className="w-3.5 h-3.5" /></button>
                             </div>
@@ -615,6 +620,12 @@ export default function InventoryPage() {
               </>
             )}
           </div>
+        </Dialog>
+      )}
+
+      {escanear && (
+        <Dialog open onClose={() => setEscanear(null)} title={escanear.name}>
+          <div className="pb-6"><CodigosBarras productId={escanear.product_id} autoFocus onSaved={() => sinCodigo && setEscanear(null)} /></div>
         </Dialog>
       )}
 

@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useBorrador, descartarBorrador } from '@/lib/borradores';
 import { BorradorAviso } from '@/components/BorradorAviso';
+import { CodigosBarras } from '@/components/CodigosBarras';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, Package, Pencil, Eye, EyeOff, Star, Filter, Truck, AlertTriangle, Download, Upload, Trash2, ScanLine, X } from 'lucide-react';
+import { Search, Plus, Package, Pencil, Eye, EyeOff, Star, Filter, Truck, AlertTriangle, Download, Upload, Trash2, ScanLine } from 'lucide-react';
 import { toast } from 'sonner';
 import { products, suppliers, type Product } from '@/lib/api';
 import { Card } from '@/components/ui/card';
@@ -40,6 +41,8 @@ export default function ProductsPage() {
   const [page, setPage] = useState(1);
   const [filterPublished, setFilterPublished] = useState<string>('all');
   const [filterSupplier, setFilterSupplier] = useState<string>('all');
+  const [sinCodigo, setSinCodigo] = useState(false);
+  const [escanear, setEscanear] = useState<Product | null>(null);
   // el producto a medio crear/editar sigue abierto al volver (lib/borradores.ts)
   const [editProduct, setEditProduct] = useBorrador<Product | null>('productos:editando', null);
   const [openCreate, setOpenCreate] = useBorrador('productos:nuevo:abierto', false);
@@ -48,7 +51,7 @@ export default function ProductsPage() {
   const [importing, setImporting] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['products', q, page, filterPublished, filterSupplier],
+    queryKey: ['products', q, page, filterPublished, filterSupplier, sinCodigo],
     queryFn: () => products.list({
       q: q || undefined,
       page,
@@ -56,6 +59,7 @@ export default function ProductsPage() {
       is_published: filterPublished === 'all' ? undefined : filterPublished === 'published',
       supplier_id: filterSupplier !== 'all' && filterSupplier !== 'none' ? filterSupplier : undefined,
       without_supplier: filterSupplier === 'none' ? true : undefined,
+      without_barcode: sinCodigo || undefined,
     }),
   });
 
@@ -175,6 +179,9 @@ export default function ProductsPage() {
           <option value="none">⚠️ Sin proveedor</option>
           {supplierList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </Select>
+        <Button variant={sinCodigo ? 'default' : 'outline'} size="sm" onClick={() => { setSinCodigo(!sinCodigo); setPage(1); }}>
+          <ScanLine className="w-4 h-4 mr-1" /> Sin código de barras
+        </Button>
       </div>
 
       {isLoading && <div className="text-center py-12 text-muted-foreground">Cargando…</div>}
@@ -247,6 +254,13 @@ export default function ProductsPage() {
                     <td className="p-4">
                       <div className="flex items-center justify-center gap-1">
                         <button
+                          title="Código de barras"
+                          onClick={() => setEscanear(p)}
+                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                        >
+                          <ScanLine className="w-3.5 h-3.5" />
+                        </button>
+                        <button
                           title="Editar"
                           onClick={() => setEditProduct(p)}
                           className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -311,6 +325,11 @@ export default function ProductsPage() {
             loading={updateMut.isPending}
           />
         )}
+      </Dialog>
+
+      {/* Modal código de barras: se escanea y, con el filtro puesto, se cierra solo */}
+      <Dialog open={!!escanear} onClose={() => setEscanear(null)} title={escanear?.name ?? ''}>
+        {escanear && <div className="pb-6"><CodigosBarras productId={escanear.id} autoFocus onSaved={() => sinCodigo && setEscanear(null)} /></div>}
       </Dialog>
 
       {/* Modal confirmar eliminación */}
@@ -567,70 +586,3 @@ function ProductForm({ initial, brands, categories, suppliers, onSubmit, loading
   );
 }
 
-// Códigos de barras del producto: se pasa la pistola una vez y queda guardado.
-// Va fuera del <form> del producto: la pistola termina con Enter y ahí guardaría
-// la ficha entera.
-const ORIGEN: Record<string, string> = { lector: 'lector', xml: 'factura', ficha: 'ficha' };
-
-function CodigosBarras({ productId }: { productId: string }) {
-  const qc = useQueryClient();
-  const [code, setCode] = useState('');
-  const key = ['product-barcodes', productId];
-  const { data: codigos } = useQuery({ queryKey: key, queryFn: () => products.barcodes(productId) });
-  const addMut = useMutation({
-    mutationFn: (c: string) => products.addBarcode(productId, c),
-    onSuccess: (r) => {
-      toast.success(`Código ${r.code} guardado`);
-      setCode('');
-      qc.invalidateQueries({ queryKey: key });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-  const delMut = useMutation({
-    mutationFn: (c: string) => products.deleteBarcode(productId, c),
-    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  return (
-    <div className="px-6 pt-6">
-      <label className="text-xs font-medium mb-1 block">Código de barras</label>
-      <div className="relative">
-        <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-500" />
-        <input
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          placeholder="Pasa la pistola por el empaque y se guarda solo"
-          value={code}
-          disabled={addMut.isPending}
-          onChange={(e) => setCode(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== 'Enter') return;
-            e.preventDefault();
-            if (code.trim()) addMut.mutate(code.trim());
-          }}
-          className="w-full pl-9 pr-3 h-9 rounded-lg border-2 border-brand-300 bg-brand-50/30 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 placeholder:text-brand-400"
-        />
-      </div>
-      {!!codigos?.length && (
-        <div className="flex flex-wrap gap-2 mt-2">
-          {codigos.map((c) => (
-            <span key={c.code} className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 pl-2 pr-1 py-0.5 text-xs font-mono">
-              {c.code}
-              <span className="font-sans text-muted-foreground">· {ORIGEN[c.source] ?? c.source}</span>
-              <button
-                type="button"
-                aria-label={`Quitar ${c.code}`}
-                onClick={() => confirm(`¿Quitar el código ${c.code}?`) && delMut.mutate(c.code)}
-                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

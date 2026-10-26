@@ -205,7 +205,7 @@ export interface PaginatedProducts {
 }
 
 export const products = {
-  list: (params: { page?: number; page_size?: number; q?: string; is_published?: boolean; category?: string; supplier_id?: string; without_supplier?: boolean } = {}) => {
+  list: (params: { page?: number; page_size?: number; q?: string; is_published?: boolean; category?: string; supplier_id?: string; without_supplier?: boolean; without_barcode?: boolean } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
     if (params.page_size) qs.set('page_size', String(params.page_size));
@@ -214,6 +214,7 @@ export const products = {
     if (params.category) qs.set('category', params.category);
     if (params.supplier_id) qs.set('supplier_id', params.supplier_id);
     if (params.without_supplier) qs.set('without_supplier', 'true');
+    if (params.without_barcode) qs.set('without_barcode', 'true');
     return api<PaginatedProducts>(`/v1/products?${qs.toString()}`);
   },
   get: (id: string) => api<Product>(`/v1/products/${id}`),
@@ -913,11 +914,12 @@ export interface MovementRow {
 }
 
 export const inventory = {
-  list: (params: { q?: string; only_in_stock?: boolean; only_low_stock?: boolean; sort_by?: string; sort_dir?: string; page?: number; page_size?: number } = {}) => {
+  list: (params: { q?: string; only_in_stock?: boolean; only_low_stock?: boolean; without_barcode?: boolean; sort_by?: string; sort_dir?: string; page?: number; page_size?: number } = {}) => {
     const qs = new URLSearchParams();
     if (params.q) qs.set('q', params.q);
     if (params.only_in_stock) qs.set('only_in_stock', 'true');
     if (params.only_low_stock) qs.set('only_low_stock', 'true');
+    if (params.without_barcode) qs.set('without_barcode', 'true');
     if (params.sort_by) qs.set('sort_by', params.sort_by);
     if (params.sort_dir) qs.set('sort_dir', params.sort_dir);
     if (params.page) qs.set('page', String(params.page));

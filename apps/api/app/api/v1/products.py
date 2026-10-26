@@ -158,6 +158,7 @@ async def list_products(
     ),
     supplier_id: uuid.UUID | None = Query(None, description="Filtrar por proveedor asociado"),
     without_supplier: bool = Query(False, description="Solo productos sin proveedor"),
+    without_barcode: bool = Query(False, description="Solo productos sin código de barras"),
     is_published: bool | None = None,
     is_featured: bool | None = None,
     page: int = Query(1, ge=1),
@@ -221,6 +222,10 @@ async def list_products(
         sub_all = select(SupplierSkuMap.product_id).distinct()
         stmt = stmt.where(Product.id.notin_(sub_all))
         count_stmt = count_stmt.where(Product.id.notin_(sub_all))
+    if without_barcode:
+        con_codigo = select(ProductBarcode.product_id)
+        stmt = stmt.where(Product.id.notin_(con_codigo))
+        count_stmt = count_stmt.where(Product.id.notin_(con_codigo))
 
     total = (await db.execute(count_stmt)).scalar_one()
     stmt = stmt.order_by(Product.created_at.desc()).offset((page - 1) * per_page).limit(per_page)

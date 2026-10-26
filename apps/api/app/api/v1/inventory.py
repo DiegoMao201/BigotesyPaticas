@@ -265,6 +265,7 @@ async def list_stock(
     q: str | None = Query(None),
     only_in_stock: bool = False,
     only_low_stock: bool = False,
+    without_barcode: bool = False,
     sort_by: str = Query(
         "quantity",
         pattern="^(quantity|cost|price|stock_value_cost|stock_value_price|margin_pct|name|sku)$",
@@ -302,6 +303,9 @@ async def list_stock(
                     ),
                 )
             )
+
+    if without_barcode:
+        stmt = stmt.where(Product.id.notin_(select(ProductBarcode.product_id)))
 
     rows = (await db.execute(stmt)).all()
     items = []
