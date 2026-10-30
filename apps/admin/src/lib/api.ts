@@ -309,6 +309,23 @@ export interface Order {
   notes: string | null;
   items: OrderItemOut[];
   payments: PaymentOut[];
+  /** Bono de bienvenida PRIMERAPATA aplicado (va dentro de discount_total, se muestra aparte). */
+  bono?: { codigo: string; email: string; valor: number } | null;
+}
+
+/** Bono de bienvenida del newsletter: quién se suscribió y en qué estado va su PRIMERAPATA. */
+export interface BonoBienvenida {
+  id: string;
+  email: string;
+  codigo: string;
+  valor: number;
+  minimo: number;
+  suscrito_en: string;
+  vence_en: string;
+  estado: 'pendiente' | 'canjeado' | 'vencido';
+  canjeado_en: string | null;
+  canjeado_orden: string | null;
+  cliente: string | null;
 }
 
 export interface OrdersListResponse {
@@ -322,6 +339,7 @@ export interface OrdersListResponse {
 }
 
 export const sales = {
+  bonos: (q?: string) => api<BonoBienvenida[]>(`/v1/sales/bonos${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   list: (params: { page?: number; page_size?: number; q?: string; product_q?: string; customer_q?: string; status?: string; payment_status?: string; channel?: string; date_from?: string; date_to?: string } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
@@ -552,6 +570,8 @@ export interface OrderCreate {
   payments?: PaymentIn[];
   shipping_total?: number;
   notes?: string;
+  /** Correo del suscriptor cuyo bono de bienvenida se canjea en esta venta. */
+  bono_email?: string;
 }
 
 export const pos = {

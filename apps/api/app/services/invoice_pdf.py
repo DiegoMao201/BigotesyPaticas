@@ -376,9 +376,19 @@ def render_invoice_html(*, order, customer_name: str, customer_doc: str) -> str:
         shipping_row = (
             f'<tr><td>Domicilio</td><td class="num">{_money(order.shipping_total)}</td></tr>'
         )
+    # El bono de bienvenida va dentro de discount_total, pero se imprime aparte:
+    # el cliente tiene que ver que fue su bono por registrarse, no un descuento más.
+    bono = (order.metadata_ or {}).get("bono") if isinstance(order.metadata_, dict) else None
+    bono_valor = float(bono.get("valor") or 0) if bono else 0.0
     discount_row = ""
-    if float(order.discount_total) > 0:
-        discount_row = f'<tr><td class="discount-label">Descuentos</td><td class="num discount">-{_money(order.discount_total)}</td></tr>'
+    otros_descuentos = float(order.discount_total) - bono_valor
+    if otros_descuentos > 0:
+        discount_row = f'<tr><td class="discount-label">Descuentos</td><td class="num discount">-{_money(otros_descuentos)}</td></tr>'
+    if bono:
+        discount_row += (
+            f'<tr><td class="bono">🎁 Bono de bienvenida {bono.get("codigo", "")}</td>'
+            f'<td class="num bono">-{_money(bono_valor)}</td></tr>'
+        )
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -493,6 +503,7 @@ def render_invoice_html(*, order, customer_name: str, customer_doc: str) -> str:
     .bold {{ font-weight: 700; }}
     .discount {{ color: #b45309; }}
     .discount-label {{ color: #b45309; }}
+    .bono {{ color: #FF6B35; font-weight: 700; }}
     .product-name {{ font-weight: 600; color: #1c1917; margin-bottom: 3px; }}
     .ref-chip {{
         display: inline-block;

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class OrderItemIn(BaseModel):
@@ -31,6 +31,9 @@ class OrderCreate(BaseModel):
     shipping_total: Decimal = Decimal("0")
     notes: str | None = None
     occurred_at: datetime | None = None  # si None → now()
+    # Bono de bienvenida PRIMERAPATA: se canjea con el correo del suscriptor
+    # (ver app/services/bono_bienvenida.py).
+    bono_email: str | None = None
 
 
 class OrderItemOut(BaseModel):
@@ -83,3 +86,10 @@ class OrderOut(BaseModel):
     notes: str | None = None
     items: list[OrderItemOut] = []
     payments: list[PaymentOut] = []
+    metadata_: dict | None = Field(default=None, exclude=True)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def bono(self) -> dict | None:
+        """Bono de bienvenida aplicado a la venta, aparte de los descuentos de línea."""
+        return (self.metadata_ or {}).get("bono")

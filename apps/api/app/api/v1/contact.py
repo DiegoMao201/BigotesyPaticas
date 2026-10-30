@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.services.bono_bienvenida import CODIGO as WELCOME_COUPON
 from app.services.email import STORE_EMAIL, send_email
 
 router = APIRouter(prefix="/contact", tags=["contact"])
@@ -144,7 +145,6 @@ async def submit_review(payload: ReviewIn, bg: BackgroundTasks) -> dict:
     return {"ok": True}
 
 
-WELCOME_COUPON = "PRIMERAPATA"
 
 
 def _welcome_html(email: str) -> str:
@@ -196,6 +196,10 @@ def _welcome_html(email: str) -> str:
             </div>
             <p style="color:#888;font-size:12px;margin:8px 0 0;">
               Compras desde $30.000 · Válido 30 días · Un uso por cliente
+            </p>
+            <p style="color:#555;font-size:12px;margin:8px 0 0;">
+              Para usarlo, dinos el correo con el que te suscribiste ({email})
+              al pagar en la tienda o al pedir por WhatsApp.
             </p>
           </td></tr>
         </table>
@@ -322,8 +326,9 @@ def ALREADY_SUBSCRIBED_HTML(email: str) -> str:
         </p>
         <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 24px;">
           Si todavía no has usado tu cupón <strong style="color:#FF6B35;">PRIMERAPATA</strong>,
-          aplícalo al momento de pedir por WhatsApp o en tienda.<br>
-          ¡No caduca hasta que te animes a comprar!
+          dinos este correo al pagar en la tienda o al pedir por WhatsApp.<br>
+          Vale $5.000 en tu primera compra desde $30.000, durante los 30 días
+          siguientes al correo de bienvenida.
         </p>
         <a href="https://mi.bigotesypaticas.com"
            style="display:inline-block;background:#187f77;color:#fff;font-size:14px;font-weight:700;

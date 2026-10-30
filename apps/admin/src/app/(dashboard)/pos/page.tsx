@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CreditCard,
   Banknote, Smartphone, CheckCircle2, Printer, RotateCcw, X, XCircle,
-  FileText, MessageCircle, History, Eye, ChevronRight, ScanLine, Zap, MapPin,
+  FileText, MessageCircle, History, Eye, ChevronRight, ScanLine, Zap, MapPin, Gift,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
-import { products, customers, pos, sales, intelligence, API_BASE, type Product, type Customer, type Order } from '@/lib/api';
+import { products, customers, pos, sales, intelligence, API_BASE, type Product, type Customer, type Order, type BonoBienvenida } from '@/lib/api';
 import { useAuth } from '@/lib/auth-store';
 import { buildWhatsAppUrl } from '@/lib/phone';
 import { toast } from 'sonner';
@@ -49,12 +49,16 @@ function buildWhatsAppMsg(order: Order, customerName?: string): string {
   ).join('\n');
   const change = Number(order.paid_amount) - Number(order.grand_total);
   const changeStr = change > 0 ? `\n💵 *Cambio:* ${formatCurrency(change)}` : '';
+  const bonoStr = order.bono
+    ? `🎁 *Bono de bienvenida ${order.bono.codigo}:* -${formatCurrency(order.bono.valor)} ¡Gracias por unirte al club!\n`
+    : '';
   return (
     `🐾 *¡Gracias por visitarnos, ${name}!* 🐾\n\n` +
     `Tu compra en *Bigotes y Paticas* fue registrada exitosamente 🎉\n\n` +
     `📋 *Orden:* ${order.order_number}\n` +
     `📅 *Fecha:* ${new Date(order.occurred_at).toLocaleDateString('es-CO', { dateStyle: 'medium' })}\n\n` +
     `🛍️ *Productos:*\n${items}\n\n` +
+    bonoStr +
     `💰 *Total:* *${formatCurrency(Number(order.grand_total))}*\n` +
     `💳 *Pago:* ${order.payment_method || order.payments?.[0]?.method || '—'}${changeStr}\n\n` +
     `¡Tus mascotas son lo más especial! 🐶🐱\n` +
@@ -285,6 +289,82 @@ function CustomerSelector({
   );
 }
 
+// ─── Bono de bienvenida (PRIMERAPATA) ─────────────────────────────
+// El regalo del correo de suscripción. Se canjea por el correo del suscriptor:
+// el código es el mismo para todos. La API vuelve a validar al facturar.
+function BonoSelector({ value, onChange }: { value: BonoBienvenida | null; onChange: (b: BonoBienvenida | null) => void }) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const { data = [], isFetched } = useQuery({
+    queryKey: ['pos-bonos', q],
+    queryFn: () => sales.bonos(q || undefined),
+    enabled: open,
+  });
+  const fecha = (iso: string) => new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+
+  if (value) {
+    return (
+      <div className="rounded-lg border-2 border-dashed border-orange-400 bg-orange-50 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Gift className="h-5 w-5 text-orange-600 shrink-0" />
+            <div className="min-w-0">
+              <div className="font-bold text-sm text-orange-700 tracking-wide">{value.codigo} · -{formatCurrency(value.valor)}</div>
+              <div className="text-xs text-orange-800/80 truncate">{value.email} · vence {fecha(value.vence_en)}</div>
+            </div>
+          </div>
+          <button onClick={() => onChange(null)} className="text-orange-700/70 hover:text-orange-900 shrink-0" title="Quitar el bono">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Gift className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Bono de bienvenida — correo del cliente"
+          className="pl-9"
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+        />
+      </div>
+      {open && data.length > 0 && (
+        <div className="rounded-lg border border-border shadow-elegant bg-background z-10 max-h-60 overflow-y-auto">
+          {data.map((b) => (
+            <button
+              key={b.id}
+              disabled={b.estado !== 'pendiente'}
+              onMouseDown={() => { if (b.estado === 'pendiente') { onChange(b); setOpen(false); setQ(''); } }}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-accent/50 text-sm text-left disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="min-w-0">
+                <div className="font-medium truncate">{b.email}</div>
+                <div className="text-xs text-muted-foreground">
+                  {b.estado === 'pendiente'
+                    ? `Sin usar · vence ${fecha(b.vence_en)}`
+                    : b.estado === 'canjeado'
+                      ? `Ya usado en ${b.canjeado_orden ?? 'una venta'}`
+                      : `Venció el ${fecha(b.vence_en)}`}
+                </div>
+              </div>
+              {b.estado === 'pendiente' && <span className="text-orange-600 font-bold text-xs shrink-0">-{formatCurrency(b.valor)}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {open && isFetched && q.length >= 3 && data.length === 0 && (
+        <p className="text-xs text-muted-foreground px-1">Ningún suscriptor con ese correo. El bono solo lo tiene quien se suscribió en la web.</p>
+      )}
+    </div>
+  );
+}
+
 // ─── Order Detail Modal ───────────────────────────────────────────
 function OrderDetailModal({ order, onClose, onCancel }: { order: Order; onClose: () => void; onCancel: (id: string) => void }) {
   const token = useAuth((s) => s.token);
@@ -335,6 +415,9 @@ function OrderDetailModal({ order, onClose, onCancel }: { order: Order; onClose:
             ))}
           </tbody>
           <tfoot className="bg-muted/30 font-bold border-t border-border text-sm">
+            {order.bono && (
+              <tr><td colSpan={3} className="px-3 py-1 text-right text-orange-600 font-semibold text-xs">🎁 Bono de bienvenida {order.bono.codigo}</td><td className="px-3 py-1 text-right text-orange-600">-{formatCurrency(order.bono.valor)}</td></tr>
+            )}
             <tr><td colSpan={3} className="px-3 py-2 text-right">Total</td><td className="px-3 py-2 text-right text-emerald-700">{formatCurrency(Number(order.grand_total))}</td></tr>
           </tfoot>
         </table>
@@ -518,6 +601,11 @@ function SuccessScreen({ order, customer, onNew }: { order: Order; customer: Cus
           Orden <span className="font-mono font-bold text-brand-700">#{order.order_number}</span>
           {customerName && <span className="ml-2">· {customerName}</span>}
         </p>
+        {order.bono && !cancelled && (
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-orange-100 text-orange-800 font-semibold text-sm px-3 py-1">
+            <Gift className="h-4 w-4" /> Primera compra con bono de bienvenida {order.bono.codigo}
+          </p>
+        )}
       </div>
 
       {/* Receipt card */}
@@ -529,6 +617,12 @@ function SuccessScreen({ order, customer, onNew }: { order: Order; customer: Cus
             <span className="font-medium shrink-0">{formatCurrency(Number(it.line_total))}</span>
           </div>
         ))}
+        {order.bono && (
+          <div className="flex justify-between text-sm font-semibold text-orange-700 rounded-md bg-orange-50 border border-dashed border-orange-300 px-2 py-1.5">
+            <span>🎁 Bono {order.bono.codigo}</span>
+            <span>-{formatCurrency(order.bono.valor)}</span>
+          </div>
+        )}
         <div className="border-t border-border pt-2 mt-2 space-y-1">
           <div className="flex justify-between font-bold text-base">
             <span>Total</span>
@@ -636,6 +730,7 @@ export default function POSPage() {
   const [customer, setCustomer] = useBorrador<Customer | null>('pos:cliente', null);
   const [payments, setPayments] = useBorrador<PaymentEntry[]>('pos:pagos', [{ method: 'Efectivo', amount: '' }]);
   const [notes, setNotes] = useBorrador('pos:notas', '');
+  const [bono, setBono] = useBorrador<BonoBienvenida | null>('pos:bono', null);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [completedCustomer, setCompletedCustomer] = useState<Customer | null>(null);
 
@@ -675,7 +770,10 @@ export default function POSPage() {
   // ── Totals ──
   const subtotal = cart.reduce((s, i) => s + i.unit_price * i.quantity, 0);
   const discounts = cart.reduce((s, i) => s + i.discount, 0);
-  const grand = subtotal - discounts;
+  // Bono de bienvenida: solo descuenta si la compra llega al mínimo que promete el correo
+  const bonoFalta = bono ? Math.max(0, bono.minimo - (subtotal - discounts)) : 0;
+  const bonoValor = bono && bonoFalta === 0 ? bono.valor : 0;
+  const grand = subtotal - discounts - bonoValor;
   const totalPaid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
   const change = totalPaid - grand;
 
@@ -706,6 +804,7 @@ export default function POSPage() {
           .filter((p) => parseFloat(p.amount) > 0)
           .map((p) => ({ method: p.method, amount: parseFloat(p.amount) })),
         notes: notes || undefined,
+        bono_email: bono && bonoFalta === 0 ? bono.email : undefined,
       }),
     onSuccess: (order) => {
       setCompletedOrder(order);
@@ -870,6 +969,18 @@ export default function POSPage() {
               </CardContent>
             </Card>
 
+            {/* Bono de bienvenida: el regalo del correo de suscripción, aparte de cualquier descuento */}
+            <Card className={bono ? 'border-orange-300' : undefined}>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Gift className="h-4 w-4 text-orange-600" /> Bono de bienvenida
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <BonoSelector value={bono} onChange={setBono} />
+              </CardContent>
+            </Card>
+
             {/* Totals */}
             <Card>
               <CardHeader className="pb-3">
@@ -884,6 +995,18 @@ export default function POSPage() {
                   <div className="flex justify-between text-sm text-emerald-600">
                     <span>Descuentos</span>
                     <span>-{formatCurrency(discounts)}</span>
+                  </div>
+                )}
+                {bono && bonoFalta === 0 && (
+                  <div className="flex justify-between text-sm font-semibold text-orange-600">
+                    <span>🎁 Bono de bienvenida {bono.codigo}</span>
+                    <span>-{formatCurrency(bono.valor)}</span>
+                  </div>
+                )}
+                {bono && bonoFalta > 0 && (
+                  <div className="text-xs text-orange-800 bg-orange-50 border border-orange-200 rounded-md px-2 py-1.5">
+                    El bono aplica desde {formatCurrency(bono.minimo)}: faltan {formatCurrency(bonoFalta)}.
+                    Si cierras así, el bono queda guardado para otra compra.
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-lg pt-1 border-t border-border/60">

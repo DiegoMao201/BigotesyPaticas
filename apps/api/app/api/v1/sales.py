@@ -17,6 +17,7 @@ from app.models.catalog import Product
 from app.models.inventory import Stock, StockLocation, StockMovement
 from app.models.sales import Order, OrderItem, Payment
 from app.schemas.sales import OrderCreate, OrderOut
+from app.services import bono_bienvenida
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
@@ -167,6 +168,24 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
             )
         )
 
+    # Bono de bienvenida: va dentro de discount_total (la verdad financiera no
+    # cambia) pero queda identificado aparte para que el comprobante, el POS y
+    # el listado lo muestren como lo que es, no como un descuento más.
+    bono = None
+    if payload.bono_email and payload.bono_email.strip():
+        bono = await bono_bienvenida.validar(
+            db, payload.bono_email, subtotal - discount_total, payload.customer_id
+        )
+        discount_total += bono_bienvenida.VALOR
+        order.metadata_ = {
+            "bono": {
+                "codigo": bono_bienvenida.CODIGO,
+                "email": bono["email"],
+                "valor": int(bono_bienvenida.VALOR),
+                "subscriber_id": str(bono["id"]),
+            }
+        }
+
     order.subtotal = subtotal
     order.discount_total = discount_total
     order.grand_total = subtotal - discount_total + Decimal(payload.shipping_total)
@@ -199,6 +218,17 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
     for mv in pending_movements:
         mv.reference_id = order.id
         db.add(mv)
+
+    if bono is not None:
+        await bono_bienvenida.canjear(db, bono["id"], order.id, payload.customer_id)
+        if payload.customer_id is not None:
+            # El suscriptor se registró con correo y el cliente del POS con cédula y
+            # teléfono: aquí se juntan las dos identidades, si el cliente no tenía correo.
+            from app.models.crm import Customer as CRMCustomer
+
+            cliente = await db.get(CRMCustomer, payload.customer_id)
+            if cliente is not None and not (cliente.email or "").strip():
+                cliente.email = bono["email"]
 
     await db.commit()
     await db.refresh(order)
@@ -261,6 +291,16 @@ def _orders_search_condition(q: str):
         _product_match_condition(q),
         _customer_match_condition(q),
     )
+
+
+@router.get("/bonos", dependencies=[Depends(require_permission("sales:read"))])
+async def listar_bonos(db: DBSession, q: str | None = None) -> list[dict]:
+    """Bonos de bienvenida PRIMERAPATA: quién se suscribió, si ya lo usó, cuándo vence.
+
+    Sirve para elegir el bono en el POS (por correo) y para ver en el monitor
+    quién se registró y todavía no ha venido a comprar.
+    """
+    return await bono_bienvenida.listar(db, q)
 
 
 @router.get("/orders", dependencies=[Depends(require_permission("sales:read"))])
@@ -476,6 +516,8 @@ async def cancel_order(
         "cancelled_by": user.email,
         "cancel_reason": reason or "",
     }
+    if (o.metadata_ or {}).get("bono"):
+        await bono_bienvenida.liberar(db, o.id)
     await db.commit()
     return {"ok": True, "order_number": o.order_number}
 

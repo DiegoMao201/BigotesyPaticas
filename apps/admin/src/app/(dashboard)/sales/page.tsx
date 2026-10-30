@@ -179,8 +179,11 @@ function OrderDetailModal({ order, onClose, onCancelDone, onPaymentDone }: { ord
             ))}
           </tbody>
           <tfoot className="bg-muted/30 border-t-2 border-border text-sm font-bold">
-            {Number(order.discount_total) > 0 && (
-              <tr><td colSpan={4} className="px-3 py-1 text-right text-rose-500 font-normal text-xs">Descuentos</td><td className="px-3 py-1 text-right text-rose-500">-{formatCurrency(Number(order.discount_total))}</td></tr>
+            {Number(order.discount_total) - (order.bono?.valor ?? 0) > 0 && (
+              <tr><td colSpan={4} className="px-3 py-1 text-right text-rose-500 font-normal text-xs">Descuentos</td><td className="px-3 py-1 text-right text-rose-500">-{formatCurrency(Number(order.discount_total) - (order.bono?.valor ?? 0))}</td></tr>
+            )}
+            {order.bono && (
+              <tr><td colSpan={4} className="px-3 py-1 text-right text-orange-600 font-semibold text-xs">🎁 Bono de bienvenida {order.bono.codigo} · {order.bono.email}</td><td className="px-3 py-1 text-right text-orange-600 font-semibold">-{formatCurrency(order.bono.valor)}</td></tr>
             )}
             <tr><td colSpan={4} className="px-3 py-2 text-right">Total</td><td className="px-3 py-2 text-right text-emerald-700 text-base">{formatCurrency(Number(order.grand_total))}</td></tr>
             {Number(order.shipping_total) > 0 && (
@@ -475,7 +478,10 @@ export default function SalesPage() {
                     <div className="font-semibold text-sm leading-tight">
                       {o.customer_name ?? <span className="text-muted-foreground font-normal">Sin cliente</span>}
                     </div>
-                    <div className="font-mono text-[11px] text-brand-700">{o.order_number}</div>
+                    <div className="font-mono text-[11px] text-brand-700">
+                      {o.order_number}
+                      {o.bono && <span className="ml-1.5 font-sans font-semibold text-orange-600">🎁 bono bienvenida</span>}
+                    </div>
                     {(o.customer_phone || o.customer_address) && (
                       <div className="mt-0.5 text-[11px] text-muted-foreground leading-tight">
                         {o.customer_phone && <span className="whitespace-nowrap">📱 {o.customer_phone}</span>}

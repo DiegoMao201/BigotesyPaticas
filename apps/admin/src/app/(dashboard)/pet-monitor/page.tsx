@@ -5,9 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Users, ShoppingCart, Calendar, Star,
   RefreshCw, CheckCircle, Clock, ChevronRight,
-  Package, Truck, XCircle, Loader2, Eye, AlertTriangle, MessageCircle,
+  Package, Truck, XCircle, Loader2, Eye, AlertTriangle, MessageCircle, Gift,
 } from 'lucide-react';
-import { adminPortal, type PortalOrder, type PortalAppointment, type RecentLogin } from '@/lib/api';
+import { adminPortal, sales, type PortalOrder, type PortalAppointment, type RecentLogin } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -130,6 +130,13 @@ export default function PetMonitorPage() {
     queryKey: ['admin-portal-recent-logins'],
     queryFn: adminPortal.recentLogins,
     refetchInterval: 30_000,
+  });
+
+  // Bonos de bienvenida del newsletter: quién se suscribió y si ya usó su PRIMERAPATA
+  const { data: bonos = [] } = useQuery({
+    queryKey: ['bonos-bienvenida'],
+    queryFn: () => sales.bonos(),
+    refetchInterval: 60_000,
   });
 
   const { mutate: markContacted } = useMutation({
@@ -272,6 +279,36 @@ export default function PetMonitorPage() {
                     {login.already_contacted ? 'Reenviar' : 'Enviar WhatsApp'}
                   </Button>
                 </a>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Bonos de bienvenida: se suscribieron en la web y recibieron el PRIMERAPATA */}
+      {bonos.length > 0 && (
+        <Card className="p-4 border border-orange-200 bg-orange-50/30">
+          <div className="flex items-center gap-2 mb-3">
+            <Gift className="h-4 w-4 text-orange-600" />
+            <h2 className="text-sm font-semibold text-gray-900">
+              Bonos de bienvenida PRIMERAPATA ({bonos.filter((b) => b.estado === 'pendiente').length} sin usar)
+            </h2>
+          </div>
+          <div className="flex flex-col gap-2">
+            {bonos.slice(0, 8).map((b) => (
+              <div key={b.id} className="flex items-center justify-between gap-3 rounded-lg border border-orange-100 bg-white px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{b.email}</p>
+                  <p className="text-xs text-gray-500">
+                    suscrito {formatAgo(b.suscrito_en)}
+                    {b.estado === 'pendiente' && ` · vence ${new Date(b.vence_en).toLocaleDateString('es-CO')}`}
+                    {b.estado === 'canjeado' && ` · usado en ${b.canjeado_orden ?? 'una venta'}${b.cliente ? ` por ${b.cliente}` : ''}`}
+                    {b.estado === 'vencido' && ` · venció el ${new Date(b.vence_en).toLocaleDateString('es-CO')}`}
+                  </p>
+                </div>
+                <Badge variant={b.estado === 'pendiente' ? 'warning' : b.estado === 'canjeado' ? 'success' : 'neutral'}>
+                  {b.estado === 'pendiente' ? `${formatCOP(b.valor)} sin usar` : b.estado === 'canjeado' ? 'usado' : 'vencido'}
+                </Badge>
               </div>
             ))}
           </div>

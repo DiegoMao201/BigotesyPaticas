@@ -188,7 +188,19 @@ async def signup(payload: SignupRequest, response: Response, db: DBSession) -> L
         has_pets = True
         pet_name_out = payload.pet_name.strip()
 
-    await db.commit()
+    # El correo de bienvenida y la página /cuenta prometen "50 Puntos Bigotes al
+    # registrarte"; hasta el 30-oct-2026 solo los daba el código de referido.
+    from app.api.v1.portal_loyalty import award_points
+
+    await award_points(
+        customer_id=customer.id,
+        points=50,
+        reason="welcome_bonus",
+        reference_type="customer",
+        reference_id=customer.id,
+        description="Bienvenida al portal: 50 puntos de regalo por registrarte",
+        db=db,
+    )
     await db.refresh(customer)
 
     token = secrets.token_urlsafe(48)
