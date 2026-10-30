@@ -91,10 +91,10 @@ async def listar(db, q: str | None = None) -> list[dict]:
             await db.execute(
                 text(
                     f"SELECT {_COLUMNAS} {_DESDE}"
-                    " WHERE (:pat IS NULL OR s.email ILIKE :pat)"
+                    " WHERE s.email ILIKE :pat"
                     " ORDER BY (s.coupon_redeemed_at IS NULL) DESC, s.subscribed_at DESC"
                 ),
-                {"pat": f"%{q.strip()}%" if q and q.strip() else None},
+                {"pat": f"%{q.strip()}%" if q and q.strip() else "%"},
             )
         )
         .mappings()
@@ -151,7 +151,7 @@ async def validar(db, email: str, base: Decimal, customer_id: uuid.UUID | None) 
                     "SELECT count(*) FROM sales.orders"
                     " WHERE customer_id = :c AND status <> 'cancelled'"
                 ),
-                {"c": str(customer_id)},
+                {"c": customer_id},
             )
         ).scalar_one()
         if previas:
@@ -174,9 +174,9 @@ async def canjear(db, subscriber_id, order_id, customer_id) -> None:
             " WHERE id = :id AND coupon_redeemed_at IS NULL"
         ),
         {
-            "id": str(subscriber_id),
-            "o": str(order_id),
-            "c": str(customer_id) if customer_id else None,
+            "id": subscriber_id,
+            "o": order_id,
+            "c": customer_id,
         },
     )
     if res.rowcount != 1:
@@ -191,5 +191,5 @@ async def liberar(db, order_id) -> None:
             " SET coupon_redeemed_at = NULL, coupon_order_id = NULL, coupon_customer_id = NULL"
             " WHERE coupon_order_id = :o"
         ),
-        {"o": str(order_id)},
+        {"o": order_id},
     )
