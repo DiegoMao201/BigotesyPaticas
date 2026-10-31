@@ -870,7 +870,122 @@ export interface DatafonoImpact {
   daily: DatafonoDay[];
 }
 
+// ─── Estados financieros (/v1/finance/estados · app/services/contabilidad.py) ──
+export interface EstadoResultados {
+  periodo: { desde: string; hasta: string; dias: number; dias_con_venta: number };
+  ventas_brutas: number;
+  descuentos: number;
+  bonos_bienvenida: number;
+  ventas_netas: number;
+  n_ventas: number;
+  unidades: number;
+  ticket_promedio: number;
+  costo_ventas: number;
+  utilidad_bruta: number;
+  margen_bruto_pct: number;
+  gastos_operativos: number;
+  gastos_fijos: number;
+  gastos_variables: number;
+  gastos_por_categoria: { categoria: string; total: number; es_fijo: boolean; n: number }[];
+  utilidad_operacional: number;
+  margen_operacional_pct: number;
+  comision_tarjeta: number;
+  ventas_tarjeta: number;
+  utilidad_neta: number;
+  margen_neto_pct: number;
+  punto_equilibrio: number;
+  cobertura_pct: number;
+  fuera_del_resultado: {
+    compras_mercancia: number;
+    compras_como_gasto: number;
+    inversiones: number;
+    abonos_credito: number;
+    envios_cobrados: number;
+  };
+  calidad: {
+    unidades_sin_costo: number;
+    lineas_bajo_costo: number;
+    perdida_bajo_costo: number;
+    gastos_sin_clasificar: number;
+  };
+}
+
+export interface MesHistorial {
+  mes: string;
+  dias: number;
+  ventas_netas: number;
+  n_ventas: number;
+  costo_ventas: number;
+  utilidad_bruta: number;
+  margen_bruto_pct: number;
+  gastos_operativos: number;
+  comision_tarjeta: number;
+  utilidad_neta: number;
+  margen_neto_pct: number;
+  en_curso: boolean;
+}
+
+export interface EstadosFinancieros {
+  resultados: EstadoResultados;
+  anterior: EstadoResultados;
+  variacion: Record<
+    'ventas_netas' | 'costo_ventas' | 'utilidad_bruta' | 'gastos_operativos' | 'utilidad_neta' | 'n_ventas' | 'ticket_promedio',
+    number | null
+  >;
+  balance: {
+    fecha: string;
+    activos: {
+      caja: number | null;
+      caja_fecha: string | null;
+      bold_por_recibir: number;
+      cuentas_por_cobrar: number;
+      ventas_por_cobrar: number;
+      inventario_costo: number;
+      inventario_venta: number;
+      inventario_unidades: number;
+      productos_sin_costo: number;
+    };
+    pasivos: {
+      proveedores_por_pagar: number;
+      facturas_por_pagar: number;
+      proveedores_vencido: number;
+      prestaciones_provisionadas: number;
+    };
+    total_activos: number;
+    total_pasivos: number;
+    capital_trabajo: number;
+  };
+  flujo_caja: {
+    entradas: { metodo: string; total: number; n: number }[];
+    total_entradas: number;
+    pagos_proveedores: { metodo: string; total: number; n: number }[];
+    total_proveedores: number;
+    gastos_operativos: number;
+    inversiones: number;
+    abonos_credito: number;
+    compras_como_gasto: number;
+    gastos_por_metodo: { metodo: string; total: number }[];
+    total_salidas: number;
+    flujo_neto: number;
+  };
+  historial: MesHistorial[];
+  indicadores: {
+    ventas_por_dia: number;
+    ticket_promedio: number;
+    unidades_por_venta: number;
+    dias_de_inventario: number | null;
+    rotacion_mensual: number | null;
+    punto_equilibrio: number;
+    cobertura_pct: number;
+    gastos_sobre_ventas_pct: number;
+  };
+  alertas: { nivel: 'info' | 'warning' | 'danger'; texto: string }[];
+  supuestos: string[];
+}
+
 export const finance = {
+  estados: (range: { start: string; end: string }) =>
+    api<EstadosFinancieros>(`/v1/finance/estados?start_date=${range.start}&end_date=${range.end}`),
   summary: (start?: string, end?: string) => {
     const qs = new URLSearchParams();
     if (start) qs.set('start', start);

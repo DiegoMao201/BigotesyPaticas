@@ -17,6 +17,7 @@ from app.models.catalog import Category, Product
 from app.models.crm import Customer
 from app.models.inventory import Stock
 from app.models.sales import Order, OrderItem, Payment
+from app.services import contabilidad
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -655,16 +656,23 @@ async def get_bi_full(
     ]
 
     # ── By payment method ──────────────────────────────────────
+    # 30-oct-2026: antes hacía outer join con payments y sumaba grand_total: una
+    # venta con dos pagos contaba dos veces. El método se resuelve con una subconsulta.
+    primer_pago = (
+        select(func.min(Payment.method))
+        .where(Payment.order_id == Order.id)
+        .correlate(Order)
+        .scalar_subquery()
+    )
     pm_rows = (
         await db.execute(
             select(
-                func.coalesce(Order.payment_method, Payment.method, literal("Sin método")).label(
+                func.coalesce(Order.payment_method, primer_pago, literal("Sin método")).label(
                     "meth"
                 ),
                 func.sum(Order.grand_total).label("rev"),
-                func.count(func.distinct(Order.id)).label("cnt"),
+                func.count(Order.id).label("cnt"),
             )
-            .outerjoin(Payment, Payment.order_id == Order.id)
             .where(Order.occurred_at >= since)
             .where(Order.occurred_at < until)
             .where(Order.status.notin_(["cancelled", "refunded"]))
@@ -803,32 +811,15 @@ async def get_bi_full(
         for r in hm_rows
     ]
 
-    # ── Expenses (P&L) — finance.expenses, por fecha Bogotá ───────
-    expense_rows = (
-        await db.execute(
-            text("""
-                SELECT coalesce(nullif(categoria, ''), 'Otros') AS categoria, sum(monto) AS total
-                FROM finance.expenses
-                WHERE fecha >= :desde AND fecha < :hasta
-                GROUP BY 1
-            """),
-            {"desde": to_bogota_date(since), "hasta": to_bogota_date(until)},
-        )
-    ).all()
-
-    expenses_total = 0.0
-    cat_exp: dict[str, float] = {}
-    for r in expense_rows:
-        m = float(r.total or 0)
-        expenses_total += m
-        cat_exp[r.categoria] = cat_exp.get(r.categoria, 0) + m
-
-    expenses_by_category = sorted(
-        [{"category": k, "total": v} for k, v in cat_exp.items()],
-        key=lambda x: x["total"],
-        reverse=True,
-    )
-    net_profit = gross_profit - expenses_total
+    # ── P&L: mismas reglas que /finance/estados (app/services/contabilidad.py) ──
+    # Antes el gasto de HOY nunca entraba (`fecha < hoy`) y los abonos a crédito,
+    # las inversiones y las compras registradas como gasto contaban como gasto.
+    estado = await contabilidad.estado_resultados(db, since, until)
+    expenses_total = estado["gastos_operativos"]
+    expenses_by_category = [
+        {"category": g["categoria"], "total": g["total"]} for g in estado["gastos_por_categoria"]
+    ]
+    net_profit = estado["utilidad_neta"]
 
     return BiFull(
         period_start=to_bogota_date(since).isoformat(),

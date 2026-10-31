@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 
 from app.deps import CurrentUser, DBSession, require_permission
 from app.models.catalog import Product, ProductBarcode
@@ -307,72 +307,91 @@ async def list_stock(
     if without_barcode:
         stmt = stmt.where(Product.id.notin_(select(ProductBarcode.product_id)))
 
-    rows = (await db.execute(stmt)).all()
-    items = []
-    total_value_cost = 0.0
-    total_value_price = 0.0
-    out_of_stock = 0
-    low_stock = 0
-    for p, qty, reserved in rows:
-        q_int = int(qty or 0)
-        r_int = int(reserved or 0)
-        avail = max(0, q_int - r_int)
-        cost = float(p.cost or 0)
-        price = float(p.price or 0)
-        if only_in_stock and q_int <= 0:
-            continue
-        if only_low_stock and q_int > 5:
-            continue
-        if q_int <= 0:
-            out_of_stock += 1
-        elif q_int < 5:
-            low_stock += 1
-        sv_cost = q_int * cost
-        sv_price = q_int * price
-        margin = round((price - cost) / price * 100, 1) if price > 0 else 0.0
-        total_value_cost += sv_cost
-        total_value_price += sv_price
-        items.append(
-            StockRowOut(
-                product_id=p.id,
-                sku=p.sku,
-                name=p.name,
-                category_name=None,
-                quantity=q_int,
-                reserved=r_int,
-                available=avail,
-                cost=cost,
-                price=price,
-                margin_pct=margin,
-                stock_value_cost=sv_cost,
-                stock_value_price=sv_price,
+    # 30-oct-2026: antes traía los 1.190 productos, los filtraba, ordenaba y paginaba
+    # en Python en cada carga de la pestaña Inventario. Ahora filtro, orden, totales y
+    # página van en SQL; a la API solo llegan las filas de la página pedida.
+    qty_expr = func.coalesce(stock_sub.c.qty, 0)
+    reserved_expr = func.coalesce(stock_sub.c.reserved, 0)
+    cost_expr = func.coalesce(Product.cost, 0)
+    price_expr = func.coalesce(Product.price, 0)
+    margin_expr = case(
+        (price_expr > 0, func.round((price_expr - cost_expr) / price_expr * 100, 1)),
+        else_=0,
+    )
+    stmt = stmt.with_only_columns(
+        Product.id.label("product_id"),
+        Product.sku.label("sku"),
+        Product.name.label("name"),
+        qty_expr.label("qty"),
+        reserved_expr.label("reserved"),
+        cost_expr.label("cost"),
+        price_expr.label("price"),
+        (qty_expr * cost_expr).label("sv_cost"),
+        (qty_expr * price_expr).label("sv_price"),
+        margin_expr.label("margin"),
+    )
+    if only_in_stock:
+        stmt = stmt.where(qty_expr > 0)
+    if only_low_stock:
+        stmt = stmt.where(qty_expr <= 5)
+    base = stmt.subquery()
+
+    total, total_value_cost, total_value_price, out_of_stock, low_stock = (
+        await db.execute(
+            select(
+                func.count(),
+                func.coalesce(func.sum(base.c.sv_cost), 0),
+                func.coalesce(func.sum(base.c.sv_price), 0),
+                func.count().filter(base.c.qty <= 0),
+                func.count().filter(and_(base.c.qty > 0, base.c.qty < 5)),
             )
         )
+    ).one()
 
-    # Sort
-    reverse = sort_dir == "desc"
-    sort_key_map = {
-        "quantity": lambda x: x.quantity,
-        "cost": lambda x: x.cost,
-        "price": lambda x: x.price,
-        "stock_value_cost": lambda x: x.stock_value_cost,
-        "stock_value_price": lambda x: x.stock_value_price,
-        "margin_pct": lambda x: x.margin_pct,
-        "name": lambda x: x.name.lower(),
-        "sku": lambda x: x.sku.lower(),
-    }
-    items.sort(key=sort_key_map.get(sort_by, lambda x: -x.quantity), reverse=reverse)
-    total = len(items)
-    start_idx = (page - 1) * page_size
+    sort_col = {
+        "quantity": base.c.qty,
+        "cost": base.c.cost,
+        "price": base.c.price,
+        "stock_value_cost": base.c.sv_cost,
+        "stock_value_price": base.c.sv_price,
+        "margin_pct": base.c.margin,
+        "name": func.lower(base.c.name),
+        "sku": func.lower(base.c.sku),
+    }[sort_by]
+    rows = (
+        await db.execute(
+            select(base)
+            .order_by(sort_col.desc() if sort_dir == "desc" else sort_col.asc(), base.c.name)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).all()
+    items = [
+        StockRowOut(
+            product_id=r.product_id,
+            sku=r.sku,
+            name=r.name,
+            category_name=None,
+            quantity=int(r.qty),
+            reserved=int(r.reserved),
+            available=max(0, int(r.qty) - int(r.reserved)),
+            cost=float(r.cost),
+            price=float(r.price),
+            margin_pct=float(r.margin),
+            stock_value_cost=float(r.sv_cost),
+            stock_value_price=float(r.sv_price),
+        )
+        for r in rows
+    ]
     return StockListResponse(
-        items=items[start_idx : start_idx + page_size],
-        total=total,
+        items=items,
+        total=int(total),
         page=page,
         page_size=page_size,
-        total_value_cost=total_value_cost,
-        total_value_price=total_value_price,
-        out_of_stock=out_of_stock,
-        low_stock=low_stock,
+        total_value_cost=float(total_value_cost),
+        total_value_price=float(total_value_price),
+        out_of_stock=int(out_of_stock),
+        low_stock=int(low_stock),
     )
 
 

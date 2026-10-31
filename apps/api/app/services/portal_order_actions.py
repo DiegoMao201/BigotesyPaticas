@@ -205,7 +205,7 @@ def _render_template(template_code: str, data: dict) -> str:
         if data.get("track_url"):
             guia_txt += f"\n🔎 Rastréalo aquí: {data['track_url']}"
 
-    carrier = data.get('carrier_nombre') or 'la transportadora'
+    carrier = data.get("carrier_nombre") or "la transportadora"
     # Quién responde por qué, en el mismo mensaje de la guía (Diego, 16-oct-2026):
     # la compra es con la tienda; desde que la transportadora recibe el paquete,
     # el transporte y la entrega son responsabilidad de ella.
@@ -307,7 +307,8 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
     discount = min(float(order.discount_amount or 0), total)
     envio_nacional = (
         float((order.shipping_quote or {}).get("precio") or 0)
-        if order.shipping_mode == "national" else 0.0
+        if order.shipping_mode == "national"
+        else 0.0
     )
 
     # ── Validar + descontar inventario real ANTES de crear la factura ────────
@@ -391,8 +392,11 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
     if envio_nacional:
         q = order.shipping_quote or {}
         metadata["envio"] = {
-            "modo": "national", "carrier": q.get("carrier"), "carrier_nombre": q.get("carrier_nombre"),
-            "cobrado_al_cliente": envio_nacional, "order_reference": order.order_reference,
+            "modo": "national",
+            "carrier": q.get("carrier"),
+            "carrier_nombre": q.get("carrier_nombre"),
+            "cobrado_al_cliente": envio_nacional,
+            "order_reference": order.order_reference,
             "bold_amount": order.bold_amount,
         }
     sales_order = SalesOrder(
@@ -433,7 +437,11 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
                 reference=order.order_reference,
                 notes=(
                     f"Pago en línea Bold de ${int(order.bold_amount or 0):,}: productos ${int(productos):,}"
-                    + (f" + envío ${int(envio_nacional):,} (registro de envíos)" if envio_nacional else "")
+                    + (
+                        f" + envío ${int(envio_nacional):,} (registro de envíos)"
+                        if envio_nacional
+                        else ""
+                    )
                 ).replace(",", "."),
                 created_by="bold",
             )
@@ -442,6 +450,21 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
         sales_order.balance_due = 0
         sales_order.payment_status = "Pagado"
         sales_order.payment_method = "bold"
+
+    # El costo se congela en la línea igual que en el POS. Hasta el 30-oct-2026
+    # iba en 0 y el margen de todo pedido del portal salía del 100 %.
+    costo_ids = (
+        [i.product_id for i in items if i.product_id]
+        if items
+        else ([order.product_id] if order.product_id else [])
+    )
+    costos: dict = {}
+    if costo_ids:
+        costos = dict(
+            (
+                await db.execute(select(Product.id, Product.cost).where(Product.id.in_(costo_ids)))
+            ).all()
+        )
 
     if items:
         for i in items:
@@ -453,7 +476,7 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
                     name_snapshot=i.name or order.product_name,
                     quantity=i.quantity,
                     unit_price=float(i.unit_price or 0),
-                    unit_cost=0,
+                    unit_cost=float(costos.get(i.product_id) or 0),
                     discount=0,
                     line_total=float(i.subtotal or 0),
                 )
@@ -467,7 +490,7 @@ async def bridge_to_sales(order: PortalOrder, db: DBSession) -> str:
                 name_snapshot=order.product_name,
                 quantity=order.quantity,
                 unit_price=float(order.unit_price or 0),
-                unit_cost=0,
+                unit_cost=float(costos.get(order.product_id) or 0),
                 discount=0,
                 line_total=total,
             )

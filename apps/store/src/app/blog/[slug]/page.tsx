@@ -8,6 +8,11 @@ import { Calendar, ArrowLeft, Tag } from 'lucide-react';
 
 export const revalidate = 86400; // 1 día
 
+// Igual que en producto: sin esto la ruta era dinámica y se renderizaba en cada visita.
+export function generateStaticParams() {
+  return [];
+}
+
 interface Props { params: { slug: string } }
 
 const CATEGORY_LABELS: Record<string, string> = {

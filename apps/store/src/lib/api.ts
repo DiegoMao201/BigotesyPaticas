@@ -238,8 +238,11 @@ export interface AdoptionListing extends SuccessFields {
   created_at: string;
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { next: { revalidate: 60 } });
+// 30-oct-2026: el revalidate del fetch manda sobre el de la página (gana el menor),
+// así que con 60 aquí el home se regeneraba cada minuto aunque declarara 600.
+// 300 s de caché de datos; los cambios de catálogo igual llegan por /api/revalidate.
+async function get<T>(path: string, revalidate = 300): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { next: { revalidate } });
   if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
   return res.json();
 }
@@ -299,8 +302,11 @@ export const storeApi = {
     if (params.page) qs.set('page', String(params.page));
     if (params.page_size) qs.set('page_size', String(params.page_size));
     try {
+      // La página de categoría lee searchParams (es dinámica por naturaleza); con
+      // 'no-store' cada visita volvía a pedir el catálogo a la API. 5 min de caché de
+      // datos por combinación de filtros.
       const res = await fetch(`${API_BASE}/v1/products/catalog?${qs.toString()}`, {
-        cache: 'no-store',
+        next: { revalidate: 300 },
       });
       if (!res.ok) throw new Error(`API ${res.status}`);
       return res.json();

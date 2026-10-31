@@ -12,7 +12,9 @@ import {
   Sparkles, DollarSign, Target, ArrowUp, ArrowDown, RefreshCw,
   Calendar, Award, Zap, Activity, CreditCard,
 } from 'lucide-react';
+import Link from 'next/link';
 import { analyticsBI, finance, type BiFull, type SalesPeriodComparison } from '@/lib/api';
+import { ResumenKpis, EstadoResultadosCard } from '@/components/finance/EstadosFinancieros';
 import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -139,7 +141,7 @@ export default function AnalyticsPage() {
       {data && tab === 'ventas' && <VentasTab data={data} />}
       {data && tab === 'clientes' && <ClientesTab data={data} />}
       {data && tab === 'productos' && <ProductosTab data={data} />}
-      {data && tab === 'pnl' && <PnlTab data={data} range={range} />}
+      {data && tab === 'pnl' && <PnlTab range={range} />}
     </div>
   );
 }
@@ -538,91 +540,32 @@ function ProductosTab({ data }: { data: BiFull }) {
 
 // ─── P&L ────────────────────────────────────────────────────────────────────
 
-function PnlTab({ data, range }: { data: BiFull; range: DateRange }) {
+function PnlTab({ range }: { range: DateRange }) {
+  // Mismo endpoint y mismas reglas que la pantalla Finanzas → Estados financieros
+  // (app/services/contabilidad.py). Antes esta pestaña sumaba los gastos por su
+  // cuenta y nunca incluía los de hoy.
+  const estados = useQuery({
+    queryKey: ['finance-estados', range.start, range.end],
+    queryFn: () => finance.estados(range),
+    staleTime: 2 * 60_000,
+  });
   const datafono = useQuery({
     queryKey: ['datafono-impact', range.start, range.end],
     queryFn: () => finance.datafonoImpact(range),
     staleTime: 2 * 60_000,
   });
 
-  const margin_gross = data.revenue > 0 ? ((data.gross_profit / data.revenue) * 100).toFixed(1) : '0';
-  const margin_net = data.revenue > 0 ? ((data.net_profit / data.revenue) * 100).toFixed(1) : '0';
-
-  const pnl_rows = [
-    { label: '+ Ingresos brutos', value: data.revenue, className: 'text-emerald-700 font-bold text-base' },
-    { label: '— COGS (costo mercancía)', value: data.cogs, neg: true, className: 'text-rose-600' },
-    { label: '= Utilidad bruta', value: data.gross_profit, className: `font-bold ${data.gross_profit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`, sub: `Margen: ${margin_gross}%`, divider: true },
-    { label: '— Gastos operativos', value: data.expenses_total, neg: true, className: 'text-rose-600' },
-    { label: '= Utilidad neta', value: data.net_profit, className: `font-bold text-base ${data.net_profit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`, sub: `Margen neto: ${margin_net}%`, divider: true },
-  ];
-
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className={`p-4 ${data.net_profit >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Utilidad neta</p>
-          <p className={`text-2xl font-bold ${data.net_profit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>{formatCurrency(data.net_profit)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Margen: {margin_net}%</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Utilidad bruta</p>
-          <p className="text-2xl font-bold text-emerald-700">{formatCurrency(data.gross_profit)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Margen: {margin_gross}%</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Gastos totales</p>
-          <p className="text-2xl font-bold text-rose-600">{formatCurrency(data.expenses_total)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">COGS</p>
-          <p className="text-2xl font-bold text-rose-600">{formatCurrency(data.cogs)}</p>
-        </Card>
-      </div>
-
-      <Card className="p-6">
-        <h2 className="text-base font-bold mb-6 flex items-center gap-2">
-          <DollarSign className="w-5 h-5 text-brand-500" /> Estado de Resultados
-        </h2>
-        <div className="space-y-3 max-w-lg">
-          {pnl_rows.map((row, i) => (
-            <div key={i} className={`flex items-center justify-between py-2 ${row.divider ? 'border-t-2 border-b border-gray-300' : 'border-b border-dashed border-gray-200'}`}>
-              <span className={`text-sm ${row.className}`}>
-                {row.label}
-                {row.sub && <span className="ml-2 text-xs text-muted-foreground font-normal">({row.sub})</span>}
-              </span>
-              <span className={`font-mono text-sm ${row.className}`}>
-                {row.neg && row.value > 0 ? '- ' : ''}{formatCurrency(row.value)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {data.expenses_by_category.length > 0 && (
-        <Card className="p-6">
-          <h2 className="text-base font-bold mb-4">Gastos por Categoría</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.expenses_by_category} layout="vertical">
-                  <CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" />
-                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                  <YAxis type="category" dataKey="category" tick={{ fontSize: 10 }} width={120} />
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                  <Bar dataKey="total" name="Gasto" fill="#ef4444" radius={[0, 6, 6, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-2">
-              {data.expenses_by_category.slice(0, 10).map((e) => (
-                <div key={e.category} className="flex items-center justify-between text-sm">
-                  <span className="truncate max-w-[160px]">{e.category}</span>
-                  <span className="font-semibold text-rose-600">{formatCurrency(e.total)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
+      {estados.isLoading && <div className="h-24 rounded-2xl bg-muted/40 animate-pulse" />}
+      {estados.data && (
+        <>
+          <ResumenKpis data={estados.data} />
+          <EstadoResultadosCard r={estados.data.resultados} anterior={estados.data.anterior} />
+          <p className="text-xs text-muted-foreground -mt-2">
+            Balance, flujo de caja e historial mensual: <Link href="/finance" className="text-brand-600 hover:underline">Finanzas → Estados financieros</Link>.
+          </p>
+        </>
       )}
 
       {/* Impacto del datáfono (Bold) — estimado hasta cargar el histórico real */}

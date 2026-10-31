@@ -97,6 +97,10 @@ function buildPresets(): { label: string; range: () => DateRange }[] {
   ];
 }
 
+export function thisMonthRange(): DateRange {
+  return buildPresets()[4].range(); // Este mes — los estados financieros se leen por mes calendario
+}
+
 export function defaultDateRange(): DateRange {
   return buildPresets()[3].range(); // Últimos 30 días — mismo default que el dropdown anterior
 }

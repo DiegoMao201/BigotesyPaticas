@@ -22,6 +22,7 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import select, text
 
 from app.deps import CurrentUser, DBSession, require_permission
+from app.services import contabilidad
 
 export_router = APIRouter(prefix="/finance", tags=["finance"])
 
@@ -256,6 +257,8 @@ async def _fetch_all_expenses(db: DBSession, months: int) -> list[dict]:
                 "banco_origen": r.banco_origen or "",
                 "monto": float(r.monto),
                 "tipo_gasto": "Fijo" if (r.es_fijo or cat in _GASTOS_FIJOS) else "Variable",
+                # inventario / inversión / crédito no son gasto del resultado
+                "clase": contabilidad.clasificar_gasto(r.categoria, r.tipo),
             }
         )
     return result
@@ -1541,7 +1544,7 @@ async def export_finance_excel(
     monthly_exp: dict[str, float] = {}
     for e in all_expenses:
         ym = e["year_month"]
-        if ym:
+        if ym and e["clase"] == "operativo":
             monthly_exp[ym] = monthly_exp.get(ym, 0.0) + e["monto"]
 
     # ── 2. Build AI summary payload ───────────────────
@@ -1554,7 +1557,8 @@ async def export_finance_excel(
 
     exp_by_cat: dict[str, float] = {}
     for e in all_expenses:
-        exp_by_cat[e["categoria"]] = exp_by_cat.get(e["categoria"], 0.0) + e["monto"]
+        if e["clase"] == "operativo":
+            exp_by_cat[e["categoria"]] = exp_by_cat.get(e["categoria"], 0.0) + e["monto"]
 
     sorted_months_ai = sorted(monthly_sales, key=lambda x: x["year_month"])
     trend_summary = [

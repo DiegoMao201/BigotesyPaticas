@@ -14,7 +14,6 @@ from slugify import slugify
 from sqlalchemy import func, or_, select, update
 
 from app.deps import DBSession, require_permission
-from app.services.seo_notifications import notify_indexnow
 from app.models.catalog import Brand, Category, Product, ProductBarcode, ProductReview
 from app.models.crm import Customer
 from app.models.inventory import Stock
@@ -28,6 +27,7 @@ from app.schemas.catalog import (
     ProductUpdate,
     RecentReviewOut,
 )
+from app.services.seo_notifications import notify_indexnow
 
 router = APIRouter(prefix="/products", tags=["catalog"])
 brands_router = APIRouter(prefix="/brands", tags=["catalog"])
@@ -366,15 +366,24 @@ async def catalog_products(
         p_out = ProductOut.model_validate(r)
         p_out.stock_qty = stock_qty
         p_out.in_stock = stock_qty > 0
+        # Las tarjetas del catálogo no usan la descripción larga ni el contenido
+        # enriquecido; eso viaja solo en la ficha del producto (157 KB → ~40 KB).
+        p_out.enriched_content = None
+        p_out.description = None
         items.append(p_out)
 
     facets: dict = {}
     try:
-        facet_stmt = select(Product).where(
+        # 30-oct-2026: antes cargaba los 521 productos publicados como objetos ORM
+        # completos (1,3 KB de enriched_content cada uno) para contar cuatro columnas:
+        # 175 ms por llamada. Solo las cuatro columnas.
+        facet_stmt = select(
+            Product.life_stage, Product.size_range, Product.brand_normalized, Product.pet_type
+        ).where(
             Product.is_published == True,  # noqa: E712
             Product.deleted_at.is_(None),
         )
-        facet_rows = (await db.execute(facet_stmt)).scalars().all()
+        facet_rows = (await db.execute(facet_stmt)).all()
 
         life_stages: dict = {}
         size_ranges: dict = {}

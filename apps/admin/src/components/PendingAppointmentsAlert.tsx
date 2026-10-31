@@ -31,7 +31,6 @@ export function PendingAppointmentsAlert() {
       return rows.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
     },
     refetchInterval: POLL_MS,
-    refetchIntervalInBackground: true,
     staleTime: 0,
   });
 

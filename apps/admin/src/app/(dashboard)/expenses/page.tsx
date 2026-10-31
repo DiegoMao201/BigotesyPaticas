@@ -16,7 +16,9 @@ import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/pagination';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
 
-const TIPOS = ['Operativo', 'Administrativo', 'Marketing', 'Personal', 'Inversión', 'Otro'];
+// 'Inversión' y 'Abono a crédito' NO entran al estado de resultados (son activo y
+// capital de deuda): salen de caja, pero no son gasto. Ver app/services/contabilidad.py.
+const TIPOS = ['Operativo', 'Administrativo', 'Marketing', 'Personal', 'Financiero', 'Inversión', 'Abono a crédito', 'Otro'];
 const CATEGORIAS = ['Alimentos', 'Servicios', 'Arriendo', 'Nómina', 'Transporte', 'Insumos', 'Publicidad', 'Mantenimiento', 'Impuestos', 'Otros'];
 const METODOS = ['Efectivo', 'Bancolombia', 'Nequi', 'Daviplata', 'Tarjeta', 'Transferencia'];
 

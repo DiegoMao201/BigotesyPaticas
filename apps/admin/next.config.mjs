@@ -14,7 +14,11 @@ const nextConfig = {
     ],
   },
   async rewrites() {
-    const api = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+    // 30-oct-2026: el servidor Next le hablaba a la API por la URL pública (salía a
+    // Cloudflare y volvía: 251 ms por llamada contra 16 ms por la red interna de
+    // Docker). API_BASE_URL apunta al alias interno `bp-api`; el navegador sigue
+    // usando NEXT_PUBLIC_API_BASE_URL.
+    const api = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
     return [{ source: '/api/v1/:path*', destination: `${api}/v1/:path*` }];
   },
 };

@@ -12,11 +12,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 
+from app.api.v1._date_ranges import resolve_window
 from app.config import get_settings
 from app.deps import CurrentUser, DBSession, require_permission
 from app.models.finance import CashClosing as CashClosingModel
 from app.models.finance import Expense
 from app.models.ops import LegacyIdMap
+from app.services import contabilidad
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 expenses_router = APIRouter(prefix="/expenses", tags=["finance"])
@@ -986,6 +988,26 @@ async def datafono_impact(
     )
 
 
+# ────────────────── Estados financieros ──────────────────────
+
+
+@router.get(
+    "/estados",
+    dependencies=[Depends(require_permission("finance:read"))],
+)
+async def estados_financieros(
+    db: DBSession,
+    days: int | None = Query(None, ge=1, le=730),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+) -> dict:
+    """Estado de resultados, balance a hoy, flujo de caja, historial e indicadores,
+    todos con las mismas reglas (`app/services/contabilidad.py`). Es lo que
+    muestra la pantalla "Estados financieros" del admin."""
+    since, until = resolve_window(days, start_date, end_date, default_days=30)
+    return await contabilidad.estados_financieros(db, since, until)
+
+
 # ────────────────── Suppliers ──────────────────────
 
 
@@ -1105,11 +1127,12 @@ async def finance_summary(
     # Expenses — desde finance.expenses, agrupados en la base
     exp_rows = (
         await db.execute(
-            text("""
+            text(f"""
                 SELECT fecha, coalesce(nullif(categoria, ''), 'Sin categoría') AS categoria,
                        sum(monto) AS total
                 FROM finance.expenses
                 WHERE fecha BETWEEN :start AND :end
+                  AND ({contabilidad.CLASE_GASTO_SQL}) = 'operativo'
                 GROUP BY 1, 2
             """),
             {"start": start, "end": end},
@@ -1368,15 +1391,17 @@ async def punto_equilibrio(db: DBSession, user: CurrentUser, meses: int = Query(
     # El mes en curso se excluye: está a medias y arrastraría la media hacia abajo,
     # haciendo parecer que hace falta vender menos de lo real.
     #
-    # Y se excluye `tipo = 'Mercancía'`: eso ya está descontado en el margen bruto, y
-    # sumarlo aquí contaría el mismo peso dos veces.
+    # Y solo entran los gastos OPERATIVOS (contabilidad.CLASE_GASTO_SQL): las compras
+    # de mercancía ya están en el margen bruto, y las inversiones y los abonos a
+    # crédito no son gasto. Antes se filtraba `tipo <> 'Mercancía'`, una etiqueta
+    # que nunca existió en la base, así que no excluía nada.
     gastos_mes = (
         await db.execute(
-            text("""
+            text(f"""
                 SELECT to_char(fecha, 'YYYY-MM') AS mes, sum(monto) AS total
                 FROM finance.expenses
                 WHERE to_char(fecha, 'YYYY-MM') < :mes_actual
-                  AND tipo <> 'Mercancía'
+                  AND ({contabilidad.CLASE_GASTO_SQL}) = 'operativo'
                 GROUP BY 1 ORDER BY 1 DESC LIMIT :n
             """),
             {"mes_actual": mes_actual, "n": meses},
@@ -1393,11 +1418,11 @@ async def punto_equilibrio(db: DBSession, user: CurrentUser, meses: int = Query(
     if meses_orden:
         cats = (
             await db.execute(
-                text("""
+                text(f"""
                     SELECT categoria, sum(monto) AS total
                     FROM finance.expenses
                     WHERE to_char(fecha, 'YYYY-MM') = ANY(:meses)
-                      AND tipo <> 'Mercancía'
+                      AND ({contabilidad.CLASE_GASTO_SQL}) = 'operativo'
                     GROUP BY 1 ORDER BY 2 DESC
                 """),
                 {"meses": meses_orden},

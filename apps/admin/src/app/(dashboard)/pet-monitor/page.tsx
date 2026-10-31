@@ -110,26 +110,27 @@ export default function PetMonitorPage() {
   const { data: kpis, isLoading: kpisLoading, isFetching, refetch: refetchKpis } = useQuery({
     queryKey: ['admin-portal-overview'],
     queryFn: adminPortal.overview,
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: true,
+    // 30-oct-2026: 4 consultas cada 30 s, una de ellas con la pestaña escondida.
+    // Cada minuto y solo con la pestaña visible: lo que llega por el portal se ve igual.
+    refetchInterval: 60_000,
   });
 
   const { data: allOrders = [], isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
     queryKey: ['admin-portal-orders'],
     queryFn: () => adminPortal.orders(),
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
   });
 
   const { data: appointments = [], isLoading: apptLoading, refetch: refetchAppts } = useQuery({
     queryKey: ['admin-portal-appointments'],
     queryFn: () => adminPortal.appointments(),
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
   });
 
   const { data: recentLogins = [], refetch: refetchLogins } = useQuery({
     queryKey: ['admin-portal-recent-logins'],
     queryFn: adminPortal.recentLogins,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
   });
 
   // Bonos de bienvenida del newsletter: quién se suscribió y si ya usó su PRIMERAPATA

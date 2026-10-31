@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, Suspense } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -48,6 +48,15 @@ function LoginPageInner() {
 
   const [doc,   setDoc]   = useState('');
   const [phone, setPhone] = useState('');
+  // 30-oct-2026: el video de fondo (983 KB) se bajaba entero en el celular y era el
+  // LCP (5,0 s en Lighthouse). En pantallas chicas o con ahorro de datos se queda el
+  // póster; el video solo se monta en escritorio.
+  const [conVideo, setConVideo] = useState(false);
+  useEffect(() => {
+    const conexion = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    const escritorio = window.matchMedia('(min-width: 768px)').matches;
+    setConVideo(escritorio && !conexion?.saveData);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,12 +110,12 @@ function LoginPageInner() {
       <video
         ref={videoRef}
         autoPlay muted loop playsInline
-        preload="metadata"
+        preload="none"
         poster={VIDEO_POSTER || undefined}
         className="absolute inset-0 w-full h-full object-cover"
       >
-        {VIDEO_WEBM && <source src={VIDEO_WEBM} type="video/webm" />}
-        {VIDEO_MP4  && <source src={VIDEO_MP4}  type="video/mp4"  />}
+        {conVideo && VIDEO_WEBM && <source src={VIDEO_WEBM} type="video/webm" />}
+        {conVideo && VIDEO_MP4  && <source src={VIDEO_MP4}  type="video/mp4"  />}
       </video>
 
       {/* Overlay teal con atmósfera */}

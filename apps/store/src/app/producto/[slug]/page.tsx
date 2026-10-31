@@ -15,7 +15,15 @@ import { Truck, ShieldCheck, RefreshCw, ChevronRight, MessageCircle } from 'luci
 import { getOutOfStockWhatsAppUrl } from '@/lib/whatsapp-messages';
 import { ZonaModalButton } from '@/components/maps/ZonaModalButton';
 
-export const revalidate = 3600; // 1 hora
+export const revalidate = 600; // 10 min: precio y stock no se quedan una hora viejos
+
+// 30-oct-2026: sin generateStaticParams, Next 14 renderizaba esta ruta en CADA visita
+// (el build la marcaba "ƒ Dynamic" y respondía `private, no-store`): el revalidate de
+// arriba no hacía nada y cada producto costaba 1,0-1,5 s de servidor. Con la lista
+// vacía la ruta pasa a ISR: la primera visita la genera y las siguientes salen de caché.
+export function generateStaticParams() {
+  return [];
+}
 
 interface Props { params: { slug: string } }
 
