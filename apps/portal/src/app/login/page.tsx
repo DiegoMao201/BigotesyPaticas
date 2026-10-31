@@ -189,7 +189,6 @@ function LoginPageInner() {
                 priority
                 className="relative z-10"
                 style={{ filter: 'drop-shadow(0 8px 32px rgba(0,0,0,0.45)) drop-shadow(0 0 20px rgba(255,255,255,0.25))' }}
-                unoptimized
               />
             </motion.div>
             <h1 className="text-white text-3xl font-bold tracking-tight" style={{ textShadow: '0 2px 16px rgba(0,0,0,0.35)' }}>

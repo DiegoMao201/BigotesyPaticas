@@ -23,7 +23,6 @@ export function Logo({ size = 56, className = '', priority = false, variant = 'p
       height={size}
       priority={priority}
       className={cls}
-      unoptimized
     />
   );
 }
