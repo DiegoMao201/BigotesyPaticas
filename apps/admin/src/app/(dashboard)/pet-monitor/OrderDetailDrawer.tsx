@@ -395,13 +395,19 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
           />
         )}
 
-        {/* PAGO VENCIDO O RECHAZADO: el pedido está completo, solo falta el dinero.
-            Un enlace nuevo con el mismo pedido es la diferencia entre recuperar
-            la venta y perderla por un detalle. */}
-        {order.payment_method === 'bold' && ['expired', 'failed', 'pending'].includes(order.payment_status ?? '') && ws !== 'cancelled' && (
+        {/* PAGO VENCIDO, RECHAZADO O CONTRAENTREGA: el pedido está completo, solo
+            falta el dinero. Un enlace con el mismo pedido es la diferencia entre
+            recuperar la venta y perderla por un detalle. 1-nov-2026: una clienta
+            pidió contraentrega y luego quiso pagar por PSE; el enlace ya existía
+            para pagos vencidos, pero el botón solo salía si el pedido nació en Bold. */}
+        {order.payment_status !== 'paid' && ws !== 'cancelled' && (order.payment_method === 'bold'
+          ? ['expired', 'failed', 'pending'].includes(order.payment_status ?? '')
+          : true) && (
           <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 shrink-0 flex flex-col gap-2">
             <p className="text-xs font-bold text-amber-900">
-              {order.payment_status === 'failed' ? 'El banco rechazó el pago' : order.payment_status === 'expired' ? 'El enlace de pago venció sin pagar' : 'Esperando el pago en línea'}
+              {order.payment_method !== 'bold'
+                ? 'Pago contraentrega o por transferencia. Si el cliente prefiere pagar en línea (PSE, tarjeta, Nequi, Daviplata), mándale un enlace con este mismo pedido.'
+                : order.payment_status === 'failed' ? 'El banco rechazó el pago' : order.payment_status === 'expired' ? 'El enlace de pago venció sin pagar' : 'Esperando el pago en línea'}
               {order.shipping_mode === 'national' ? ' · envío nacional: no sale hasta que pague' : ''}
             </p>
             {!enlaceNuevo ? (
@@ -410,7 +416,7 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
                 disabled={enlaceMut.isPending}
                 className="self-start rounded-lg bg-amber-500 text-white px-3 py-1.5 text-xs font-bold disabled:opacity-50"
               >
-                {enlaceMut.isPending ? 'Creando…' : '🔗 Nuevo enlace de pago (30 min)'}
+                {enlaceMut.isPending ? 'Creando…' : order.payment_method === 'bold' ? '🔗 Nuevo enlace de pago (30 min)' : '🔗 Enviar enlace de pago en línea (30 min)'}
               </button>
             ) : (
               <div className="rounded-lg bg-white border border-amber-200 p-2 text-xs flex flex-col gap-1.5">
