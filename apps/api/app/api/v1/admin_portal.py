@@ -1563,6 +1563,7 @@ async def _get_order_with_items(db: DBSession, order_id: uuid.UUID) -> dict:
         "customer_name": customer.full_name if customer else None,
         "customer_phone": customer.phone if customer else None,
         "customer_email": customer.email if customer else None,
+        "customer_document": customer.document_id if customer else None,
         "status": order.status,
         "workflow_status": order.workflow_status,
         "payment_method": order.payment_method,

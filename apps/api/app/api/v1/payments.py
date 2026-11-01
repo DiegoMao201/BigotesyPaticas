@@ -29,6 +29,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.deps import DBSession
+from app.models.crm import Customer
 from app.models.portal import PaymentEvent, PortalOrder, PortalOrderItem
 from app.services import bold, riesgo_pago
 
@@ -313,6 +314,24 @@ async def _aprobar(
         return
 
     log.info("BOLD · PAGADO %s · %s pesos", pedido.order_reference, monto)
+
+    # Bold manda el correo del pagador. Si la ficha del cliente no tenía correo (el
+    # domicilio local no lo pedía hasta el 1-nov-2026), queda registrado aquí: por ahí
+    # salen el comprobante y el correo de agradecimiento. Nunca pisa un correo existente
+    # ni puede tumbar el pago.
+    try:
+        correo_pagador = ((datos or {}).get("payer_email") or "").strip().lower()[:160]
+        if correo_pagador and pedido.customer_id:
+            cliente = (
+                await db.execute(select(Customer).where(Customer.id == pedido.customer_id))
+            ).scalar_one_or_none()
+            if cliente and not cliente.email:
+                cliente.email = correo_pagador
+                cliente.extra = {**(cliente.extra or {}), "email_origen": "bold"}
+                await db.commit()
+                log.info("BOLD · correo %s guardado en la ficha de %s", correo_pagador, cliente.full_name)
+    except Exception:
+        log.exception("BOLD · no se pudo guardar el correo del pagador de %s", pedido.order_reference)
 
     # ── SEMÁFORO DE RIESGO (8-oct-2026) ──────────────────────────────────────
     # El pago ya entró y el dinero ya está; esto NO lo revierte. Lo que decide es si

@@ -68,6 +68,28 @@ async def cliente_por_telefono(
     return cliente
 
 
+async def completar_cliente(db, cliente: Customer, email: str | None, cedula: str | None) -> None:
+    """Completa correo y cédula de un cliente que llegó por la web, sin pisar lo que ya
+    tenía (1-nov-2026). Diego: *"registrar el cliente con todos los datos... así poderle
+    facturar a nombre del cliente"*. La cédula es única en `crm.customers`: si otra ficha
+    ya la tiene, se deja en paz y se anota en `extra` para que el admin lo vea."""
+    correo = (email or "").strip().lower()[:160]
+    if correo and not cliente.email and re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]{2,}", correo):
+        cliente.email = correo
+    doc = re.sub(r"\D", "", cedula or "")[:40]
+    if doc and not cliente.document_id:
+        otro = (
+            await db.execute(
+                select(Customer.id).where(Customer.document_id == doc, Customer.id != cliente.id).limit(1)
+            )
+        ).scalar_one_or_none()
+        if otro is None:
+            cliente.document_id = doc
+        else:
+            cliente.extra = {**(cliente.extra or {}), "cedula_duplicada": doc}
+    cliente.extra = {**(cliente.extra or {}), "cliente_web": True}
+
+
 async def mascota_de(db, cliente: Customer, nombre: str, especie: str, nota: str) -> Pet:
     pet = (
         await db.execute(

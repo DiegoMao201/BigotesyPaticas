@@ -75,6 +75,10 @@ export default function CheckoutPage() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
+  // 1-nov-2026: correo y cédula opcionales en el domicilio local. Sin correo no hay
+  // comprobante ni correo de gracias; sin cédula no hay factura a su nombre.
+  const [email, setEmail] = useState('');
+  const [cedula, setCedula] = useState('');
   const [pideUbicacion, setPideUbicacion] = useState(false);
   const [errorTel, setErrorTel] = useState(false);
   const [errorNombre, setErrorNombre] = useState(false);
@@ -285,6 +289,8 @@ export default function CheckoutPage() {
       lat: ubicacion?.lat ?? null,
       lng: ubicacion?.lng ?? null,
       km: ubicacion?.km ?? null,
+      email: email.trim() || null,
+      cedula: cedula.trim() || null,
       notes: notes.trim() || null,
       ...huellaGoogle(),
     };
@@ -517,6 +523,39 @@ export default function CheckoutPage() {
                   <p className="text-[11px] text-muted-foreground mt-1">Para confirmarte el pedido y la entrega.</p>
                 )}
               </div>
+              {!nacional && (
+                <>
+                  <div>
+                    <label htmlFor="correo" className="text-xs font-medium text-muted-foreground block mb-1">
+                      Tu correo <span className="opacity-60">(opcional)</span>
+                    </label>
+                    <input
+                      id="correo"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="para enviarte el comprobante"
+                      autoComplete="email"
+                      className="w-full rounded-xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/50"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="cedula" className="text-xs font-medium text-muted-foreground block mb-1">
+                      Tu cédula <span className="opacity-60">(opcional)</span>
+                    </label>
+                    <input
+                      id="cedula"
+                      type="text"
+                      inputMode="numeric"
+                      value={cedula}
+                      onChange={(e) => setCedula(e.target.value)}
+                      placeholder="para la factura a tu nombre"
+                      maxLength={20}
+                      className="w-full rounded-xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/50"
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1">¿Alguna nota? (sabor, talla, etc.)</label>

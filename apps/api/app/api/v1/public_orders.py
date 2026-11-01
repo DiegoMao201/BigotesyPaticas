@@ -42,7 +42,7 @@ from app.deps import DBSession
 from app.models.catalog import Product
 from app.models.portal import PortalOrder, PortalOrderItem
 from app.services import bold, cobertura, envia
-from app.services.citas import cliente_por_telefono, limpiar
+from app.services.citas import completar_cliente, cliente_por_telefono, limpiar
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/public/orders", tags=["public"])
@@ -184,6 +184,11 @@ class PedidoIn(BaseModel):
     lng: float | None = None
     km: float | None = None
     notes: str | None = Field(default=None, max_length=500)
+    # 1-nov-2026: el domicilio local no pedía correo ni cédula, así que el cliente
+    # web quedaba sin forma de recibir el comprobante ni de facturarle a su nombre.
+    # Los dos son opcionales: pedirlos obligatorios es perder ventas.
+    email: str | None = Field(default=None, max_length=160)
+    cedula: str | None = Field(default=None, max_length=40)
     # La huella de Google de ESTA visita. Sin esto la compra entra como "(direct)".
     #
     # ⚠️ ESTOS TRES CAMPOS NO PUEDEN RECHAZAR UN PEDIDO. NUNCA.
@@ -362,6 +367,14 @@ async def crear_pedido_web(payload: PedidoIn, request: Request, db: DBSession) -
     ahora = datetime.now(_TZ_CO)
     cliente = await cliente_por_telefono(
         db, nombre, tel, "pedido_web_tienda", ahora, consentimiento=True
+    )
+    # Ficha completa desde el primer pedido: correo (comprobante, correo de gracias)
+    # y cédula (factura a su nombre). Sin pisar lo que ya tenía.
+    await completar_cliente(
+        db,
+        cliente,
+        (payload.destino.email if nacional and payload.destino else None) or payload.email,
+        (payload.destino.cedula if nacional and payload.destino else None) or payload.cedula,
     )
 
     notas = [f"Pedido desde la tienda web · Tel: {tel}", envio_texto]

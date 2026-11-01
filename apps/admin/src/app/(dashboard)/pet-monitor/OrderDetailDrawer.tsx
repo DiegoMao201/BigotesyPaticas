@@ -353,6 +353,12 @@ export function OrderDetailDrawer({ orderId, onClose, onRefreshList }: Props) {
             {order.customer_phone && (
               <p className="text-xs text-gray-500">{order.customer_phone}</p>
             )}
+            {/* Correo y cédula: sin ellos no hay correo de gracias ni factura a su nombre. */}
+            <p className="text-xs text-gray-500 truncate">
+              {order.customer_email ?? <span className="text-amber-700">sin correo</span>}
+              {' · '}
+              {order.customer_document ? `C.C. ${order.customer_document}` : <span className="text-amber-700">sin cédula</span>}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-xs font-semibold px-3 py-1 rounded-full ${wsInfo.color}`}>

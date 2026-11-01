@@ -1769,6 +1769,7 @@ export interface PortalOrderDetail {
   customer_name: string | null;
   customer_phone: string | null;
   customer_email: string | null;
+  customer_document?: string | null;
   status: string;
   workflow_status: string;
   payment_method: string | null;
