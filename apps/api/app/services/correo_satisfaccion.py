@@ -45,9 +45,9 @@ CDN = "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypatica
 LOGO = f"{CDN}/logo-circulo.png"
 #: Cinco tiras GIF sincronizadas (4 s en bucle): las estrellas se van llenando una a
 #: una y la quinta late con "¡clic!". Los correos no admiten animación CSS; un GIF sí.
-#: v2 (1-nov-2026, aprobado por Diego): el doble de resolución, degradado dorado,
-#: destello y halo que alumbra; nombre nuevo para saltarse la caché del CDN.
-ESTRELLA = f"{CDN}/estrella-{{n}}-v2.gif"
+#: v3 (1-nov-2026, lo que pidió Diego): el doble de resolución, amarillo vivo y
+#: plano, borde dorado, SIN sombra ni halo. Nombre nuevo para saltarse la caché del CDN.
+ESTRELLA = f"{CDN}/estrella-{{n}}-v3.gif"
 #: Enlace corto de reseñas de la ficha de Google (el mismo del portal de clientes).
 RESENA_GOOGLE = "https://g.page/r/CfL67OgLB-10EBM/review"
 
