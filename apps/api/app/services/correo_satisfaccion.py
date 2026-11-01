@@ -39,7 +39,13 @@ log = logging.getLogger("correo_satisfaccion")
 
 API_PUBLICA = "https://api.bigotesypaticas.com"
 TIENDA = "https://bigotesypaticas.com"
-LOGO = "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding/logo-512.png"
+CDN = "https://catalogo-ferreinox.nyc3.cdn.digitaloceanspaces.com/bigotesypaticas/branding"
+#: Logo recortado en círculo con anillo blanco (generado el 1-nov-2026): el PNG
+#: cuadrado dentro de un círculo se veía mal.
+LOGO = f"{CDN}/logo-circulo.png"
+#: Cinco tiras GIF sincronizadas (4 s en bucle): las estrellas se van llenando una a
+#: una y la quinta late con "¡clic!". Los correos no admiten animación CSS; un GIF sí.
+ESTRELLA = f"{CDN}/estrella-{{n}}.gif"
 #: Enlace corto de reseñas de la ficha de Google (el mismo del portal de clientes).
 RESENA_GOOGLE = "https://g.page/r/CfL67OgLB-10EBM/review"
 
@@ -61,10 +67,10 @@ def _estrellas(order_id, product_id) -> str:
     for n in range(1, 6):
         url = f"{API_PUBLICA}/v1/public/calificar/{order_id}/{product_id}/{n}?t={t}"
         celdas.append(
-            f'<td style="padding:0 3px;"><a href="{url}" title="{n} de 5" '
-            'style="display:inline-block;width:40px;height:40px;line-height:40px;text-align:center;'
-            "font-size:26px;color:#f5a641;text-decoration:none;background:#fff7ea;"
-            'border-radius:10px;">★</a></td>'
+            f'<td style="padding:0;"><a href="{url}" title="Calificar con {n} de 5" '
+            'style="display:block;text-decoration:none;">'
+            f'<img src="{ESTRELLA.format(n=n)}" alt="{"★" * n}" width="64" height="78" '
+            'style="display:block;width:64px;height:78px;border:0;"></a></td>'
         )
     return "".join(celdas)
 
@@ -97,7 +103,7 @@ def armar_html(
               <td style="padding:14px 14px 14px 4px;vertical-align:middle;">
                 <p style="margin:0 0 4px;color:#1a1a1a;font-size:15px;font-weight:700;line-height:1.3;">{escape(it["nombre"])}</p>
                 <p style="margin:0 0 8px;color:#6b7280;font-size:12px;">Cantidad: {it["cantidad"]}</p>
-                {f'<p style="margin:0 0 6px;color:#187f77;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;">¿Qué tal te pareció?</p><table cellpadding="0" cellspacing="0"><tr>{estrellas}</tr></table>' if estrellas else ""}
+                {f'<p style="margin:0 0 6px;color:#187f77;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;">¿Qué tal te pareció? Toca una estrella</p><table cellpadding="0" cellspacing="0"><tr>{estrellas}</tr></table><p style="margin:2px 0 0;color:#9ca3af;font-size:11px;">5 estrellas si te encantó · 1 si no te gustó</p>' if estrellas else ""}
               </td>
             </tr>
           </table>
@@ -113,9 +119,7 @@ def armar_html(
     <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
 
       <tr><td style="background:#187f77;border-radius:20px 20px 0 0;padding:36px 40px 28px;text-align:center;">
-        <div style="width:96px;height:96px;margin:0 auto 14px;background:#ffffff;border-radius:50%;">
-          <img src="{LOGO}" alt="Bigotes y Paticas" width="76" height="76" style="display:block;margin:0 auto;padding-top:10px;">
-        </div>
+        <img src="{LOGO}" alt="Bigotes y Paticas" width="104" height="104" style="display:block;margin:0 auto 14px;width:104px;height:104px;border:0;">
         <p style="color:#a8ddd9;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin:0 0 8px;">BIGOTES Y PATICAS · DOSQUEBRADAS</p>
         <h1 style="color:#ffffff;font-size:28px;font-weight:800;margin:0;line-height:1.2;">{saludo} 🐾</h1>
         <p style="color:#a8ddd9;font-size:16px;margin:10px 0 0;">{"Gracias por visitarnos" if mostrador else "Tu pedido ya llegó a casa"}</p>
@@ -140,8 +144,7 @@ def armar_html(
         <p style="color:#187f77;font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;margin:0 0 12px;">{"Lo que llevaste" if mostrador else "Lo que recibiste"}</p>
         <table width="100%" cellpadding="0" cellspacing="0">{productos}</table>
         <p style="color:#6b7280;font-size:12px;line-height:1.5;margin:4px 0 20px;">
-          Toca las estrellas de cada producto para calificarlo: un solo clic, sin contraseñas.
-          Las reseñas de 5 estrellas suman puntos en tu portal de cliente.
+          Un solo clic, sin contraseñas. Las calificaciones de 5 estrellas suman puntos en tu portal de cliente.
         </p>
       </td></tr>
 
