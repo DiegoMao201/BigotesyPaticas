@@ -501,11 +501,12 @@ export interface PaginatedCustomers {
 }
 
 export const customers = {
-  list: (params: { page?: number; page_size?: number; q?: string } = {}) => {
+  list: (params: { page?: number; page_size?: number; q?: string; faltan?: 'correo' | 'cedula' | 'celular' | 'direccion' | 'cualquiera' } = {}) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', String(params.page));
     if (params.page_size) qs.set('page_size', String(params.page_size));
     if (params.q) qs.set('q', params.q);
+    if (params.faltan) qs.set('faltan', params.faltan);
     return api<PaginatedCustomers>(`/v1/customers?${qs.toString()}`);
   },
   get: (id: string) => api<Customer>(`/v1/customers/${id}`),

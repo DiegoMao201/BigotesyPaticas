@@ -17,7 +17,7 @@ from app.models.catalog import Product
 from app.models.inventory import Stock, StockLocation, StockMovement
 from app.models.sales import Order, OrderItem, Payment
 from app.schemas.sales import OrderCreate, OrderOut
-from app.services import bono_bienvenida
+from app.services import bono_bienvenida, correo_satisfaccion
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
@@ -232,6 +232,13 @@ async def create_order(payload: OrderCreate, db: DBSession, user: CurrentUser) -
 
     await db.commit()
     await db.refresh(order)
+
+    # Venta de mostrador con cliente que tiene correo: sale el correo de gracias con
+    # la calificación en Google y por producto (Diego, 1-nov-2026). Los pedidos del
+    # portal/web lo reciben al marcarse entregados, no aquí (channel PORTAL).
+    if payload.channel != "PORTAL" and order.customer_id and await correo_satisfaccion.enviar_venta(db, order):
+        await db.commit()
+        await db.refresh(order)
     return order
 
 

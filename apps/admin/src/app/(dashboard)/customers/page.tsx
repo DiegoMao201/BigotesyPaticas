@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Users, Phone, Mail, MapPin, Plus, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
+import { faltantes, etiquetaFaltantes } from '@/components/DatosFaltantes';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogFooter } from '@/components/ui/dialog';
@@ -184,13 +185,14 @@ export default function CustomersPage() {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
+  const [faltan, setFaltan] = useState<'' | 'cualquiera' | 'correo' | 'cedula' | 'celular' | 'direccion'>('');
   const [editCustomer, setEditCustomer] = useBorrador<Customer | null>('clientes:editando', null);
   const [inviteCustomer, setInviteCustomer] = useState<Customer | null>(null);
   const [openCreate, setOpenCreate] = useBorrador('clientes:nuevo:abierto', false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['customers', q, page],
-    queryFn: () => customers.list({ q: q || undefined, page, page_size: 25 }),
+    queryKey: ['customers', q, page, faltan],
+    queryFn: () => customers.list({ q: q || undefined, page, page_size: 25, faltan: faltan || undefined }),
     staleTime: 30_000,
   });
 
@@ -244,14 +246,30 @@ export default function CustomersPage() {
         </Button>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Nombre, email, teléfono…"
-          className="pl-9"
-          value={q}
-          onChange={(e) => { setQ(e.target.value); setPage(1); }}
-        />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Nombre, email, teléfono…"
+            className="pl-9"
+            value={q}
+            onChange={(e) => { setQ(e.target.value); setPage(1); }}
+          />
+        </div>
+        {/* Base lista para facturación electrónica: ver de un vistazo a quién le falta qué. */}
+        <div className="flex flex-wrap gap-1">
+          {([
+            ['', 'Todos'], ['cualquiera', 'Incompletos'], ['correo', 'Sin correo'], ['cedula', 'Sin cédula'], ['celular', 'Sin celular'], ['direccion', 'Sin dirección'],
+          ] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => { setFaltan(k); setPage(1); }}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${faltan === k ? 'bg-brand-500 text-white border-brand-500' : 'border-border text-muted-foreground hover:bg-muted'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <Card>
@@ -281,9 +299,12 @@ export default function CustomersPage() {
                     {(c.full_name ?? '?').charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm">{c.full_name}</span>
                       <RfmBadge segment={c.rfm_segment} />
+                      {faltantes(c).length > 0 && (
+                        <span className="text-[11px] rounded-full bg-amber-100 text-amber-800 px-2 py-0.5">Falta: {etiquetaFaltantes(c)}</span>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 mt-0.5 text-xs text-muted-foreground">
                       {c.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{c.email}</span>}

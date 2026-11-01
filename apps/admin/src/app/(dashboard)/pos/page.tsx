@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useBorrador, descartarBorrador } from '@/lib/borradores';
 import { BorradorAviso } from '@/components/BorradorAviso';
+import { DatosFaltantesModal, faltantes, etiquetaFaltantes } from '@/components/DatosFaltantes';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CreditCard,
@@ -195,9 +196,11 @@ function ProductSearch({ onAdd }: { onAdd: (p: Product) => void }) {
 function CustomerSelector({
   value,
   onChange,
+  onCompletar,
 }: {
   value: Customer | null;
   onChange: (c: Customer | null) => void;
+  onCompletar?: () => void;
 }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
@@ -224,6 +227,14 @@ function CustomerSelector({
             <X className="h-4 w-4" />
           </button>
         </div>
+        {faltantes(value).length > 0 && (
+          <div className="flex items-center justify-between gap-2 rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+            <span>Falta: <strong>{etiquetaFaltantes(value)}</strong></span>
+            {onCompletar && (
+              <button onClick={onCompletar} className="font-semibold text-amber-900 underline underline-offset-2 shrink-0">Completar</button>
+            )}
+          </div>
+        )}
         {/* Dirección para domicilio — visible al facturar */}
         <div className={cn(
           'flex items-start gap-2 rounded-md px-2.5 py-2 text-xs',
@@ -728,6 +739,13 @@ export default function POSPage() {
   // la venta en curso sobrevive a salir de la pantalla (ver lib/borradores.ts)
   const [cart, setCart] = useBorrador<CartItem[]>('pos:carrito', []);
   const [customer, setCustomer] = useBorrador<Customer | null>('pos:cliente', null);
+  // Al elegir un cliente con la ficha incompleta salta el modal para pedir lo que
+  // falta (correo, cédula…): la base tiene que quedar lista para facturación electrónica.
+  const [pedirDatos, setPedirDatos] = useState(false);
+  function elegirCliente(c: Customer | null) {
+    setCustomer(c);
+    setPedirDatos(Boolean(c) && faltantes(c).length > 0);
+  }
   const [payments, setPayments] = useBorrador<PaymentEntry[]>('pos:pagos', [{ method: 'Efectivo', amount: '' }]);
   const [notes, setNotes] = useBorrador('pos:notas', '');
   const [bono, setBono] = useBorrador<BonoBienvenida | null>('pos:bono', null);
@@ -965,7 +983,13 @@ export default function POSPage() {
                 <CardTitle className="text-base">Cliente</CardTitle>
               </CardHeader>
               <CardContent>
-                <CustomerSelector value={customer} onChange={setCustomer} />
+                <CustomerSelector value={customer} onChange={elegirCliente} onCompletar={() => setPedirDatos(true)} />
+                <DatosFaltantesModal
+                  customer={customer}
+                  open={pedirDatos}
+                  onClose={() => setPedirDatos(false)}
+                  onSaved={(c) => { setCustomer(c); setPedirDatos(faltantes(c).length > 0); }}
+                />
               </CardContent>
             </Card>
 

@@ -17,6 +17,7 @@ from app.deps import DBSession, require_permission
 from app.models.catalog import GBPReviewCache, Product, ProductReview
 from app.models.crm import Customer
 from app.models.portal import PortalOrder, PortalOrderItem
+from app.models.sales import Order as SalesOrder
 from app.services import correo_satisfaccion
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -625,7 +626,13 @@ async def _reseña_desde_correo(db, order_id: uuid.UUID, product_id: uuid.UUID, 
     if not correo_satisfaccion.token_valido(order_id, t):
         return None, _pagina("Enlace no válido", "Este enlace no corresponde a tu pedido. Abre el correo que te enviamos y vuelve a tocar las estrellas.", "🔒", status=403)
     order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
-    if not order or order.workflow_status != "delivered":
+    if order is None:
+        # Venta de mostrador (POS): el cliente ya se llevó el producto.
+        venta = (await db.execute(select(SalesOrder).where(SalesOrder.id == order_id))).scalar_one_or_none()
+        if venta is None or venta.status in ("cancelled", "refunded") or not venta.customer_id:
+            return None, _pagina("Pedido no encontrado", "No encontramos esa compra. Abre el correo que te enviamos y vuelve a tocar las estrellas.", "🤔", status=404)
+        order = venta
+    elif order.workflow_status != "delivered":
         return None, _pagina("Todavía no", "Podrás calificar tus productos cuando el pedido esté entregado.", "⏳", status=409)
     product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one_or_none()
     if not product:

@@ -119,24 +119,38 @@ async def conciliar_una_vez() -> dict:
                 creado = pedido.created_at
                 if creado and creado.tzinfo is None:
                     creado = creado.replace(tzinfo=UTC)
-                if creado and (ahora - creado) > timedelta(minutes=VENCIMIENTO_MIN):
+                # 1-nov-2026: el vencimiento es el del ENLACE (`payment_expires_at`),
+                # no 30 min desde que nació el pedido. Antes un enlace de cobro de 24 h
+                # o un enlace reenviado desde el admin sobre un pedido de ayer se vencía
+                # (y se cancelaba) a la media hora.
+                vence = pedido.payment_expires_at or (
+                    creado + timedelta(minutes=VENCIMIENTO_MIN) if creado else None
+                )
+                if vence and vence.tzinfo is None:
+                    vence = vence.replace(tzinfo=UTC)
+                if vence and ahora > vence:
                     pedido.payment_status = "expired"
-                    # Y SE CIERRA EL TRÁMITE, no solo el pago.
-                    #
-                    # Marcar `payment_status='expired'` dejando el `workflow_status`
-                    # en 'received' no sirve de nada: el aviso del panel cuenta por
-                    # workflow, así que el pedido seguía gritando "pendiente" para
-                    # siempre. Un enlace que nadie pagó no es trabajo por hacer.
-                    pedido.workflow_status = "cancelled"
-                    pedido.status = "cancelled"
-                    nota = (f"[{ahora.strftime('%d/%m %H:%M')}] Vencido: nadie pagó el "
-                            f"enlace en {VENCIMIENTO_MIN} min.")
+                    marca = ahora.strftime("%d/%m %H:%M")
+                    if pedido.link_enviado_por_admin_at is not None:
+                        # El pedido existía antes del enlace (contraentrega que el
+                        # cliente quiso pagar en línea): el enlace vence, el pedido NO.
+                        # Sigue a la vista como "pago vencido · reenviar enlace".
+                        nota = f"[{marca}] El enlace de pago venció sin pagar; el pedido sigue vivo."
+                    else:
+                        # Y SE CIERRA EL TRÁMITE, no solo el pago.
+                        #
+                        # Marcar `payment_status='expired'` dejando el `workflow_status`
+                        # en 'received' no sirve de nada: el aviso del panel cuenta por
+                        # workflow, así que el pedido seguía gritando "pendiente" para
+                        # siempre. Un enlace que nadie pagó no es trabajo por hacer.
+                        pedido.workflow_status = "cancelled"
+                        pedido.status = "cancelled"
+                        nota = f"[{marca}] Vencido: nadie pagó el enlace."
                     pedido.internal_notes = (
                         f"{(pedido.internal_notes or '').strip()}\n{nota}".strip()
                     )
                     await db.commit()
-                    log.info("BOLD · %s vencido y cerrado: nadie lo pagó",
-                             pedido.order_reference)
+                    log.info("BOLD · %s vencido: nadie lo pagó", pedido.order_reference)
                     resumen["vencidos"] += 1
 
             # PROCESSING y PENDING (PSE) se dejan como están: siguen en curso.

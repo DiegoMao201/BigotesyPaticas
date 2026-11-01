@@ -238,7 +238,9 @@ async def crear_pago_libre(payload: PagoLibreIn, request: Request, db: DBSession
 # Diego, en la primera prueba del envío nacional: *"no pude completar el pago,
 # ¿puedes enviarme otro y generarle un pago al cliente nuevo si es del caso?"*.
 #
-# Un enlace de pago vive 30 minutos. Quien abandona a medio camino —se le cayó la
+HORAS_ENLACE_ADMIN = 24
+
+# El enlace del checkout vive 30 minutos. Quien abandona a medio camino —se le cayó la
 # conexión, no tenía la tarjeta a mano, lo pensó— llega al admin como "pago
 # vencido" con su pedido completo: productos, dirección, transportadora. Volver
 # a pedirle todo sería perder la venta por un detalle. Esto le da un enlace
@@ -313,7 +315,9 @@ async def nuevo_enlace_para_pedido(order_id: uuid.UUID, db: DBSession) -> dict:
     order.total_amount = total
     order.payment_method = "bold"
     order.payment_status = "pending"
-    order.payment_expires_at = ahora + timedelta(minutes=bold.MINUTOS_PARA_PAGAR)
+    # 24 horas, como los enlaces de cobro: se manda por WhatsApp y la gente lo abre
+    # cuando puede (Diego, 1-nov-2026). El checkout sigue en 30 min.
+    order.payment_expires_at = ahora + timedelta(hours=HORAS_ENLACE_ADMIN)
     order.bold_payment_id = None
     # El pedido ya existía y el admin lo está cobrando: no es una intención de
     # compra, así que el listado del admin lo sigue mostrando como "esperando pago".
@@ -333,7 +337,7 @@ async def nuevo_enlace_para_pedido(order_id: uuid.UUID, db: DBSession) -> dict:
     texto = (
         f"Hola {nombre}! 🐾 Te dejamos un enlace nuevo para pagar tu pedido{detalle}: "
         f"${monto:,.0f}".replace(",", ".")
-        + f"\n\n{enlace}\n\nVale 30 minutos. Es un pago seguro procesado por Bold; "
+        + f"\n\n{enlace}\n\nVale {HORAS_ENLACE_ADMIN} horas. Es un pago seguro procesado por Bold; "
         "cualquier duda, escríbenos por aquí mismo."
     )
     log.info("COBRO · nuevo enlace %s para pedido %s por $%s", referencia, order_id, monto)

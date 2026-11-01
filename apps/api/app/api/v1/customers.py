@@ -88,10 +88,25 @@ class PaginatedCustomers(BaseModel):
 async def list_customers(
     db: DBSession,
     q: str | None = Query(None, description="Nombre, email, teléfono o documento"),
+    faltan: str | None = Query(
+        None,
+        pattern="^(correo|cedula|celular|direccion|cualquiera)$",
+        description="Solo clientes a los que les falta ese dato (1-nov-2026: base para facturación electrónica)",
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
 ) -> PaginatedCustomers:
     stmt = select(Customer).where(Customer.deleted_at == None)  # noqa: E711
+    vacios = {
+        "correo": func.coalesce(Customer.email, "") == "",
+        "cedula": func.coalesce(Customer.document_id, "") == "",
+        "celular": func.coalesce(Customer.phone, "") == "",
+        "direccion": func.coalesce(Customer.address, "") == "",
+    }
+    if faltan == "cualquiera":
+        stmt = stmt.where(or_(*vacios.values()))
+    elif faltan:
+        stmt = stmt.where(vacios[faltan])
     if q:
         term = f"%{q}%"
         stmt = stmt.where(

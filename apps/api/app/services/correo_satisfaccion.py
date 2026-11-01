@@ -31,6 +31,8 @@ from app.config import get_settings
 from app.models.catalog import Product
 from app.models.crm import Customer
 from app.models.portal import Pet, PortalOrder, PortalOrderItem
+from app.models.sales import Order as VentaMostrador
+from app.models.sales import OrderItem as LineaVenta
 from app.services.email import send_email
 
 log = logging.getLogger("correo_satisfaccion")
@@ -67,7 +69,10 @@ def _estrellas(order_id, product_id) -> str:
     return "".join(celdas)
 
 
-def armar_html(nombre: str, mascota: str | None, items: list[dict], order_id) -> str:
+def armar_html(
+    nombre: str, mascota: str | None, items: list[dict], order_id, modo: str = "domicilio"
+) -> str:
+    mostrador = modo == "mostrador"
     saludo = f"¡Gracias, {escape(nombre)}!" if nombre else "¡Gracias por tu compra!"
     quien = (
         f"Esperamos que <strong>{escape(mascota)}</strong> ya esté disfrutando su pedido."
@@ -113,7 +118,7 @@ def armar_html(nombre: str, mascota: str | None, items: list[dict], order_id) ->
         </div>
         <p style="color:#a8ddd9;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin:0 0 8px;">BIGOTES Y PATICAS · DOSQUEBRADAS</p>
         <h1 style="color:#ffffff;font-size:28px;font-weight:800;margin:0;line-height:1.2;">{saludo} 🐾</h1>
-        <p style="color:#a8ddd9;font-size:16px;margin:10px 0 0;">Tu pedido ya llegó a casa</p>
+        <p style="color:#a8ddd9;font-size:16px;margin:10px 0 0;">{"Gracias por visitarnos" if mostrador else "Tu pedido ya llegó a casa"}</p>
       </td></tr>
 
       <tr><td style="background:#ffffff;padding:32px 40px 8px;">
@@ -132,7 +137,7 @@ def armar_html(nombre: str, mascota: str | None, items: list[dict], order_id) ->
           </td></tr>
         </table>
 
-        <p style="color:#187f77;font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;margin:0 0 12px;">Lo que recibiste</p>
+        <p style="color:#187f77;font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;margin:0 0 12px;">{"Lo que llevaste" if mostrador else "Lo que recibiste"}</p>
         <table width="100%" cellpadding="0" cellspacing="0">{productos}</table>
         <p style="color:#6b7280;font-size:12px;line-height:1.5;margin:4px 0 20px;">
           Toca las estrellas de cada producto para calificarlo: un solo clic, sin contraseñas.
@@ -242,4 +247,57 @@ async def enviar(db, order: PortalOrder) -> bool:
         return bool(ok)
     except Exception:  # nunca tumba la entrega
         log.exception("satisfaccion: error mandando el correo del pedido %s", order.id)
+        return False
+
+
+async def enviar_venta(db, venta: VentaMostrador) -> bool:
+    """El mismo correo para una venta de mostrador (POS) con cliente que tenga
+    correo. El candado vive en `metadata.correo_gracias_at`: una sola vez por venta.
+    No lanza excepciones."""
+    try:
+        meta = dict(venta.metadata_ or {})
+        if meta.get("correo_gracias_at") or not venta.customer_id:
+            return False
+        cliente = (
+            await db.execute(select(Customer).where(Customer.id == venta.customer_id))
+        ).scalar_one_or_none()
+        correo = (cliente.email or "").strip() if cliente else ""
+        if not correo:
+            return False
+        nombre = ((cliente.full_name if cliente else "") or "").strip().split(" ")[0]
+        mascota = ((cliente.extra or {}).get("pet_name") if cliente else None) or None
+        lineas = (
+            await db.execute(
+                select(LineaVenta, Product.primary_image_url)
+                .outerjoin(Product, Product.id == LineaVenta.product_id)
+                .where(LineaVenta.order_id == venta.id)
+            )
+        ).all()
+        items = [
+            {
+                "nombre": li.name_snapshot or "Producto",
+                "cantidad": int(li.quantity or 1),
+                "imagen": imagen,
+                "product_id": li.product_id,
+            }
+            for li, imagen in lineas
+        ]
+        if not items:
+            return False
+        html = armar_html(nombre, mascota, items, venta.id, modo="mostrador")
+        asunto = (
+            f"{nombre}, gracias por tu compra 🐾 ¿nos calificas?"
+            if nombre
+            else "Gracias por tu compra 🐾 ¿nos calificas?"
+        )
+        ok = await asyncio.to_thread(send_email, correo, asunto, html)
+        if ok:
+            meta["correo_gracias_at"] = datetime.now(UTC).isoformat()
+            venta.metadata_ = meta
+            log.info(
+                "satisfaccion: correo enviado a %s por la venta %s", correo, venta.order_number
+            )
+        return bool(ok)
+    except Exception:  # nunca tumba la venta
+        log.exception("satisfaccion: error mandando el correo de la venta %s", venta.id)
         return False
