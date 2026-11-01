@@ -1683,6 +1683,8 @@ export interface PortalOrder {
   payment_method?: string | null;
   order_reference?: string | null;
   paid_at?: string | null;
+  link_enviado_por_admin_at?: string | null;
+  satisfaction_email_sent_at?: string | null;
   /** 'national' = sale por transportadora (Envia); 'local' o null = domicilio propio */
   shipping_mode?: 'local' | 'national' | null;
   shipping_city?: string | null;
@@ -1810,6 +1812,8 @@ export interface PortalOrderDetail {
   bold_card_brand?: string | null;
   bold_masked_pan?: string | null;
   bold_payer_email?: string | null;
+  link_enviado_por_admin_at?: string | null;
+  satisfaction_email_sent_at?: string | null;
   delivered_to_name?: string | null;
   delivered_to_doc?: string | null;
   delivery_evidence_url?: string | null;

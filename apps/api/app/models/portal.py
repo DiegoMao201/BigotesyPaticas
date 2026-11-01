@@ -264,6 +264,15 @@ class PortalOrder(UUIDPKMixin, TimestampMixin, Base):
     purchase_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # 1-nov-2026 (migración 0056): el admin mandó un enlace de pago sobre un pedido
+    # que ya existía (no es una intención de compra: debe seguir en el listado), y
+    # candado del correo de agradecimiento/calificación.
+    link_enviado_por_admin_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    satisfaction_email_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # ── Antifraude (8-oct-2026, migración 0049) ──────────────────────────────
     # Bold manda estos datos en cada evento y hasta hoy morían dentro de
     # `raw_payload`. Van a columnas porque lo que delata un fraude es poder cruzar:

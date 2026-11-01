@@ -415,7 +415,7 @@ export default function PetMonitorPage() {
                           )}
                           {order.payment_status === 'pending' && (
                             <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
-                              ⏳ Esperando pago
+                              ⏳ Esperando pago{order.link_enviado_por_admin_at ? ' · enlace enviado' : ''}
                             </span>
                           )}
                           {order.payment_status === 'failed' && (

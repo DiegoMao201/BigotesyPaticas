@@ -6,7 +6,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import desc, func, select, text
 
@@ -16,6 +17,7 @@ from app.deps import DBSession, require_permission
 from app.models.catalog import GBPReviewCache, Product, ProductReview
 from app.models.crm import Customer
 from app.models.portal import PortalOrder, PortalOrderItem
+from app.services import correo_satisfaccion
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -590,3 +592,128 @@ async def run_gbp_sync():
     except TimeoutError:
         proc.kill()
         return {"ok": False, "error": "timeout después de 60 segundos"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CALIFICAR CON UN CLIC DESDE EL CORREO (1-nov-2026)
+#
+# Diego: "que nos califique los productos". El correo de agradecimiento trae
+# cinco estrellas por producto; tocar una llega aquí con un token firmado del
+# pedido (correo_satisfaccion.token). Sin iniciar sesión: la compra ya está
+# verificada porque el pedido se marcó entregado. Mismas reglas que la reseña
+# desde el portal: 5 estrellas se publica sola y da puntos; menos, queda en
+# moderación.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PAGINA = """<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>{titulo}</title></head>
+<body style="margin:0;background:#f0f7f6;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+<div style="max-width:480px;margin:40px auto;background:#fff;border-radius:20px;padding:32px 28px;text-align:center;">
+  <div style="font-size:44px;margin-bottom:8px;">{emoji}</div>
+  <h1 style="color:#187f77;font-size:24px;margin:0 0 10px;">{titulo}</h1>
+  <p style="color:#4b5563;font-size:15px;line-height:1.6;margin:0 0 20px;">{texto}</p>
+  {extra}
+  <p style="margin:24px 0 0;"><a href="https://bigotesypaticas.com" style="color:#FF6B35;font-weight:700;text-decoration:none;">Volver a bigotesypaticas.com</a></p>
+</div></body></html>"""
+
+
+def _pagina(titulo: str, texto: str, emoji: str = "🐾", extra: str = "", status: int = 200) -> HTMLResponse:
+    return HTMLResponse(_PAGINA.format(titulo=titulo, texto=texto, emoji=emoji, extra=extra), status_code=status)
+
+
+async def _reseña_desde_correo(db, order_id: uuid.UUID, product_id: uuid.UUID, t: str | None):
+    if not correo_satisfaccion.token_valido(order_id, t):
+        return None, _pagina("Enlace no válido", "Este enlace no corresponde a tu pedido. Abre el correo que te enviamos y vuelve a tocar las estrellas.", "🔒", status=403)
+    order = (await db.execute(select(PortalOrder).where(PortalOrder.id == order_id))).scalar_one_or_none()
+    if not order or order.workflow_status != "delivered":
+        return None, _pagina("Todavía no", "Podrás calificar tus productos cuando el pedido esté entregado.", "⏳", status=409)
+    product = (await db.execute(select(Product).where(Product.id == product_id))).scalar_one_or_none()
+    if not product:
+        return None, _pagina("Producto no encontrado", "Ese producto ya no está en el catálogo.", "🤔", status=404)
+    existing = (
+        await db.execute(
+            select(ProductReview).where(
+                ProductReview.customer_id == order.customer_id,
+                ProductReview.product_id == product_id,
+            )
+        )
+    ).scalar_one_or_none()
+    return (order, product, existing), None
+
+
+@public_router.get("/calificar/{order_id}/{product_id}/{rating}", response_class=HTMLResponse)
+async def calificar_desde_correo(
+    order_id: uuid.UUID, product_id: uuid.UUID, rating: int, db: DBSession, t: str | None = None
+):
+    if rating < 1 or rating > 5:
+        return _pagina("Calificación no válida", "Las estrellas van de 1 a 5.", "⭐", status=422)
+    datos, error = await _reseña_desde_correo(db, order_id, product_id, t)
+    if error:
+        return error
+    order, product, existing = datos
+    auto = rating == 5
+    if existing:
+        existing.rating = rating
+        if existing.status in ("pending", "auto_published"):
+            existing.status = "auto_published" if auto else "pending"
+        rev = existing
+        nuevo = False
+    else:
+        rev = ProductReview(
+            product_id=product_id,
+            customer_id=order.customer_id,
+            rating=rating,
+            status="auto_published" if auto else "pending",
+            is_verified_purchase=True,
+            points_awarded=POINTS_REVIEW_BASE if auto else 0,
+        )
+        db.add(rev)
+        await db.flush()
+        nuevo = True
+        if auto:
+            await award_points(
+                customer_id=order.customer_id,
+                points=POINTS_REVIEW_BASE,
+                reason="review",
+                reference_type="product_review",
+                reference_id=rev.id,
+                description=f"Reseña de {product.name[:60]}",
+                db=db,
+            )
+    await db.commit()
+    estrellas = "★" * rating + "☆" * (5 - rating)
+    puntos = f" Te sumamos {POINTS_REVIEW_BASE} puntos en tu portal." if (auto and nuevo) else ""
+    form = f"""
+  <form method="post" action="/v1/public/calificar/{order_id}/{product_id}/comentario" style="text-align:left;">
+    <input type="hidden" name="t" value="{t}">
+    <label style="display:block;color:#187f77;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin:0 0 6px;">¿Nos cuentas por qué?</label>
+    <textarea name="comentario" rows="4" maxlength="1000" placeholder="Opcional: qué le gustó a tu peludo, cómo le cayó, qué mejorarías…" style="width:100%;box-sizing:border-box;border:2px solid #d1e7e4;border-radius:12px;padding:12px;font-size:14px;font-family:inherit;"></textarea>
+    <button type="submit" style="margin-top:12px;width:100%;background:#FF6B35;color:#fff;border:0;border-radius:12px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;">Enviar comentario</button>
+  </form>"""
+    return _pagina(
+        f"{estrellas}",
+        f"Calificaste <strong>{product.name}</strong> con {rating} de 5. ¡Gracias!{puntos}",
+        "🐾",
+        extra=form,
+    )
+
+
+@public_router.post("/calificar/{order_id}/{product_id}/comentario", response_class=HTMLResponse)
+async def comentario_desde_correo(
+    order_id: uuid.UUID,
+    product_id: uuid.UUID,
+    db: DBSession,
+    t: str = Form(""),
+    comentario: str = Form(""),
+):
+    datos, error = await _reseña_desde_correo(db, order_id, product_id, t)
+    if error:
+        return error
+    _order, product, existing = datos
+    if not existing:
+        return _pagina("Primero las estrellas", "Toca una estrella en el correo y luego cuéntanos.", "⭐", status=409)
+    texto = (comentario or "").strip()[:1000]
+    if texto:
+        existing.comment = texto
+        await db.commit()
+    return _pagina("¡Gracias por contarnos!", f"Tu comentario sobre <strong>{product.name}</strong> quedó guardado. Nos ayuda a elegir mejor lo que traemos a la tienda.", "💚")

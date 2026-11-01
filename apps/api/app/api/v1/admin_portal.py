@@ -26,6 +26,7 @@ from app.models.portal import (
     PortalOrderItem,
     PortalSession,
 )
+from app.services import correo_satisfaccion
 from app.services.ga4 import enviar_purchase, enviar_purchase_cita
 from app.services.portal_order_actions import (
     InsufficientStockError,
@@ -622,10 +623,16 @@ async def list_portal_orders(
         #
         # Si nunca paga, la conciliación lo marca 'expired' a la media hora y se
         # queda en la base para los números, sin molestar a nadie.
+        #
+        # EXCEPCIÓN (1-nov-2026): si el enlace lo mandó el ADMIN sobre un pedido que
+        # ya existía (contraentrega que el cliente quiso pagar por PSE), el pedido es
+        # real y tiene que seguir a la vista como "esperando pago". Diego: "le envié
+        # el nuevo link de pago y el pedido desapareció de pedidos en el admin".
         .where(
             or_(
                 PortalOrder.payment_status.is_(None),
                 PortalOrder.payment_status != "pending",
+                PortalOrder.link_enviado_por_admin_at.isnot(None),
             )
         )
         .order_by(PortalOrder.created_at.desc())
@@ -715,6 +722,12 @@ async def list_portal_orders(
                 "payment_method": order.payment_method,
                 "order_reference": order.order_reference,
                 "paid_at": order.paid_at.isoformat() if order.paid_at else None,
+                "link_enviado_por_admin_at": order.link_enviado_por_admin_at.isoformat()
+                if order.link_enviado_por_admin_at
+                else None,
+                "satisfaction_email_sent_at": order.satisfaction_email_sent_at.isoformat()
+                if order.satisfaction_email_sent_at
+                else None,
                 # 'national' = sale por transportadora; hay que generar guía.
                 "shipping_mode": order.shipping_mode or "local",
                 "shipping_city": (order.shipping_destination or {}).get("ciudad"),
@@ -855,6 +868,9 @@ async def update_portal_order(
         # que además quedan atribuidos a la búsqueda o al anuncio que trajo al cliente.
         # Nunca tumba la entrega: enviar_purchase() no lanza excepciones.
         await enviar_purchase(db, order)
+        # Y el correo de agradecimiento con la calificación en Google y por producto
+        # (1-nov-2026). También idempotente y sin excepciones.
+        await correo_satisfaccion.enviar(db, order)
         await notify_customer(
             db,
             order.customer_id,

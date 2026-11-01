@@ -315,6 +315,9 @@ async def nuevo_enlace_para_pedido(order_id: uuid.UUID, db: DBSession) -> dict:
     order.payment_status = "pending"
     order.payment_expires_at = ahora + timedelta(minutes=bold.MINUTOS_PARA_PAGAR)
     order.bold_payment_id = None
+    # El pedido ya existía y el admin lo está cobrando: no es una intención de
+    # compra, así que el listado del admin lo sigue mostrando como "esperando pago".
+    order.link_enviado_por_admin_at = ahora
     marca = ahora.strftime("%d/%m %H:%M")
     order.internal_notes = (f"{order.internal_notes or ''}\n[{marca}] Nuevo enlace de pago {referencia}{nota_envio}").strip()
     await db.commit()
