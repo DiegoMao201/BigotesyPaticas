@@ -49,7 +49,7 @@ from app.models.portal import PaymentApplication, PortalOrder
 from app.models.sales import Order as Venta
 from app.models.sales import OrderItem as VentaItem
 from app.models.sales import Payment as PagoVenta
-from app.services.ga4 import enviar_purchase_de_venta
+from app.services.ga4 import enviar_purchase, enviar_purchase_de_venta
 
 log = logging.getLogger(__name__)
 
@@ -153,6 +153,9 @@ async def ventas_candidatas(order_id: uuid.UUID, db: DBSession) -> dict:
         "ya_aplicado": float(usado),
         "disponible": float(max(Decimal("0"), monto - usado)),
         "es_cobro_sin_pedido": (pago.origen or "") in ORIGENES_DE_COBRO,
+        # Cerrado con "pago recibido y procesado", sin atarlo a ventas (3-nov-2026).
+        "marcado_recibido": not aplicadas and pago.workflow_status == "delivered",
+        "enviado_a_google": pago.purchase_sent_at is not None,
         "ventas_aplicadas": [
             {"sales_order_id": str(a.sales_order_id), "amount": a.amount,
              "enviado_a_google": a.purchase_sent_at is not None}
@@ -207,6 +210,10 @@ async def aplicar_a_ventas(
         raise HTTPException(404, "Cobro no encontrado")
     if pago.payment_status != "paid":
         raise HTTPException(400, "Este cobro todavía no está pagado.")
+    if pago.purchase_sent_at is not None:
+        # Ya se marcó como recibido y se le contó a Google por su valor: aplicarlo a
+        # ventas mandaría la misma plata otra vez.
+        raise HTTPException(400, "Este pago ya se marcó como recibido y procesado.")
 
     monto_total = Decimal(str(pago.bold_amount or pago.total_amount or 0))
     previas = await _ya_aplicado(db, pago.id)
@@ -335,3 +342,52 @@ async def aplicar_a_ventas(
         "sobrante_sin_aplicar": float(sobrante),
         "ventas": resultados,
     }
+
+
+class RecibidoPayload(BaseModel):
+    nota: str | None = Field(default=None, max_length=500)
+
+
+@router.post(
+    "/orders/{order_id}/marcar-recibido",
+    dependencies=[Depends(require_permission("crm:write"))],
+)
+async def marcar_recibido(
+    order_id: uuid.UUID, payload: RecibidoPayload, db: DBSession, user: CurrentUser
+) -> dict:
+    """Cierra un cobro sin atarlo a ventas: "pago recibido y procesado".
+
+    Diego (3-nov-2026): un pago de $257.000 que cubre varias facturas de varios
+    clientes y de varios días. Buscarlas una por una no compensa; él lo concilia por
+    dentro. Se cierra el cobro y se le cuenta a Google por su valor, con el
+    `transaction_id` del cobro (una sola vez: candado `purchase_sent_at`).
+    """
+    pago = (await db.execute(
+        select(PortalOrder).where(PortalOrder.id == order_id)
+    )).scalar_one_or_none()
+    if not pago:
+        raise HTTPException(404, "Cobro no encontrado")
+    if (pago.origen or "") not in ORIGENES_DE_COBRO:
+        raise HTTPException(400, "Esto es un pedido, no un pago sin pedido.")
+    if pago.payment_status != "paid":
+        raise HTTPException(400, "Este cobro todavía no está pagado.")
+    if await _ya_aplicado(db, pago.id):
+        raise HTTPException(400, "Este pago ya está aplicado a ventas.")
+
+    ahora = datetime.now(UTC)
+    enviado = False
+    try:
+        enviado = await enviar_purchase(db, pago)
+    except Exception:
+        log.exception("No se pudo contarle a Google el cobro %s", pago.order_reference)
+
+    pago.workflow_status = "delivered"
+    pago.status = "delivered"
+    pago.delivered_at = pago.delivered_at or ahora
+    detalle = (f"[{ahora.strftime('%d/%m %H:%M')}] Pago recibido y procesado por "
+               f"{user.full_name or user.email}"
+               + (f" · {payload.nota.strip()}" if payload.nota else ""))
+    pago.internal_notes = f"{(pago.internal_notes or '').strip()}\n{detalle}".strip()
+    await db.commit()
+    log.info("COBRO · %s marcado como recibido; a Google: %s", pago.order_reference, enviado)
+    return {"ok": True, "enviado_a_google": enviado or pago.purchase_sent_at is not None}

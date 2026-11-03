@@ -1333,7 +1333,31 @@ function PagoSinPedido({ orderId, order }: { orderId: string; order: PortalOrder
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Diego (3-nov-2026): un pago de varias facturas, de varios clientes y días. Él lo
+  // concilia por dentro; aquí solo se cierra y se le cuenta a Google por su valor.
+  const recibido = useMutation({
+    mutationFn: () => adminPortal.marcarRecibido(orderId),
+    onSuccess: (r) => {
+      toast.success(`Pago recibido y procesado${r.enviado_a_google ? ' · contado a Google' : ''}`);
+      qc.invalidateQueries({ queryKey: ['ventas-candidatas', orderId] });
+      qc.invalidateQueries({ queryKey: ['portal-order', orderId] });
+      qc.invalidateQueries({ queryKey: ['portal-orders'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const yaAplicado = (data?.ventas_aplicadas.length ?? 0) > 0;
+
+  if (data?.marcado_recibido) {
+    return (
+      <div className="flex items-start gap-2 border-b border-green-100 bg-green-50 px-4 py-2 text-xs text-green-800 shrink-0">
+        <Check size={15} className="mt-0.5 shrink-0" />
+        <span>
+          Pago recibido y procesado.{data.enviado_a_google && ' Contado a Google.'}
+        </span>
+      </div>
+    );
+  }
 
   if (yaAplicado) {
     return (
@@ -1366,6 +1390,26 @@ function PagoSinPedido({ orderId, order }: { orderId: string; order: PortalOrder
             <p className="mt-2 text-xs text-blue-700">
               No encontré ventas recientes de este cliente. Búscala en Ventas y vuelve.
             </p>
+          )}
+
+          {data && (
+            <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg border border-green-200 bg-white px-3 py-2 text-sm text-green-900">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-green-600"
+                checked={recibido.isPending}
+                disabled={recibido.isPending}
+                onChange={() => {
+                  if (window.confirm(`¿Marcar este pago de ${formatCurrency(order.total)} como recibido y procesado? Se cierra y se le cuenta a Google por su valor.`)) recibido.mutate();
+                }}
+              />
+              <span>
+                <strong>Pago recibido y procesado</strong>
+                <span className="block text-xs text-green-700">
+                  Para pagos de varias facturas o clientes: lo cierro sin asignar ventas.
+                </span>
+              </span>
+            </label>
           )}
 
           {data && data.candidatas.length > 0 && (

@@ -1852,6 +1852,8 @@ export interface CandidatasResp {
   ya_aplicado: number;
   disponible: number;
   es_cobro_sin_pedido: boolean;
+  marcado_recibido: boolean;
+  enviado_a_google: boolean;
   ventas_aplicadas: { sales_order_id: string; amount: number; enviado_a_google: boolean }[];
   candidatas: VentaCandidata[];
 }
@@ -2079,6 +2081,12 @@ export const adminPortal = {
     api<AplicarResp>(`/v1/admin/portal/orders/${id}/aplicar-a-ventas`, {
       method: 'POST',
       body: JSON.stringify({ ventas, enviar_a_google, nota }),
+    }),
+  /** Cierra un pago sin pedido sin atarlo a ventas: "pago recibido y procesado". */
+  marcarRecibido: (id: string, nota?: string) =>
+    api<{ ok: boolean; enviado_a_google: boolean }>(`/v1/admin/portal/orders/${id}/marcar-recibido`, {
+      method: 'POST',
+      body: JSON.stringify({ nota }),
     }),
   /** Marca que un pedido de riesgo ya se verificó por teléfono y puede salir. */
   liberarRiesgo: (id: string, nota: string) =>
