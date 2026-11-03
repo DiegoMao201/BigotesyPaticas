@@ -933,7 +933,7 @@ async def agenda_del_dia(db: DBSession, date: str = Query(...)) -> dict:
     """Citas pendientes y confirmadas de un día, con su bloque de horas."""
     from datetime import date as _date
 
-    from app.api.v1.portal_appointments import _CLOSE_H, _OPEN_H, _TZ_CO, bloqueos_entre
+    from app.api.v1.portal_appointments import _ADMIN_OPEN_H, _CLOSE_H, _TZ_CO, bloqueos_entre
     from app.models.portal import Pet
 
     try:
@@ -977,7 +977,7 @@ async def agenda_del_dia(db: DBSession, date: str = Query(...)) -> dict:
             "en_bloqueo": en_bloqueo,
         })
     fin_dia = ini + timedelta(days=1)
-    return {"date": date, "abre": f"{_OPEN_H:02d}:00", "cierra": f"{_CLOSE_H:02d}:00",
+    return {"date": date, "abre": f"{_ADMIN_OPEN_H:02d}:00", "cierra": f"{_CLOSE_H:02d}:00",
             "cerrado": d.weekday() == 6, "citas": citas,
             "bloqueos": [_bloqueo_out(b, ini, fin_dia) for b in bloqueos]}
 

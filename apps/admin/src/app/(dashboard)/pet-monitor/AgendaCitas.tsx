@@ -61,7 +61,7 @@ export function AgendaCitas({ onOpenCita }: { onOpenCita: (id: string) => void }
     refetchInterval: 60_000,
   });
 
-  const abre = aMin(data?.abre ?? '10:00');
+  const abre = aMin(data?.abre ?? '08:00');
   const cierra = aMin(data?.cierra ?? '19:00');
   const filas = useMemo(() => {
     const out: string[] = [];

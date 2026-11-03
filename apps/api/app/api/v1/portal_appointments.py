@@ -27,6 +27,9 @@ router = APIRouter(prefix="/portal/appointments", tags=["portal"])
 # Google y la web: lunes a sábado de 10 a. m. a 7 p. m. (business-info.ts).
 _OPEN_H = int(os.getenv("PORTAL_OPEN_HOURS", "10-19").split("-")[0])
 _CLOSE_H = int(os.getenv("PORTAL_OPEN_HOURS", "10-19").split("-")[1])
+# 3-nov-2026: el admin agenda desde las 8 a. m. ("a veces se hace desde esa hora"). La web
+# y el portal siguen ofreciendo desde _OPEN_H; solo la agenda del admin abre antes.
+_ADMIN_OPEN_H = min(8, _OPEN_H)
 _CLOSED_WEEKDAYS = {6}  # domingo (date.weekday(): lunes=0)
 _SLOT_CAP = int(os.getenv("PORTAL_SLOT_CAPACITY", "1"))
 _DEFAULT_DURATION = 120  # baño y peluquería
@@ -187,7 +190,7 @@ async def horas_libres_admin(
     bloqueos = await bloqueos_entre(db, day_start, day_start + timedelta(days=1))
     libres: list[str] = []
     bloqueadas: list[str] = []
-    t = day_start + timedelta(hours=_OPEN_H)
+    t = day_start + timedelta(hours=_ADMIN_OPEN_H)
     while t + dur <= day_start + timedelta(hours=_CLOSE_H):
         if t >= ahora and len(await conflictos(db, t, duration_min, excluir=excluir)) < _SLOT_CAP:
             if any(b.inicio < t + dur and b.fin > t for b in bloqueos):
