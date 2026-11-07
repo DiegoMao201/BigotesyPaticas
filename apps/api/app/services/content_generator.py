@@ -1,7 +1,7 @@
 """Motor de generación de contenido IA — Sprint 6A.
 
 Usa:
-  - Claude Haiku 4.5 vía OpenRouter para rellenar templates y generar captions
+  - Claude Haiku 5.5 (Anthropic directo, app/services/claude.py) para rellenar templates y generar captions
   - GPT-image-1 (OpenAI) o Flux 1.1 Pro (Replicate) para generar imágenes
   - DO Spaces CDN para almacenamiento
   - Pillow para logo overlay (8% ancho, 60% opacidad, esquina inferior-derecha)
@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import ClassVar
 
 import requests
+
+from app.services.claude import a_json, completar, hay_claude
 
 log = logging.getLogger(__name__)
 
@@ -89,8 +91,6 @@ S3_SECRET = os.environ.get("S3_SECRET_KEY", "")
 LOGO_PATH = Path("/app/apps/store/public/icon-192.png")
 TEMP_DIR = Path("/tmp/content_engine")
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-
 BRAND_HASHTAGS = ["#BigotesYPaticasPereira", "#BigotesYPaticasDosquebradas"]
 
 IMAGE_COSTS = {
@@ -133,9 +133,8 @@ class ContentGenerator:
     """Genera posts completos: caption + imagen + upload CDN."""
 
     def __init__(self):
-        self._openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
-        if not self._openrouter_key:
-            raise RuntimeError("OPENROUTER_API_KEY no configurada en environment")
+        if not hay_claude():
+            raise RuntimeError("ANTHROPIC_API_KEY no configurada en environment")
         TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
     # ── API pública ────────────────────────────────────────────────────────────
@@ -369,31 +368,7 @@ OTROS
 Respondé JSON estricto sin markdown:
 {{"visual_prompt": "...", "caption": "...", "hashtags": ["#..."], "cta_url": "..." }}"""
 
-        resp = requests.post(
-            OPENROUTER_URL,
-            headers={
-                "Authorization": f"Bearer {self._openrouter_key}",
-                "HTTP-Referer": "https://bigotesypaticas.com",
-                "X-Title": "Bigotes y Paticas Content Engine",
-            },
-            json={
-                "model": "anthropic/claude-haiku-4-5",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 2000,
-                "temperature": 0.8,
-            },
-            timeout=60,
-        )
-        resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"]
-        raw = raw.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```", 2)[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            if "```" in raw:
-                raw = raw.rsplit("```", 1)[0]
-        return json.loads(raw.strip())
+        return a_json(completar(prompt, max_tokens=2000, timeout=90))
 
     # ── Paso 2a: GPT-image-1 ─────────────────────────────────────────────────
 

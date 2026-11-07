@@ -1,19 +1,17 @@
 """Exportación Excel financiero ejecutivo — Bigotes y Paticas.
 
 Endpoint: GET /v1/finance/export-excel?months=12
-Genera un workbook de 5 hojas con análisis IA via Claude Haiku (OpenRouter).
+Genera un workbook de 5 hojas con análisis IA con Claude Haiku (Anthropic directo).
 """
 
 from __future__ import annotations
 
 import io
 import json
-import os
 from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-import httpx
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
@@ -23,6 +21,7 @@ from sqlalchemy import select, text
 
 from app.deps import CurrentUser, DBSession, require_permission
 from app.services import contabilidad
+from app.services.claude import a_json, completar_async, hay_claude
 
 export_router = APIRouter(prefix="/finance", tags=["finance"])
 
@@ -404,23 +403,22 @@ async def _fetch_revenue_by_method(db: DBSession, months: int) -> list[dict]:
 
 
 # ═══════════════════════════════════════════════════════
-#  IA: ANÁLISIS EJECUTIVO VIA OPENROUTER
+#  IA: ANÁLISIS EJECUTIVO CON CLAUDE (ANTHROPIC DIRECTO)
 # ═══════════════════════════════════════════════════════
 
 
 async def _get_ai_analysis(summary: dict) -> dict:
-    key = os.environ.get("OPENROUTER_API_KEY", "")
     fallback = {
-        "diagnostico": "Análisis IA no disponible (clave OPENROUTER_API_KEY no configurada).",
+        "diagnostico": "Análisis IA no disponible (clave ANTHROPIC_API_KEY no configurada o Claude no respondió).",
         "fortalezas": [
             "Datos de ventas registrados correctamente.",
             "Sistema de inventario activo.",
         ],
         "riesgos": ["Verifique la configuración de la API de IA."],
-        "recomendaciones": ["Configure OPENROUTER_API_KEY para habilitar el análisis IA."],
+        "recomendaciones": ["Configure ANTHROPIC_API_KEY para habilitar el análisis IA."],
         "proyeccion": "No disponible.",
     }
-    if not key:
+    if not hay_claude():
         return fallback
 
     prompt = f"""Eres un analista financiero experto en retail de mascotas en Colombia.
@@ -445,30 +443,7 @@ Responde en JSON estricto sin markdown ni texto adicional:
 }}"""
 
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {key}",
-                    "HTTP-Referer": "https://bigotesypaticas.com",
-                    "X-Title": "B&P Finance Report",
-                },
-                json={
-                    "model": "anthropic/claude-haiku-4-5",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 2500,
-                    "temperature": 0.2,
-                },
-            )
-            resp.raise_for_status()
-            raw = resp.json()["choices"][0]["message"]["content"].strip()
-            if raw.startswith("```"):
-                raw = raw.split("```", 2)[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-                if "```" in raw:
-                    raw = raw.rsplit("```", 1)[0]
-            return json.loads(raw.strip())
+        return a_json(await completar_async(prompt, max_tokens=2500, timeout=90))
     except Exception:
         return fallback
 
