@@ -18,10 +18,12 @@ from datetime import datetime
 
 import httpx
 
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _claude import HAIKU, claude_post, hay_claude  # noqa: E402
+
 # ─── Configuración ──────────────────────────────────────────────────────────
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "google/gemini-2.5-flash"
+MODEL = HAIKU  # 6-nov-2026: Claude Haiku 5.5 en Anthropic (antes Gemini por OpenRouter)
 
 DB_URL = os.environ.get("DATABASE_URL", "")
 CONCURRENCY = 5
@@ -176,20 +178,12 @@ async def enrich_one(client: httpx.AsyncClient, product: dict) -> dict | None:
 
     for attempt in range(RETRY_MAX):
         try:
-            r = await client.post(
-                OPENROUTER_URL,
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://bigotesypaticas.com",
-                    "X-Title": "BigotesyPaticas Catalog Enrichment",
-                },
+            r = await claude_post(
+                client,
                 json={
                     "model": MODEL,
                     "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.65,
                     "max_tokens": 900,
-                    "response_format": {"type": "json_object"},
                 },
                 timeout=60,
             )
@@ -224,8 +218,8 @@ async def enrich_one(client: httpx.AsyncClient, product: dict) -> dict | None:
 
 
 async def main() -> None:
-    if not OPENROUTER_API_KEY:
-        print("❌ OPENROUTER_API_KEY no configurada")
+    if not hay_claude():
+        print("❌ ANTHROPIC_API_KEY no configurada (ni ~/.config/bp/anthropic.json)")
         sys.exit(1)
     if not DB_URL:
         print("❌ DATABASE_URL no configurada")
@@ -293,7 +287,7 @@ async def main() -> None:
             print(f"{label} {p['sku']} · {p['name'][:55]}", end="", flush=True)
 
             if DRY_RUN:
-                # En dry-run igual llamamos a OpenRouter para validar formato
+                # En dry-run igual llamamos a Claude para validar formato
                 async with httpx.AsyncClient() as cl:
                     result = await enrich_one(cl, p)
             else:
@@ -340,9 +334,6 @@ async def main() -> None:
     await asyncio.gather(*tasks)
 
     elapsed = time.time() - stats["t0"]
-    cost_in = stats["tok_in"] * 0.075 / 1_000_000
-    cost_out = stats["tok_out"] * 0.30 / 1_000_000
-    total_cost = cost_in + cost_out
 
     print()
     print("═" * 58)
@@ -351,7 +342,7 @@ async def main() -> None:
     print(f"  Fallidos:      {stats['fail']:,}")
     print(f"  Tokens entrada:{stats['tok_in']:,}")
     print(f"  Tokens salida: {stats['tok_out']:,}")
-    print(f"  💵 Costo est.: ${total_cost:.4f} USD  (gemini-2.5-flash)")
+    print(f"  💵 Se descuenta del crédito de Anthropic ({MODEL}); ver la consola")
     print("═" * 58)
 
     if not DRY_RUN and stats["ok"] > 0:

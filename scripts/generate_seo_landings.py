@@ -7,7 +7,7 @@ Uso:
   python scripts/generate_seo_landings.py --limit=5
   python scripts/generate_seo_landings.py
 
-Costo estimado: 40 landings x ~2500 tokens = ~$0.04 USD con Gemini 2.5 Flash
+Modelo: Claude Haiku 5.5 en Anthropic (crédito gratuito de la cuenta de ferreinox.co)
 """
 
 import asyncio
@@ -18,9 +18,11 @@ import sys
 
 import httpx
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "google/gemini-2.5-flash"
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _claude import HAIKU, claude_post, hay_claude  # noqa: E402
+
+MODEL = HAIKU  # 6-nov-2026: Claude Haiku 5.5 en Anthropic (antes Gemini por OpenRouter)
 API_BASE = os.environ.get("API_BASE_URL", "https://api.bigotesypaticas.com")
 
 DRY_RUN = "--dry-run" in sys.argv
@@ -323,16 +325,11 @@ async def call_ai(client: httpx.AsyncClient, kw: dict) -> dict | None:
 
     for attempt in range(3):
         try:
-            res = await client.post(
-                OPENROUTER_URL,
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
+            res = await claude_post(
+                client,
                 json={
                     "model": MODEL,
                     "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.65,
                     "max_tokens": 2048,
                 },
                 timeout=90,
@@ -374,8 +371,8 @@ async def save_landing(client: httpx.AsyncClient, data: dict, kw: dict) -> bool:
 
 
 async def main():
-    if not OPENROUTER_API_KEY and not DRY_RUN:
-        print("✗ OPENROUTER_API_KEY no configurada")
+    if not hay_claude() and not DRY_RUN:
+        print("✗ ANTHROPIC_API_KEY no configurada (ni ~/.config/bp/anthropic.json)")
         sys.exit(1)
 
     keywords = STRATEGIC_KEYWORDS[:LIMIT] if LIMIT else STRATEGIC_KEYWORDS

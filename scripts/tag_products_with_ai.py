@@ -1,6 +1,6 @@
 """
 Tag catalog products with life_stage, size_range, pet_type, health_concerns, brand_normalized
-using OpenRouter (Gemini Flash / DeepSeek) via AI.
+using Claude Haiku 5.5 (Anthropic, scripts/_claude.py).
 
 Usage:
   python scripts/tag_products_with_ai.py --dry-run   # show 10 examples
@@ -9,7 +9,7 @@ Usage:
 
 Env:
   DATABASE_URL=postgresql+asyncpg://...
-  OPENROUTER_API_KEY=sk-or-v1-...
+  ANTHROPIC_API_KEY (o ~/.config/bp/anthropic.json)
 """
 
 from __future__ import annotations
@@ -24,9 +24,11 @@ import sys
 import asyncpg
 import httpx
 
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _claude import HAIKU, claude_post, hay_claude  # noqa: E402
+
 DB_URL = os.environ.get("DATABASE_URL", "")
-OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 VALID_LIFE_STAGES = {"puppy", "adult", "senior", "all"}
 VALID_SIZE_RANGES = {"mini", "small", "medium", "large", "giant", "all"}
@@ -97,20 +99,15 @@ Categoría: {product.get('category') or 'Sin categoría'}
 Descripción: {description[:300] or 'Sin descripción'}"""
 
     try:
-        resp = await client.post(
-            OPENROUTER_URL,
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_KEY}",
-                "Content-Type": "application/json",
-            },
+        resp = await claude_post(
+            client,
             json={
-                "model": "google/gemini-2.5-flash-lite",
+                "model": HAIKU,
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_msg},
                 ],
                 "max_tokens": 200,
-                "temperature": 0.1,
             },
             timeout=15.0,
         )
@@ -130,8 +127,8 @@ async def run(dry_run: bool, resume: bool) -> None:
     if not DB_URL:
         print("ERROR: DATABASE_URL not set.", file=sys.stderr)
         sys.exit(1)
-    if not OPENROUTER_KEY and not dry_run:
-        print("ERROR: OPENROUTER_API_KEY not set.", file=sys.stderr)
+    if not hay_claude() and not dry_run:
+        print("ERROR: ANTHROPIC_API_KEY not set (ni ~/.config/bp/anthropic.json).", file=sys.stderr)
         sys.exit(1)
 
     conn = await asyncpg.connect(DB_URL)

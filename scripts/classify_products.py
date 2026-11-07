@@ -23,7 +23,7 @@ Uso:
 
 Env requeridas:
   DATABASE_URL=postgresql+asyncpg://...
-  OPENROUTER_API_KEY=sk-or-v1-...
+  ANTHROPIC_API_KEY (o ~/.config/bp/anthropic.json)
 """
 
 from __future__ import annotations
@@ -39,15 +39,17 @@ import time
 import asyncpg
 import httpx
 
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _claude import HAIKU, claude_post, hay_claude  # noqa: E402
+
 # ─── Config ─────────────────────────────────────────────────────────────────
 DB_URL = (
     os.environ.get("DATABASE_URL", "")
     .replace("postgresql+psycopg://", "postgresql://")
     .replace("postgresql+asyncpg://", "postgresql://")
 )
-OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "google/gemini-2.5-flash-lite"
+MODEL = HAIKU  # 6-nov-2026: Claude Haiku 5.5 en Anthropic (antes Gemini por OpenRouter)
 CONCURRENCY = 8
 BATCH_SIZE = 20  # productos por llamada a la API
 
@@ -136,13 +138,8 @@ async def classify_batch(
 
     for attempt in range(3):
         try:
-            resp = await client.post(
-                OPENROUTER_URL,
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_KEY}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://bigotesypaticas.com",
-                },
+            resp = await claude_post(
+                client,
                 json={
                     "model": MODEL,
                     "messages": [
@@ -150,7 +147,6 @@ async def classify_batch(
                         {"role": "user", "content": user_msg},
                     ],
                     "max_tokens": 4000,
-                    "temperature": 0.1,
                 },
                 timeout=60.0,
             )
@@ -261,8 +257,8 @@ async def run(args: argparse.Namespace) -> None:
     if not DB_URL:
         print("ERROR: DATABASE_URL no configurada", file=sys.stderr)
         sys.exit(1)
-    if not OPENROUTER_KEY and not args.dry_run:
-        print("ERROR: OPENROUTER_API_KEY no configurada", file=sys.stderr)
+    if not hay_claude() and not args.dry_run:
+        print("ERROR: ANTHROPIC_API_KEY no configurada (ni ~/.config/bp/anthropic.json)", file=sys.stderr)
         sys.exit(1)
 
     conn = await asyncpg.connect(DB_URL)
