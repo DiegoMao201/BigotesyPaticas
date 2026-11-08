@@ -1,5 +1,6 @@
 'use client';
 
+import { DashboardShop } from '@/components/shop/DashboardShop';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -253,6 +254,9 @@ export default function DashboardPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Tienda en el inicio (8-nov-2026) ──────────────────────────── */}
+      <DashboardShop />
 
       {/* ── Puntos Bigotes ────────────────────────────────────────────── */}
       {loyaltyData !== undefined && (
