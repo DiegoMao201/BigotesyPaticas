@@ -1,4 +1,5 @@
 'use client';
+import { tomarTurno } from '@/lib/turno';
 
 import { useEffect, useState } from 'react';
 import { Star, X, CheckCircle } from 'lucide-react';
@@ -40,7 +41,7 @@ export function GoogleReviewPrompt() {
     });
     if (!hasOldDeliveredOrder) return;
 
-    const timer = setTimeout(() => setShow(true), 8000);
+    const timer = setTimeout(() => { if (tomarTurno('resena')) setShow(true); }, 8000);
     return () => clearTimeout(timer);
   }, [orderList]);
 

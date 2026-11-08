@@ -553,6 +553,10 @@ export interface Order {
   notes: string | null;
   created_at: string;
   points_earned: number | null;
+  /** Fotos de lo pedido (hasta 4), productos y total — desde el 8-nov-2026. */
+  images?: string[];
+  items_count?: number | null;
+  total?: number | null;
 }
 
 export interface TopProduct {

@@ -5,9 +5,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LifeBuoy, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { portalLocation } from '@/lib/api';
+import { useAuthStore } from '@/lib/auth-store';
+import { tomarTurno } from '@/lib/turno';
 
 const STORAGE_KEY = 'bp_last_geo_prompt';
-const THROTTLE_MS = 4 * 60 * 60 * 1000; // 4 horas
+// 8-nov-2026: antes cada 4 horas aunque ya hubiera aceptado. Ahora: si el permiso ya está
+// dado, se actualiza la ubicación en silencio; si lo negó, no se vuelve a pedir; si dijo
+// "ahora no", se espera una semana.
+const THROTTLE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Antes de disparar el permiso nativo del navegador, explicamos por qué lo
@@ -18,12 +23,32 @@ export function LocationTracker() {
   const [show, setShow] = useState(false);
   const [requesting, setRequesting] = useState(false);
 
+  const terminos = useAuthStore((s) => s.customer?.terms_accepted_at);
+
   useEffect(() => {
-    if (typeof window === 'undefined' || !navigator.geolocation) return;
-    const last = Number(localStorage.getItem(STORAGE_KEY) ?? 0);
-    if (Date.now() - last < THROTTLE_MS) return;
-    setShow(true);
-  }, []);
+    if (typeof window === 'undefined' || !navigator.geolocation || !terminos) return;
+    let cancelado = false;
+    const decidir = (estado?: PermissionState) => {
+      if (cancelado) return;
+      if (estado === 'granted') {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => portalLocation.update(pos.coords.latitude, pos.coords.longitude).catch(() => {}),
+          () => {},
+          { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60 * 60 * 1000 },
+        );
+        return;
+      }
+      if (estado === 'denied') return;
+      const last = Number(localStorage.getItem(STORAGE_KEY) ?? 0);
+      if (Date.now() - last < THROTTLE_MS) return;
+      // va de último: deja ver el portal primero
+      setTimeout(() => { if (!cancelado && tomarTurno('ubicacion')) setShow(true); }, 4000);
+    };
+    if (navigator.permissions?.query) {
+      navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((r) => decidir(r.state), () => decidir());
+    } else decidir();
+    return () => { cancelado = true; };
+  }, [terminos]);
 
   function dismiss() {
     localStorage.setItem(STORAGE_KEY, String(Date.now()));

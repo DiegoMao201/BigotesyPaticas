@@ -1,4 +1,5 @@
 'use client';
+import { tomarTurno } from '@/lib/turno';
 
 import { useEffect, useState } from 'react';
 import { X, Download } from 'lucide-react';
@@ -34,7 +35,7 @@ export function PWAInstallBanner() {
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setTimeout(() => setShow(true), 30_000);
+      setTimeout(() => { if (tomarTurno('instalar')) setShow(true); }, 30_000);
     };
     window.addEventListener('beforeinstallprompt', handler);
 

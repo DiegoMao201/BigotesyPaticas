@@ -1,493 +1,265 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
-import { Search, ShoppingCart, Star, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
-import Image from 'next/image';
-import { orders, pets, catalog, auth, type PublicProduct, type TopProduct } from '@/lib/api';
-import { formatCOP, getSpeciesEmoji } from '@/lib/utils';
-import { cn } from '@/lib/utils';
-import { usePortalCart } from '@/lib/cart-store';
+/**
+ * TIENDA DEL PORTAL (8-nov-2026). Diego: "cliente que entre es cliente que debe volver…
+ * competir con apps grandotas como Laika". Lo de antes era un top 5 y un catálogo
+ * escondido detrás de un acordeón ("Ver portafolio completo"): para comprar algo que no
+ * hubieras comprado antes había que adivinar que existía. Ahora es una tienda de verdad:
+ * buscador fijo arriba, la mascota del cliente decide qué se ve primero (perro o gato),
+ * categorías en fichas, "Lo de siempre" para repetir en un toque, rejilla de 2 columnas
+ * con foto grande y el "+" en la tarjeta, detalle en hoja que sube desde abajo y la barra
+ * del carrito siempre a la vista. Solo productos con stock, primero.
+ */
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
+import { Search, X, SlidersHorizontal, RotateCcw } from 'lucide-react';
+import { orders, pets as petsApi, catalog } from '@/lib/api';
+import { ProductCard, ProductCardSkeleton } from '@/components/shop/ProductCard';
+import { ProductSheet } from '@/components/shop/ProductSheet';
+import { CartBar } from '@/components/shop/CartBar';
+import { toShop, type ShopProduct } from '@/components/shop/types';
 
-const CATEGORY_ICONS: Record<string, string> = {
-  concentrado: '🥘',
-  snack: '🍪',
-  snacks: '🍪',
-  accesorios: '🎾',
-  juguetes: '🎾',
-  aseo: '💧',
-  arena: '🏖️',
-  arenas: '🏖️',
-  medicamento: '💊',
-  perros: '🐶',
-  gatos: '🐱',
-};
-function categoryIcon(slug: string) {
-  return CATEGORY_ICONS[slug?.toLowerCase()] ?? '📦';
+const CATEGORIAS: { slug: string; nombre: string; icono: string }[] = [
+  { slug: 'alimento-seco', nombre: 'Concentrado', icono: '🥣' },
+  { slug: 'snacks', nombre: 'Snacks', icono: '🦴' },
+  { slug: 'alimento-medicado', nombre: 'Dietas vet.', icono: '🩺' },
+  { slug: 'medicamentos', nombre: 'Salud', icono: '💊' },
+  { slug: 'higiene-y-cuidado', nombre: 'Aseo y arena', icono: '🫧' },
+  { slug: 'juguetes', nombre: 'Juguetes', icono: '🧸' },
+  { slug: 'accesorios', nombre: 'Accesorios', icono: '🎀' },
+  { slug: 'alimento-natural', nombre: 'Natural', icono: '🥕' },
+];
+const ORDEN = [
+  { v: 'relevance', l: 'Destacados' },
+  { v: 'price_asc', l: 'Menor precio' },
+  { v: 'price_desc', l: 'Mayor precio' },
+  { v: 'newest', l: 'Nuevos' },
+];
+const ESPECIE: Record<string, string> = { perro: 'dog', dog: 'dog', gato: 'cat', cat: 'cat' };
+
+function useDebounced<T>(v: T, ms = 300) {
+  const [d, setD] = useState(v);
+  useEffect(() => { const t = setTimeout(() => setD(v), ms); return () => clearTimeout(t); }, [v, ms]);
+  return d;
 }
 
-export default function NewOrderPage() {
-  const router = useRouter();
+export default function TiendaPage() {
+  const [q, setQ] = useState('');
+  const qd = useDebounced(q.trim());
+  const [cat, setCat] = useState<string | null>(null);
+  const [petType, setPetType] = useState<string | null>(null);
+  const [orden, setOrden] = useState('relevance');
+  const [abierto, setAbierto] = useState<ShopProduct | null>(null);
+  const [verOrden, setVerOrden] = useState(false);
+  const elegidoPorDefecto = useRef(false);
 
-  const addItemToCart = usePortalCart((s) => s.addItem);
+  const { data: misPets = [] } = useQuery({ queryKey: ['portal-pets'], queryFn: petsApi.list });
+  const { data: top = [] } = useQuery({ queryKey: ['top-products'], queryFn: () => orders.topProducts(8), staleTime: 5 * 60 * 1000 });
 
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<PublicProduct | TopProduct | null>(null);
-  const [selectedPetId, setSelectedPetId] = useState<string>('');
-  const [qty, setQty] = useState(1);
-  const [notes, setNotes] = useState('');
-  const [catalogOpen, setCatalogOpen] = useState(false);
-  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  // La mascota decide la vitrina: si todas son perros (o todas gatos), se abre filtrada.
+  const especies = useMemo(
+    () => Array.from(new Set(misPets.map((p) => ESPECIE[p.species?.toLowerCase()] ?? '').filter(Boolean))),
+    [misPets],
+  );
+  useEffect(() => {
+    if (!elegidoPorDefecto.current && especies.length === 1) {
+      setPetType(especies[0]);
+      elegidoPorDefecto.current = true;
+    }
+  }, [especies]);
 
-  const { data: me } = useQuery({ queryKey: ['portal-me'], queryFn: auth.me });
-  const { data: petsData } = useQuery({ queryKey: ['portal-pets'], queryFn: pets.list });
-  const { data: topProducts = [], isLoading: topLoading } = useQuery({
-    queryKey: ['top-products'],
-    queryFn: () => orders.topProducts(5),
-    staleTime: 5 * 60 * 1000,
+  const buscando = qd.length > 1;
+
+  const lista = useInfiniteQuery({
+    queryKey: ['tienda', cat, petType, orden],
+    enabled: !buscando,
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) => {
+      const qs = new URLSearchParams({ in_stock: 'true', page: String(pageParam), page_size: '24', sort: orden });
+      if (cat) qs.set('category_slug', cat);
+      if (petType) qs.set('pet_type', petType);
+      const r = await fetch(`/api/v1/products/catalog?${qs}`);
+      if (!r.ok) throw new Error('catálogo');
+      const d = (await r.json()) as { items: Record<string, unknown>[]; total: number; page: number; page_size: number };
+      return { items: d.items.map(toShop), total: d.total, page: d.page, size: d.page_size };
+    },
+    getNextPageParam: (last) => (last.page * last.size < last.total ? last.page + 1 : undefined),
+    staleTime: 2 * 60 * 1000,
   });
 
-  // Categorías del catálogo
-  const { data: categoriesData } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => fetch('/api/v1/categories').then((r) => r.json()) as Promise<Array<{ id: string; name: string; slug: string }>>,
-    staleTime: 60 * 60 * 1000,
-    enabled: catalogOpen,
-  });
-
-  // Productos filtrados por búsqueda o categoría
-  const searchActive = search.length > 0 || activeCategoryId !== null;
-  const { data: catalogData, isLoading: catalogLoading } = useQuery({
-    queryKey: ['catalog-products', search, activeCategoryId],
-    queryFn: () => catalog.list(search || undefined, activeCategoryId ?? undefined),
+  const busqueda = useQuery({
+    queryKey: ['tienda-buscar', qd],
+    enabled: buscando,
+    queryFn: () => catalog.list(qd).then((r) => r.items.map((p) => toShop(p as unknown as Record<string, unknown>))),
     staleTime: 60 * 1000,
-    enabled: searchActive,
   });
-  const filteredProducts = catalogData?.items ?? [];
 
-  const selectedPrice = (selected as any)?.price ?? 0;
+  const productos = buscando ? busqueda.data ?? [] : lista.data?.pages.flatMap((p) => p.items) ?? [];
+  const total = buscando ? productos.length : lista.data?.pages[0]?.total ?? 0;
+  const cargando = buscando ? busqueda.isLoading : lista.isLoading;
 
-  function handleAddToCart() {
-    if (!selected) return;
-    const prod = selected as any;
-    const petName = selectedPetId ? petsData?.find((p) => p.id === selectedPetId)?.name : null;
-    const finalNotes = [notes, petName ? `Para: ${petName}` : ''].filter(Boolean).join(' | ') || undefined;
-    addItemToCart({
-      product_id: prod.id,
-      sku: prod.sku ?? '',
-      name: prod.name,
-      image_url: prod.image_url ?? null,
-      unit_price: prod.price,
-      quantity: qty,
-      notes: finalNotes,
-    });
-    toast.success(`${prod.name.slice(0, 30)}... agregado al carrito 🛒`);
-    setSelected(null);
-    setQty(1);
-    setNotes('');
-    setSelectedPetId('');
-  }
+  // Carga la siguiente página al acercarse al final, sin botón.
+  const centinela = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = centinela.current;
+    if (!el || buscando) return;
+    const io = new IntersectionObserver((e) => {
+      if (e[0].isIntersecting && lista.hasNextPage && !lista.isFetchingNextPage) lista.fetchNextPage();
+    }, { rootMargin: '600px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [buscando, lista]);
 
-  function shareWhatsApp() {
-    const code = me?.referral_code;
-    if (!code) return;
-    const name = me?.full_name?.split(' ')[0] ?? 'tu amigo';
-    const msg = encodeURIComponent(
-      `¡Hola! 🐾 Te recomiendo Bigotes y Paticas.\nUsa mi código *${code}* al registrarte y los dos ganamos puntos 🎁\n👉 https://mi.bigotesypaticas.com/?ref=${code}`
-    );
-    window.open(`https://wa.me/?text=${msg}`, '_blank');
-  }
-
-  function selectProduct(prod: PublicProduct | TopProduct) {
-    setSelected(prod);
-    setQty(1);
-    setNotes('');
-  }
-
-  function addToCart(prod: PublicProduct | TopProduct) {
-    addItemToCart({
-      product_id: prod.id,
-      sku: (prod as TopProduct).sku ?? '',
-      name: prod.name,
-      image_url: prod.image_url ?? null,
-      unit_price: prod.price,
-      quantity: 1,
-    });
-    toast.success('Producto agregado al carrito 🛒');
-  }
-
-  if (selected) {
-    return (
-      <div className="p-4 pt-6 flex flex-col gap-5">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setSelected(null)}
-            className="p-2 -ml-2 rounded-xl hover:bg-gray-100"
-          >
-            ← Volver
-          </button>
-          <h1 className="font-display text-xl font-bold">Agregar al carrito</h1>
-        </div>
-
-        <div className="card flex items-center gap-4 py-3 border-2 border-primary-700">
-          <div className="h-14 w-14 rounded-xl bg-primary-50 flex items-center justify-center text-2xl shrink-0 overflow-hidden">
-            {(selected as any).image_url ? (
-              <Image
-                src={(selected as any).image_url}
-                alt={(selected as any).name}
-                width={56}
-                height={56}
-                className="h-full w-full object-contain p-1"
-              />
-            ) : (
-              '📦'
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm">{(selected as any).name}</p>
-            <p className="font-bold text-primary-700">{formatCOP(selectedPrice)}</p>
-          </div>
-          <button onClick={() => setSelected(null)} className="text-xs text-muted underline">
-            Cambiar
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 rounded-xl px-4 py-2.5">
-          <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
-          <span>
-            Ganarás <strong>{Math.floor((selectedPrice * qty) / 1_000)} puntos</strong> con este
-            pedido
-          </span>
-        </div>
-
-        {petsData && petsData.length > 0 && (
-          <div>
-            <label className="text-xs font-semibold text-muted uppercase tracking-wide mb-2 block">
-              Para qué mascota (opcional)
-            </label>
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-              <button
-                onClick={() => setSelectedPetId('')}
-                className={cn(
-                  'flex flex-col items-center gap-1.5 min-w-[60px] px-3 py-2 rounded-xl border-2 text-xs font-medium transition-all',
-                  !selectedPetId
-                    ? 'border-primary-700 bg-primary-50 text-primary-700'
-                    : 'border-border text-muted',
-                )}
-              >
-                <span className="text-xl">👥</span>
-                General
-              </button>
-              {petsData.map((pet) => (
-                <button
-                  key={pet.id}
-                  onClick={() => setSelectedPetId(pet.id)}
-                  className={cn(
-                    'flex flex-col items-center gap-1.5 min-w-[60px] px-3 py-2 rounded-xl border-2 text-xs font-medium transition-all',
-                    selectedPetId === pet.id
-                      ? 'border-primary-700 bg-primary-50 text-primary-700'
-                      : 'border-border text-muted',
-                  )}
-                >
-                  <span className="text-xl">{getSpeciesEmoji(pet.species)}</span>
-                  <span className="truncate w-12 text-center">{pet.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div>
-          <label className="text-xs font-semibold text-muted uppercase tracking-wide mb-2 block">
-            Cantidad
-          </label>
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => setQty(Math.max(1, qty - 1))}
-              className="h-10 w-10 rounded-xl border-2 border-border flex items-center justify-center text-xl font-bold"
-            >
-              −
-            </button>
-            <span className="font-bold text-2xl w-8 text-center">{qty}</span>
-            <button
-              type="button"
-              onClick={() => setQty(qty + 1)}
-              className="h-10 w-10 rounded-xl border-2 border-primary-700 bg-primary-50 flex items-center justify-center text-xl font-bold text-primary-700"
-            >
-              +
-            </button>
-            <span className="text-muted text-sm ml-2">= {formatCOP(selectedPrice * qty)}</span>
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold text-muted uppercase tracking-wide mb-2 block">
-            Notas adicionales
-          </label>
-          <textarea
-            className="input-field min-h-[72px] resize-none"
-            placeholder="Sabor, presentación, indicaciones especiales..."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
-
-        <button onClick={handleAddToCart} className="btn-primary">
-          <ShoppingCart className="h-4 w-4" />
-          Agregar al carrito
-        </button>
-        <button
-          onClick={() => { handleAddToCart(); router.push('/pedido'); }}
-          className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl transition flex items-center justify-center gap-2"
-        >
-          Agregar y confirmar pedido →
-        </button>
-      </div>
-    );
-  }
+  const nombreMascota = misPets.length === 1 ? misPets[0].name : null;
+  // Solo productos con foto: un servicio (baño) o una paleta sin foto en la primera
+  // fila de la tienda se ven como error.
+  const repetir = top.filter((p) => p.image_url && !/baño|peluquer/i.test(p.name));
+  const mostrarRepetir = !buscando && !cat && repetir.length > 0;
 
   return (
-    <div className="flex flex-col">
-      {/* Header teal */}
-      <div
-        className="px-5 pt-8 pb-6 text-white rounded-b-3xl"
-        style={{ background: 'linear-gradient(160deg, #187f77, #085041)' }}
-      >
-        <h1 className="font-display text-2xl font-extrabold tracking-tight">¿Qué quieres pedir hoy?</h1>
-        <p className="text-primary-100 text-sm mt-1">Lo que más compras está aquí abajo</p>
-      </div>
-
-      <div className="px-4 pt-4 flex flex-col gap-5 pb-8">
-        {/* Banner invitar */}
-        {me?.referral_code && (
-          <div className="flex items-center gap-3 rounded-2xl px-4 py-3"
-            style={{ backgroundColor: '#f5a641' }}>
-            <span className="text-2xl">⭐</span>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-white text-sm">Invita amigos · Gana 100 pts</p>
-              <p className="text-amber-100 text-xs truncate">
-                Comparte tu código {me.referral_code} por WhatsApp
-              </p>
-            </div>
-            <button
-              onClick={shareWhatsApp}
-              className="bg-white text-amber-700 font-bold text-xs px-3 py-1.5 rounded-xl shrink-0 flex items-center gap-1.5"
-            >
-              <Share2 className="h-3.5 w-3.5" />
-              Compartir
-            </button>
-          </div>
-        )}
-
-        {/* Top 5 */}
-        {(topLoading || topProducts.length > 0) && (
+    <div className="min-h-[100dvh] bg-[#f6f7f5] pb-40">
+      {/* Cabecera fija con buscador */}
+      <div className="sticky top-0 z-30 bg-[#f6f7f5]/90 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
+        <div className="mb-3 flex items-end justify-between pr-12">
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-display font-bold text-foreground">
-                ⚡ Tu top 5 · pide directo
-              </h2>
-              <span className="text-xs text-muted">basado en tu historial</span>
-            </div>
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4">
-              {topLoading
-                ? Array.from({ length: 5 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="min-w-[130px] h-[170px] rounded-2xl bg-gray-100 animate-pulse shrink-0"
-                    />
-                  ))
-                : topProducts.map((prod) => (
-                    <motion.div
-                      key={prod.id}
-                      role="button"
-                      tabIndex={0}
-                      whileTap={{ scale: 0.96 }}
-                      onClick={() => selectProduct(prod as any)}
-                      onKeyDown={(e) => e.key === 'Enter' && selectProduct(prod as any)}
-                      className="min-w-[130px] flex flex-col rounded-2xl border border-border bg-white shadow-sm overflow-hidden shrink-0 text-left hover:shadow-card-hover transition-shadow cursor-pointer"
-                    >
-                      <div className="h-20 bg-gray-50 flex items-center justify-center overflow-hidden">
-                        {prod.image_url ? (
-                          <Image
-                            src={prod.image_url}
-                            alt={prod.name}
-                            width={80}
-                            height={80}
-                            className="h-full w-full object-contain p-1"
-                          />
-                        ) : (
-                          <span className="text-3xl">📦</span>
-                        )}
-                      </div>
-                      <div className="p-2.5 flex flex-col gap-1 flex-1">
-                        <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2">
-                          {prod.name}
-                        </p>
-                        <p className="text-xs font-bold text-primary-700 mt-auto">
-                          {formatCOP(prod.price)}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); addToCart(prod); }}
-                          className="text-[10px] font-bold text-teal-700 bg-teal-50 rounded-lg px-2 py-1 text-center mt-1 w-full hover:bg-teal-100"
-                        >
-                          🛒 Carrito
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-            </div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-700">Tienda</p>
+            <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-tight text-foreground">
+              {nombreMascota ? `Lo mejor para ${nombreMascota}` : '¿Qué necesita tu mascota?'}
+            </h1>
           </div>
-        )}
-
-        {/* Búsqueda */}
+        </div>
         <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-400" />
           <input
-            className="input-field pl-10"
-            placeholder="¿Buscas algo específico? Escribe el nombre del producto..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setActiveCategoryId(null);
-            }}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Busca concentrado, arena, Churu…"
+            inputMode="search"
+            className="h-12 w-full rounded-2xl border-0 bg-white pl-11 pr-10 text-[15px] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_10px_rgba(16,24,40,.05)] outline-none ring-1 ring-black/5 placeholder:text-gray-400 focus:ring-2 focus:ring-primary-700/40"
           />
+          {q && (
+            <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-gray-200 p-1" aria-label="Borrar búsqueda">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
-        {/* Resultados de búsqueda */}
-        <AnimatePresence>
-          {searchActive && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex flex-col gap-2"
-            >
-              {catalogLoading && (
-                <div className="flex justify-center py-4">
-                  <div className="h-6 w-6 rounded-full border-2 border-primary-200 border-t-primary-700 animate-spin" />
-                </div>
-              )}
-              {filteredProducts.map((product, i) => (
-                <motion.div
-                  key={product.id}
-                  role="button"
-                  tabIndex={0}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  onClick={() => selectProduct(product)}
-                  onKeyDown={(e) => e.key === 'Enter' && selectProduct(product)}
-                  className="card flex items-center gap-4 py-3 text-left hover:shadow-card-hover transition-shadow active:scale-[0.98] cursor-pointer"
-                >
-                  <div className="h-12 w-12 rounded-xl bg-primary-50 flex items-center justify-center text-2xl shrink-0 overflow-hidden">
-                    {product.image_url ? (
-                      <Image
-                        src={product.image_url}
-                        alt={product.name}
-                        width={48}
-                        height={48}
-                        className="h-full w-full object-contain p-1"
-                      />
-                    ) : (
-                      '📦'
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm leading-snug">{product.name}</p>
-                    {product.category && (
-                      <p className="text-xs text-muted">
-                        {typeof product.category === 'object'
-                          ? (product.category as { name: string })?.name
-                          : product.category}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-bold text-primary-700 text-sm">{formatCOP(product.price)}</p>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); addToCart(product); }}
-                      className="text-xs text-teal-700 font-semibold bg-teal-50 rounded-lg px-2 py-1 hover:bg-teal-100 transition"
-                    >
-                      🛒 Carrito
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
-              {!catalogLoading && filteredProducts.length === 0 && (
-                <div className="text-center py-6 text-muted">
-                  <p className="text-2xl mb-2">🔍</p>
-                  <p className="text-sm">Sin resultados. Prueba con otro término.</p>
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Portafolio completo — colapsado por defecto */}
-        {!searchActive && (
-          <div className="rounded-2xl border border-border overflow-hidden">
+        {!buscando && (
+          <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 scrollbar-hide">
+            {[{ v: null as string | null, l: 'Todo', e: '✨' }, { v: 'dog', l: 'Perros', e: '🐶' }, { v: 'cat', l: 'Gatos', e: '🐱' }].map((o) => (
+              <button
+                key={o.l}
+                onClick={() => setPetType(o.v)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                  petType === o.v ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 ring-1 ring-black/5'
+                }`}
+              >
+                <span>{o.e}</span>{o.l}
+              </button>
+            ))}
             <button
-              onClick={() => setCatalogOpen(!catalogOpen)}
-              className="w-full flex items-center gap-3 px-4 py-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+              onClick={() => setVerOrden((v) => !v)}
+              className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 ring-1 ring-black/5"
             >
-              <span className="text-2xl">📚</span>
-              <div className="text-left flex-1">
-                <p className="font-bold text-foreground text-sm">Ver portafolio completo</p>
-                <p className="text-xs text-muted">Explora por categorías · 247 productos</p>
-              </div>
-              {catalogOpen ? (
-                <ChevronUp className="h-5 w-5 text-muted" />
-              ) : (
-                <ChevronDown className="h-5 w-5 text-primary-700" />
-              )}
+              <SlidersHorizontal className="h-4 w-4" />{ORDEN.find((o) => o.v === orden)?.l}
             </button>
-
-            <AnimatePresence>
-              {catalogOpen && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
-                  <div className="p-3 border-t border-border">
-                    {/* Grid de categorías */}
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                      {categoriesData
-                        ?.filter((c) => !['sin-categoria'].includes(c.slug))
-                        .map((cat) => (
-                          <button
-                            key={cat.id}
-                            onClick={() => {
-                              setActiveCategoryId(cat.id);
-                              setCatalogOpen(false);
-                            }}
-                            className="flex items-center gap-2.5 rounded-xl border border-border px-3 py-3 bg-white hover:bg-primary-50 hover:border-primary-300 transition-colors text-left"
-                          >
-                            <span className="text-xl">{categoryIcon(cat.slug)}</span>
-                            <span className="text-sm font-semibold text-foreground capitalize">
-                              {cat.name.charAt(0).toUpperCase() + cat.name.slice(1).toLowerCase()}
-                            </span>
-                          </button>
-                        ))}
-                    </div>
-                    <p className="text-xs text-muted text-center italic">
-                      Al tocar una categoría verás todos sus productos
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         )}
+        {verOrden && !buscando && (
+          <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="mt-2 flex flex-wrap gap-2">
+            {ORDEN.map((o) => (
+              <button key={o.v} onClick={() => { setOrden(o.v); setVerOrden(false); }}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${orden === o.v ? 'bg-primary-700 text-white' : 'bg-white text-gray-700 ring-1 ring-black/5'}`}>
+                {o.l}
+              </button>
+            ))}
+          </motion.div>
+        )}
       </div>
+
+      {/* Categorías */}
+      {!buscando && (
+        <div className="-mt-1 grid grid-cols-4 gap-2 px-4 pb-1 pt-1">
+          {CATEGORIAS.map((c) => {
+            const activa = cat === c.slug;
+            return (
+              <motion.button
+                key={c.slug}
+                whileTap={{ scale: 0.94 }}
+                onClick={() => setCat(activa ? null : c.slug)}
+                className={`flex flex-col items-center gap-1 rounded-2xl px-1 py-2.5 transition-colors ${
+                  activa ? 'bg-primary-700 text-white shadow-[0_6px_16px_rgba(24,127,119,.3)]' : 'bg-white text-gray-700 ring-1 ring-black/5'
+                }`}
+              >
+                <span className="text-[22px] leading-none">{c.icono}</span>
+                <span className="text-[11px] font-semibold leading-tight">{c.nombre}</span>
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Lo de siempre */}
+      {mostrarRepetir && (
+        <section className="mt-5">
+          <div className="mb-2.5 flex items-center justify-between px-4">
+            <h2 className="flex items-center gap-1.5 font-display text-[17px] font-bold">
+              <RotateCcw className="h-4 w-4 text-primary-700" /> Lo de siempre
+            </h2>
+            <span className="text-xs text-muted">un toque y listo</span>
+          </div>
+          <div className="-mb-2 flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
+            {repetir.map((p) => (
+              <div key={p.id} className="w-[150px] shrink-0">
+                <ProductCard p={toShop(p as unknown as Record<string, unknown>)} onOpen={setAbierto} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Rejilla */}
+      <section className="mt-5 px-4">
+        <div className="mb-2.5 flex items-baseline justify-between">
+          <h2 className="font-display text-[17px] font-bold">
+            {buscando ? `Resultados para “${qd}”` : cat ? CATEGORIAS.find((c) => c.slug === cat)?.nombre : 'Todo con stock'}
+          </h2>
+          {!cargando && <span className="text-xs text-muted">{total} productos</span>}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {cargando
+            ? Array.from({ length: 6 }).map((_, i) => <ProductCardSkeleton key={i} />)
+            : productos.map((p, i) => (
+                <motion.div
+                  key={p.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.28, delay: Math.min(i % 24, 8) * 0.03, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <ProductCard p={p} onOpen={setAbierto} />
+                </motion.div>
+              ))}
+          {lista.isFetchingNextPage && Array.from({ length: 2 }).map((_, i) => <ProductCardSkeleton key={`m${i}`} />)}
+        </div>
+
+        {!cargando && productos.length === 0 && (
+          <div className="flex flex-col items-center py-14 text-center">
+            <span className="text-5xl">🔎</span>
+            <p className="mt-3 font-semibold">No encontramos eso</p>
+            <p className="mt-1 max-w-[260px] text-sm text-muted">Prueba con la marca o escríbenos por WhatsApp: si no lo tenemos, te lo conseguimos.</p>
+          </div>
+        )}
+        <div ref={centinela} className="h-4" />
+      </section>
+
+      <ProductSheet
+        product={abierto}
+        pets={misPets.map((p) => ({ id: p.id, name: p.name, species: p.species }))}
+        onClose={() => setAbierto(null)}
+      />
+      <CartBar />
     </div>
   );
 }

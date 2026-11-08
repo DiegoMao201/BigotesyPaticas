@@ -47,6 +47,11 @@ class OrderOut(BaseModel):
     notes: str | None
     created_at: str
     points_earned: int | None = None
+    # 8-nov-2026: la lista de pedidos del portal mostraba un emoji de caja en todos.
+    # Ahora trae las fotos de lo que se pidió (hasta 4), cuántos productos y el total.
+    images: list[str] = []
+    items_count: int | None = None
+    total: float | None = None
 
 
 def _order_out(o: PortalOrder, points: int | None = None) -> OrderOut:
@@ -87,7 +92,50 @@ async def list_orders(
         .scalars()
         .all()
     )
-    return [_order_out(o) for o in rows]
+    out = [_order_out(o) for o in rows]
+    if not rows:
+        return out
+    ids = [o.id for o in rows]
+    items = (
+        await db.execute(
+            select(
+                PortalOrderItem.portal_order_id,
+                PortalOrderItem.quantity,
+                PortalOrderItem.subtotal,
+                func.coalesce(PortalOrderItem.image_url, Product.primary_image_url),
+            )
+            .outerjoin(Product, Product.id == PortalOrderItem.product_id)
+            .where(PortalOrderItem.portal_order_id.in_(ids))
+        )
+    ).all()
+    por_pedido: dict = {}
+    for oid, qty, sub, img in items:
+        d = por_pedido.setdefault(oid, {"imgs": [], "n": 0, "total": 0.0})
+        d["n"] += int(qty or 0)
+        d["total"] += float(sub or 0)
+        if img and img not in d["imgs"] and len(d["imgs"]) < 4:
+            d["imgs"].append(img)
+    # pedidos viejos de un solo producto, sin ítems: la foto actual del producto
+    sueltos = [o.product_id for o in rows if o.id not in por_pedido and o.product_id]
+    fotos = {}
+    if sueltos:
+        fotos = dict(
+            (
+                await db.execute(
+                    select(Product.id, Product.primary_image_url).where(Product.id.in_(sueltos))
+                )
+            ).all()
+        )
+    for o, r in zip(rows, out):
+        d = por_pedido.get(o.id)
+        if d:
+            r.images, r.items_count, r.total = d["imgs"], d["n"], round(d["total"], 2)
+        else:
+            img = fotos.get(o.product_id) if o.product_id else None
+            r.images = [img] if img else []
+            r.items_count = o.quantity
+            r.total = float(o.unit_price or 0) * (o.quantity or 1) if o.unit_price else None
+    return out
 
 
 @router.post("", response_model=OrderOut, status_code=status.HTTP_201_CREATED)

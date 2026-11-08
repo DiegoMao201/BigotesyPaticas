@@ -6,6 +6,8 @@
  * Sale una vez por sesión en el inicio del portal (no interrumpe si ya está reservando).
  */
 import { useEffect, useState } from 'react';
+import { useAuthStore } from '@/lib/auth-store';
+import { tomarTurno } from '@/lib/turno';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
@@ -16,16 +18,17 @@ export function PromoGroomer() {
   const pathname = usePathname();
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
+  const terminos = useAuthStore((s) => s.customer?.terms_accepted_at);
 
   useEffect(() => {
-    if (pathname !== '/dashboard') return;
+    if (pathname !== '/dashboard' || !terminos) return;
     try {
       if (sessionStorage.getItem(CLAVE)) return;
       sessionStorage.setItem(CLAVE, '1');
     } catch { /* sin storage: igual se muestra */ }
-    const t = setTimeout(() => setAbierto(true), 600);
+    const t = setTimeout(() => { if (tomarTurno('promo')) setAbierto(true); }, 600);
     return () => clearTimeout(t);
-  }, [pathname]);
+  }, [pathname, terminos]);
 
   function reservar() {
     setAbierto(false);

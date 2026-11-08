@@ -20,6 +20,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const router = useRouter();
   const { setCustomer } = useAuthStore();
   const pathname = usePathname();
+  const enTienda = pathname === '/orders/new';
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['portal-me'],
@@ -48,10 +49,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       </div>
 
       {children}
-      <CartButton />
+      {/* En la tienda manda la barra del carrito: tres botones flotantes encima de la
+          rejilla tapaban precios y el "+" (8-nov-2026). WhatsApp sigue en el detalle
+          y en "no encontramos eso". */}
+      {!enTienda && <CartButton />}
       <BottomNav />
-      <SOSButton />
-      <WhatsAppButton />
+      {!enTienda && <SOSButton />}
+      {!enTienda && <WhatsAppButton />}
 
       {/* Modal de términos — solo primera vez */}
       <TermsModal />
