@@ -335,6 +335,49 @@ async def products_feed_xml(db: DBSession) -> Response:
         if peso > 0:
             ET.SubElement(item, "g:shipping_weight").text = f"{max(0.3, round(peso * 1.1, 2))} kg"
 
+        # ENVÍO POR CIUDAD (8-nov-2026). Lo del 17-oct dejó el envío SOLO en la cuenta, y la
+        # cuenta solo tiene el servicio nacional por peso: en la búsqueda "churu gato pereira"
+        # Google mostraba "Entrega por $21 k" en Pereira, al lado de un competidor con $8.000.
+        # Merchant no admite regiones por código postal en Colombia (las regiones salen
+        # shippingEligible=false), así que el domicilio local va aquí, por ciudad, con el
+        # location_id de Google Ads (Pereira 1003665, Dosquebradas 1029306) y la misma
+        # regla del store (lib/delivery.ts): gratis desde $30.000, si no $5.000. Como lo
+        # que declara el producto PISA la configuración de la cuenta para todo el país,
+        # también va el nacional por peso, con la MISMA tabla que tiene la cuenta.
+        peso_env = max(0.3, round(peso * 1.1, 2)) if peso > 0 else None
+        if peso_env is None and cat_name != "MEDICAMENTOS":
+            # sin peso registrado: el del nombre ("15 KG", "7lb", "3K"); los medicamentos
+            # no, porque "Stomizol 20kg" es para perros de 20 kg, no pesa 20 kg
+            u = _unidad_de_venta(p["name"])
+            if u:
+                peso_env = max(0.3, round(float(u[0]) * 1.1, 2))
+        peso_env = peso_env or 0.3
+        for tope, tarifa in ((1, 21000), (2, 24000), (3, 26000), (5, 32000), (10, 45000), (25, 48000)):
+            if peso_env <= tope:
+                nacional = tarifa
+                break
+        else:
+            nacional = 50000
+        local = 0 if price >= 30000 else 5000
+        for loc_id in ("1003665", "1029306"):          # Pereira, Dosquebradas
+            sh = ET.SubElement(item, "g:shipping")
+            ET.SubElement(sh, "g:country").text = "CO"
+            ET.SubElement(sh, "g:location_id").text = loc_id
+            ET.SubElement(sh, "g:service").text = "Domicilio Pereira y Dosquebradas"
+            ET.SubElement(sh, "g:price").text = f"{local:.2f} COP"
+            ET.SubElement(sh, "g:min_handling_time").text = "0"
+            ET.SubElement(sh, "g:max_handling_time").text = "0"
+            ET.SubElement(sh, "g:min_transit_time").text = "0"
+            ET.SubElement(sh, "g:max_transit_time").text = "1"
+        sh = ET.SubElement(item, "g:shipping")
+        ET.SubElement(sh, "g:country").text = "CO"
+        ET.SubElement(sh, "g:service").text = "Envío nacional por transportadora"
+        ET.SubElement(sh, "g:price").text = f"{nacional:.2f} COP"
+        ET.SubElement(sh, "g:min_handling_time").text = "1"
+        ET.SubElement(sh, "g:max_handling_time").text = "2"
+        ET.SubElement(sh, "g:min_transit_time").text = "1"
+        ET.SubElement(sh, "g:max_transit_time").text = "5"
+
         # Lo que Merchant Center pedía: los detalles por los que la gente filtra.
         # Van como atributos, no solo dentro del texto, para que Google los entienda.
         for nombre_attr, valor_attr in detalles:
