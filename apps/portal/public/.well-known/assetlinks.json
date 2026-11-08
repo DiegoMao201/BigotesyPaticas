@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.bigotesypaticas.app",
+      "sha256_cert_fingerprints": ["4A:7A:EC:E4:D3:FB:A1:1A:3A:FA:E7:36:88:85:A9:3C:B0:33:59:B0:3D:66:CF:49:4B:72:5D:19:99:53:DE:F9"]
+    }
+  }
+]
