@@ -8,6 +8,8 @@ import { LogOut, Star, ChevronRight, LifeBuoy, ShoppingBag, CalendarClock, Insta
 import { auth, portalLocation } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { PageHeader } from '@/components/ui/page-header';
+import { EliminarCuenta } from '@/components/portal/EliminarCuenta';
+import { HuellaPerfil } from '@/components/auth/Huella';
 import { cn } from '@/lib/utils';
 
 const PREF_ITEMS = [
@@ -151,6 +153,8 @@ export default function ProfilePage() {
         ))}
       </div>
 
+      <HuellaPerfil />
+
       {/* Logout */}
       <button
         onClick={handleLogout}
@@ -160,6 +164,8 @@ export default function ProfilePage() {
         <LogOut className="h-4 w-4" />
         {loggingOut ? 'Cerrando sesión...' : 'Cerrar sesión'}
       </button>
+
+      <EliminarCuenta />
     </div>
   );
 }

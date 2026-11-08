@@ -74,7 +74,7 @@ async def get_portal_customer(
             )
         )
     ).scalar_one_or_none()
-    if not customer:
+    if not customer or (customer.extra or {}).get("eliminacion"):
         raise HTTPException(status_code=401, detail="Cliente no encontrado")
     return customer
 
@@ -258,6 +258,12 @@ async def login(payload: LoginRequest, response: Response, db: DBSession) -> Log
     ).scalar_one_or_none()
 
     is_new = False
+
+    if customer and (customer.extra or {}).get("eliminacion"):
+        raise HTTPException(
+            status_code=403,
+            detail="Esta cuenta se cerró porque pediste eliminarla. Si quieres volver, escríbenos por WhatsApp al 320 687 6633.",
+        )
 
     if customer:
         # Verificar teléfono
@@ -530,3 +536,90 @@ async def accept_terms(
     await db.commit()
     await db.refresh(customer)
     return _me_response(customer)
+
+
+# ── Eliminación de cuenta (8-nov-2026) ─────────────────────────────────
+# Google Play y la App Store EXIGEN que el cliente pueda borrar su cuenta desde la app
+# (Apple 5.1.1(v)) y desde una página web (Play, "Data deletion"). La Ley 1581 de 2012
+# le da además el derecho de supresión, con 15 días hábiles para atenderlo.
+#
+# Qué pasa al pedirlo, de inmediato:
+#   · se cierran TODAS las sesiones y la cuenta ya no puede entrar
+#   · se borra la ubicación guardada y se apagan las notificaciones
+#   · llega un correo a la tienda para terminar el borrado
+# Qué NO se borra: las facturas y ventas (la DIAN obliga a conservarlas). Eso se le dice
+# al cliente antes de confirmar, sin letra pequeña.
+#
+# Para la web (sin sesión) se pide cédula + teléfono, y la respuesta es SIEMPRE la misma
+# exista o no la cuenta: así nadie puede usar el formulario para averiguar quién es cliente.
+
+
+class DeleteAccountRequest(BaseModel):
+    confirm: str
+
+
+class PublicDeleteRequest(BaseModel):
+    document_id: str
+    phone: str
+
+
+_MSG_ELIMINACION = (
+    "Recibimos tu solicitud. Tu cuenta quedó cerrada y en máximo 15 días hábiles "
+    "eliminamos tus datos personales y los de tus mascotas. Las facturas de tus compras "
+    "se conservan porque la ley nos obliga."
+)
+
+
+async def _cerrar_cuenta(db, customer: Customer, origen: str) -> None:
+    extra = dict(customer.extra or {})
+    extra["eliminacion"] = {"solicitada_en": datetime.now(UTC).isoformat(), "origen": origen}
+    customer.extra = extra
+    customer.last_lat = None
+    customer.last_lng = None
+    customer.last_location_at = None
+    customer.notification_prefs = {"push": False, "email": False, "whatsapp": False}
+    await db.execute(delete(PortalSession).where(PortalSession.customer_id == customer.id))
+    await db.commit()
+    try:
+        from app.services.email import send_email
+
+        send_email(
+            "bigotesypaticasdosquebradas@gmail.com",
+            f"Solicitud de eliminación de cuenta — {customer.full_name or customer.document_id}",
+            (
+                f"<p>El cliente <b>{customer.full_name or '(sin nombre)'}</b> (cédula {customer.document_id}, "
+                f"tel. {customer.phone}) pidió eliminar su cuenta desde <b>{origen}</b>.</p>"
+                "<p>Ya no puede entrar y su ubicación quedó borrada. Falta borrar sus datos "
+                "personales y mascotas conservando las facturas. Plazo legal: 15 días hábiles "
+                "(Ley 1581 de 2012).</p>"
+            ),
+        )
+    except Exception:  # noqa: BLE001 — el aviso no debe impedir el cierre
+        pass
+
+
+@router.post("/me/delete")
+async def delete_my_account(
+    payload: DeleteAccountRequest,
+    response: Response,
+    db: DBSession,
+    customer: Customer = PortalUser,
+) -> dict:
+    if payload.confirm.strip().upper() != "ELIMINAR":
+        raise HTTPException(status_code=400, detail="Escribe ELIMINAR para confirmar")
+    await _cerrar_cuenta(db, customer, "la app")
+    response.delete_cookie(_COOKIE)
+    return {"ok": True, "message": _MSG_ELIMINACION}
+
+
+@router.post("/delete-request")
+async def public_delete_request(payload: PublicDeleteRequest, db: DBSession) -> dict:
+    doc = payload.document_id.strip()
+    customer = (
+        await db.execute(
+            select(Customer).where(and_(Customer.document_id == doc, Customer.deleted_at == None))  # noqa: E711
+        )
+    ).scalar_one_or_none()
+    if customer and _phones_match(customer.phone, payload.phone.strip()) and not (customer.extra or {}).get("eliminacion"):
+        await _cerrar_cuenta(db, customer, "la página web")
+    return {"ok": True, "message": _MSG_ELIMINACION}

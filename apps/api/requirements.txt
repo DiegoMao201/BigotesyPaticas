@@ -62,3 +62,4 @@ replicate>=0.34.0
 # PDF carnet — QR + cálculo edad relativa
 qrcode[pil]==7.4.2
 python-dateutil==2.9.0
+webauthn==2.7.0

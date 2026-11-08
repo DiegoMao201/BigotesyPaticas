@@ -65,6 +65,9 @@ export const auth = {
       body: JSON.stringify({ document_id, phone }),
     }),
   logout: () => request<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
+  /** Cierra la cuenta y pide borrar los datos (exigido por Play Store y App Store). */
+  deleteAccount: () =>
+    request<{ ok: boolean; message: string }>('/auth/me/delete', { method: 'POST', body: JSON.stringify({ confirm: 'ELIMINAR' }) }),
   me: () => request<MeResponse>('/auth/me'),
   updateMe: (data: Partial<MeResponse>) =>
     request<MeResponse>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),

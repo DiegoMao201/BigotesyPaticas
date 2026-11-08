@@ -38,6 +38,7 @@ from app.api.v1 import (
     public_orders,
     public_shipping,
     portal_auth,
+    portal_acceso,
     portal_bookings,
     portal_intelligence,
     portal_location,
@@ -97,6 +98,7 @@ api_router.include_router(purchases.router, prefix="/v1")
 api_router.include_router(purchases_xml.router, prefix="/v1")
 # Portal de fidelización — rutas bajo /v1/portal/...
 api_router.include_router(portal_auth.router, prefix="/v1")
+api_router.include_router(portal_acceso.router, prefix="/v1")
 api_router.include_router(portal_pets.router, prefix="/v1")
 api_router.include_router(portal_orders.router, prefix="/v1")
 api_router.include_router(portal_appointments.router, prefix="/v1")

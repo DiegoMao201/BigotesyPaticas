@@ -11,6 +11,8 @@ import { useAuthStore } from '@/lib/auth-store';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { Logo } from '@/components/brand/Logo';
+import { AccesoRapido } from '@/components/auth/AccesoRapido';
+import { google as googleApi } from '@/lib/passkeys';
 
 const VIDEO_MP4  = process.env.NEXT_PUBLIC_LOGIN_VIDEO_MP4  ?? '';
 const VIDEO_WEBM = process.env.NEXT_PUBLIC_LOGIN_VIDEO_WEBM ?? '';
@@ -45,6 +47,8 @@ function LoginPageInner() {
   const [loading,   setLoading]   = useState(false);
   const [muted,     setMuted]     = useState(true);
   const [expanded,  setExpanded]  = useState(false);
+  // Primera vez con Google: se une con la cédula una sola vez (8-nov-2026)
+  const [linkToken, setLinkToken] = useState<string | null>(null);
 
   const [doc,   setDoc]   = useState('');
   const [phone, setPhone] = useState('');
@@ -74,7 +78,19 @@ function LoginPageInner() {
 
     setLoading(true);
     try {
-      const resp = await auth.login(doc.trim(), phone.trim());
+      const resp = linkToken
+        ? await googleApi.link<LoginResponse>(linkToken, doc.trim(), phone.trim())
+        : await auth.login(doc.trim(), phone.trim());
+      await continuar(resp);
+    } catch (err: any) {
+      toast.error(err.message ?? 'Error al iniciar sesión');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function continuar(resp: LoginResponse) {
+    {
       setLoginData(resp);
 
       if (resp.has_pets && !resp.full_name) {
@@ -96,10 +112,6 @@ function LoginPageInner() {
       }
 
       router.replace(destino);
-    } catch (err: any) {
-      toast.error(err.message ?? 'Error al iniciar sesión');
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -237,7 +249,7 @@ function LoginPageInner() {
                       className="flex flex-col gap-3 overflow-hidden"
                     >
                       <p className="text-gray-400 text-sm -mt-1">
-                        Usa tu cédula y teléfono registrado en la tienda.
+                        {linkToken ? 'Último paso: tu cédula y teléfono, para unir Google con tus compras y puntos.' : 'Usa tu cédula y teléfono registrado en la tienda.'}
                       </p>
 
                       <div className="relative">
@@ -286,6 +298,17 @@ function LoginPageInner() {
                     </>
                   )}
                 </motion.button>
+
+                {!linkToken && (
+                  <AccesoRapido
+                    onLogin={(r) => { continuar(r).catch((e) => toast.error(e.message)); }}
+                    onLinkRequerido={(t) => {
+                      setLinkToken(t);
+                      setExpanded(true);
+                      toast('Une tu cuenta de Google', { description: 'Escribe tu cédula y teléfono una sola vez; la próxima entras con un toque.' });
+                    }}
+                  />
+                )}
 
                 <p className="text-center text-xs text-gray-400 mt-1">
                   ¿Primera vez?{' '}
