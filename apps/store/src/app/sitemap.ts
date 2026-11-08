@@ -124,7 +124,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (landingsData) {
     landingPages.push(
       ...landingsData
-        .filter((l) => !l.slug.startsWith('test-'))
+        // 7-nov-2026: las dos landings que ceden su canonical a /pereira-dosquebradas-mascotas
+        // no se anuncian en el sitemap (ver CANONICAL_A en landing/[slug]/page.tsx).
+        .filter((l) => !l.slug.startsWith('test') && !['tienda-mascotas-risaralda', 'mejor-tienda-mascotas-pereira'].includes(l.slug))
         .map((l) => ({
           url: `${BASE}/landing/${l.slug}`,
           lastModified: l.updated_at ? new Date(l.updated_at) : now,

@@ -11,6 +11,25 @@ export const revalidate = 3600; // 1 hora
 
 interface Props { params: { slug: string } }
 
+// 7-nov-2026 (Search Console, 90 días): «tienda de mascotas pereira» se repartía entre
+// CINCO páginas nuestras y «tienda de mascotas dosquebradas» entre tres. Estas dos landings
+// dicen lo mismo que /pereira-dosquebradas-mascotas, así que le ceden la autoridad con el
+// canonical en vez de competirle. Tampoco van en el sitemap.
+const CANONICAL_A: Record<string, string> = {
+  'tienda-mascotas-risaralda': 'https://bigotesypaticas.com/pereira-dosquebradas-mascotas',
+  'mejor-tienda-mascotas-pereira': 'https://bigotesypaticas.com/pereira-dosquebradas-mascotas',
+};
+
+// Landings de MARCA: muestran los productos reales de esa marca que hay en stock
+// (brand_normalized), no una categoría entera. Search Console 28 d: «monello perros» 30
+// impresiones, «royal canin» 22, «purina pro plan» 17, todas en puesto ~13 y sin clics.
+const MARCA_DE: Record<string, string> = {
+  'royal-canin-pereira': 'royal_canin',
+  'pro-plan-dosquebradas': 'pro_plan,proplan,purina_pro_plan',
+  'hills-pereira': 'hills,hills_v2',
+  'monello-pereira': 'monello',
+};
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const landing = await storeApi.landingBySlug(params.slug);
   if (!landing) return { title: 'Página no encontrada | Bigotes y Paticas' };
@@ -19,7 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // El title del DB ya incluye la marca — usar absolute para no duplicarla con el template del layout
     title: { absolute: landing.title },
     description: landing.meta_description ?? undefined,
-    alternates: { canonical: `https://bigotesypaticas.com/landing/${landing.slug}` },
+    alternates: { canonical: CANONICAL_A[landing.slug] ?? `https://bigotesypaticas.com/landing/${landing.slug}` },
     openGraph: {
       title: landing.title,
       description: landing.meta_description ?? undefined,
@@ -32,9 +51,14 @@ export default async function LandingPage({ params }: Props) {
   const landing = await storeApi.landingBySlug(params.slug);
   if (!landing) notFound();
 
-  const products = landing.category_slug
-    ? await storeApi.list({ category_slug: landing.category_slug, per_page: 8 })
-    : { items: [], total: 0, page: 1, per_page: 8 };
+  const marca = MARCA_DE[landing.slug];
+  const products = marca
+    ? await storeApi
+        .catalogFiltered({ brand: marca, in_stock: true, page_size: 12 })
+        .then((r) => ({ items: r.items, total: r.total, page: r.page, per_page: r.page_size }))
+    : landing.category_slug
+      ? await storeApi.list({ category_slug: landing.category_slug, per_page: 8 })
+      : { items: [], total: 0, page: 1, per_page: 8 };
 
   const pageUrl = `https://bigotesypaticas.com/landing/${landing.slug}`;
 

@@ -10,9 +10,12 @@ export const metadata: Metadata = {
   // 19-sep-2026: Pereira primero (216 impresiones vs 131 de Dosquebradas en
   // Search Console) y "domicilio el mismo día" en el título, que es lo que
   // diferencia de las tiendas que salen al lado. Descripción ≤155 caracteres.
-  title: { absolute: 'Tienda de Mascotas Pereira y Dosquebradas · Domicilio Hoy' },
+  // 7-nov-2026: esta página se queda con PEREIRA y con «pet shop» («pet shop pereira» 34
+  // impresiones y «pet store near me» 248, ambas con CERO clics); la portada se queda con
+  // Dosquebradas. Antes las dos decían "Pereira y Dosquebradas" y se repartían la búsqueda.
+  title: { absolute: 'Tienda de Mascotas y Pet Shop en Pereira · Domicilio Hoy' },
   description:
-    'Tienda de mascotas en Samara Plaza Mall, Dosquebradas, con domicilio en Pereira. Concentrado, accesorios y medicamentos. 5,0 ★ en Google. Envío gratis.',
+    'Pet shop con domicilio el mismo día en Pereira. Concentrado, accesorios y medicamentos para perros y gatos. 5,0 ★ en Google. Envío gratis desde $30.000.',
   keywords: [
     'pet shop Pereira', 'petshop Pereira', 'pet shop Dosquebradas',
     'domicilio pet shop Pereira', 'pet shop domicilio Risaralda',

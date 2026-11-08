@@ -40,7 +40,11 @@ export const metadata: Metadata = {
     // asi que se le deja esa consulta a ella y la portada se queda con la
     // marca y el producto, que es lo que de verdad aterriza aqui
     // ("bigotes y patitas" puesto 2,7).
-    default: 'Bigotes y Paticas · Concentrado y Accesorios con Domicilio',
+    // 7-nov-2026, Search Console (90 días): la portada YA compite por «tienda de mascotas
+    // dosquebradas» (317 impresiones, 9 clics, puesto 7,4) contra /pereira-dosquebradas-
+    // mascotas (327 / 8). Como la tienda está físicamente en Dosquebradas, la portada se
+    // queda con Dosquebradas y la landing con Pereira + pet shop: una búsqueda, una página.
+    default: 'Tienda de Mascotas en Dosquebradas · Domicilio Hoy | Bigotes y Paticas',
     // 22-sep-2026: la plantilla sumaba 31 caracteres a CADA titulo y Google corta
     // hacia los 60: el nombre de la pagina se perdia. "Pet Shop" sobra aqui,
     // ya va en los titulos que lo necesitan.

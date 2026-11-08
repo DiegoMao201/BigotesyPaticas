@@ -3,8 +3,10 @@ import Link from 'next/link';
 import { FollowUsSection } from '@/components/social/SocialLinks';
 
 export const metadata = {
-  title: 'Nuestra historia',
-  description: 'Conoce a Bigotes y Paticas, la tienda de mascotas premium en Dosquebradas y Pereira.',
+  // 7-nov-2026: "Nuestra historia" salió 110 veces en Google y nadie hizo clic (0 %).
+  title: 'Quiénes somos · Samara Plaza Mall, Dosquebradas',
+  description:
+    'La tienda de mascotas de Samara Plaza Mall, Dosquebradas, con domicilio en Pereira: quiénes somos, dónde estamos, horario y cómo atendemos a perros y gatos.',
   alternates: { canonical: 'https://bigotesypaticas.com/nosotros' },
 };
 

@@ -30,7 +30,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!post) return { title: 'Artículo no encontrado | Bigotes y Paticas' };
 
   return {
-    title: post.meta_title || `${post.title} | Bigotes y Paticas`,
+    // 7-nov-2026: meta_title ya traía "| Bigotes y Paticas" y la plantilla del layout lo
+    // sumaba OTRA vez: Google mostraba la marca dos veces en todos los artículos
+    // (Search Console: 1.274 impresiones y 9 clics en el de Hill's vs Royal Canin).
+    title: {
+      absolute:
+        (post.meta_title || post.title).replace(/(\s*\|\s*Bigotes y Paticas)+\s*$/i, '') +
+        ' | Bigotes y Paticas',
+    },
     description: post.meta_description || post.excerpt || '',
     keywords: post.keywords,
     alternates: { canonical: `https://bigotesypaticas.com/blog/${post.slug}` },
