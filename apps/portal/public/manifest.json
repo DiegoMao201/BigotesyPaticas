@@ -1,8 +1,8 @@
 {
-  "name": "Mi Bigotes y Paticas",
+  "name": "Bigotes y Paticas",
   "short_name": "Bigotes",
-  "description": "Tu cuenta de fidelización Bigotes y Paticas",
-  "start_url": "/",
+  "description": "Tienda de mascotas con domicilio el mismo día en Pereira y Dosquebradas: concentrado, snacks, arena y salud para perros y gatos, citas de peluquería, carnet de tus mascotas y puntos en cada compra.",
+  "start_url": "/dashboard?utm_source=app",
   "display": "standalone",
   "background_color": "#0d4a45",
   "theme_color": "#187f77",
@@ -39,22 +39,71 @@
     {
       "name": "Reportar mascota perdida",
       "url": "/sos/new",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Mis mascotas",
       "url": "/pets",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Hacer un pedido",
       "url": "/orders/new",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Directorio de aliados",
       "url": "/servicios",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "id": "/",
+  "categories": [
+    "shopping",
+    "lifestyle"
+  ],
+  "prefer_related_applications": false,
+  "screenshots": [
+    {
+      "src": "/screenshots/tienda.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "La tienda con todo para tu mascota"
+    },
+    {
+      "src": "/screenshots/producto.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Detalle del producto"
+    },
+    {
+      "src": "/screenshots/carrito.png",
+      "sizes": "780x1688",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Tu carrito siempre a la vista"
     }
   ]
 }
