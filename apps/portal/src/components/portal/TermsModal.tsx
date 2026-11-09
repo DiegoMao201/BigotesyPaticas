@@ -107,16 +107,35 @@ export function TermsModal() {
                   label: (
                     <>
                       He leído y acepto los{' '}
-                      <span className="text-primary-700 font-semibold underline cursor-pointer">
+                      <a
+                        href="https://bigotesypaticas.com/terminos"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-primary-700 font-semibold underline"
+                      >
                         términos de uso
-                      </span>
+                      </a>
                     </>
                   ),
                 },
                 {
                   checked: dataOk,
                   onChange: () => setDataOk((v) => !v),
-                  label: 'Autorizo el tratamiento de mis datos personales',
+                  label: (
+                    <>
+                      Autorizo el tratamiento de mis datos personales según la{' '}
+                      <a
+                        href="https://bigotesypaticas.com/politica-privacidad"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-primary-700 font-semibold underline"
+                      >
+                        política de privacidad
+                      </a>
+                    </>
+                  ),
                 },
               ].map(({ checked, onChange, label }, i) => (
                 <button

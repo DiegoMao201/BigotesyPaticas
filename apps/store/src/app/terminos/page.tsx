@@ -12,9 +12,20 @@ export default function TerminosPage() {
   return (
     <div className="container-tight py-16 max-w-3xl">
       <h1 className="text-3xl font-display font-bold mb-2">Términos y Condiciones</h1>
-      <p className="text-muted-foreground text-sm mb-8">Última actualización: junio 2026</p>
+      <p className="text-muted-foreground text-sm mb-8">Última actualización: 8 de noviembre de 2026</p>
 
       <div className="prose prose-sm max-w-none space-y-6 text-gray-700 leading-relaxed">
+        <section>
+          <h2 className="text-xl font-bold text-gray-900 mb-3">Quién vende</h2>
+          <p>
+            <strong>Diego Mauricio García Rengifo</strong>, persona natural, NIT 1088266407-7, propietario del establecimiento
+            de comercio <strong>Bigotes y Paticas</strong> (matrícula mercantil 68875, Cámara de Comercio de Dosquebradas).
+            Dirección para notificaciones: Cl. 15 #3A-07, C.C. Samara Plaza, Local 2, Dosquebradas, Risaralda, Colombia.
+            Correo: bigotesypaticasdosquebradas@gmail.com · WhatsApp +57 320 687 6633. Estos términos aplican a la web,
+            al portal mi.bigotesypaticas.com y a la app Bigotes y Paticas.
+          </p>
+        </section>
+
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-3">1. Aceptación</h2>
           <p>
@@ -36,8 +47,8 @@ export default function TerminosPage() {
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-3">3. Precios y disponibilidad</h2>
           <ul className="list-disc pl-5 space-y-1">
-            <li>Los precios están expresados en pesos colombianos (COP) e incluyen IVA cuando aplica</li>
-            <li>Nos reservamos el derecho de modificar precios sin previo aviso</li>
+            <li>Los precios publicados son precios finales en pesos colombianos (COP). Bigotes y Paticas no es responsable de IVA, por lo que no se suma IVA al precio</li>
+            <li>Los precios pueden cambiar, pero el precio que pagas es el que se mostró al confirmar tu pedido</li>
             <li>La disponibilidad de productos está sujeta a existencias en inventario</li>
             <li>En caso de agotamiento de un producto pedido, le contactaremos para ofrecerle alternativas</li>
           </ul>
@@ -100,14 +111,25 @@ export default function TerminosPage() {
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-3">7. Limitación de responsabilidad</h2>
           <p>
-            Bigotes y Paticas no se hace responsable por daños indirectos derivados del uso de los
-            productos. Todos nuestros productos son distribuidos por marcas reconocidas con registro
+            Sin perjuicio de la garantía legal y de los derechos que te da la Ley 1480 de 2011, Bigotes y
+            Paticas no responde por daños derivados del uso indebido de los productos o contrario a sus
+            instrucciones. Todos nuestros productos son distribuidos por marcas reconocidas con registro
             ICA o INVIMA vigente según corresponda.
           </p>
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-3">8. Ley aplicable</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-3">8. Tus derechos como consumidor</h2>
+          <p>
+            Tienes derecho de <strong>retracto</strong> (5 días hábiles desde la entrega), a la <strong>reversión del pago</strong>{' '}
+            en compras en línea y a la <strong>garantía legal</strong>, según la Ley 1480 de 2011 (Estatuto del Consumidor).
+            Cómo ejercerlos está en la <Link href="/devoluciones" className="text-teal-600 hover:underline">política de devoluciones y retracto</Link>.
+            La autoridad de protección al consumidor es la Superintendencia de Industria y Comercio (www.sic.gov.co).
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold text-gray-900 mb-3">9. Ley aplicable</h2>
           <p>
             Estos términos se rigen por las leyes de la República de Colombia. Cualquier disputa
             será resuelta en los tribunales de Pereira, Risaralda.
@@ -117,7 +139,7 @@ export default function TerminosPage() {
 
       <div className="mt-10 pt-6 border-t border-border flex gap-4 text-sm text-muted-foreground">
         <Link href="/politica-privacidad" className="hover:text-brand">Política de Privacidad</Link>
-        <Link href="/devoluciones" className="hover:text-brand">Política de Devoluciones</Link>
+        <Link href="/devoluciones" className="hover:text-brand">Devoluciones y retracto</Link>
         <Link href="/contacto" className="hover:text-brand">Contacto</Link>
       </div>
     </div>

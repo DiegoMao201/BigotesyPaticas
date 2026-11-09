@@ -77,9 +77,9 @@ export default function NosotrosPage() {
 
         <div className="mt-8 rounded-2xl border border-gray-200 bg-gray-50 p-5 text-sm text-gray-600 space-y-1">
           <p className="font-semibold text-gray-800 mb-2">Información legal</p>
-          <p><span className="font-medium text-gray-700">Razón social:</span> Diego Mauricio García — Bigotes y Paticas</p>
+          <p><span className="font-medium text-gray-700">Titular:</span> Diego Mauricio García Rengifo, persona natural, propietario del establecimiento Bigotes y Paticas (matrícula mercantil 68875, Cámara de Comercio de Dosquebradas)</p>
           <p><span className="font-medium text-gray-700">NIT:</span> 1088266407-7</p>
-          <p><span className="font-medium text-gray-700">Régimen:</span> Simple de Tributación</p>
+          <p><span className="font-medium text-gray-700">Régimen:</span> Ordinario · No responsable de IVA</p>
           <p><span className="font-medium text-gray-700">Dirección:</span> Samara Plaza Mall, Cl. 15 #3A-07 Local 2, Dosquebradas, Risaralda, C.P. 661001</p>
           <p className="text-xs text-gray-500 mt-2">
             Cumplimos con la <Link href="/politica-privacidad" className="underline hover:text-teal-600">Ley 1581 de 2012</Link> (protección de datos) y los{' '}

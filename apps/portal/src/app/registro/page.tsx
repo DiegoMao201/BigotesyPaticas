@@ -270,7 +270,10 @@ export default function RegistroPage() {
                   Al registrarte aceptas que Bigotes y Paticas almacene y use tus datos personales para
                   gestionar tu cuenta, enviarte información sobre tus pedidos, y brindarte una experiencia
                   personalizada. Puedes solicitar la eliminación de tus datos en cualquier momento.
-                  Política de privacidad disponible en bigotesypaticas.com.
+                  Lee la{' '}
+                  <a href="https://bigotesypaticas.com/politica-privacidad" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary-700 underline">política de privacidad</a>{' '}
+                  y los{' '}
+                  <a href="https://bigotesypaticas.com/terminos" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary-700 underline">términos</a>.
                 </div>
                 <label className="flex items-start gap-3 cursor-pointer group">
                   <div className={cn(

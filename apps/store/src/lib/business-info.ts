@@ -137,8 +137,8 @@ export const BUSINESS_INFO = {
   legal: {
     nit: "1088266407",
     nitFormatted: "NIT 1088266407-7",
-    owner: "Diego Mauricio García",
-    regime: "Régimen Simple de Tributación",
+    owner: "Diego Mauricio García Rengifo",
+    regime: "Régimen ordinario · No responsable de IVA",
     dataProtectionLaw: "Ley 1581 de 2012",
     privacyEmail: "bigotesypaticasdosquebradas@gmail.com",
   },

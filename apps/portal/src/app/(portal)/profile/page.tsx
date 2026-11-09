@@ -10,6 +10,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { PageHeader } from '@/components/ui/page-header';
 import { EliminarCuenta } from '@/components/portal/EliminarCuenta';
 import { HuellaPerfil } from '@/components/auth/Huella';
+import { Legal } from '@/components/portal/Legal';
 import { cn } from '@/lib/utils';
 
 const PREF_ITEMS = [
@@ -154,6 +155,8 @@ export default function ProfilePage() {
       </div>
 
       <HuellaPerfil />
+
+      <Legal />
 
       {/* Logout */}
       <button

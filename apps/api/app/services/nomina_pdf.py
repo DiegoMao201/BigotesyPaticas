@@ -13,7 +13,7 @@ from decimal import Decimal
 from app.services.invoice_pdf import LOGO_PNG_B64, generate_invoice_pdf
 
 # Datos del empleador. Son los mismos que publica la web (business-info.ts) y la
-# política de privacidad del store: persona natural, Régimen Simple.
+# política de privacidad del store: persona natural, régimen ordinario, no responsable de IVA (RUT).
 EMPRESA = {
     "nombre": "Bigotes y Paticas",
     "razon_social": "Diego Mauricio García — Bigotes y Paticas",
