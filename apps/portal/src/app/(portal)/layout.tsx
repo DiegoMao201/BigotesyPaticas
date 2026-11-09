@@ -16,6 +16,7 @@ import { NotificationBell } from '@/components/portal/NotificationBell';
 import { LocationTracker } from '@/components/portal/LocationTracker';
 import { PromoGroomer } from '@/components/portal/PromoGroomer';
 import { HuellaOferta } from '@/components/auth/Huella';
+import { CorreoSeguro } from '@/components/auth/CorreoSeguro';
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -60,6 +61,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
       {/* Modal de términos — solo primera vez */}
       <TermsModal />
+      <CorreoSeguro />
       <HuellaOferta />
       <GoogleReviewPrompt />
     </div>

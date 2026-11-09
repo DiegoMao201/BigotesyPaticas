@@ -7,7 +7,7 @@ import secrets
 import unicodedata
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import and_, delete, select
 
@@ -217,6 +217,10 @@ async def signup(payload: SignupRequest, response: Response, db: DBSession) -> L
         secure=True,
     )
 
+    from app.api.v1.portal_acceso import marcar_equipo
+
+    marcar_equipo(response, customer)
+
     # Meta Conversion API — CompleteRegistration
     from app.services import meta_conversion_api as capi
 
@@ -243,8 +247,19 @@ async def signup(payload: SignupRequest, response: Response, db: DBSession) -> L
     )
 
 
-@router.post("/login", response_model=LoginResponse)
-async def login(payload: LoginRequest, response: Response, db: DBSession) -> LoginResponse:
+@router.post("/login", response_model=None)
+async def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    db: DBSession,
+    bp_equipo: str | None = Cookie(default=None),
+) -> dict | LoginResponse:
+    """Cédula + teléfono. Desde el 8-nov-2026, en un celular nuevo se pide además un
+    código al correo (ver portal_codigo.py); en uno de confianza entra directo."""
+    from app.api.v1.portal_codigo import bloqueo_cedula, frenar_ip, paso_seguro, sumar_fallo, telefono_no_coincide
+
+    frenar_ip(request)
     doc = payload.document_id.strip()
     phone = payload.phone.strip()
 
@@ -266,12 +281,15 @@ async def login(payload: LoginRequest, response: Response, db: DBSession) -> Log
         )
 
     if customer:
-        # Verificar teléfono
+        bloqueo_cedula(customer)
         if not _phones_match(customer.phone, phone):
+            sumar_fallo(customer)
+            await db.commit()
             raise HTTPException(
                 status_code=401,
-                detail="Teléfono no coincide con el registrado",
+                detail=telefono_no_coincide(customer),
             )
+        return await paso_seguro(db, request, response, customer, bp_equipo)
     else:
         # Cliente nuevo — crear registro base
         is_new = True
@@ -322,6 +340,9 @@ async def login(payload: LoginRequest, response: Response, db: DBSession) -> Log
         max_age=SESSION_TTL_DAYS * 86400,
         secure=True,
     )
+    from app.api.v1.portal_acceso import marcar_equipo
+
+    marcar_equipo(response, customer)
 
     extra = customer.extra or {}
     return LoginResponse(
@@ -397,7 +418,9 @@ async def update_me(
     db: DBSession,
     customer: Customer = PortalUser,
 ) -> MeResponse:
-    allowed = {"full_name", "email", "phone", "address", "city"}
+    # 8-nov-2026: el correo ya no se cambia aquí: recibe el código de acceso, así que
+    # pasa por /me/correo (con código). El teléfono tampoco: es la otra mitad del acceso.
+    allowed = {"full_name", "address", "city"}
     for k, v in payload.items():
         if k in allowed and v is not None:
             setattr(customer, k, v)

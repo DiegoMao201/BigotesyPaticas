@@ -31,7 +31,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 // ── Auth ──────────────────────────────────────────────────────────────
 
 export interface LoginResponse {
-  status: 'existing' | 'new';
+  /** 8-nov-2026: en un celular nuevo, cédula + teléfono piden un código al correo. */
+  status: 'existing' | 'new' | 'code_required' | 'email_required';
+  reto?: string;
+  email_hint?: string;
   customer_id: string;
   full_name: string | null;
   has_pets: boolean;
@@ -69,6 +72,20 @@ export const auth = {
   deleteAccount: () =>
     request<{ ok: boolean; message: string }>('/auth/me/delete', { method: 'POST', body: JSON.stringify({ confirm: 'ELIMINAR' }) }),
   me: () => request<MeResponse>('/auth/me'),
+  /** Cliente sin correo: registra uno y le llega ahí el código. */
+  correo: (reto: string, email: string) =>
+    request<LoginResponse>('/auth/login/correo', { method: 'POST', body: JSON.stringify({ reto, email }) }),
+  verificar: (reto: string, codigo: string) =>
+    request<LoginResponse>('/auth/login/verificar', { method: 'POST', body: JSON.stringify({ reto, codigo }) }),
+  reenviar: (reto: string) =>
+    request<{ ok: boolean; email_hint: string }>('/auth/login/reenviar', { method: 'POST', body: JSON.stringify({ reto }) }),
+  /** Con la sesión abierta: agregar o confirmar el correo. */
+  miCorreo: (email: string) =>
+    request<{ ok: boolean; email_hint: string }>('/auth/me/correo', { method: 'POST', body: JSON.stringify({ email }) }),
+  miCorreoVerificar: (codigo: string) =>
+    request<{ ok: boolean; email: string }>('/auth/me/correo/verificar', { method: 'POST', body: JSON.stringify({ codigo }) }),
+  seguridad: () =>
+    request<{ email: string | null; correo_verificado: boolean; google: boolean; huellas: number }>('/auth/me/seguridad'),
   updateMe: (data: Partial<MeResponse>) =>
     request<MeResponse>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
   acceptTerms: (version = '1.0') =>

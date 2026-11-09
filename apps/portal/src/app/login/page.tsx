@@ -13,12 +13,13 @@ import Image from 'next/image';
 import { Logo } from '@/components/brand/Logo';
 import { AccesoRapido } from '@/components/auth/AccesoRapido';
 import { google as googleApi } from '@/lib/passkeys';
+import { PasoCodigo, PasoCorreo } from '@/components/auth/PasoCodigo';
 
 const VIDEO_MP4  = process.env.NEXT_PUBLIC_LOGIN_VIDEO_MP4  ?? '';
 const VIDEO_WEBM = process.env.NEXT_PUBLIC_LOGIN_VIDEO_WEBM ?? '';
 const VIDEO_POSTER = process.env.NEXT_PUBLIC_LOGIN_POSTER   ?? '';
 
-type Step = 'login' | 'onboarding';
+type Step = 'login' | 'onboarding' | 'correo' | 'codigo';
 
 const PAWS = [
   { left: '8%',  top: '14%', delay: 0,   size: 18 },
@@ -49,6 +50,9 @@ function LoginPageInner() {
   const [expanded,  setExpanded]  = useState(false);
   // Primera vez con Google: se une con la cédula una sola vez (8-nov-2026)
   const [linkToken, setLinkToken] = useState<string | null>(null);
+  // Código al correo en un celular nuevo (8-nov-2026)
+  const [reto, setReto] = useState<string | null>(null);
+  const [hint, setHint] = useState('');
 
   const [doc,   setDoc]   = useState('');
   const [phone, setPhone] = useState('');
@@ -81,12 +85,29 @@ function LoginPageInner() {
       const resp = linkToken
         ? await googleApi.link<LoginResponse>(linkToken, doc.trim(), phone.trim())
         : await auth.login(doc.trim(), phone.trim());
-      await continuar(resp);
+      await manejar(resp);
     } catch (err: any) {
       toast.error(err.message ?? 'Error al iniciar sesión');
     } finally {
       setLoading(false);
     }
+  }
+
+  /** La API puede abrir la sesión o pedir primero el correo / el código. */
+  async function manejar(resp: LoginResponse) {
+    if (resp.status === 'code_required' && resp.reto) {
+      setReto(resp.reto); setHint(resp.email_hint ?? 'tu correo'); setStep('codigo');
+      return;
+    }
+    if (resp.status === 'email_required' && resp.reto) {
+      setReto(resp.reto); setStep('correo');
+      return;
+    }
+    await continuar(resp);
+  }
+
+  function volver() {
+    setReto(null); setStep('login'); setLinkToken(null);
   }
 
   async function continuar(resp: LoginResponse) {
@@ -301,7 +322,7 @@ function LoginPageInner() {
 
                 {!linkToken && (
                   <AccesoRapido
-                    onLogin={(r) => { continuar(r).catch((e) => toast.error(e.message)); }}
+                    onLogin={(r) => { manejar(r).catch((e) => toast.error(e.message)); }}
                     onLinkRequerido={(t) => {
                       setLinkToken(t);
                       setExpanded(true);
@@ -326,6 +347,21 @@ function LoginPageInner() {
                   </a>
                 </div>
               </motion.form>
+            ) : step === 'correo' && reto ? (
+              <PasoCorreo
+                key="correo"
+                texto="Tu cuenta aún no tiene correo. Agrégalo y te mandamos un código para confirmar que eres tú."
+                onEnviar={async (correo) => { await manejar(await auth.correo(reto, correo)); }}
+                onVolver={volver}
+              />
+            ) : step === 'codigo' && reto ? (
+              <PasoCodigo
+                key="codigo"
+                hint={hint}
+                onVerificar={async (codigo) => { await manejar(await auth.verificar(reto, codigo)); }}
+                onReenviar={async () => { const r = await auth.reenviar(reto); setHint(r.email_hint); }}
+                onVolver={volver}
+              />
             ) : (
               <OnboardingStep
                 key="onboarding"

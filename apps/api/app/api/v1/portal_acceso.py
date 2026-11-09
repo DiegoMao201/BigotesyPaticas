@@ -16,6 +16,7 @@ Decisiones:
 from __future__ import annotations
 
 import base64
+import copy
 import hashlib
 import hmac
 import json
@@ -81,7 +82,20 @@ def _leer(token: str) -> dict:
         raise HTTPException(status_code=400, detail="La solicitud venció. Intenta de nuevo.")
 
 
+COOKIE_EQUIPO = "bp_equipo"
+EQUIPO_DIAS = 180
+
+
+def marcar_equipo(response: Response, c: Customer) -> None:
+    """Celular de confianza: aquí ya se probó quién es; no se vuelve a pedir código (180 días)."""
+    response.set_cookie(
+        key=COOKIE_EQUIPO, value=_firmar({"t": "eq", "u": str(c.id)}, ttl=EQUIPO_DIAS * 86400),
+        httponly=True, samesite="lax", secure=True, max_age=EQUIPO_DIAS * 86400,
+    )
+
+
 async def _emitir_sesion(db, response: Response, customer: Customer) -> dict:
+    marcar_equipo(response, customer)
     token = secrets.token_urlsafe(48)
     db.add(PortalSession(customer_id=customer.id, token=token,
                          expires_at=datetime.now(UTC) + timedelta(days=SESSION_TTL_DAYS)))
@@ -187,7 +201,7 @@ async def passkey_login_verificar(payload: VerificarIn, response: Response, db: 
     customer = (await db.execute(select(Customer).where(Customer.id == cid))).scalar_one_or_none()
     if not _activo(customer):
         raise HTTPException(status_code=401, detail="No encontramos tu cuenta")
-    extra = dict(customer.extra or {})
+    extra = copy.deepcopy(customer.extra or {})
     llaves = list(extra.get("passkeys", []))
     llave = next((p for p in llaves if p["id"] == cred_id), None)
     if not llave:
@@ -273,25 +287,38 @@ async def google_login(payload: GoogleIn, response: Response, db: DBSession) -> 
 
 
 @router.post("/google/link")
-async def google_unir(payload: GoogleLinkIn, response: Response, db: DBSession) -> dict:
+async def google_unir(payload: GoogleLinkIn, request: Request, response: Response, db: DBSession) -> dict:
+    from app.api.v1.portal_codigo import bloqueo_cedula, frenar_ip, paso_seguro, sumar_fallo, telefono_no_coincide
+
+    frenar_ip(request)
     st = _leer(payload.link_token)
     if st.get("t") != "g":
         raise HTTPException(status_code=400, detail="Solicitud inválida")
     doc, tel = payload.document_id.strip(), payload.phone.strip()
+    correo_g = (st.get("email") or "").lower()
     c = (await db.execute(select(Customer).where(
         and_(Customer.document_id == doc, Customer.deleted_at == None)))).scalar_one_or_none()  # noqa: E711
     if c is not None:
         if not _activo(c):
             raise HTTPException(status_code=403, detail="Esta cuenta se cerró porque pediste eliminarla.")
+        bloqueo_cedula(c)
         if not _phones_match(c.phone, tel):
-            raise HTTPException(status_code=401, detail="Teléfono no coincide con el registrado")
+            sumar_fallo(c)
+            await db.commit()
+            raise HTTPException(status_code=401, detail=telefono_no_coincide(c))
+        # 8-nov-2026: si la cuenta ya tiene OTRO correo, Google no basta: se manda código a
+        # ese correo (si no, cualquiera con la cédula y el teléfono uniría su propio Google).
+        if c.email and c.email.lower() != correo_g:
+            return await paso_seguro(db, request, response, c, None, {"gsub": st["sub"]})
     else:
         c = Customer(full_name=st.get("name") or "", document_id=doc, phone=tel, extra={})
-        if st.get("email"):
-            c.email = st["email"]
         db.add(c)
         await db.flush()
-    extra = dict(c.extra or {}); extra["google_sub"] = st["sub"]; c.extra = extra
-    if not c.email and st.get("email"):
-        c.email = st["email"]
+    extra = dict(c.extra or {}); extra["google_sub"] = st["sub"]
+    if correo_g:
+        if not c.email:
+            c.email = correo_g
+        extra["correo_verificado"] = correo_g  # Google ya verificó ese correo
+    extra.pop("acceso_fallos", None)
+    c.extra = extra
     return await _emitir_sesion(db, response, c)
