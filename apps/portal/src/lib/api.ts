@@ -700,9 +700,12 @@ export interface PortalNotification {
   read_at: string | null;
   created_at: string;
   data: Record<string, unknown>;
+  /** A dónde lleva tocarla (pedido, cita, SOS…). */
+  url?: string;
 }
 
 export const notifications = {
+  markRead: (id: string) => request<{ ok: boolean }>(`/notifications/${id}/read`, { method: 'POST' }),
   list: (unreadOnly = false) =>
     request<PortalNotification[]>(`/notifications${unreadOnly ? '?unread_only=true' : ''}`),
   unreadCount: () => request<{ unread: number }>('/notifications/unread-count'),

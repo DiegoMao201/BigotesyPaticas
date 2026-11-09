@@ -11,6 +11,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EliminarCuenta } from '@/components/portal/EliminarCuenta';
 import { HuellaPerfil } from '@/components/auth/Huella';
 import { Legal } from '@/components/portal/Legal';
+import { CorreoFila } from '@/components/auth/CorreoSeguro';
+import { AvisosCelular } from '@/components/portal/Avisos';
 import { cn } from '@/lib/utils';
 
 const PREF_ITEMS = [
@@ -77,7 +79,6 @@ export default function ProfilePage() {
       <div className="card flex flex-col divide-y divide-border">
         {[
           { label: 'Cédula', value: customer?.document_id },
-          { label: 'Email', value: customer?.email },
           { label: 'Teléfono', value: customer?.phone },
           { label: 'Ciudad', value: customer?.city },
           { label: 'Dirección', value: customer?.address },
@@ -89,12 +90,24 @@ export default function ProfilePage() {
         ))}
       </div>
 
+      {/* Configuración — 8-nov-2026: todo lo de la cuenta en un solo lugar, con títulos */}
+      <div>
+        <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2 px-1">
+          Cuenta y seguridad
+        </p>
+        <div className="card flex flex-col divide-y divide-border">
+          <CorreoFila />
+        </div>
+        <div className="mt-3"><HuellaPerfil /></div>
+      </div>
+
       {/* Preferencias de notificación */}
       <div>
         <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2 px-1">
           Notificaciones
         </p>
         <div className="card flex flex-col divide-y divide-border">
+          <AvisosCelular />
           {PREF_ITEMS.map(({ key, icon: Icon, label, desc }) => {
             const enabled = prefs[key] !== false; // default true si no está definido
             return (
@@ -130,6 +143,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Links */}
+      <p className="-mb-3 text-xs font-semibold text-muted uppercase tracking-wide px-1">Ayuda y redes</p>
       <div className="card flex flex-col divide-y divide-border">
         <a
           href={`https://wa.me/573206876633?text=${encodeURIComponent('Hola! Necesito ayuda con mi portal de Bigotes y Paticas.')}`}
@@ -154,10 +168,10 @@ export default function ProfilePage() {
         ))}
       </div>
 
-      <HuellaPerfil />
-
+      <p className="-mb-3 text-xs font-semibold text-muted uppercase tracking-wide px-1">Legal</p>
       <Legal />
 
+      <p className="-mb-3 text-xs font-semibold text-muted uppercase tracking-wide px-1">Tu cuenta</p>
       {/* Logout */}
       <button
         onClick={handleLogout}

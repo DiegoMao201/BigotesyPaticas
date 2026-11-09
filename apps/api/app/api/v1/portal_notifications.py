@@ -63,6 +63,7 @@ async def notify_customer(
             "body": body,
             "created_at": datetime.now(UTC).isoformat(),
             "data": data or {},
+            "url": _url(notif_type, data),
         }
     )
     try:
@@ -71,6 +72,11 @@ async def notify_customer(
         await r.aclose()
     except Exception:
         pass  # Redis down no bloquea la operación principal
+
+    # 8-nov-2026: también al celular, aunque la app esté cerrada.
+    from app.services import push
+
+    push.enviar_en_fondo(cid, notif_type, title, body, data)
 
 
 async def notify_admins(
@@ -123,6 +129,7 @@ class NotificationOut(BaseModel):
     read_at: str | None
     created_at: str
     data: dict
+    url: str = "/dashboard"
 
 
 def _notif_out(n: PortalNotification) -> NotificationOut:
@@ -135,7 +142,14 @@ def _notif_out(n: PortalNotification) -> NotificationOut:
         read_at=n.read_at.isoformat() if n.read_at else None,
         created_at=n.created_at.isoformat(),
         data=n.data or {},
+        url=_url(n.type, n.data),
     )
+
+
+def _url(tipo: str, data: dict | None) -> str:
+    from app.services.push import url_para
+
+    return url_para(tipo, data)
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
@@ -191,6 +205,73 @@ async def mark_all_read(
     )
     await db.commit()
     return {"ok": True}
+
+
+@router.post("/{notif_id}/read")
+async def mark_one_read(notif_id: uuid.UUID, db: DBSession, customer: Customer = PortalUser) -> dict:
+    """Tocar una notificación la marca leída (antes solo existía 'todas leídas')."""
+    await db.execute(
+        update(PortalNotification)
+        .where(
+            PortalNotification.id == notif_id,
+            PortalNotification.customer_id == customer.id,
+            PortalNotification.read_at == None,  # noqa: E711
+        )
+        .values(read_at=datetime.now(UTC))
+    )
+    await db.commit()
+    return {"ok": True}
+
+
+# ── push al celular (8-nov-2026) ──────────────────────────────────────────────
+class PushSubIn(BaseModel):
+    subscription: dict
+    equipo: str | None = None
+
+
+@router.get("/push/config")
+async def push_config() -> dict:
+    from app.services import push
+
+    return {"public_key": push.VAPID_PUBLIC or None}
+
+
+@router.post("/push/subscribe")
+async def push_subscribe(payload: PushSubIn, db: DBSession, customer: Customer = PortalUser) -> dict:
+    import copy
+
+    sub = payload.subscription
+    if not isinstance(sub.get("endpoint"), str) or not sub["endpoint"].startswith("https://") or not (sub.get("keys") or {}).get("p256dh"):
+        raise HTTPException(status_code=422, detail="Suscripción inválida")
+    extra = copy.deepcopy(customer.extra or {})
+    subs = [s for s in extra.get("push", []) if s["sub"]["endpoint"] != sub["endpoint"]]
+    subs.append({"sub": {"endpoint": sub["endpoint"], "keys": sub["keys"]},
+                 "equipo": (payload.equipo or "Celular")[:40], "desde": datetime.now(UTC).isoformat()})
+    extra["push"] = subs[-5:]
+    customer.extra = extra
+    await db.commit()
+    return {"ok": True, "celulares": len(extra["push"])}
+
+
+@router.post("/push/unsubscribe")
+async def push_unsubscribe(payload: dict, db: DBSession, customer: Customer = PortalUser) -> dict:
+    import copy
+
+    extra = copy.deepcopy(customer.extra or {})
+    extra["push"] = [s for s in extra.get("push", []) if s["sub"]["endpoint"] != payload.get("endpoint")]
+    customer.extra = extra
+    await db.commit()
+    return {"ok": True}
+
+
+@router.post("/push/test")
+async def push_test(customer: Customer = PortalUser) -> dict:
+    """Botón 'probar' del perfil: el cliente ve que sí le llegan."""
+    from app.services import push
+
+    n = await push.enviar(customer.id, "general", "¡Listo! 🐾", "Así te avisaremos de tus pedidos, citas y mascotas perdidas cerca.",
+                          {"url": "/profile"})
+    return {"enviados": n}
 
 
 @router.get("/events")

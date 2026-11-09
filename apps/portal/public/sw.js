@@ -10,7 +10,7 @@
 //   · /_next/static (con hash, nunca cambian): primero caché
 //   · imágenes: caché y se refresca por detrás
 //   · /api: solo red
-const VERSION = 'bp-portal-v3';
+const VERSION = 'bp-portal-v4';
 const ESTATICOS = `${VERSION}-static`;
 const PAGINAS = `${VERSION}-paginas`;
 const IMAGENES = `${VERSION}-img`;
@@ -93,7 +93,9 @@ self.addEventListener('push', (event) => {
       body: data.body || '',
       icon: '/icon-192.png',
       badge: '/icon-maskable-192.png',
-      data: data.url ? { url: data.url } : undefined,
+      data: { url: data.url || '/dashboard' },
+      tag: data.tag || undefined,
+      renotify: !!data.tag,
       vibrate: [100, 50, 100],
     }),
   );

@@ -32,8 +32,13 @@ export function EliminarCuenta() {
 
   return (
     <>
-      <button onClick={() => setAbierto(true)} className="mx-auto flex items-center gap-1.5 py-2 text-xs font-medium text-gray-400 underline-offset-2 hover:underline">
-        <Trash2 className="h-3.5 w-3.5" /> Eliminar mi cuenta
+      {/* 8-nov-2026: visible en "Tu cuenta" (Diego no la encontró: era un texto gris diminuto) */}
+      <button onClick={() => setAbierto(true)} className="card flex w-full items-center gap-3 py-3 text-left">
+        <div className="h-9 w-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0"><Trash2 className="h-4 w-4 text-red-600" /></div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-red-600">Eliminar mi cuenta</p>
+          <p className="text-xs text-muted">Borra tus datos, mascotas y puntos</p>
+        </div>
       </button>
       <AnimatePresence>
         {abierto && (

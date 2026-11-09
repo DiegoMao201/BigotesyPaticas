@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, X, Check } from 'lucide-react';
+import { Bell, X, Check, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { notifications, type PortalNotification } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
+import { AvisosCelular } from '@/components/portal/Avisos';
 
 const TYPE_COLORS: Record<string, { bg: string; dot: string }> = {
   appt_confirmed:    { bg: '#E1F5EE', dot: '#187f77' },
@@ -57,8 +59,9 @@ export function NotificationBell() {
         qc.invalidateQueries({ queryKey: ['notif-list'] });
         toast(data.title, {
           description: data.body,
-          duration: 5000,
-          position: 'bottom-right',
+          duration: 6000,
+          position: 'top-center',
+          action: { label: 'Ver', onClick: () => { window.location.href = data.url || '/dashboard'; } },
         });
       } catch {}
     };
@@ -81,6 +84,18 @@ export function NotificationBell() {
   }
 
   const unread = countData?.unread ?? 0;
+  const router = useRouter();
+
+  /** Tocar una notificación: se marca leída y lleva a lo que avisa (pedido, cita, SOS…). */
+  async function abrir(n: PortalNotification) {
+    setOpen(false);
+    if (!n.read_at) {
+      notifications.markRead(n.id).catch(() => {});
+      qc.setQueryData<{ unread: number }>(['notif-count'], (d) => ({ unread: Math.max(0, (d?.unread ?? 1) - 1) }));
+      qc.invalidateQueries({ queryKey: ['notif-list'] });
+    }
+    router.push(n.url || '/dashboard');
+  }
 
   return (
     <>
@@ -114,7 +129,7 @@ export function NotificationBell() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40"
+              className="fixed inset-0 z-[100] bg-black/30"
               onClick={() => setOpen(false)}
             />
             <motion.div
@@ -122,7 +137,7 @@ export function NotificationBell() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="fixed top-0 right-0 bottom-0 z-50 w-full max-w-sm bg-white shadow-2xl flex flex-col"
+              className="fixed top-0 right-0 bottom-0 z-[101] w-full max-w-sm bg-white shadow-2xl flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
             >
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-border">
@@ -153,6 +168,8 @@ export function NotificationBell() {
                 </div>
               </div>
 
+              <AvisosCelular compacto />
+
               {/* Lista */}
               <div className="flex-1 overflow-y-auto divide-y divide-border">
                 {!notifList || notifList.length === 0 ? (
@@ -163,7 +180,7 @@ export function NotificationBell() {
                   </div>
                 ) : (
                   notifList.map((n) => (
-                    <NotifItem key={n.id} notif={n} />
+                    <NotifItem key={n.id} notif={n} onAbrir={() => abrir(n)} />
                   ))
                 )}
               </div>
@@ -175,13 +192,15 @@ export function NotificationBell() {
   );
 }
 
-function NotifItem({ notif }: { notif: PortalNotification }) {
+function NotifItem({ notif, onAbrir }: { notif: PortalNotification; onAbrir: () => void }) {
   const colors = TYPE_COLORS[notif.type] ?? TYPE_COLORS.default;
   const isUnread = !notif.read_at;
 
   return (
-    <div
-      className="flex items-start gap-3.5 p-4 transition-colors"
+    <button
+      type="button"
+      onClick={onAbrir}
+      className="flex w-full items-start gap-3.5 p-4 text-left transition-colors active:bg-gray-50"
       style={{ background: isUnread ? colors.bg : 'white' }}
     >
       <div
@@ -197,6 +216,7 @@ function NotifItem({ notif }: { notif: PortalNotification }) {
           })}
         </p>
       </div>
-    </div>
+      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted" />
+    </button>
   );
 }
