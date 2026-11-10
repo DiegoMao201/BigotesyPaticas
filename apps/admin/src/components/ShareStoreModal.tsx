@@ -20,6 +20,16 @@ const PAGOS = [
   { id: 'link', icono: '💳', titulo: 'Link de pago', valor: 'https://bigotesypaticas.com/pagar', nota: 'Tarjeta, PSE, Nequi o Daviplata' },
 ];
 
+// Mismos enlaces que el correo de gracias (correo_satisfaccion.py): la ficha de Google y,
+// para los productos, Mis pedidos del portal, que alimenta el feed de reseñas de Merchant.
+const CALIFICAR = [
+  { id: 'google', icono: '⭐', titulo: 'Ficha de Google', valor: 'https://g.page/r/CfL67OgLB-10EBM/review', nota: 'Calificar la tienda' },
+  { id: 'productos', icono: '🛍️', titulo: 'Productos comprados', valor: 'https://mi.bigotesypaticas.com/orders', nota: 'Mis pedidos en el portal · suma puntos' },
+];
+
+/** Tarjetas para copiar un dato suelto, según el mensaje elegido. */
+const DATOS: Record<string, typeof PAGOS> = { medios_pago: PAGOS, calificar: CALIFICAR };
+
 const SCENARIOS: Scenario[] = [
   {
     id: 'medios_pago',
@@ -35,6 +45,21 @@ const SCENARIOS: Scenario[] = [
       '💳 *Link de pago* (tarjeta, PSE, Nequi o Daviplata):\n' +
       '  https://bigotesypaticas.com/pagar\n\n' +
       '✅ Cuando pagues, envíanos el comprobante por aquí y te confirmamos. ¡Gracias! 💛',
+  },
+  {
+    id: 'calificar',
+    label: 'Pedir calificación',
+    emoji: '⭐',
+    description: 'Reseña en Google y de los productos',
+    message:
+      '¡Hola! 🐾 Gracias de corazón por confiar en *Bigotes y Paticas* 💛\n\n' +
+      'Si te gustó la atención, ¿nos regalas un minuto para calificarnos? ' +
+      'A una tienda de barrio como la nuestra le ayuda muchísimo a que más familias con mascotas nos encuentren.\n\n' +
+      '⭐ *En Google:*\n' +
+      'https://g.page/r/CfL67OgLB-10EBM/review\n\n' +
+      '🛍️ *Tus productos* (en Mis pedidos, y ganas Puntos Bigotes):\n' +
+      'https://mi.bigotesypaticas.com/orders\n\n' +
+      '¡Mil gracias! Un abrazo para tu peludito 🐶🐱',
   },
   {
     id: 'info_general',
@@ -203,9 +228,9 @@ export function ShareStoreModal({ open, onClose }: Props) {
           {/* Message preview */}
           <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <div className="flex-1 overflow-y-auto p-4">
-              {selected === 'medios_pago' && (
+              {DATOS[selected] && (
                 <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {PAGOS.map((p) => (
+                  {DATOS[selected].map((p) => (
                     <button
                       key={p.id}
                       type="button"
