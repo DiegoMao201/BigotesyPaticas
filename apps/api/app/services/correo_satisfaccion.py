@@ -130,8 +130,8 @@ def armar_html(
 
       <tr><td style="background:#ffffff;padding:32px 40px 8px;">
         <p style="color:#1a1a1a;font-size:16px;line-height:1.6;margin:0 0 24px;">
-          {quien} Comprar en una tienda del barrio es confiar, y nosotros lo sabemos:
-          por eso cada pedido lo preparamos como si fuera para los nuestros.
+          {quien} Gracias por confiar en una tienda especializada en tu mascota:
+          cada pedido lo preparamos con el mismo cuidado que le damos a los nuestros.
         </p>
 
         <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">

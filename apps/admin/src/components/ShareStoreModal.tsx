@@ -54,7 +54,7 @@ const SCENARIOS: Scenario[] = [
     message:
       '¡Hola! 🐾 Gracias de corazón por confiar en *Bigotes y Paticas* 💛\n\n' +
       'Si te gustó la atención, ¿nos regalas un minuto para calificarnos? ' +
-      'A una tienda de barrio como la nuestra le ayuda muchísimo a que más familias con mascotas nos encuentren.\n\n' +
+      'Tu opinión nos ayuda a seguir mejorando y a que más familias con mascotas encuentren una tienda especializada que las atienda como se merecen.\n\n' +
       '⭐ *En Google:*\n' +
       'https://g.page/r/CfL67OgLB-10EBM/review\n\n' +
       '🛍️ *Tus productos* (en Mis pedidos, y ganas Puntos Bigotes):\n' +
