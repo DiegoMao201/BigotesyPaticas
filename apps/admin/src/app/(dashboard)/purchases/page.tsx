@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { useBorrador, descartarBorrador, useHayBorrador } from '@/lib/borradores';
+import { useBorrador, descartarBorrador, useHayBorrador, leerBorrador, useClavesConBorrador } from '@/lib/borradores';
+import { PendienteAviso } from '@/components/PendienteAviso';
 import { BorradorAviso } from '@/components/BorradorAviso';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -104,6 +105,16 @@ export default function PurchasesPage() {
   const [tab, setTab] = useBorrador<Tab>('vista:compras:tab', 'historial');
   const [desdeCorreo, setDesdeCorreo] = useBorrador<DesdeCorreo | null>('compras:xml:correo', null);
   const xmlEnCurso = useHayBorrador('compras:xml:factura');
+  // Qué quedó a medias en las otras pestañas: el menú decía "en curso" y desde el
+  // Historial no había cómo verlo (10-nov-2026).
+  const xmlPendiente = useClavesConBorrador('compras:xml').length > 0 && tab !== 'nueva-xml';
+  const manualPendiente = useClavesConBorrador('compras:manual').length > 0 && tab !== 'nueva-manual';
+  const resumen = (pref: string, provClave: string) => {
+    const prov = leerBorrador<string>(`${pref}:${provClave}`) || leerBorrador<string>(`${pref}:nombre`);
+    const n = leerBorrador<unknown[]>(`${pref}:items`)?.length ?? 0;
+    const folio = leerBorrador<string>(`${pref}:folio`);
+    return [prov, folio && `factura ${folio}`, n > 0 && `${n} producto${n === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+  };
   const qc = useQueryClient();
   const pendientesQ = useQuery({ queryKey: ['inbox', 'pendiente'], queryFn: () => purchases.inbox.list('pendiente'), refetchInterval: 120_000 });
   const nPendientes = pendientesQ.data?.conteo?.pendiente ?? 0;
@@ -138,6 +149,21 @@ export default function PurchasesPage() {
         </Button>
       </div>
 
+      {xmlPendiente && (
+        <PendienteAviso
+          texto={<>Compra con <b>XML DIAN</b> a medio cargar{(desdeCorreo?.etiqueta || resumen('compras:xml', 'proveedorNombre')) ? <>: <b>{desdeCorreo?.etiqueta || resumen('compras:xml', 'proveedorNombre')}</b></> : ''}.</>}
+          onContinuar={() => setTab('nueva-xml')}
+          onDescartar={() => descartarBorrador('compras:xml')}
+        />
+      )}
+      {manualPendiente && (
+        <PendienteAviso
+          texto={<>Compra <b>manual</b> a medio hacer{resumen('compras:manual', 'proveedorNombre') ? <>: <b>{resumen('compras:manual', 'proveedorNombre')}</b></> : ''}.</>}
+          onContinuar={() => setTab('nueva-manual')}
+          onDescartar={() => descartarBorrador('compras:manual')}
+        />
+      )}
+
       <div className="flex gap-2 border-b">
         {[
           { id: 'historial', label: 'Historial', icon: FileText },
@@ -166,7 +192,15 @@ export default function PurchasesPage() {
       {tab === 'historial' && <HistorialTab />}
       {tab === 'cartera' && <CarteraTab />}
       {tab === 'correo' && (
-        <FacturasCorreoTab onCargar={(d) => { setDesdeCorreo(d); setTab('nueva-xml'); }} />
+        <FacturasCorreoTab
+          onCargar={(d) => {
+            // Otra compra XML a medias: avisar antes de reemplazarla.
+            const otra = xmlEnCurso && leerBorrador<string | null>('compras:xml:origen') !== d.id;
+            if (otra && !window.confirm(`Tienes otra compra con XML a medio cargar${desdeCorreo?.etiqueta ? ` (${desdeCorreo.etiqueta})` : ''}. ¿La reemplazo por ${d.etiqueta}?`)) return;
+            setDesdeCorreo(d);
+            setTab('nueva-xml');
+          }}
+        />
       )}
       {tab === 'nueva-xml' && (
         <NuevaXmlTab
@@ -819,7 +853,9 @@ function NuevaXmlTab({ onDone, inicial }: { onDone: () => void; inicial?: DesdeC
   // Solo la primera vez: si la pantalla se vuelve a abrir con un borrador de ESTA
   // misma factura, no se pisa lo que el usuario ya había asociado y corregido.
   useEffect(() => {
-    if (inicial && origen !== inicial.id) {
+    // También si es la misma factura pero quedó en el paso 1 (se tocó "Atrás"): antes no
+    // se volvía a aplicar y "Cargar" mostraba la pantalla de subir XML (10-nov-2026).
+    if (inicial && (origen !== inicial.id || !parsed || step === 1)) {
       aplicarParsed(inicial.parsed);
       setOrigen(inicial.id);
     }

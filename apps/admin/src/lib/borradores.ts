@@ -96,3 +96,20 @@ export function useHayBorrador(prefijo: string): boolean {
   );
   return enCliente && hay;
 }
+
+/** Valor guardado de una clave (o undefined), para mostrar QUÉ quedó a medias sin
+ *  montar el formulario. */
+export function leerBorrador<T>(clave: string): T | undefined {
+  return useBorradores.getState().b[clave]?.valor as T | undefined;
+}
+
+/** Claves con trabajo pendiente bajo un prefijo. Se suscribe al store para que el
+ *  aviso aparezca y desaparezca solo. */
+export function useClavesConBorrador(prefijo: string): string[] {
+  const enCliente = useEnCliente();
+  const b = useBorradores((s) => s.b);
+  if (!enCliente) return [];
+  return Object.entries(b)
+    .filter(([k, e]) => (k === prefijo || k.startsWith(`${prefijo}:`)) && !e.vacio)
+    .map(([k]) => k);
+}

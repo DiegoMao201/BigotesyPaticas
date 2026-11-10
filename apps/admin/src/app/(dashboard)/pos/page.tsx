@@ -4,11 +4,12 @@ import { useState, useCallback, useRef } from 'react';
 import { useBorrador, descartarBorrador } from '@/lib/borradores';
 import { BorradorAviso } from '@/components/BorradorAviso';
 import { DatosFaltantesModal, faltantes, etiquetaFaltantes } from '@/components/DatosFaltantes';
+import { CustomerForm, aPayload } from '@/components/CustomerForm';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, User, CreditCard,
   Banknote, Smartphone, CheckCircle2, Printer, RotateCcw, X, XCircle,
-  FileText, MessageCircle, History, Eye, ChevronRight, ScanLine, Zap, MapPin, Gift,
+  FileText, MessageCircle, History, Eye, ChevronRight, ScanLine, Zap, MapPin, Gift, UserPlus,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -197,10 +198,13 @@ function CustomerSelector({
   value,
   onChange,
   onCompletar,
+  onNuevo,
 }: {
   value: Customer | null;
   onChange: (c: Customer | null) => void;
   onCompletar?: () => void;
+  /** Abre "Cliente nuevo" con lo que se haya escrito en la búsqueda. */
+  onNuevo: (busqueda: string) => void;
 }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
@@ -275,6 +279,22 @@ function CustomerSelector({
           onBlur={() => setTimeout(() => setOpen(false), 200)}
         />
       </div>
+      {/* Diego (10-nov-2026): crear el cliente sin salir de la venta. */}
+      {open && q.trim().length >= 3 && data && data.items.length === 0 && (
+        <button
+          onMouseDown={() => { onNuevo(q.trim()); setOpen(false); setQ(''); }}
+          className="w-full rounded-lg border border-dashed border-brand/50 bg-brand/5 px-3 py-2.5 text-left text-sm hover:bg-brand/10"
+        >
+          No existe «{q.trim()}» — <span className="font-semibold text-brand-700">crearlo como cliente nuevo</span>
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => { onNuevo(q.trim()); setQ(''); }}
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-brand/40 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand/10"
+      >
+        <UserPlus className="h-4 w-4" /> Cliente nuevo
+      </button>
       {open && (data?.items.length ?? 0) > 0 && (
         <div className="rounded-lg border border-border shadow-elegant bg-background z-10">
           {data!.items.map((c) => (
@@ -746,6 +766,27 @@ export default function POSPage() {
     setCustomer(c);
     setPedirDatos(Boolean(c) && faltantes(c).length > 0);
   }
+  // "Cliente nuevo" sin salir de la venta: lo escrito se guarda como borrador de la venta.
+  const [nuevoCliente, setNuevoCliente] = useBorrador('pos:clienteNuevo:abierto', false);
+  const [sugerido, setSugerido] = useState<Partial<Customer> | undefined>(undefined);
+  function abrirNuevoCliente(busqueda: string) {
+    // Si buscó un número, va al celular; si buscó un nombre, al nombre.
+    const esNumero = /^[\d\s+()-]{7,}$/.test(busqueda);
+    setSugerido(!busqueda ? undefined : esNumero ? { phone: busqueda.replace(/\D/g, '') } : { full_name: busqueda });
+    setNuevoCliente(true);
+  }
+  const crearClienteMut = useMutation({
+    mutationFn: (d: Parameters<typeof aPayload>[0]) => customers.create(aPayload(d)),
+    onSuccess: (c) => {
+      toast.success(`Cliente creado: ${c.full_name}`);
+      descartarBorrador('pos:clienteNuevo');
+      setSugerido(undefined);
+      qc.invalidateQueries({ queryKey: ['pos-customers'] });
+      qc.invalidateQueries({ queryKey: ['customers'] });
+      elegirCliente(c);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   const [payments, setPayments] = useBorrador<PaymentEntry[]>('pos:pagos', [{ method: 'Efectivo', amount: '' }]);
   const [notes, setNotes] = useBorrador('pos:notas', '');
   const [bono, setBono] = useBorrador<BonoBienvenida | null>('pos:bono', null);
@@ -983,7 +1024,15 @@ export default function POSPage() {
                 <CardTitle className="text-base">Cliente</CardTitle>
               </CardHeader>
               <CardContent>
-                <CustomerSelector value={customer} onChange={elegirCliente} onCompletar={() => setPedirDatos(true)} />
+                <CustomerSelector value={customer} onChange={elegirCliente} onCompletar={() => setPedirDatos(true)} onNuevo={abrirNuevoCliente} />
+                <Dialog open={nuevoCliente} onClose={() => setNuevoCliente(false)} title="Cliente nuevo" size="md">
+                  <CustomerForm
+                    prefijo="pos:clienteNuevo"
+                    initial={sugerido}
+                    onSubmit={(d) => crearClienteMut.mutate(d)}
+                    loading={crearClienteMut.isPending}
+                  />
+                </Dialog>
                 <DatosFaltantesModal
                   customer={customer}
                   open={pedirDatos}
