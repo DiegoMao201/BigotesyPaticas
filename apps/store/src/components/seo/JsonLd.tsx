@@ -112,7 +112,8 @@ export function OrganizationSchema() {
         founder: {
           '@type': 'Person',
           '@id': 'https://www.datovatenexuspro.com/#diego',
-          name: 'Diego Mauricio García R.',
+          name: 'Diego Mauricio García Rengifo',
+          alternateName: 'Diego Mauricio García R.',
           url: 'https://www.datovatenexuspro.com/diego',
           sameAs: [
             'https://www.datovatenexuspro.com',

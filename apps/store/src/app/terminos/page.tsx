@@ -18,7 +18,7 @@ export default function TerminosPage() {
         <section>
           <h2 className="text-xl font-bold text-gray-900 mb-3">Quién vende</h2>
           <p>
-            <strong>Diego Mauricio García Rengifo</strong>, persona natural, NIT 1088266407-7, propietario del establecimiento
+            <strong><a href="https://www.datovatenexuspro.com/diego" className="underline">Diego Mauricio García Rengifo</a></strong>, persona natural, NIT 1088266407-7, propietario del establecimiento
             de comercio <strong>Bigotes y Paticas</strong> (matrícula mercantil 68875, Cámara de Comercio de Dosquebradas).
             Dirección para notificaciones: Cl. 15 #3A-07, C.C. Samara Plaza, Local 2, Dosquebradas, Risaralda, Colombia.
             Correo: bigotesypaticasdosquebradas@gmail.com · WhatsApp +57 320 687 6633. Estos términos aplican a la web,
