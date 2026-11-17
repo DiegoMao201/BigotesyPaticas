@@ -7,7 +7,7 @@ así que un desprendible de hace un año se vuelve a generar idéntico.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from app.services.invoice_pdf import LOGO_PNG_B64, generate_invoice_pdf
@@ -270,3 +270,203 @@ def render_contrato_html(*, employee, smmlv: Decimal, aux: Decimal) -> str:
 
 def html_a_pdf(html: str) -> bytes:
     return generate_invoice_pdf(html)
+
+
+# ────────────────── Liquidación final (17-nov-2026) ──────────────────────
+
+MOTIVOS = {
+    "mutuo_acuerdo": "mutuo acuerdo entre las partes (artículo 61, literal b, del Código Sustantivo del Trabajo)",
+    "renuncia": "renuncia voluntaria del trabajador (artículo 61, literal h, del Código Sustantivo del Trabajo)",
+}
+
+
+def render_liquidacion_html(
+    *,
+    employee,
+    liq: dict,
+    fecha_retiro: date,
+    fecha_documento: date,
+    motivo: str,
+    razon: str,
+    pagos: list,
+    consecutivo: int,
+) -> str:
+    """Carta, liquidación definitiva, acta de terminación con paz y salvo, y
+    certificado laboral: los cuatro documentos de un cierre de contrato."""
+    nombre = employee.nombre
+    primer = nombre.split(" ")[0]
+    causal = MOTIVOS.get(motivo, motivo)
+    # Período de prueba pactado en el contrato: 2 meses desde el ingreso.
+    ing = employee.fecha_ingreso
+    m = ing.month + 2
+    fin_prueba = date(ing.year + (m - 1) // 12, (m - 1) % 12 + 1, ing.day) - timedelta(days=1)
+    en_prueba = fecha_retiro <= fin_prueba
+
+    filas_pagos = "".join(
+        f"<tr><td>N.º {p.consecutivo:05d}</td><td>{_fecha_corta(p.periodo_inicio)} al {_fecha_corta(p.periodo_fin)}</td>"
+        f"<td class='num'>{p.dias_trabajados}</td><td>{_fecha_corta(p.fecha_pago)}</td><td class='num'>{_money(p.neto)}</td></tr>"
+        for p in pagos
+    )
+    ultimo_pago = pagos[-1] if pagos else None
+    total = liq["total"]
+    nota_prueba = (
+        f" La terminación ocurre dentro del período de prueba pactado (hasta el {_fecha_larga(fin_prueba)}),"
+        " por lo que, además, no hay lugar a preaviso ni a indemnización alguna."
+        if en_prueba
+        else ""
+    )
+    footer = f"""<div class="footer">{EMPRESA["razon_social"]} · NIT {EMPRESA["nit"]} · {EMPRESA["direccion"]} · {EMPRESA["telefono"]} · {EMPRESA["email"]}</div>"""
+    firmas = f"""
+  <div class="firmas">
+    <div class="firma"><strong>{EMPRESA["representante"]}</strong><br/>C.C. {EMPRESA["cedula_representante"]}<br/>Empleador</div>
+    <div class="firma"><strong>{nombre}</strong><br/>C.C. {employee.documento}<br/>Trabajador</div>
+  </div>"""
+
+    return f"""<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><style>{_BASE_CSS}
+  .salto {{ page-break-before: always; }}
+  .header {{ margin-bottom: 5mm; }}
+  p {{ font-size: 9.8pt; line-height: 1.42; margin: 0 0 2.4mm; }}
+  .destino {{ margin: 0 0 4mm; line-height: 1.4; }}
+  .asunto {{ font-weight: 700; margin: 0 0 4mm; }}
+  .firmas {{ margin-top: 12mm; }}
+  .footer {{ margin-top: 5mm; }}
+  table {{ margin-bottom: 3mm; }}
+  td {{ padding: 5px 8px; }}
+  .neto {{ margin: 2mm 0 4mm; }}
+  .formula {{ color: #78716c; font-size: 8.5pt; }}
+  .firma-sola {{ width: 70mm; margin-top: 13mm; border-top: 1px solid #1c1917; padding-top: 4px; font-size: 8.5pt; }}
+</style></head>
+<body>
+
+<div class="carta">
+  {_header("Comunicación", "Terminación del contrato", f"{EMPRESA['ciudad']}, {_fecha_larga(fecha_documento)}")}
+  <div class="destino">Señor<br/><strong>{nombre}</strong><br/>C.C. {employee.documento}<br/>{employee.email or ""}</div>
+  <p class="asunto">Asunto: terminación del contrato de trabajo y liquidación definitiva de prestaciones sociales.</p>
+  <p>Apreciado {primer}:</p>
+  <p>Por medio de la presente le confirmamos que el contrato individual de trabajo {("a término indefinido" if employee.tipo_contrato == "indefinido" else employee.tipo_contrato)}
+  que usted celebró con {EMPRESA["representante"]}, propietario del establecimiento {EMPRESA["nombre"]}, en el cargo de
+  <strong>{employee.cargo}</strong>, vigente desde el {_fecha_larga(employee.fecha_ingreso)}, terminó el
+  <strong>{_fecha_larga(fecha_retiro)}</strong>, último día laborado, por {causal}{(", " + razon) if razon else ""}.{nota_prueba}</p>
+  <p>Su salario y su auxilio de transporte quedaron pagados hasta el {_fecha_larga(fecha_retiro)}{f" con el desprendible N.º {ultimo_pago.consecutivo:05d}" if ultimo_pago else ""}.
+  Adjunto encontrará la liquidación definitiva de sus prestaciones sociales por los {liq["dias_laborados"]} días laborados,
+  por un valor total de <strong>{_money(total)}</strong>, que se le consignará a la cuenta en la que recibe su salario.
+  Ese valor corresponde a cesantías, intereses a las cesantías, prima de servicios y vacaciones causadas y no disfrutadas;
+  no se le hace ningún descuento.</p>
+  <p>Le informamos además que:</p>
+  <p>1. Su retiro se reportará en la planilla de seguridad social (PILA) del mes de {MESES[fecha_retiro.month - 1]},
+  con aportes cubiertos hasta el {_fecha_larga(fecha_retiro)}.<br/>
+  2. Tiene derecho a realizarse el examen médico ocupacional de egreso, a cargo del empleador. Si desea hacérselo,
+  por favor avísenos dentro de los cinco (5) días siguientes al recibo de esta comunicación para programarlo.<br/>
+  3. Adjuntamos su certificado laboral y el acta de terminación con paz y salvo, que le pedimos firmar y devolver.</p>
+  <p>Le agradecemos sinceramente el compromiso y el trabajo que dedicó a {EMPRESA["nombre"]} y a nuestros clientes.
+  Lamentamos la situación familiar que motiva su retiro y le deseamos que todo se resuelva pronto. Las puertas de la
+  tienda quedan abiertas para usted.</p>
+  <p>Cordialmente,</p>
+  <div class="firma-sola"><strong>{EMPRESA["representante"]}</strong><br/>C.C. {EMPRESA["cedula_representante"]}<br/>Empleador · {EMPRESA["nombre"]}</div>
+  {footer}
+</div>
+
+<div class="salto">
+  {_header("Liquidación definitiva", f"N.º L-{consecutivo:05d}", f"Elaborada el {_fecha_larga(fecha_documento)}")}
+  <div class="grid">
+    <div class="card"><div class="label">Trabajador</div><div class="value">{nombre}</div>
+      <div class="sub">C.C. {employee.documento} · {employee.cargo}</div><div class="sub">Contrato {employee.tipo_contrato}</div></div>
+    <div class="card"><div class="label">Tiempo de servicio</div><div class="value">{liq["dias_laborados"]} días</div>
+      <div class="sub">Ingreso: {_fecha_corta(employee.fecha_ingreso)}</div><div class="sub">Retiro: {_fecha_corta(fecha_retiro)}</div></div>
+    <div class="card"><div class="label">Bases mensuales</div><div class="value">{_money(liq["salario_base"])}</div>
+      <div class="sub">Salario básico</div><div class="sub">Aux. transporte {_money(liq["aux_base"])}</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Concepto</th><th>Cálculo</th><th class="num">Valor</th></tr></thead>
+    <tbody>
+      <tr><td>Cesantías</td><td class="formula">{_money(liq["base_prestaciones"])} × {liq["dias_laborados"]} días / 360</td><td class="num">{_money(liq["cesantias"])}</td></tr>
+      <tr><td>Intereses a las cesantías</td><td class="formula">cesantías × {liq["dias_laborados"]} días × 12 % / 360</td><td class="num">{_money(liq["intereses_cesantias"])}</td></tr>
+      <tr><td>Prima de servicios ({"1.er" if fecha_retiro.month <= 6 else "2.º"} semestre {fecha_retiro.year})</td><td class="formula">{_money(liq["base_prestaciones"])} × {liq["dias_prima"]} días / 360</td><td class="num">{_money(liq["prima"])}</td></tr>
+      <tr><td>Vacaciones no disfrutadas ({str(liq["dias_vacaciones"]).replace(".", ",")} días)</td><td class="formula">{_money(liq["salario_base"])} × {liq["dias_laborados"]} días / 720</td><td class="num">{_money(liq["vacaciones"])}</td></tr>
+      <tr><td>Salarios pendientes</td><td class="formula">pagados hasta el {_fecha_corta(fecha_retiro)}</td><td class="num">{_money(0)}</td></tr>
+      <tr><td>Indemnización</td><td class="formula">no aplica: {"mutuo acuerdo" if motivo == "mutuo_acuerdo" else "renuncia"}{" en período de prueba" if en_prueba else ""}</td><td class="num">{_money(0)}</td></tr>
+      <tr><td>Deducciones</td><td class="formula">las prestaciones no son base de aportes</td><td class="num">{_money(0)}</td></tr>
+      <tr class="total"><td colspan="2">Total a pagar</td><td class="num">{_money(total)}</td></tr>
+    </tbody>
+  </table>
+  <div class="neto"><span class="l">Neto a pagar al trabajador</span><span class="v">{_money(total)}</span></div>
+  <h2>Salarios pagados durante el contrato</h2>
+  <table>
+    <thead><tr><th>Desprendible</th><th>Período</th><th class="num">Días</th><th>Pagado</th><th class="num">Neto</th></tr></thead>
+    <tbody>{filas_pagos}</tbody>
+  </table>
+  <p class="note">Bases: salario mínimo legal mensual vigente y auxilio de transporte legal (el trabajador devengaba
+  hasta dos salarios mínimos). Cesantías y prima incluyen el auxilio de transporte; las vacaciones se liquidan sobre el
+  salario solo. Días en mes comercial de 30 días. Por terminar el contrato antes del 31 de diciembre, las cesantías se
+  pagan directamente al trabajador.</p>
+  {firmas}
+  {footer}
+</div>
+
+<div class="salto">
+  {_header("Acta de terminación", "Paz y salvo", f"{EMPRESA['ciudad']}, {_fecha_larga(fecha_documento)}")}
+  <p>Entre los suscritos, <strong>{EMPRESA["representante"]}</strong>, identificado con C.C. {EMPRESA["cedula_representante"]},
+  propietario del establecimiento {EMPRESA["nombre"]} (NIT {EMPRESA["nit"]}), en adelante el EMPLEADOR, y
+  <strong>{nombre}</strong>, identificado con C.C. {employee.documento}, en adelante el TRABAJADOR, hacemos constar:</p>
+  <p><strong>Primero.</strong> Que entre las partes existió un contrato individual de trabajo {employee.tipo_contrato}
+  para el cargo de {employee.cargo}, desde el {_fecha_larga(employee.fecha_ingreso)}.</p>
+  <p><strong>Segundo.</strong> Que el contrato terminó el {_fecha_larga(fecha_retiro)} por {causal}{(", " + razon) if razon else ""},
+  decisión que el TRABAJADOR declara haber tomado de manera libre y voluntaria, sin presión de ninguna clase.{nota_prueba}</p>
+  <p><strong>Tercero.</strong> Que el EMPLEADOR pagó al TRABAJADOR la totalidad de los salarios y auxilios de transporte
+  causados hasta el {_fecha_larga(fecha_retiro)}, y le paga en este acto la liquidación definitiva N.º L-{consecutivo:05d}
+  por <strong>{_money(total)}</strong>, que comprende cesantías ({_money(liq["cesantias"])}), intereses a las cesantías
+  ({_money(liq["intereses_cesantias"])}), prima de servicios ({_money(liq["prima"])}) y vacaciones no disfrutadas
+  ({_money(liq["vacaciones"])}).</p>
+  <p><strong>Cuarto.</strong> Que con el recibo de dicho valor el TRABAJADOR declara al EMPLEADOR a paz y salvo por todo
+  concepto de salarios, prestaciones sociales, vacaciones e indemnizaciones derivados del contrato de trabajo, sin perjuicio
+  de los derechos ciertos e indiscutibles que la ley le reconoce. A su vez, el TRABAJADOR declara haber devuelto los
+  elementos, dineros y cobros de domicilios que tuvo a su cargo, y el EMPLEADOR lo declara a paz y salvo por ese concepto.</p>
+  <p><strong>Quinto.</strong> Que el TRABAJADOR fue informado de su derecho a realizarse el examen médico ocupacional de egreso.</p>
+  <p>Para constancia se firma en {EMPRESA["ciudad"]}, el ____ de {MESES[fecha_documento.month - 1]} de {fecha_documento.year}.</p>
+  {firmas}
+  {footer}
+</div>
+
+<div class="salto carta">
+  {_header("Certificado laboral", "Constancia", f"{EMPRESA['ciudad']}, {_fecha_larga(fecha_documento)}")}
+  <p style="text-align:center;font-weight:700;margin:8mm 0 5mm">EL SUSCRITO EMPLEADOR CERTIFICA QUE:</p>
+  <p>El señor <strong>{nombre}</strong>, identificado con cédula de ciudadanía N.º {employee.documento}, laboró en el
+  establecimiento <strong>{EMPRESA["nombre"]}</strong>, de propiedad de {EMPRESA["representante"]} (NIT {EMPRESA["nit"]}),
+  mediante contrato individual de trabajo {employee.tipo_contrato}, desde el {_fecha_larga(employee.fecha_ingreso)} hasta el
+  {_fecha_larga(fecha_retiro)}, desempeñando el cargo de <strong>{employee.cargo}</strong>, con un salario básico mensual de
+  {_money(liq["salario_base"])} más el auxilio de transporte de ley.</p>
+  <p>La presente certificación se expide a solicitud del interesado, en {EMPRESA["ciudad"]}, el {_fecha_larga(fecha_documento)}.</p>
+  <div class="firma-sola"><strong>{EMPRESA["representante"]}</strong><br/>C.C. {EMPRESA["cedula_representante"]}<br/>Empleador · {EMPRESA["telefono"]}</div>
+  {footer}
+</div>
+
+</body></html>"""
+
+
+def correo_liquidacion_html(*, employee, liq: dict, fecha_retiro: date) -> str:
+    """Cuerpo del correo que acompaña la liquidación final."""
+    td = "padding:4px 12px 4px 0;color:#57534e"
+    tv = "padding:4px 0;text-align:right"
+    return f"""
+    <div style="font-family:Arial,sans-serif;color:#1c1917;max-width:560px">
+      <h2 style="color:#0d4a45;margin-bottom:4px">Liquidación definitiva de tu contrato</h2>
+      <p>Hola {employee.nombre.split(" ")[0]},</p>
+      <p>Como lo hablamos, tu contrato con Bigotes y Paticas terminó el
+      <strong>{_fecha_larga(fecha_retiro)}</strong>. Tu salario quedó pagado hasta ese día y aquí
+      está la liquidación de tus prestaciones por los {liq["dias_laborados"]} días que trabajaste con nosotros:</p>
+      <table style="border-collapse:collapse;font-size:14px">
+        <tr><td style="{td}">Cesantías</td><td style="{tv}">{_money(liq["cesantias"])}</td></tr>
+        <tr><td style="{td}">Intereses a las cesantías</td><td style="{tv}">{_money(liq["intereses_cesantias"])}</td></tr>
+        <tr><td style="{td}">Prima de servicios</td><td style="{tv}">{_money(liq["prima"])}</td></tr>
+        <tr><td style="{td}">Vacaciones no disfrutadas</td><td style="{tv}">{_money(liq["vacaciones"])}</td></tr>
+        <tr><td style="padding:6px 12px 6px 0;font-weight:bold;border-top:1px solid #d6d3d1">Total a pagar</td><td style="padding:6px 0;text-align:right;font-weight:bold;border-top:1px solid #d6d3d1">{_money(liq["total"])}</td></tr>
+      </table>
+      <p style="margin-top:16px">En el PDF adjunto van cuatro documentos: la carta de terminación, la
+      liquidación con el cálculo de cada valor, el acta de terminación con paz y salvo y tu certificado laboral.
+      Te pedimos firmar el acta y la liquidación y devolvérnoslas (en la tienda o por foto a este correo).</p>
+      <p>Gracias por tu trabajo con nosotros, {employee.nombre.split(" ")[0]}. Te deseamos lo mejor con tu familia;
+      aquí tienes las puertas abiertas.</p>
+      <p>Diego Mauricio García<br/>Bigotes y Paticas</p>
+      <p style="color:#78716c;font-size:12px">Bigotes y Paticas · Samara Plaza Mall, Local 2 · Dosquebradas · {EMPRESA["telefono"]}</p>
+    </div>"""

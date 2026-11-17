@@ -634,6 +634,20 @@ export interface NominaEmpleado {
   provision_mensual: NominaProvision;
   pendiente: { periodo: NominaPeriodo; dias_sugeridos: number; quincena_terminada: boolean; puede_pagar: boolean; motivo: string | null; liquidacion: NominaLiquidacion } | null;
   acumulado: { quincenas_pagadas: number; neto_pagado: number; provision: NominaProvision };
+  liquidacion_final: NominaLiquidacionFinal | null;
+}
+export interface NominaFinalDetalle {
+  dias_laborados: number; dias_prima: number; dias_vacaciones: number; salario_base: number; aux_base: number;
+  base_prestaciones: number; cesantias: number; intereses_cesantias: number; prima: number; vacaciones: number; total: number;
+}
+export interface NominaLiquidacionFinal {
+  id: string; consecutivo: number; fecha_retiro: string; fecha_documento: string; motivo: string; razon: string | null;
+  detalle: NominaFinalDetalle; total: number; provision_acumulada: number; ajuste_provision: number;
+  metodo_pago: string | null; fecha_pago: string | null; registrada_por: string | null;
+  email_enviado_a: string | null; email_enviado_at: string | null; email_error: string | null;
+}
+export interface NominaFinalIn {
+  fecha_retiro: string; motivo: 'mutuo_acuerdo' | 'renuncia'; razon: string | null; metodo_pago: string; fecha_pago: string | null; enviar_correo: boolean;
 }
 export interface NominaPago {
   id: string; consecutivo: number; employee_id: string; employee_nombre: string | null; periodo: NominaPeriodo;
@@ -681,6 +695,12 @@ export const nomina = {
   editarEmpleado: (id: string, payload: NominaEmpleadoIn) => api<NominaEmpleado>(`/v1/nomina/empleados/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   contratoPdf: (id: string) => apiPdf(`/v1/nomina/empleados/${id}/contrato.pdf`),
   enviarContrato: (id: string) => api<NominaEmpleado>(`/v1/nomina/empleados/${id}/contrato/enviar`, { method: 'POST' }),
+  finalPreview: (id: string, fecha_retiro: string) =>
+    api<{ liquidacion: NominaFinalDetalle; provision_acumulada: number; ajuste_provision: number; aviso: string | null }>(`/v1/nomina/empleados/${id}/liquidacion-final?fecha_retiro=${fecha_retiro}`),
+  finalRegistrar: (id: string, payload: NominaFinalIn) =>
+    api<NominaLiquidacionFinal>(`/v1/nomina/empleados/${id}/liquidacion-final`, { method: 'POST', body: JSON.stringify(payload) }),
+  finalPdf: (liqId: string) => apiPdf(`/v1/nomina/liquidaciones/${liqId}/pdf`),
+  finalEnviar: (liqId: string) => api<NominaLiquidacionFinal>(`/v1/nomina/liquidaciones/${liqId}/enviar`, { method: 'POST' }),
   guardarParametro: (payload: NominaParametro) => api<{ ok: boolean }>('/v1/nomina/parametros', { method: 'POST', body: JSON.stringify(payload) }),
 };
 

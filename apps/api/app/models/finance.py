@@ -229,3 +229,35 @@ class Payroll(UUIDPKMixin, Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
+
+
+class PayrollSettlement(UUIDPKMixin, Base):
+    """Liquidación final de un contrato terminado (17-nov-2026), cifras congeladas."""
+
+    __tablename__ = "payroll_settlements"
+    __table_args__: ClassVar = {"schema": "finance"}
+
+    consecutivo: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    employee_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("finance.employees.id"), nullable=False, unique=True
+    )
+    fecha_retiro: Mapped[date] = mapped_column(Date, nullable=False)
+    fecha_documento: Mapped[date] = mapped_column(Date, nullable=False)
+    motivo: Mapped[str] = mapped_column(String(40), nullable=False)
+    razon: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detalle: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    total: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    provision_acumulada: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    ajuste_provision: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    ajuste_expense_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("finance.expenses.id"), nullable=True
+    )
+    metodo_pago: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    fecha_pago: Mapped[date | None] = mapped_column(Date, nullable=True)
+    registrada_por: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    email_enviado_a: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    email_enviado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    email_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )

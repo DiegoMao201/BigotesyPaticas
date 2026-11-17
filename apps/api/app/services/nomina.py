@@ -28,7 +28,7 @@ from __future__ import annotations
 import calendar
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import ROUND_HALF_EVEN, Decimal
+from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
 
 PESO = Decimal("1")
 DIAS_MES = 30
@@ -206,4 +206,70 @@ def provision_mensual(salario_mensual: Decimal, aux_mensual: Decimal) -> dict[st
         "prima": float(prima),
         "vacaciones": float(vac),
         "total": float(ces + inte + prima + vac),
+    }
+
+
+# ────────────────── Liquidación final (17-nov-2026) ──────────────────────
+#
+# Al terminar el contrato se pagan, en proporción a los días laborados, las
+# prestaciones que la quincena solo venía provisionando. Fórmulas de ley:
+#   cesantías  = (salario + auxilio) × días / 360            (art. 249 CST)
+#   intereses  = cesantías × días × 12 % / 360               (Ley 52 de 1975)
+#   prima      = (salario + auxilio) × días del semestre / 360 (art. 306 CST)
+#   vacaciones = salario × días / 720  (15 días hábiles por año, art. 189 CST;
+#                el auxilio de transporte no entra)
+# Días en convención comercial (mes de 30). Se redondea al peso hacia arriba en
+# el medio peso: en una liquidación final el redondeo favorece al trabajador.
+
+
+def dias_360(desde: date, hasta: date) -> int:
+    """Días entre dos fechas, ambas incluidas, con meses de 30 días."""
+    d1 = min(desde.day, 30)
+    d2 = min(hasta.day, 30)
+    if hasta.month == 2 and hasta.day == calendar.monthrange(hasta.year, 2)[1]:
+        d2 = 30
+    return (hasta.year - desde.year) * 360 + (hasta.month - desde.month) * 30 + (d2 - d1) + 1
+
+
+def _peso_arriba(v: Decimal) -> Decimal:
+    return v.quantize(PESO, rounding=ROUND_HALF_UP)
+
+
+def liquidacion_final(
+    *,
+    salario_mensual: Decimal,
+    aux_mensual: Decimal,
+    fecha_ingreso: date,
+    fecha_retiro: date,
+    smmlv: Decimal,
+    vacaciones_disfrutadas: int = 0,
+) -> dict:
+    """Prestaciones a pagar al terminar el contrato. Sin salarios pendientes:
+    la última quincena se liquida con el botón de siempre."""
+    dias = dias_360(fecha_ingreso, fecha_retiro)
+    # La prima es semestral: cuenta desde el 1-ene o el 1-jul, o desde el ingreso.
+    ini_sem = date(fecha_retiro.year, 1 if fecha_retiro.month <= 6 else 7, 1)
+    dias_prima = dias_360(max(ini_sem, fecha_ingreso), fecha_retiro)
+    aux = aux_mensual if salario_mensual <= smmlv * 2 else Decimal(0)
+    base = salario_mensual + aux
+
+    ces_exacta = base * dias / Decimal(360)
+    cesantias = _peso_arriba(ces_exacta)
+    intereses = _peso_arriba(ces_exacta * dias * Decimal("0.12") / Decimal(360))
+    prima = _peso_arriba(base * dias_prima / Decimal(360))
+    dias_vac = Decimal(dias) * 15 / Decimal(360) - vacaciones_disfrutadas
+    vacaciones = _peso_arriba(salario_mensual * dias_vac / Decimal(30))
+    total = cesantias + intereses + prima + vacaciones
+    return {
+        "dias_laborados": dias,
+        "dias_prima": dias_prima,
+        "dias_vacaciones": float(round(dias_vac, 2)),
+        "salario_base": float(salario_mensual),
+        "aux_base": float(aux),
+        "base_prestaciones": float(base),
+        "cesantias": float(cesantias),
+        "intereses_cesantias": float(intereses),
+        "prima": float(prima),
+        "vacaciones": float(vacaciones),
+        "total": float(total),
     }

@@ -23,7 +23,7 @@ import {
 import { toast } from 'sonner';
 import {
   nomina, type NominaEmpleado, type NominaEmpleadoIn, type NominaLiquidacion, type NominaPago,
-  type NominaParametro, type NominaResumen,
+  type NominaParametro, type NominaResumen, type NominaFinalDetalle,
 } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
@@ -102,6 +102,7 @@ export default function NominaPage() {
           </div>
           <div className="space-y-4">
             <EmpleadoCard empleado={empleado} onEditar={() => setEditando(empleado)} onCambio={refrescar} />
+            <LiquidacionFinalCard empleado={empleado} onCambio={refrescar} />
             <ProvisionCard empleado={empleado} />
             <ParametrosCard param={data.parametros_vigentes} onEditar={() => setEditParam(true)} />
           </div>
@@ -608,5 +609,151 @@ function Historial({ pagos, onCambio }: { pagos: NominaPago[]; onCambio: () => v
         </table>
       </div>
     </Card>
+  );
+}
+
+
+// ───────────────────────── Liquidación final (17-nov-2026) ─────────────────────────
+// Al terminar el contrato: carta, liquidación, acta con paz y salvo y certificado
+// laboral en un PDF. Registrar retira al empleado y cuadra la provisión en Gastos.
+
+function LiquidacionFinalCard({ empleado, onCambio }: { empleado: NominaEmpleado; onCambio: () => void }) {
+  const lf = empleado.liquidacion_final;
+  const [abrir, setAbrir] = useState(false);
+  const [bajando, setBajando] = useState(false);
+  const [fecha, setFecha] = useState(empleado.fecha_retiro ?? new Date().toISOString().slice(0, 10));
+  const [motivo, setMotivo] = useState<'mutuo_acuerdo' | 'renuncia'>('mutuo_acuerdo');
+  const [razon, setRazon] = useState('a solicitud del trabajador por motivos familiares');
+  const [metodo, setMetodo] = useState('Transferencia');
+  const [enviarCorreo, setEnviarCorreo] = useState(false);
+
+  const preview = useQuery({
+    queryKey: ['nomina-final', empleado.id, fecha],
+    queryFn: () => nomina.finalPreview(empleado.id, fecha),
+    enabled: abrir && !lf && /^\d{4}-\d{2}-\d{2}$/.test(fecha),
+  });
+  const registrar = useMutation({
+    mutationFn: () => nomina.finalRegistrar(empleado.id, { fecha_retiro: fecha, motivo, razon: razon || null, metodo_pago: metodo, fecha_pago: null, enviar_correo: enviarCorreo }),
+    onSuccess: (r) => {
+      setAbrir(false);
+      if (r.email_enviado_at) toast.success(`Liquidación registrada y enviada a ${r.email_enviado_a}`);
+      else if (enviarCorreo) toast.warning(`Liquidación registrada, pero el correo falló: ${r.email_error ?? ''}`);
+      else toast.success('Liquidación final registrada');
+      onCambio();
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo registrar la liquidación'),
+  });
+  const enviar = useMutation({
+    mutationFn: () => nomina.finalEnviar(lf!.id),
+    onSuccess: (r) => { toast.success(`Liquidación enviada a ${r.email_enviado_a}`); onCambio(); },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo enviar'),
+  });
+
+  if (lf) {
+    return (
+      <Card className="p-4 space-y-3">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> Liquidación final L-{String(lf.consecutivo).padStart(5, '0')}</div>
+        <div className="text-2xl font-black text-brand-700">{formatCurrency(lf.total)}</div>
+        <FilasFinal d={lf.detalle} />
+        <dl className="text-xs grid grid-cols-2 gap-x-3 gap-y-1 text-muted-foreground">
+          <dt>Retiro</dt><dd>{fechaCorta(lf.fecha_retiro)}</dd>
+          <dt>Causa</dt><dd>{lf.motivo === 'renuncia' ? 'Renuncia' : 'Mutuo acuerdo'}</dd>
+          <dt>Provisionado</dt><dd>{formatCurrency(lf.provision_acumulada)}</dd>
+          <dt>Ajuste provisión</dt><dd>{lf.ajuste_provision > 0 ? '+' : ''}{formatCurrency(lf.ajuste_provision)}</dd>
+          <dt>Registrada</dt><dd>{fechaCorta(lf.fecha_documento)} · {lf.metodo_pago}</dd>
+        </dl>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" disabled={bajando} onClick={async () => {
+            setBajando(true);
+            try { descargar(await nomina.finalPdf(lf.id), `liquidacion-L-${String(lf.consecutivo).padStart(5, '0')}.pdf`); }
+            catch (e) { toast.error((e as Error).message); }
+            finally { setBajando(false); }
+          }}>
+            {bajando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Ver PDF
+          </Button>
+          <Button variant="outline" size="sm" disabled={!empleado.email || enviar.isPending} onClick={() => enviar.mutate()}>
+            {enviar.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {lf.email_enviado_at ? 'Reenviar' : 'Enviar al empleado'}
+          </Button>
+        </div>
+        {lf.email_enviado_at
+          ? <div className="text-xs text-emerald-700 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Enviada a {lf.email_enviado_a} el {fechaCorta(lf.email_enviado_at)}</div>
+          : <div className="text-xs text-muted-foreground">{lf.email_error ? `Error: ${lf.email_error}` : 'Todavía no se ha enviado al empleado.'}</div>}
+      </Card>
+    );
+  }
+
+  if (!empleado.activo) return null;
+  const p = preview.data;
+  return (
+    <Card className="p-4 space-y-2">
+      <div className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> Terminación del contrato</div>
+      <p className="text-xs text-muted-foreground">Calcula la liquidación final, genera la carta, el acta con paz y salvo y el certificado laboral, y retira al empleado.</p>
+      <Button variant="outline" size="sm" onClick={() => setAbrir(true)}>Liquidar contrato</Button>
+
+      <Dialog open={abrir} onClose={() => !registrar.isPending && setAbrir(false)} title={`Liquidación final · ${empleado.nombre}`} size="md">
+        <DialogBody className="space-y-3 text-sm">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium mb-1 block">Último día laborado</label>
+              <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Causa</label>
+              <Select value={motivo} onChange={(e) => setMotivo(e.target.value as 'mutuo_acuerdo' | 'renuncia')}>
+                <option value="mutuo_acuerdo">Mutuo acuerdo</option>
+                <option value="renuncia">Renuncia voluntaria</option>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Razón (sale en la carta y el acta)</label>
+            <Input value={razon} onChange={(e) => setRazon(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block">Método de pago</label>
+            <Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>
+              {METODOS.map((m) => <option key={m} value={m}>{m}</option>)}
+            </Select>
+          </div>
+          {!p ? (
+            <div className="text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Calculando…</div>
+          ) : (
+            <div className="rounded-lg bg-muted p-3 space-y-1">
+              <FilasFinal d={p.liquidacion} />
+              <div className="flex justify-between font-bold border-t border-border pt-1"><span>Total a consignar</span><span>{formatCurrency(p.liquidacion.total)}</span></div>
+              <div className="text-xs text-muted-foreground pt-1">
+                Ya provisionado en Gastos: {formatCurrency(p.provision_acumulada)}.{' '}
+                {p.ajuste_provision < 0 ? `Sobran ${formatCurrency(-p.ajuste_provision)}: se descuentan de la última provisión.` : p.ajuste_provision > 0 ? `Faltan ${formatCurrency(p.ajuste_provision)}: se registran como gasto.` : 'Cuadra exacto.'}
+              </div>
+              {p.aviso && <div className="text-xs text-amber-700 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {p.aviso}</div>}
+            </div>
+          )}
+          <label className="text-xs flex items-center gap-2 text-muted-foreground">
+            <input type="checkbox" checked={enviarCorreo} onChange={(e) => setEnviarCorreo(e.target.checked)} />
+            Enviar ya la carta y la liquidación a {empleado.email || 'sin correo'} (copia a la tienda)
+          </label>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setAbrir(false)} disabled={registrar.isPending}>Cancelar</Button>
+          <Button onClick={() => registrar.mutate()} disabled={registrar.isPending || !p || !!p.aviso}>
+            {registrar.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Registrando…</> : 'Registrar liquidación y retirar'}
+          </Button>
+        </DialogFooter>
+      </Dialog>
+    </Card>
+  );
+}
+
+function FilasFinal({ d }: { d: NominaFinalDetalle }) {
+  const filas: [string, number][] = [
+    [`Cesantías (${d.dias_laborados} días)`, d.cesantias],
+    ['Intereses a las cesantías', d.intereses_cesantias],
+    [`Prima (${d.dias_prima} días)`, d.prima],
+    [`Vacaciones (${String(d.dias_vacaciones).replace('.', ',')} días)`, d.vacaciones],
+  ];
+  return (
+    <div className="space-y-0.5 text-sm">
+      {filas.map(([k, v]) => <div key={k} className="flex justify-between"><span className="text-muted-foreground">{k}</span><span className="tabular-nums">{formatCurrency(v)}</span></div>)}
+    </div>
   );
 }

@@ -37,13 +37,15 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 
 from app.deps import CurrentUser, DBSession, require_permission
-from app.models.finance import Employee, Expense, Payroll, PayrollParam
+from app.models.finance import Employee, Expense, Payroll, PayrollParam, PayrollSettlement
 from app.services import nomina as calc
 from app.services.email import STORE_EMAIL, send_email
 from app.services.nomina_pdf import (
+    correo_liquidacion_html,
     html_a_pdf,
     render_contrato_html,
     render_desprendible_html,
+    render_liquidacion_html,
 )
 
 log = structlog.get_logger()
@@ -335,6 +337,10 @@ async def resumen(db: DBSession, user: CurrentUser):
     for emp in empleados:
         d = _employee_out(emp, param)
         d["pendiente"] = await _pendiente_out(db, emp) if emp.activo else None
+        liqf = (
+            await db.execute(select(PayrollSettlement).where(PayrollSettlement.employee_id == emp.id))
+        ).scalar_one_or_none()
+        d["liquidacion_final"] = _settlement_out(liqf) if liqf else None
         acum = (
             await db.execute(
                 text("""
@@ -710,3 +716,278 @@ async def guardar_parametro(payload: ParamIn, db: DBSession, user: CurrentUser):
     row.fuente = (payload.fuente or "").strip() or None
     await db.commit()
     return {"ok": True}
+
+
+# ── Liquidación final (17-nov-2026) ──
+#
+# Diego: *"necesito calcularle la liquidación con carta formal y con cierre de
+# contrato formal [...] y que me quede registro de todo"*. Registrar hace tres
+# cosas en una transacción: congela la liquidación, retira al empleado (inactivo
+# con fecha de retiro) y cuadra la provisión. La provisión quincenal ya llevó las
+# prestaciones al gasto; si sobra, se descuenta de la última provisión; si falta,
+# se registra un gasto por la diferencia. Pagar la liquidación no es gasto nuevo.
+
+
+class LiquidacionFinalIn(BaseModel):
+    fecha_retiro: date
+    motivo: str = Field(default="mutuo_acuerdo", pattern="^(mutuo_acuerdo|renuncia)$")
+    razon: str | None = "a solicitud del trabajador por motivos familiares"
+    metodo_pago: str = "Transferencia"
+    fecha_pago: date | None = None
+    enviar_correo: bool = False
+
+
+def _settlement_out(s: PayrollSettlement) -> dict:
+    return {
+        "id": str(s.id),
+        "consecutivo": s.consecutivo,
+        "fecha_retiro": s.fecha_retiro.isoformat(),
+        "fecha_documento": s.fecha_documento.isoformat(),
+        "motivo": s.motivo,
+        "razon": s.razon,
+        "detalle": s.detalle,
+        "total": float(s.total),
+        "provision_acumulada": float(s.provision_acumulada),
+        "ajuste_provision": float(s.ajuste_provision),
+        "metodo_pago": s.metodo_pago,
+        "fecha_pago": s.fecha_pago.isoformat() if s.fecha_pago else None,
+        "registrada_por": s.registrada_por,
+        "email_enviado_a": s.email_enviado_a,
+        "email_enviado_at": s.email_enviado_at.isoformat() if s.email_enviado_at else None,
+        "email_error": s.email_error,
+    }
+
+
+async def _calcular_final(db: DBSession, emp: Employee, fecha_retiro: date) -> dict:
+    if fecha_retiro < emp.fecha_ingreso:
+        raise HTTPException(status_code=422, detail="La fecha de retiro es anterior al ingreso.")
+    param = await _param_vigente(db, fecha_retiro)
+    salario, aux = _bases(emp, param)
+    liq = calc.liquidacion_final(
+        salario_mensual=salario,
+        aux_mensual=aux,
+        fecha_ingreso=emp.fecha_ingreso,
+        fecha_retiro=fecha_retiro,
+        smmlv=Decimal(param.smmlv),
+    )
+    pagos = (
+        (
+            await db.execute(
+                select(Payroll).where(Payroll.employee_id == emp.id).order_by(Payroll.periodo_inicio)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    falta_salario = None
+    if calc.dias_360(emp.fecha_ingreso, fecha_retiro) > sum(p.dias_trabajados for p in pagos):
+        falta_salario = "Hay días sin pagar: liquida primero la última quincena con el botón de siempre."
+    provision = sum((Decimal(p.total_provision) for p in pagos), Decimal(0))
+    return {
+        "liquidacion": liq,
+        "pagos": pagos,
+        "provision_acumulada": float(provision),
+        "ajuste_provision": float(Decimal(str(liq["total"])) - provision),
+        "aviso": falta_salario,
+    }
+
+
+def _liquidacion_pdf(s: PayrollSettlement, emp: Employee, pagos: list) -> bytes:
+    html = render_liquidacion_html(
+        employee=emp,
+        liq=s.detalle,
+        fecha_retiro=s.fecha_retiro,
+        fecha_documento=s.fecha_documento,
+        motivo=s.motivo,
+        razon=s.razon or "",
+        pagos=pagos,
+        consecutivo=s.consecutivo,
+    )
+    return html_a_pdf(html)
+
+
+async def _pagos_de(db: DBSession, employee_id: uuid.UUID) -> list:
+    return list(
+        (
+            await db.execute(
+                select(Payroll)
+                .where(Payroll.employee_id == employee_id)
+                .order_by(Payroll.periodo_inicio)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def _enviar_liquidacion(db: DBSession, s: PayrollSettlement, emp: Employee) -> bool:
+    if not emp.email:
+        s.email_error = "El empleado no tiene correo registrado."
+        await db.commit()
+        return False
+    try:
+        pagos = await _pagos_de(db, emp.id)
+        pdf = await asyncio.to_thread(_liquidacion_pdf, s, emp, pagos)
+        ok = await asyncio.to_thread(
+            send_email,
+            emp.email,
+            "Liquidación definitiva de tu contrato · Bigotes y Paticas",
+            correo_liquidacion_html(employee=emp, liq=s.detalle, fecha_retiro=s.fecha_retiro),
+            "",
+            [(f"liquidacion-L-{s.consecutivo:05d}.pdf", pdf, "application/pdf")],
+            [STORE_EMAIL],
+        )
+    except Exception as exc:  # pragma: no cover - red/pdf
+        log.error("nomina.liquidacion_email_error", error=str(exc))
+        ok = False
+        s.email_error = str(exc)[:500]
+    if ok:
+        s.email_enviado_a = emp.email
+        s.email_enviado_at = datetime.now(UTC)
+        s.email_error = None
+    elif not s.email_error:
+        s.email_error = "El servicio de correo rechazó el envío."
+    await db.commit()
+    return ok
+
+
+@router.get(
+    "/empleados/{employee_id}/liquidacion-final",
+    dependencies=[Depends(require_permission("finance:read"))],
+)
+async def liquidacion_final_preview(
+    employee_id: uuid.UUID, fecha_retiro: date, db: DBSession, user: CurrentUser
+):
+    emp = await db.get(Employee, employee_id)
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    r = await _calcular_final(db, emp, fecha_retiro)
+    r.pop("pagos")
+    return r
+
+
+@router.post(
+    "/empleados/{employee_id}/liquidacion-final",
+    dependencies=[Depends(require_permission("finance:write"))],
+)
+async def liquidacion_final_registrar(
+    employee_id: uuid.UUID, payload: LiquidacionFinalIn, db: DBSession, user: CurrentUser
+):
+    emp = await db.get(Employee, employee_id)
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado")
+    ya = (
+        await db.execute(select(PayrollSettlement).where(PayrollSettlement.employee_id == emp.id))
+    ).scalar_one_or_none()
+    if ya is not None:
+        raise HTTPException(status_code=409, detail="Este empleado ya tiene la liquidación final registrada.")
+    r = await _calcular_final(db, emp, payload.fecha_retiro)
+    if r["aviso"]:
+        raise HTTPException(status_code=409, detail=r["aviso"])
+    liq = r["liquidacion"]
+    total = Decimal(str(liq["total"]))
+    ajuste = Decimal(str(r["ajuste_provision"]))
+    hoy = _hoy()
+    consecutivo = (
+        await db.execute(text("SELECT coalesce(max(consecutivo), 0) + 1 FROM finance.payroll_settlements"))
+    ).scalar_one()
+
+    ajuste_id = None
+    if ajuste > 0:
+        # Faltó provisión: el faltante sí es gasto.
+        g = Expense(
+            fecha=payload.fecha_pago or hoy,
+            monto=ajuste,
+            categoria="Nómina",
+            tipo="Operativo",
+            descripcion=f"Ajuste provisión · liquidación final L-{consecutivo:05d} {emp.nombre}",
+            metodo_pago="Provisión",
+            es_fijo=False,
+            created_by=user.email,
+            legacy_id=f"NOMINA-LIQ-{consecutivo:05d}",
+        )
+        db.add(g)
+        await db.flush()
+        ajuste_id = g.id
+    elif ajuste < 0:
+        # Sobró provisión: se devuelve descontándola de las provisiones, de la más reciente hacia atrás.
+        sobra = -ajuste
+        for p in reversed(r["pagos"]):
+            if sobra <= 0 or p.provision_expense_id is None:
+                continue
+            gasto = await db.get(Expense, p.provision_expense_id)
+            if gasto is None:
+                continue
+            baja = min(sobra, Decimal(gasto.monto))
+            gasto.monto = Decimal(gasto.monto) - baja
+            gasto.descripcion = (
+                f"{gasto.descripcion} · ajustada -{_cop(baja)} en la liquidación final "
+                f"L-{consecutivo:05d} (la provisión quincenal superó lo liquidado)"
+            )
+            gasto.updated_at = datetime.now(UTC)
+            ajuste_id = ajuste_id or gasto.id
+            sobra -= baja
+
+    s = PayrollSettlement(
+        consecutivo=int(consecutivo),
+        employee_id=emp.id,
+        fecha_retiro=payload.fecha_retiro,
+        fecha_documento=hoy,
+        motivo=payload.motivo,
+        razon=(payload.razon or "").strip() or None,
+        detalle=liq,
+        total=total,
+        provision_acumulada=Decimal(str(r["provision_acumulada"])),
+        ajuste_provision=ajuste,
+        ajuste_expense_id=ajuste_id,
+        metodo_pago=payload.metodo_pago,
+        fecha_pago=payload.fecha_pago or hoy,
+        registrada_por=user.email,
+    )
+    db.add(s)
+    emp.fecha_retiro = payload.fecha_retiro
+    emp.activo = False
+    nota = f"Retirado el {payload.fecha_retiro:%d/%m/%Y} · liquidación final L-{consecutivo:05d} por {_cop(total)}."
+    emp.notas = f"{emp.notas}\n{nota}" if emp.notas else nota
+    emp.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(s)
+    log.info("nomina.liquidacion_final", empleado=emp.nombre, total=float(total), ajuste=float(ajuste))
+    if payload.enviar_correo:
+        await _enviar_liquidacion(db, s, emp)
+        await db.refresh(s)
+    return _settlement_out(s)
+
+
+@router.get(
+    "/liquidaciones/{settlement_id}/pdf",
+    dependencies=[Depends(require_permission("finance:read"))],
+)
+async def liquidacion_final_pdf(settlement_id: uuid.UUID, db: DBSession, user: CurrentUser):
+    s = await db.get(PayrollSettlement, settlement_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Liquidación no encontrada")
+    emp = await db.get(Employee, s.employee_id)
+    pagos = await _pagos_de(db, emp.id)
+    pdf = await asyncio.to_thread(_liquidacion_pdf, s, emp, pagos)
+    return StreamingResponse(
+        io.BytesIO(pdf),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="liquidacion-L-{s.consecutivo:05d}.pdf"'},
+    )
+
+
+@router.post(
+    "/liquidaciones/{settlement_id}/enviar",
+    dependencies=[Depends(require_permission("finance:write"))],
+)
+async def liquidacion_final_enviar(settlement_id: uuid.UUID, db: DBSession, user: CurrentUser):
+    s = await db.get(PayrollSettlement, settlement_id)
+    if s is None:
+        raise HTTPException(status_code=404, detail="Liquidación no encontrada")
+    emp = await db.get(Employee, s.employee_id)
+    ok = await _enviar_liquidacion(db, s, emp)
+    await db.refresh(s)
+    if not ok:
+        raise HTTPException(status_code=502, detail=s.email_error or "No se pudo enviar")
+    return _settlement_out(s)
