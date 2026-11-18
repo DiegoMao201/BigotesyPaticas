@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { storeApi } from '@/lib/api';
 import { ArticleSchema, BreadcrumbSchema } from '@/components/seo/JsonLd';
 import { Calendar, ArrowLeft, Tag } from 'lucide-react';
@@ -62,6 +62,10 @@ function formatDate(iso: string) {
 export default async function BlogPostPage({ params }: Props) {
   const post = await storeApi.blogBySlug(params.slug);
   if (!post) notFound();
+  // 18-nov-2026: las noticias viven en /noticias/<slug>, pero la misma nota también
+  // abría aquí con su propia canónica: dos URL iguales compitiendo ("Duplicada: el
+  // usuario no ha indicado ninguna versión canónica" en Search Console). Una sola casa.
+  if (post.category === 'noticias') permanentRedirect(`/noticias/${post.slug}`);
 
   const postUrl = `https://bigotesypaticas.com/blog/${post.slug}`;
 

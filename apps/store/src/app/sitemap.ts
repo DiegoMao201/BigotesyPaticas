@@ -10,48 +10,58 @@ const API =
 
 const BASE = 'https://bigotesypaticas.com';
 
+// 18-nov-2026: antes un fallo de la API devolvía null y el sitemap salía, en silencio,
+// solo con las páginas fijas (sin un solo producto) y así quedaba guardado una hora. Si
+// Google lo bajaba en ese rato veía desaparecer el catálogo. Ahora se reintenta y, si la
+// API sigue sin contestar, se lanza el error: Next conserva el último sitemap bueno.
 async function fetchJson<T>(path: string): Promise<T | null> {
-  try {
-    const res = await fetch(`${API}${path}`, {
-      next: { revalidate: 3600 },
-      headers: { Accept: 'application/json' },
-    });
-    if (!res.ok) return null;
-    return res.json() as Promise<T>;
-  } catch {
-    return null;
+  for (let intento = 1; ; intento++) {
+    try {
+      const res = await fetch(`${API}${path}`, {
+        next: { revalidate: 3600 },
+        headers: { Accept: 'application/json' },
+      });
+      if (res.ok) return (await res.json()) as T;
+      if (res.status < 500) return null; // 4xx: la consulta está mal, reintentar no la arregla
+      throw new Error(`API ${res.status}: ${path}`);
+    } catch (e) {
+      if (intento === 3) throw e;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
   }
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Sin `lastModified` donde no hay fecha real: con la hora actual en las 856 URL, cada
+  // hora, Google deja de creerle al campo entero (también al de los artículos, que sí
+  // traen su fecha verdadera).
   const now = new Date();
 
   const staticPages: MetadataRoute.Sitemap = [
-    { url: BASE, lastModified: now, changeFrequency: 'daily', priority: 1.0 },
-    { url: `${BASE}/categorias/perros`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
-    { url: `${BASE}/categorias/gatos`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
-    { url: `${BASE}/categorias/accesorios`, lastModified: now, changeFrequency: 'weekly', priority: 0.85 },
-    { url: `${BASE}/categorias/snacks`, lastModified: now, changeFrequency: 'weekly', priority: 0.85 },
-    { url: `${BASE}/categorias/todos`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
-    { url: `${BASE}/blog`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${BASE}/noticias`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
-    { url: `${BASE}/nosotros`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${BASE}/contacto`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${BASE}/pereira-dosquebradas-mascotas`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
-    { url: `${BASE}/tarjeta.html`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${BASE}/adopcion`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
-    { url: `${BASE}/mascotas-perdidas`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
-    { url: `${BASE}/mascotas-encontradas`, lastModified: now, changeFrequency: 'daily', priority: 0.85 },
-    { url: `${BASE}/finales-felices`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
-    { url: `${BASE}/domicilio-mascotas`, lastModified: now, changeFrequency: 'monthly', priority: 0.85 },
-    { url: `${BASE}/peluqueria`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
+    { url: BASE, changeFrequency: 'daily', priority: 1.0 },
+    { url: `${BASE}/categorias/perros`, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/categorias/gatos`, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/categorias/accesorios`, changeFrequency: 'weekly', priority: 0.85 },
+    { url: `${BASE}/categorias/snacks`, changeFrequency: 'weekly', priority: 0.85 },
+    { url: `${BASE}/categorias/todos`, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/blog`, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${BASE}/noticias`, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/nosotros`, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${BASE}/contacto`, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${BASE}/pereira-dosquebradas-mascotas`, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${BASE}/tarjeta.html`, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${BASE}/adopcion`, changeFrequency: 'daily', priority: 0.85 },
+    { url: `${BASE}/mascotas-perdidas`, changeFrequency: 'daily', priority: 0.85 },
+    { url: `${BASE}/mascotas-encontradas`, changeFrequency: 'daily', priority: 0.85 },
+    { url: `${BASE}/finales-felices`, changeFrequency: 'daily', priority: 0.8 },
+    { url: `${BASE}/domicilio-mascotas`, changeFrequency: 'monthly', priority: 0.85 },
+    { url: `${BASE}/peluqueria`, changeFrequency: 'monthly', priority: 0.9 },
   ];
 
   // Una entrada por zona de Pereira y Dosquebradas. Sin esto Google tardaría
   // semanas en descubrirlas, porque solo se enlazan entre ellas y desde su índice.
   const zonaPages: MetadataRoute.Sitemap = ZONAS.map((z) => ({
     url: `${BASE}/domicilio-mascotas/${z.slug}`,
-    lastModified: now,
     changeFrequency: 'monthly' as const,
     priority: 0.8,
   }));
@@ -75,8 +85,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     productPages.push(
       ...data.items.map((p) => ({
         url: `${BASE}/producto/${p.slug}`,
-        lastModified: now,
-        changeFrequency: 'weekly' as const,
+            changeFrequency: 'weekly' as const,
         priority: 0.7,
       })),
     );

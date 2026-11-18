@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { redirect, notFound } from 'next/navigation';
+import { permanentRedirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { storeApi } from '@/lib/api';
@@ -84,14 +84,16 @@ const WA_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP ?? '573206876633';
 export default async function ProductPage({ params }: Props) {
   const product = await storeApi.bySlug(params.slug);
   if (!product || !product.is_published) {
-    // Solo redirigimos (301) cuando el slug fue renombrado y hay un mapeo real
+    // Solo redirigimos (308) cuando el slug fue renombrado y hay un mapeo real
     // a un producto vivo (tabla catalog.slug_redirects). Si no existe ese mapeo,
     // el producto está oculto/eliminado y debe devolver un 404 real: redirigir
     // esas URLs muertas a una página de categoría genérica es un "soft redirect"
     // que Google no indexa ("Página con redirección" en Search Console) — un 404
     // limpio permite que Google desindexe la URL correctamente.
     const redir = await storeApi.slugRedirect(params.slug);
-    if (redir) redirect(`/producto/${redir}`);
+    // permanente (308) y no temporal (307): el slug cambió para siempre, y con 307 Google
+    // conserva la URL vieja en el índice en vez de pasarle su posición a la nueva.
+    if (redir) permanentRedirect(`/producto/${redir}`);
     notFound();
   }
 

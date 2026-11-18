@@ -241,10 +241,29 @@ export interface AdoptionListing extends SuccessFields {
 // 30-oct-2026: el revalidate del fetch manda sobre el de la página (gana el menor),
 // así que con 60 aquí el home se regeneraba cada minuto aunque declarara 600.
 // 300 s de caché de datos; los cambios de catálogo igual llegan por /api/revalidate.
+class ApiError extends Error {
+  constructor(public status: number, path: string) { super(`API ${status}: ${path}`); }
+}
+
 async function get<T>(path: string, revalidate = 300): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { next: { revalidate } });
-  if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
+  if (!res.ok) throw new ApiError(res.status, path);
   return res.json();
+}
+
+// 18-nov-2026: "no existe" y "la API no contestó" NO son lo mismo. Antes cualquier fallo
+// (API reiniciando en un despliegue, un 500, un corte de red) devolvía null, la página
+// hacía notFound() y Google recibía un 404 con noindex de un producto que SÍ existe;
+// con ISR ese 404 quedaba guardado hasta 10 minutos. Ahora null es solo cuando la API
+// dice que no existe (4xx). Si está caída se lanza el error: Next sigue sirviendo la
+// última versión buena de la página y, si no la hay, responde 500 (Google reintenta).
+async function getOrNull<T>(path: string): Promise<T | null> {
+  try {
+    return await get<T>(path);
+  } catch (e) {
+    if (e instanceof ApiError && e.status < 500) return null;
+    throw e;
+  }
 }
 
 export const storeApi = {
@@ -315,7 +334,7 @@ export const storeApi = {
     }
   },
   bySlug: async (slug: string): Promise<Product | null> => {
-    try { return await get<Product>(`/v1/products/by-slug/${slug}`); } catch { return null; }
+    return getOrNull<Product>(`/v1/products/by-slug/${slug}`);
   },
   productRedirectTarget: async (slug: string): Promise<string> => {
     try {
@@ -345,7 +364,7 @@ export const storeApi = {
     }
   },
   blogBySlug: async (slug: string): Promise<BlogPost | null> => {
-    try { return await get<BlogPost>(`/v1/blog/posts/${slug}`); } catch { return null; }
+    return getOrNull<BlogPost>(`/v1/blog/posts/${slug}`);
   },
   // Noticias de interés: misma tabla que el blog, con category='noticias'. Se
   // separan en dos secciones para que cada URL salga una sola vez en Google.
@@ -356,7 +375,7 @@ export const storeApi = {
     return p && p.category === 'noticias' ? p : null;
   },
   landingBySlug: async (slug: string): Promise<SeoLanding | null> => {
-    try { return await get<SeoLanding>(`/v1/landings/${slug}`); } catch { return null; }
+    return getOrNull<SeoLanding>(`/v1/landings/${slug}`);
   },
   landings: async (): Promise<SeoLanding[]> => {
     try { return await get<SeoLanding[]>('/v1/landings'); } catch { return []; }
@@ -368,13 +387,13 @@ export const storeApi = {
     try { return await get<LostPet[]>('/v1/public/community/lost'); } catch { return []; }
   },
   lostPetById: async (id: string): Promise<LostPet | null> => {
-    try { return await get<LostPet>(`/v1/public/community/lost/${id}`); } catch { return null; }
+    return getOrNull<LostPet>(`/v1/public/community/lost/${id}`);
   },
   foundAnimals: async (): Promise<FoundEvent[]> => {
     try { return await get<FoundEvent[]>('/v1/public/community/found'); } catch { return []; }
   },
   foundEventById: async (id: string): Promise<FoundEvent | null> => {
-    try { return await get<FoundEvent>(`/v1/public/community/found/${id}`); } catch { return null; }
+    return getOrNull<FoundEvent>(`/v1/public/community/found/${id}`);
   },
   adoptionListings: async (postType?: 'offer' | 'want'): Promise<AdoptionListing[]> => {
     const qs = postType ? `?post_type=${postType}` : '';
@@ -384,7 +403,7 @@ export const storeApi = {
     try { return await get<AdoptionListing[]>('/v1/public/community/adoption?outcome=matched&limit=12'); } catch { return []; }
   },
   adoptionListingById: async (id: string): Promise<AdoptionListing | null> => {
-    try { return await get<AdoptionListing>(`/v1/public/community/adoption/${id}`); } catch { return null; }
+    return getOrNull<AdoptionListing>(`/v1/public/community/adoption/${id}`);
   },
 
   // Finales felices (ya en casa / reunidos / adoptados), visibles 30 días
