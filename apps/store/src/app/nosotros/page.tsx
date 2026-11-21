@@ -37,6 +37,29 @@ export default function NosotrosPage() {
           </p>
         </div>
 
+        <div className="mt-12 grid sm:grid-cols-2 gap-6">
+          <section className="rounded-2xl border border-teal-100 bg-teal-50/60 p-6">
+            <h2 className="font-display font-bold text-xl text-teal-900 mb-3">Misión</h2>
+            <p className="text-teal-900/80 leading-relaxed">
+              Cuidamos la salud y el bienestar de los perros y gatos de Pereira y Dosquebradas. Desde
+              nuestra tienda en Samara Plaza Mall ofrecemos alimento, medicamentos veterinarios y
+              accesorios escogidos con criterio, junto con consulta veterinaria, vacunación con carnet y
+              peluquería, y orientamos a cada familia para que alimente, vacune y proteja a su mascota
+              de forma responsable.
+            </p>
+          </section>
+          <section className="rounded-2xl border border-teal-100 bg-teal-50/60 p-6">
+            <h2 className="font-display font-bold text-xl text-teal-900 mb-3">Visión</h2>
+            <p className="text-teal-900/80 leading-relaxed">
+              En 2030 seremos la tienda de mascotas y servicios veterinarios de referencia en Pereira y
+              Dosquebradas: la primera en la que piense una familia cuando su perro o su gato necesite
+              comer bien, vacunarse o ser atendido. Queremos que nos reconozcan por el trato honesto, por
+              el manejo responsable de vacunas, medicamentos y residuos, y por promover la adopción y la
+              tenencia responsable.
+            </p>
+          </section>
+        </div>
+
         <div className="mt-12 grid sm:grid-cols-3 gap-6">
           <div className="rounded-2xl border border-border bg-card p-5 flex flex-col gap-2">
             <div className="text-3xl">🐶</div>
